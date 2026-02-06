@@ -6,6 +6,7 @@ Pydantic schemas for Training APIs including:
 - Training Event
 - Training Attendee
 """
+
 from datetime import date, datetime, time
 from decimal import Decimal
 from typing import List, Optional

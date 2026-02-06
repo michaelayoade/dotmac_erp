@@ -8,6 +8,7 @@ Pydantic schemas for HR Core APIs including:
 - Employee Grade
 - Employee
 """
+
 from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional
@@ -400,7 +401,9 @@ class LocationBase(BaseModel):
     longitude: Optional[Decimal] = None
     geofence_radius_m: int = 500
     geofence_enabled: bool = True
-    geofence_polygon: Optional[dict] = None  # GeoJSON Polygon/MultiPolygon (if set, overrides circle)
+    geofence_polygon: Optional[dict] = (
+        None  # GeoJSON Polygon/MultiPolygon (if set, overrides circle)
+    )
     is_active: bool = True
 
 
@@ -426,7 +429,9 @@ class LocationUpdate(BaseModel):
     longitude: Optional[Decimal] = None
     geofence_radius_m: Optional[int] = None
     geofence_enabled: Optional[bool] = None
-    geofence_polygon: Optional[dict] = None  # GeoJSON Polygon/MultiPolygon (if set, overrides circle)
+    geofence_polygon: Optional[dict] = (
+        None  # GeoJSON Polygon/MultiPolygon (if set, overrides circle)
+    )
     is_active: Optional[bool] = None
 
 

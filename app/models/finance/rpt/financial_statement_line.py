@@ -1,12 +1,24 @@
 """
 Financial Statement Line Model - Reporting Schema.
 """
+
 import enum
 import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,7 +40,9 @@ class FinancialStatementLine(Base):
 
     __tablename__ = "financial_statement_line"
     __table_args__ = (
-        UniqueConstraint("organization_id", "statement_type", "line_code", name="uq_fs_line"),
+        UniqueConstraint(
+            "organization_id", "statement_type", "line_code", name="uq_fs_line"
+        ),
         {"schema": "rpt"},
     )
 
@@ -68,7 +82,9 @@ class FinancialStatementLine(Base):
     is_separator: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Calculation
-    calculation_type: Mapped[str] = mapped_column(String(30), nullable=False, default="SUM_ACCOUNTS")
+    calculation_type: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="SUM_ACCOUNTS"
+    )
     calculation_formula: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Account mapping
@@ -77,8 +93,12 @@ class FinancialStatementLine(Base):
     exclude_account_codes: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
     # Sign convention
-    normal_balance: Mapped[str] = mapped_column(String(10), nullable=False, default="DEBIT")
-    display_sign: Mapped[str] = mapped_column(String(20), nullable=False, default="NATURAL")
+    normal_balance: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="DEBIT"
+    )
+    display_sign: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="NATURAL"
+    )
 
     # XBRL mapping
     xbrl_element: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)

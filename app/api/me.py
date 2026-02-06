@@ -3,6 +3,7 @@ Self-service API router for authenticated users.
 
 Currently implements attendance self-service endpoints.
 """
+
 from datetime import date, timedelta
 from typing import Optional
 from uuid import UUID
@@ -414,6 +415,7 @@ def my_payslip_detail(
         raise HTTPException(status_code=403, detail="Forbidden")
     return SalarySlipRead.model_validate(slip)
 
+
 # =============================================================================
 # Attendance
 # =============================================================================
@@ -460,13 +462,19 @@ def my_attendance_today(
     employee_id = _get_employee_id(db, organization_id, person_id)
 
     svc = AttendanceService(db)
-    record = svc.get_attendance_by_date(organization_id, employee_id, svc.get_org_today(organization_id))
+    record = svc.get_attendance_by_date(
+        organization_id, employee_id, svc.get_org_today(organization_id)
+    )
     if not record:
         raise HTTPException(status_code=404, detail="Attendance record not found")
     return AttendanceRead.model_validate(record)
 
 
-@router.post("/attendance/check-in", response_model=AttendanceRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/attendance/check-in",
+    response_model=AttendanceRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def my_check_in(
     payload: AttendanceRecordCheckIn,
     auth: dict = Depends(require_tenant_auth),
@@ -488,7 +496,11 @@ def my_check_in(
     return AttendanceRead.model_validate(attendance)
 
 
-@router.post("/attendance/check-out", response_model=AttendanceRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/attendance/check-out",
+    response_model=AttendanceRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def my_check_out(
     payload: AttendanceRecordCheckOut,
     auth: dict = Depends(require_tenant_auth),

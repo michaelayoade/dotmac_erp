@@ -22,7 +22,6 @@ from app.models.finance.gl.fiscal_year import FiscalYear
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
-from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
 
 # Organization ID - use existing org or override via env var
 DOTMAC_ORG_ID = UUID(os.environ.get("ORG_ID", "00000000-0000-0000-0000-000000000001"))
@@ -92,7 +91,12 @@ ACCOUNT_MAP = {
     # Cost of Sales (5000-5099)
     "Purchases": ("5000", "COS", "DEBIT", None),
     "Customer Terminal Devices": ("5010", "COS", "DEBIT", None),
-    "Installation and maintenance of fiber optic Network": ("5020", "COS", "DEBIT", None),
+    "Installation and maintenance of fiber optic Network": (
+        "5020",
+        "COS",
+        "DEBIT",
+        None,
+    ),
     "Purchase of bandwitdh and Interconnect": ("5030", "COS", "DEBIT", None),
     # Operating Expenses (6000-6999)
     "Staff Salaries & Wage": ("6000", "EXP", "DEBIT", None),
@@ -275,8 +279,18 @@ def create_fiscal_years(db) -> dict:
 
         # Create monthly periods
         months = [
-            (1, 31), (2, 28 if year % 4 != 0 else 29), (3, 31), (4, 30),
-            (5, 31), (6, 30), (7, 31), (8, 31), (9, 30), (10, 31), (11, 30), (12, 31)
+            (1, 31),
+            (2, 28 if year % 4 != 0 else 29),
+            (3, 31),
+            (4, 30),
+            (5, 31),
+            (6, 30),
+            (7, 31),
+            (8, 31),
+            (9, 30),
+            (10, 31),
+            (11, 30),
+            (12, 31),
         ]
         for month, days in months:
             period = FiscalPeriod(
@@ -304,22 +318,24 @@ def read_trial_balance(year: int) -> dict:
     in_accum_depreciation = False
 
     for idx, row in df.iterrows():
-        item = str(row['ITEMS']).strip() if pd.notna(row['ITEMS']) else ''
+        item = str(row["ITEMS"]).strip() if pd.notna(row["ITEMS"]) else ""
         if not item:
             continue
 
         # Track if we're in accumulated depreciation section
-        if 'accumulated depreciation' in item.lower():
+        if "accumulated depreciation" in item.lower():
             in_accum_depreciation = True
             continue
-        elif item.lower() in ('current assets', 'cash and cash equivalent:'):
+        elif item.lower() in ("current assets", "cash and cash equivalent:"):
             in_accum_depreciation = False
 
         # Skip section headers
-        if item.endswith(':') or 'ADJUSTMENT' in item.upper() or 'Please note' in item:
+        if item.endswith(":") or "ADJUSTMENT" in item.upper() or "Please note" in item:
             continue
 
-        debit = row['ADJUSTED FINAL TOTAL'] if pd.notna(row['ADJUSTED FINAL TOTAL']) else 0
+        debit = (
+            row["ADJUSTED FINAL TOTAL"] if pd.notna(row["ADJUSTED FINAL TOTAL"]) else 0
+        )
         credit = row.iloc[8] if pd.notna(row.iloc[8]) else 0
 
         try:
@@ -330,12 +346,17 @@ def read_trial_balance(year: int) -> dict:
                 continue
 
             # Handle accumulated depreciation accounts (same names as assets)
-            if in_accum_depreciation and item in ('Office Equipment', 'Motor Vehicle', 'Furniture & Fittings', 'Plant & Machinery'):
+            if in_accum_depreciation and item in (
+                "Office Equipment",
+                "Motor Vehicle",
+                "Furniture & Fittings",
+                "Plant & Machinery",
+            ):
                 item = f"{item}_ACCUM"
 
             balances[item] = {
-                'debit': Decimal(str(debit)),
-                'credit': Decimal(str(credit)),
+                "debit": Decimal(str(debit)),
+                "credit": Decimal(str(credit)),
             }
         except (ValueError, TypeError):
             pass
@@ -343,7 +364,9 @@ def read_trial_balance(year: int) -> dict:
     return balances
 
 
-def create_opening_balance_journal(db, year: int, accounts: dict, fiscal_years: dict, balances: dict):
+def create_opening_balance_journal(
+    db, year: int, accounts: dict, fiscal_years: dict, balances: dict
+):
     """Create opening balance journal entry for a year."""
     print(f"\n--- Creating Opening Balance Journal for {year} ---")
 
@@ -383,7 +406,7 @@ def create_opening_balance_journal(db, year: int, accounts: dict, fiscal_years: 
         reference=f"OB-{year}",
         description=f"Opening Balance {year} - Imported from Trial Balance",
         currency_code="NGN",
-        exchange_rate=Decimal('1.0'),
+        exchange_rate=Decimal("1.0"),
         status=JournalStatus.POSTED,
         source_module="IMPORT",
         created_by_user_id=UUID("00000000-0000-0000-0000-000000000001"),  # System user
@@ -391,8 +414,8 @@ def create_opening_balance_journal(db, year: int, accounts: dict, fiscal_years: 
     db.add(je)
     db.flush()
 
-    total_debit = Decimal('0')
-    total_credit = Decimal('0')
+    total_debit = Decimal("0")
+    total_credit = Decimal("0")
     line_num = 1
     lines_created = 0
 
@@ -402,8 +425,8 @@ def create_opening_balance_journal(db, year: int, accounts: dict, fiscal_years: 
             continue
 
         account_id = accounts[tb_name]
-        debit = bal['debit']
-        credit = bal['credit']
+        debit = bal["debit"]
+        credit = bal["credit"]
 
         if debit > 0:
             line = JournalEntryLine(
@@ -413,11 +436,11 @@ def create_opening_balance_journal(db, year: int, accounts: dict, fiscal_years: 
                 account_id=account_id,
                 description=f"Opening balance {year}",
                 debit_amount=debit,
-                credit_amount=Decimal('0'),
+                credit_amount=Decimal("0"),
                 debit_amount_functional=debit,
-                credit_amount_functional=Decimal('0'),
+                credit_amount_functional=Decimal("0"),
                 currency_code="NGN",
-                exchange_rate=Decimal('1.0'),
+                exchange_rate=Decimal("1.0"),
             )
             db.add(line)
             total_debit += debit
@@ -431,12 +454,12 @@ def create_opening_balance_journal(db, year: int, accounts: dict, fiscal_years: 
                 line_number=line_num,
                 account_id=account_id,
                 description=f"Opening balance {year}",
-                debit_amount=Decimal('0'),
+                debit_amount=Decimal("0"),
                 credit_amount=credit,
-                debit_amount_functional=Decimal('0'),
+                debit_amount_functional=Decimal("0"),
                 credit_amount_functional=credit,
                 currency_code="NGN",
-                exchange_rate=Decimal('1.0'),
+                exchange_rate=Decimal("1.0"),
             )
             db.add(line)
             total_credit += credit
@@ -454,7 +477,7 @@ def create_opening_balance_journal(db, year: int, accounts: dict, fiscal_years: 
     print(f"  [created] OB-{year}: {lines_created} lines")
     print(f"    Total Debit:  {total_debit:>20,.2f}")
     print(f"    Total Credit: {total_credit:>20,.2f}")
-    if abs(difference) > Decimal('0.01'):
+    if abs(difference) > Decimal("0.01"):
         print(f"    Difference:   {difference:>20,.2f} (will be adjusted)")
 
 

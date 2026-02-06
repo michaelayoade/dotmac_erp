@@ -4,8 +4,6 @@ Tests for app/services/ifrs/gl/bulk.py
 Tests for AccountBulkService that handles bulk operations on GL account entities.
 """
 
-import uuid
-from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,10 +13,13 @@ from tests.ifrs.bulk.conftest import MockAccount, MockAccountType, MockAccountCa
 
 # ============ TestCanDelete ============
 
+
 class TestCanDelete:
     """Tests for the can_delete method."""
 
-    def test_cannot_delete_control_account(self, mock_db, mock_control_account, organization_id):
+    def test_cannot_delete_control_account(
+        self, mock_db, mock_control_account, organization_id
+    ):
         """Control accounts cannot be deleted."""
         with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
@@ -42,7 +43,9 @@ class TestCanDelete:
             assert can_delete is True
             assert reason == ""
 
-    def test_cannot_delete_with_journal_lines(self, mock_db, mock_account, organization_id):
+    def test_cannot_delete_with_journal_lines(
+        self, mock_db, mock_account, organization_id
+    ):
         """Accounts with journal lines cannot be deleted."""
         mock_db.query.return_value.filter.return_value.count.return_value = 50
 
@@ -81,7 +84,9 @@ class TestCanDelete:
 
             assert "100 journal entries" in reason
 
-    def test_control_checked_before_journals(self, mock_db, mock_control_account, organization_id):
+    def test_control_checked_before_journals(
+        self, mock_db, mock_control_account, organization_id
+    ):
         """Control account check should run before journal check."""
         # Even if there are no journal entries, control account should fail
         mock_db.query.return_value.filter.return_value.count.return_value = 0
@@ -110,10 +115,7 @@ class TestCanDelete:
 
     def test_error_includes_control_account_name(self, mock_db, organization_id):
         """Control account error should include account name."""
-        account = MockAccount(
-            account_name="AR Control",
-            is_control_account=True
-        )
+        account = MockAccount(account_name="AR Control", is_control_account=True)
 
         with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
@@ -140,6 +142,7 @@ class TestCanDelete:
 
 
 # ============ TestGetExportValue ============
+
 
 class TestGetExportValue:
     """Tests for the _get_export_value method."""
@@ -282,7 +285,7 @@ class TestGetExportValue:
             account_code="1000",
             account_name="Cash",
             currency_code="EUR",
-            description="Cash at bank"
+            description="Cash at bank",
         )
 
         with patch("app.services.finance.gl.bulk.Account", MagicMock()):
@@ -301,6 +304,7 @@ class TestGetExportValue:
 
 
 # ============ TestGetExportFilename ============
+
 
 class TestGetExportFilename:
     """Tests for the _get_export_filename method."""
@@ -339,6 +343,7 @@ class TestGetExportFilename:
 
 # ============ TestBulkDelete ============
 
+
 class TestBulkDelete:
     """Tests for the bulk_delete method."""
 
@@ -358,7 +363,9 @@ class TestBulkDelete:
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
-            result = await service.bulk_delete([account1.account_id, account2.account_id])
+            result = await service.bulk_delete(
+                [account1.account_id, account2.account_id]
+            )
 
             assert result.success_count == 2
             assert result.failed_count == 0
@@ -367,11 +374,12 @@ class TestBulkDelete:
     async def test_bulk_delete_control_account_blocked(self, mock_db, organization_id):
         """Control accounts should fail to delete."""
         control_account = MockAccount(
-            account_name="AR Control",
-            is_control_account=True
+            account_name="AR Control", is_control_account=True
         )
 
-        mock_db.query.return_value.filter.return_value.all.return_value = [control_account]
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            control_account
+        ]
 
         with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
@@ -417,7 +425,9 @@ class TestBulkDelete:
             from app.services.finance.gl.bulk import AccountBulkService
 
             service = AccountBulkService(mock_db, organization_id)
-            result = await service.bulk_delete([deletable.account_id, control.account_id])
+            result = await service.bulk_delete(
+                [deletable.account_id, control.account_id]
+            )
 
             assert result.success_count == 1
             assert result.failed_count == 1
@@ -436,6 +446,7 @@ class TestBulkDelete:
 
 
 # ============ TestBulkExport ============
+
 
 class TestBulkExport:
     """Tests for the bulk_export method."""
@@ -482,6 +493,7 @@ class TestBulkExport:
 
 
 # ============ TestFactoryFunction ============
+
 
 class TestFactoryFunction:
     """Tests for the get_account_bulk_service factory function."""

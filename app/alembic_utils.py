@@ -1,4 +1,5 @@
 """Alembic utilities for shared migration helpers."""
+
 from __future__ import annotations
 
 from typing import Optional

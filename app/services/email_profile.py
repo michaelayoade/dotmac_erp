@@ -65,6 +65,13 @@ class EmailProfileService:
             )
 
             if routing:
+                if routing.use_default:
+                    logger.debug(
+                        "Module routing set to use defaults: %s (org=%s)",
+                        module.value,
+                        organization_id,
+                    )
+                    return None
                 profile = self.db.get(EmailProfile, routing.email_profile_id)
                 if profile and profile.is_active:
                     logger.debug(
@@ -73,6 +80,13 @@ class EmailProfileService:
                         profile.name,
                     )
                     return profile
+                if routing.email_profile_id:
+                    logger.warning(
+                        "Module routing profile missing/inactive: %s (org=%s, profile_id=%s)",
+                        module.value,
+                        organization_id,
+                        routing.email_profile_id,
+                    )
 
         # Step 2: Try organization's default profile
         if organization_id:
@@ -232,7 +246,9 @@ class EmailProfileService:
         self,
         organization_id: UUID,
         module: EmailModule,
-        profile_id: UUID,
+        profile_id: UUID | None,
+        *,
+        use_default: bool = False,
     ) -> ModuleEmailRouting:
         """Set or update the email profile for a module.
 
@@ -240,9 +256,10 @@ class EmailProfileService:
             ValueError: If the specified profile_id does not exist.
         """
         # Validate that the profile exists before setting routing
-        profile = self.db.get(EmailProfile, profile_id)
-        if not profile:
-            raise ValueError(f"Email profile {profile_id} not found")
+        if profile_id is not None:
+            profile = self.db.get(EmailProfile, profile_id)
+            if not profile:
+                raise ValueError(f"Email profile {profile_id} not found")
 
         # Check if routing exists
         existing = self.db.scalar(
@@ -254,6 +271,7 @@ class EmailProfileService:
 
         if existing:
             existing.email_profile_id = profile_id
+            existing.use_default = use_default
             self.db.flush()
             logger.info(
                 "Updated module routing: %s -> profile %s", module.value, profile_id
@@ -264,6 +282,7 @@ class EmailProfileService:
             organization_id=organization_id,
             module=module,
             email_profile_id=profile_id,
+            use_default=use_default,
         )
 
         self.db.add(routing)

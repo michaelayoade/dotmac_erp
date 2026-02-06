@@ -53,7 +53,9 @@ def get_db():
         db.close()
 
 
-@router.get("/auth", response_model=ListResponse[DomainSettingRead], tags=["settings-auth"])
+@router.get(
+    "/auth", response_model=ListResponse[DomainSettingRead], tags=["settings-auth"]
+)
 def list_auth_settings(
     is_active: bool | None = None,
     order_by: str = Query(default="created_at"),
@@ -509,7 +511,9 @@ def import_settings(
 )
 def list_history(
     domain: SettingDomain | None = Query(default=None, description="Filter by domain"),
-    key: str | None = Query(default=None, description="Filter by key (requires domain)"),
+    key: str | None = Query(
+        default=None, description="Filter by key (requires domain)"
+    ),
     setting_id: UUID | None = Query(default=None, description="Filter by setting ID"),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
@@ -804,6 +808,4 @@ def list_fonts(
     if category:
         fonts = [f for f in fonts if f["category"] == category]
 
-    return FontListResponse(
-        fonts=[FontOption.model_validate(f) for f in fonts]
-    )
+    return FontListResponse(fonts=[FontOption.model_validate(f) for f in fonts])

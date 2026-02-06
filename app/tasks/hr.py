@@ -12,11 +12,11 @@ Handles:
 
 import logging
 from datetime import date, timedelta
-from typing import Any, Optional
+from typing import Any
 import uuid
 
 from celery import shared_task
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import func, select
 
 from app.db import SessionLocal
 from app.models.finance.core_org.organization import Organization
@@ -58,8 +58,7 @@ def process_probation_ending_notifications() -> dict:
 
         # Find employees on probation with probation end dates
         probation_employees = db.scalars(
-            select(Employee)
-            .where(
+            select(Employee).where(
                 Employee.status == EmployeeStatus.ACTIVE,
                 Employee.probation_end_date.isnot(None),
             )
@@ -115,15 +114,17 @@ def process_probation_ending_notifications() -> dict:
                     employee.employee_id,
                     e,
                 )
-                results["errors"].append({
-                    "employee_id": str(employee.employee_id),
-                    "error": str(e),
-                })
+                results["errors"].append(
+                    {
+                        "employee_id": str(employee.employee_id),
+                        "error": str(e),
+                    }
+                )
 
     total_sent = (
-        results["first_notices_sent"] +
-        results["second_notices_sent"] +
-        results["final_notices_sent"]
+        results["first_notices_sent"]
+        + results["second_notices_sent"]
+        + results["final_notices_sent"]
     )
     logger.info("Probation notifications complete: %d sent", total_sent)
 
@@ -161,13 +162,14 @@ def process_contract_expiry_notifications() -> dict:
 
         contract_end_attr = getattr(Employee, "contract_end_date", None)
         if contract_end_attr is None:
-            logger.info("Employee.contract_end_date not available; skipping contract expiry notifications")
+            logger.info(
+                "Employee.contract_end_date not available; skipping contract expiry notifications"
+            )
             return results
 
         # Find employees with contract end dates
         contract_employees = db.scalars(
-            select(Employee)
-            .where(
+            select(Employee).where(
                 Employee.status == EmployeeStatus.ACTIVE,
                 contract_end_attr.isnot(None),
             )
@@ -187,7 +189,11 @@ def process_contract_expiry_notifications() -> dict:
                     continue
 
                 # Only send on specific days
-                if days_remaining not in [FIRST_NOTICE_DAYS, SECOND_NOTICE_DAYS, FINAL_NOTICE_DAYS]:
+                if days_remaining not in [
+                    FIRST_NOTICE_DAYS,
+                    SECOND_NOTICE_DAYS,
+                    FINAL_NOTICE_DAYS,
+                ]:
                     continue
 
                 # Get manager
@@ -212,12 +218,16 @@ def process_contract_expiry_notifications() -> dict:
                     employee.employee_id,
                     e,
                 )
-                results["errors"].append({
-                    "employee_id": str(employee.employee_id),
-                    "error": str(e),
-                })
+                results["errors"].append(
+                    {
+                        "employee_id": str(employee.employee_id),
+                        "error": str(e),
+                    }
+                )
 
-    logger.info("Contract expiry notifications complete: %d sent", results["notifications_sent"])
+    logger.info(
+        "Contract expiry notifications complete: %d sent", results["notifications_sent"]
+    )
 
     return results
 
@@ -248,8 +258,7 @@ def process_work_anniversary_notifications() -> dict:
 
         # Find active employees
         active_employees = db.scalars(
-            select(Employee)
-            .where(
+            select(Employee).where(
                 Employee.status == EmployeeStatus.ACTIVE,
                 Employee.date_of_joining.isnot(None),
             )
@@ -298,10 +307,12 @@ def process_work_anniversary_notifications() -> dict:
                     employee.employee_id,
                     e,
                 )
-                results["errors"].append({
-                    "employee_id": str(employee.employee_id),
-                    "error": str(e),
-                })
+                results["errors"].append(
+                    {
+                        "employee_id": str(employee.employee_id),
+                        "error": str(e),
+                    }
+                )
 
     logger.info(
         "Work anniversary notifications complete: %d sent (%d milestones)",
@@ -337,8 +348,7 @@ def process_birthday_notifications() -> dict:
 
         # Find active employees
         active_employees = db.scalars(
-            select(Employee)
-            .where(
+            select(Employee).where(
                 Employee.status == EmployeeStatus.ACTIVE,
                 Employee.date_of_birth.isnot(None),
             )
@@ -384,12 +394,16 @@ def process_birthday_notifications() -> dict:
                     employee.employee_id,
                     e,
                 )
-                results["errors"].append({
-                    "employee_id": str(employee.employee_id),
-                    "error": str(e),
-                })
+                results["errors"].append(
+                    {
+                        "employee_id": str(employee.employee_id),
+                        "error": str(e),
+                    }
+                )
 
-    logger.info("Birthday notifications complete: %d sent", results["notifications_sent"])
+    logger.info(
+        "Birthday notifications complete: %d sent", results["notifications_sent"]
+    )
 
     return results
 
@@ -408,7 +422,10 @@ def process_performance_review_reminders() -> dict:
         Dict with reminder statistics
     """
     from app.models.people.perf.appraisal import Appraisal, AppraisalStatus
-    from app.models.people.perf.appraisal_cycle import AppraisalCycle, AppraisalCycleStatus
+    from app.models.people.perf.appraisal_cycle import (
+        AppraisalCycle,
+        AppraisalCycleStatus,
+    )
     from app.services.hr_notifications import HRNotificationService
 
     logger.info("Processing performance review reminders")
@@ -425,13 +442,14 @@ def process_performance_review_reminders() -> dict:
 
         # Find active cycles
         active_cycles = db.scalars(
-            select(AppraisalCycle)
-            .where(
-                AppraisalCycle.status.in_([
-                    AppraisalCycleStatus.ACTIVE,
-                    AppraisalCycleStatus.REVIEW,
-                    AppraisalCycleStatus.CALIBRATION,
-                ]),
+            select(AppraisalCycle).where(
+                AppraisalCycle.status.in_(
+                    [
+                        AppraisalCycleStatus.ACTIVE,
+                        AppraisalCycleStatus.REVIEW,
+                        AppraisalCycleStatus.CALIBRATION,
+                    ]
+                ),
             )
         ).all()
 
@@ -445,23 +463,26 @@ def process_performance_review_reminders() -> dict:
                     if 0 <= days_to_deadline <= 7:
                         # Find employees with pending self-assessment
                         pending_appraisals = db.scalars(
-                            select(Appraisal)
-                            .where(
+                            select(Appraisal).where(
                                 Appraisal.cycle_id == cycle.cycle_id,
-                                Appraisal.status.in_([
-                                    AppraisalStatus.DRAFT,
-                                    AppraisalStatus.SELF_ASSESSMENT,
-                                ]),
+                                Appraisal.status.in_(
+                                    [
+                                        AppraisalStatus.DRAFT,
+                                        AppraisalStatus.SELF_ASSESSMENT,
+                                    ]
+                                ),
                             )
                         ).all()
 
                         for appraisal in pending_appraisals:
                             employee = db.get(Employee, appraisal.employee_id)
                             if employee:
-                                success = notification_service.send_self_assessment_reminder(
-                                    employee,
-                                    cycle,
-                                    days_remaining=days_to_deadline,
+                                success = (
+                                    notification_service.send_self_assessment_reminder(
+                                        employee,
+                                        cycle,
+                                        days_remaining=days_to_deadline,
+                                    )
                                 )
                                 if success:
                                     results["self_assessment_reminders"] += 1
@@ -472,13 +493,14 @@ def process_performance_review_reminders() -> dict:
                     if 0 <= days_to_deadline <= 7:
                         # Find appraisals pending manager review
                         pending_reviews = db.scalars(
-                            select(Appraisal)
-                            .where(
+                            select(Appraisal).where(
                                 Appraisal.cycle_id == cycle.cycle_id,
-                                Appraisal.status.in_([
-                                    AppraisalStatus.PENDING_REVIEW,
-                                    AppraisalStatus.UNDER_REVIEW,
-                                ]),
+                                Appraisal.status.in_(
+                                    [
+                                        AppraisalStatus.PENDING_REVIEW,
+                                        AppraisalStatus.UNDER_REVIEW,
+                                    ]
+                                ),
                             )
                         ).all()
 
@@ -486,11 +508,13 @@ def process_performance_review_reminders() -> dict:
                             manager = db.get(Employee, appraisal.manager_id)
                             employee = db.get(Employee, appraisal.employee_id)
                             if manager and employee:
-                                success = notification_service.send_manager_review_reminder(
-                                    manager,
-                                    employee,
-                                    cycle,
-                                    days_remaining=days_to_deadline,
+                                success = (
+                                    notification_service.send_manager_review_reminder(
+                                        manager,
+                                        employee,
+                                        cycle,
+                                        days_remaining=days_to_deadline,
+                                    )
                                 )
                                 if success:
                                     results["manager_review_reminders"] += 1
@@ -501,15 +525,17 @@ def process_performance_review_reminders() -> dict:
                     cycle.cycle_id,
                     e,
                 )
-                results["errors"].append({
-                    "cycle_id": str(cycle.cycle_id),
-                    "error": str(e),
-                })
+                results["errors"].append(
+                    {
+                        "cycle_id": str(cycle.cycle_id),
+                        "error": str(e),
+                    }
+                )
 
     total_sent = (
-        results["self_assessment_reminders"] +
-        results["manager_review_reminders"] +
-        results["calibration_reminders"]
+        results["self_assessment_reminders"]
+        + results["manager_review_reminders"]
+        + results["calibration_reminders"]
     )
     logger.info("Performance review reminders complete: %d sent", total_sent)
 
@@ -548,11 +574,11 @@ def process_certification_expiry_notifications() -> dict:
 
         # Find certifications with expiry dates
         expiring_certs = db.scalars(
-            select(EmployeeCertification)
-            .where(
+            select(EmployeeCertification).where(
                 EmployeeCertification.valid_until.isnot(None),
                 EmployeeCertification.valid_until >= today,
-                EmployeeCertification.valid_until <= today + timedelta(days=FIRST_NOTICE_DAYS),
+                EmployeeCertification.valid_until
+                <= today + timedelta(days=FIRST_NOTICE_DAYS),
             )
         ).all()
 
@@ -566,7 +592,11 @@ def process_certification_expiry_notifications() -> dict:
                 days_remaining = (valid_until - today).days
 
                 # Only send on specific days
-                if days_remaining not in [FIRST_NOTICE_DAYS, SECOND_NOTICE_DAYS, FINAL_NOTICE_DAYS]:
+                if days_remaining not in [
+                    FIRST_NOTICE_DAYS,
+                    SECOND_NOTICE_DAYS,
+                    FINAL_NOTICE_DAYS,
+                ]:
                     continue
 
                 employee = db.get(Employee, cert.employee_id)
@@ -589,12 +619,17 @@ def process_certification_expiry_notifications() -> dict:
                     cert.certification_id,
                     e,
                 )
-                results["errors"].append({
-                    "certification_id": str(cert.certification_id),
-                    "error": str(e),
-                })
+                results["errors"].append(
+                    {
+                        "certification_id": str(cert.certification_id),
+                        "error": str(e),
+                    }
+                )
 
-    logger.info("Certification expiry notifications complete: %d sent", results["notifications_sent"])
+    logger.info(
+        "Certification expiry notifications complete: %d sent",
+        results["notifications_sent"],
+    )
 
     return results
 
@@ -624,44 +659,49 @@ def calculate_hr_analytics(organization_id: str) -> dict:
             today = date.today()
 
             # Get active employee count
-            active_count = db.scalar(
-                select(func.count(Employee.employee_id))
-                .where(
-                    Employee.organization_id == org_id,
-                    Employee.status == EmployeeStatus.ACTIVE,
+            active_count = (
+                db.scalar(
+                    select(func.count(Employee.employee_id)).where(
+                        Employee.organization_id == org_id,
+                        Employee.status == EmployeeStatus.ACTIVE,
+                    )
                 )
-            ) or 0
+                or 0
+            )
 
             # Get employees on probation
-            on_probation = db.scalar(
-                select(func.count(Employee.employee_id))
-                .where(
-                    Employee.organization_id == org_id,
-                    Employee.status == EmployeeStatus.ACTIVE,
-                    Employee.probation_end_date.isnot(None),
-                    Employee.probation_end_date >= today,
+            on_probation = (
+                db.scalar(
+                    select(func.count(Employee.employee_id)).where(
+                        Employee.organization_id == org_id,
+                        Employee.status == EmployeeStatus.ACTIVE,
+                        Employee.probation_end_date.isnot(None),
+                        Employee.probation_end_date >= today,
+                    )
                 )
-            ) or 0
+                or 0
+            )
 
             # Get employees with expiring contracts (next 90 days)
             expiring_contracts = 0
             contract_end_attr = getattr(Employee, "contract_end_date", None)
             if contract_end_attr is not None:
-                expiring_contracts = db.scalar(
-                    select(func.count(Employee.employee_id))
-                    .where(
-                        Employee.organization_id == org_id,
-                        Employee.status == EmployeeStatus.ACTIVE,
-                        contract_end_attr.isnot(None),
-                        contract_end_attr >= today,
-                        contract_end_attr <= today + timedelta(days=90),
+                expiring_contracts = (
+                    db.scalar(
+                        select(func.count(Employee.employee_id)).where(
+                            Employee.organization_id == org_id,
+                            Employee.status == EmployeeStatus.ACTIVE,
+                            contract_end_attr.isnot(None),
+                            contract_end_attr >= today,
+                            contract_end_attr <= today + timedelta(days=90),
+                        )
                     )
-                ) or 0
+                    or 0
+                )
 
             # Calculate average tenure
             employees_with_joining = db.scalars(
-                select(Employee)
-                .where(
+                select(Employee).where(
                     Employee.organization_id == org_id,
                     Employee.status == EmployeeStatus.ACTIVE,
                     Employee.date_of_joining.isnot(None),
@@ -675,7 +715,8 @@ def calculate_hr_analytics(organization_id: str) -> dict:
 
             avg_tenure_years = (
                 (total_tenure_days / len(employees_with_joining) / 365)
-                if employees_with_joining else 0
+                if employees_with_joining
+                else 0
             )
 
             return {
@@ -745,10 +786,12 @@ def process_onboarding_overdue_activities() -> dict:
                     org.organization_id,
                     e,
                 )
-                results["errors"].append({
-                    "organization_id": str(org.organization_id),
-                    "error": str(e),
-                })
+                results["errors"].append(
+                    {
+                        "organization_id": str(org.organization_id),
+                        "error": str(e),
+                    }
+                )
 
         db.commit()
 
@@ -775,7 +818,11 @@ def process_onboarding_reminders() -> dict:
     Returns:
         Dict with notification statistics
     """
-    from app.models.notification import EntityType, NotificationChannel, NotificationType
+    from app.models.notification import (
+        EntityType,
+        NotificationChannel,
+        NotificationType,
+    )
     from app.services.notification import NotificationService
     from app.services.people.hr.onboarding import OnboardingService
     from app.models.people.hr.lifecycle import EmployeeOnboarding
@@ -811,7 +858,9 @@ def process_onboarding_reminders() -> dict:
 
                         # If no specific assignee, get from onboarding record
                         if not recipient_id:
-                            onboarding = db.get(EmployeeOnboarding, activity.onboarding_id)
+                            onboarding = db.get(
+                                EmployeeOnboarding, activity.onboarding_id
+                            )
                             if onboarding:
                                 # For self-service tasks, notify the employee via their person_id
                                 if activity.assigned_to_employee:
@@ -819,13 +868,21 @@ def process_onboarding_reminders() -> dict:
                                     if employee:
                                         recipient_id = employee.person_id
                                 # For manager tasks
-                                elif activity.assignee_role == "MANAGER" and onboarding.manager_id:
+                                elif (
+                                    activity.assignee_role == "MANAGER"
+                                    and onboarding.manager_id
+                                ):
                                     manager = db.get(Employee, onboarding.manager_id)
                                     if manager:
                                         recipient_id = manager.person_id
                                 # For buddy tasks
-                                elif activity.assignee_role == "BUDDY" and onboarding.buddy_employee_id:
-                                    buddy = db.get(Employee, onboarding.buddy_employee_id)
+                                elif (
+                                    activity.assignee_role == "BUDDY"
+                                    and onboarding.buddy_employee_id
+                                ):
+                                    buddy = db.get(
+                                        Employee, onboarding.buddy_employee_id
+                                    )
                                     if buddy:
                                         recipient_id = buddy.person_id
 
@@ -838,14 +895,22 @@ def process_onboarding_reminders() -> dict:
 
                         # Determine notification type
                         is_overdue = activity.is_overdue
-                        notif_type = NotificationType.OVERDUE if is_overdue else NotificationType.DUE_SOON
+                        notif_type = (
+                            NotificationType.OVERDUE
+                            if is_overdue
+                            else NotificationType.DUE_SOON
+                        )
 
                         # Build notification message
                         if is_overdue:
                             title = f"Overdue: {activity.activity_name}"
                             message = f"The onboarding task '{activity.activity_name}' is overdue. Please complete it as soon as possible."
                         else:
-                            days_remaining = (activity.due_date - date.today()).days if activity.due_date else 0
+                            days_remaining = (
+                                (activity.due_date - date.today()).days
+                                if activity.due_date
+                                else 0
+                            )
                             title = f"Task Due Soon: {activity.activity_name}"
                             message = f"The onboarding task '{activity.activity_name}' is due in {days_remaining} day{'s' if days_remaining != 1 else ''}."
 
@@ -877,10 +942,12 @@ def process_onboarding_reminders() -> dict:
                             activity.activity_id,
                             e,
                         )
-                        results["errors"].append({
-                            "activity_id": str(activity.activity_id),
-                            "error": str(e),
-                        })
+                        results["errors"].append(
+                            {
+                                "activity_id": str(activity.activity_id),
+                                "error": str(e),
+                            }
+                        )
 
             except Exception as e:
                 logger.error(
@@ -888,10 +955,12 @@ def process_onboarding_reminders() -> dict:
                     org.organization_id,
                     e,
                 )
-                results["errors"].append({
-                    "organization_id": str(org.organization_id),
-                    "error": str(e),
-                })
+                results["errors"].append(
+                    {
+                        "organization_id": str(org.organization_id),
+                        "error": str(e),
+                    }
+                )
 
         db.commit()
 
@@ -918,6 +987,7 @@ def send_welcome_email(onboarding_id: str) -> dict:
         Dict with result status
     """
     import os
+    from app.models.email_profile import EmailModule
     from app.services.email import send_email
     from app.services.people.hr.onboarding import OnboardingService
     from app.models.people.hr.lifecycle import EmployeeOnboarding
@@ -959,9 +1029,15 @@ def send_welcome_email(onboarding_id: str) -> dict:
             portal_url = f"{app_url.rstrip('/')}/onboarding/start/{raw_token}"
 
             # Build email content
-            employee_name = person.display_name or f"{person.first_name} {person.last_name}"
+            employee_name = (
+                person.display_name or f"{person.first_name} {person.last_name}"
+            )
             org_name = org.legal_name
-            start_date = onboarding.date_of_joining.strftime("%B %d, %Y") if onboarding.date_of_joining else "TBD"
+            start_date = (
+                onboarding.date_of_joining.strftime("%B %d, %Y")
+                if onboarding.date_of_joining
+                else "TBD"
+            )
 
             subject = f"Welcome to {org_name} - Complete Your Onboarding"
             body_html = f"""
@@ -1024,6 +1100,8 @@ Human Resources
                 subject=subject,
                 body_html=body_html,
                 body_text=body_text,
+                module=EmailModule.PEOPLE_PAYROLL,
+                organization_id=onboarding.organization_id,
             )
 
             if success:

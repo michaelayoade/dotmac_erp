@@ -11,7 +11,18 @@ import uuid
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -20,16 +31,18 @@ from app.db import Base
 
 class SagaStatus(str, enum.Enum):
     """Status of a saga execution."""
-    PENDING = "PENDING"           # Not yet started
-    EXECUTING = "EXECUTING"       # Steps in progress
-    COMPLETED = "COMPLETED"       # All steps succeeded
-    COMPENSATING = "COMPENSATING" # Rolling back
-    COMPENSATED = "COMPENSATED"   # Rollback complete
-    FAILED = "FAILED"             # Failed permanently (compensation also failed)
+
+    PENDING = "PENDING"  # Not yet started
+    EXECUTING = "EXECUTING"  # Steps in progress
+    COMPLETED = "COMPLETED"  # All steps succeeded
+    COMPENSATING = "COMPENSATING"  # Rolling back
+    COMPENSATED = "COMPENSATED"  # Rollback complete
+    FAILED = "FAILED"  # Failed permanently (compensation also failed)
 
 
 class StepStatus(str, enum.Enum):
     """Status of a saga step."""
+
     PENDING = "PENDING"
     EXECUTING = "EXECUTING"
     COMPLETED = "COMPLETED"

@@ -3,6 +3,7 @@ Training Event Model - Training Schema.
 
 Tracks scheduled training sessions and attendees.
 """
+
 import enum
 import uuid
 from datetime import date, datetime, time
@@ -35,6 +36,7 @@ if TYPE_CHECKING:
 
 class TrainingEventStatus(str, enum.Enum):
     """Training event status."""
+
     DRAFT = "DRAFT"
     SCHEDULED = "SCHEDULED"
     IN_PROGRESS = "IN_PROGRESS"
@@ -44,6 +46,7 @@ class TrainingEventStatus(str, enum.Enum):
 
 class AttendeeStatus(str, enum.Enum):
     """Training attendee status."""
+
     INVITED = "INVITED"
     CONFIRMED = "CONFIRMED"
     ATTENDED = "ATTENDED"
@@ -202,7 +205,11 @@ class TrainingEvent(Base, AuditMixin, ERPNextSyncMixin):
     @property
     def attendee_count(self) -> int:
         """Get confirmed attendee count."""
-        return sum(1 for a in self.attendees if a.status in (AttendeeStatus.CONFIRMED, AttendeeStatus.ATTENDED))
+        return sum(
+            1
+            for a in self.attendees
+            if a.status in (AttendeeStatus.CONFIRMED, AttendeeStatus.ATTENDED)
+        )
 
     @property
     def spots_remaining(self) -> Optional[int]:

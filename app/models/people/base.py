@@ -5,6 +5,7 @@ This module provides base classes and mixins for all People/HR models.
 These follow the same patterns as the Finance models but with HR-specific
 extensions.
 """
+
 import uuid
 from datetime import datetime
 from typing import Optional

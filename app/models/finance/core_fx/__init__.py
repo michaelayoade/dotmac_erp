@@ -2,6 +2,7 @@
 Core FX & Currency Schema.
 Currencies, exchange rates, currency translation adjustments.
 """
+
 from app.models.finance.core_fx.currency import Currency
 from app.models.finance.core_fx.exchange_rate_type import ExchangeRateType
 from app.models.finance.core_fx.exchange_rate import ExchangeRate, ExchangeRateSource

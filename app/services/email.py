@@ -11,10 +11,12 @@ from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Generator, Optional, TypedDict
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from app.models.domain_settings import SettingDomain
+from app.models.email_profile import EmailModule
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +243,21 @@ def _get_smtp_config(db: Session | None = None) -> SMTPConfig:
     }
 
 
+def _get_module_smtp_config(
+    db: Session | None,
+    organization_id: UUID | None,
+    module: EmailModule | None,
+) -> SMTPConfig | None:
+    if db is None or module is None:
+        return None
+    from app.services.email_profile import EmailProfileService
+
+    profile = EmailProfileService(db).get_profile_for_module(organization_id, module)
+    if profile:
+        return profile.to_config_dict()
+    return None
+
+
 def validate_smtp_config(
     config: SMTPConfig, timeout_seconds: int = 10
 ) -> tuple[bool, str | None]:
@@ -322,6 +339,9 @@ def send_email(
     body_text: str | None = None,
     attachments: Optional[list[tuple[str, bytes, str]]] = None,
     raise_on_error: bool = False,
+    *,
+    module: EmailModule | None = EmailModule.ADMIN,
+    organization_id: UUID | None = None,
 ) -> bool:
     """
     Send an email using SMTP settings from database or environment.
@@ -333,7 +353,9 @@ def send_email(
         body_html: HTML body content
         body_text: Plain text body content (optional)
         attachments: List of attachments as (filename, data, mime_type) tuples
-                    Example: [("payslip.pdf", pdf_bytes, "application/pdf")]
+            Example: [("payslip.pdf", pdf_bytes, "application/pdf")]
+        module: Email module used for profile routing (defaults to ADMIN)
+        organization_id: Organization scope for module routing (optional)
         raise_on_error: If True, re-raise exceptions instead of returning False.
                        Use this for async tasks that need to classify errors.
 
@@ -343,7 +365,9 @@ def send_email(
     Raises:
         smtplib.SMTPException: If raise_on_error=True and sending fails
     """
-    config = _get_smtp_config(db)
+    config = _get_module_smtp_config(db, organization_id, module) or _get_smtp_config(
+        db
+    )
 
     # Use mixed multipart to support both alternative content and attachments
     msg = MIMEMultipart("mixed")
@@ -403,6 +427,7 @@ def send_password_reset_email(
     reset_token: str,
     person_name: str | None = None,
     app_url: str | None = None,
+    organization_id: UUID | None = None,
 ) -> bool:
     name = person_name or "there"
     env_app_url = _env_value("APP_URL")
@@ -415,7 +440,15 @@ def send_password_reset_email(
         f'<p><a href="{reset_link}">Reset password</a></p>'
     )
     body_text = f"Hi {name}, use this link to reset your password: {reset_link}"
-    return send_email(db, to_email, subject, body_html, body_text)
+    return send_email(
+        db,
+        to_email,
+        subject,
+        body_html,
+        body_text,
+        module=EmailModule.ADMIN,
+        organization_id=organization_id,
+    )
 
 
 # Async email sending convenience function
@@ -425,6 +458,9 @@ def queue_email(
     body_html: str,
     body_text: str | None = None,
     attachments: list[tuple[str, bytes, str]] | None = None,
+    *,
+    module: EmailModule | None = EmailModule.ADMIN,
+    organization_id: UUID | None = None,
 ) -> None:
     """
     Queue an email for async delivery via Celery.
@@ -441,4 +477,13 @@ def queue_email(
     """
     from app.tasks.email import queue_email as _queue_email
 
-    _queue_email(to_email, subject, body_html, body_text, attachments)
+    module_value = module.value if module else None
+    _queue_email(
+        to_email,
+        subject,
+        body_html,
+        body_text,
+        attachments,
+        module=module_value,
+        organization_id=str(organization_id) if organization_id else None,
+    )

@@ -3,6 +3,7 @@ Maintenance Record Pydantic Schemas.
 
 Schemas for maintenance API endpoints.
 """
+
 from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional

@@ -3,13 +3,26 @@ Bill of Materials (BOM) Models - Inventory Schema.
 
 Manages product assembly structures and component relationships.
 """
+
 import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -91,7 +104,9 @@ class BillOfMaterials(Base):
 
     # Relationships
     item: Mapped["Item"] = relationship(
-        "Item", foreign_keys=[item_id], lazy="noload",
+        "Item",
+        foreign_keys=[item_id],
+        lazy="noload",
     )
     components: Mapped[list["BOMComponent"]] = relationship(
         "BOMComponent",
@@ -148,7 +163,9 @@ class BOMComponent(Base):
     line_number: Mapped[int] = mapped_column(Numeric(5, 0), nullable=False, default=1)
 
     # Optional: specific warehouse/location for component
-    warehouse_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    warehouse_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 

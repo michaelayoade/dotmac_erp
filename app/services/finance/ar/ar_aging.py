@@ -23,21 +23,15 @@ from app.models.finance.ar.invoice import (
     InvoiceStatus,
 )
 from app.services.common import coerce_uuid
+from app.services.finance.common.aging_helper import (
+    AGING_BUCKETS,
+    BUCKET_ATTRS,
+    compute_aging_totals,
+)
 from app.services.finance.platform.org_context import org_context_service
 from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class AgingBucket:
-    """Represents an aging bucket."""
-
-    bucket_name: str
-    min_days: int
-    max_days: Optional[int]  # None for 90+ bucket
-    amount: Decimal = Decimal("0")
-    invoice_count: int = 0
 
 
 @dataclass
@@ -79,13 +73,7 @@ class ARAgingService(ListResponseMixin):
     point-in-time snapshots for historical reporting.
     """
 
-    # Standard aging buckets
-    AGING_BUCKETS = [
-        AgingBucket("Current", 0, 30),
-        AgingBucket("31-60 Days", 31, 60),
-        AgingBucket("61-90 Days", 61, 90),
-        AgingBucket("Over 90 Days", 91, None),
-    ]
+    AGING_BUCKETS = AGING_BUCKETS
 
     @staticmethod
     def calculate_customer_aging(
@@ -133,23 +121,12 @@ class ARAgingService(ListResponseMixin):
             .all()
         )
 
-        current = Decimal("0")
-        days_31_60 = Decimal("0")
-        days_61_90 = Decimal("0")
-        over_90 = Decimal("0")
-
-        for inv in invoices:
-            days_overdue = (ref_date - inv.due_date).days
-            balance = inv.balance_due
-
-            if days_overdue <= 30:
-                current += balance
-            elif days_overdue <= 60:
-                days_31_60 += balance
-            elif days_overdue <= 90:
-                days_61_90 += balance
-            else:
-                over_90 += balance
+        current, days_31_60, days_61_90, over_90 = compute_aging_totals(
+            invoices,
+            ref_date,
+            due_date=lambda inv: inv.due_date,
+            balance=lambda inv: inv.balance_due,
+        )
 
         return CustomerAgingSummary(
             customer_id=customer.customer_id,
@@ -201,25 +178,13 @@ class ARAgingService(ListResponseMixin):
             .all()
         )
 
-        current = Decimal("0")
-        days_31_60 = Decimal("0")
-        days_61_90 = Decimal("0")
-        over_90 = Decimal("0")
-        customer_ids = set()
-
-        for inv in invoices:
-            days_overdue = (ref_date - inv.due_date).days
-            balance = inv.balance_due
-            customer_ids.add(inv.customer_id)
-
-            if days_overdue <= 30:
-                current += balance
-            elif days_overdue <= 60:
-                days_31_60 += balance
-            elif days_overdue <= 90:
-                days_61_90 += balance
-            else:
-                over_90 += balance
+        customer_ids = {inv.customer_id for inv in invoices}
+        current, days_31_60, days_61_90, over_90 = compute_aging_totals(
+            invoices,
+            ref_date,
+            due_date=lambda inv: inv.due_date,
+            balance=lambda inv: inv.balance_due,
+        )
 
         # Get organization's functional currency
         functional_currency = org_context_service.get_functional_currency(db, org_id)
@@ -323,12 +288,7 @@ class ARAgingService(ListResponseMixin):
         customer_aging = ARAgingService.get_aging_by_customer(db, org_id, ref_date)
 
         snapshots = []
-        bucket_configs = [
-            ("Current", "current"),
-            ("31-60 Days", "days_31_60"),
-            ("61-90 Days", "days_61_90"),
-            ("Over 90 Days", "over_90"),
-        ]
+        bucket_configs = BUCKET_ATTRS
 
         for aging in customer_aging:
             for bucket_name, attr_name in bucket_configs:

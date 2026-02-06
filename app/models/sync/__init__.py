@@ -3,6 +3,7 @@ Sync Models - External system sync state tracking.
 
 Tracks migration state from external systems (ERPNext, DotMac CRM) to DotMac ERP.
 """
+
 from .integration_config import IntegrationConfig, IntegrationType
 from .sync_entity import SyncEntity, SyncStatus
 from .sync_history import SyncHistory, SyncJobStatus, SyncType

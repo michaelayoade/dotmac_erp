@@ -22,11 +22,10 @@ from uuid import UUID
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.models.people.hr.employee import Employee
 from app.models.people.payroll.salary_structure import SalaryStructure
 from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
 
@@ -37,7 +36,9 @@ EXCEL_PATH = Path("/root/.dotmac/jan paye (2) (1).xlsx")
 
 def get_org_id(db: Session) -> UUID:
     """Get the first organization ID."""
-    result = db.execute(text("SELECT organization_id FROM core_org.organization LIMIT 1"))
+    result = db.execute(
+        text("SELECT organization_id FROM core_org.organization LIMIT 1")
+    )
     row = result.fetchone()
     if not row:
         raise ValueError("No organization found.")
@@ -46,7 +47,11 @@ def get_org_id(db: Session) -> UUID:
 
 def get_admin_user_id(db: Session) -> UUID:
     """Get admin user ID."""
-    result = db.execute(text("SELECT person_id FROM public.user_credentials WHERE username = 'admin' LIMIT 1"))
+    result = db.execute(
+        text(
+            "SELECT person_id FROM public.user_credentials WHERE username = 'admin' LIMIT 1"
+        )
+    )
     row = result.fetchone()
     if row:
         return row[0]
@@ -57,20 +62,32 @@ def get_admin_user_id(db: Session) -> UUID:
     return row[0]
 
 
-def get_structures(db: Session, org_id: UUID) -> tuple[SalaryStructure, SalaryStructure]:
+def get_structures(
+    db: Session, org_id: UUID
+) -> tuple[SalaryStructure, SalaryStructure]:
     """Get permanent and contract salary structures."""
-    perm = db.query(SalaryStructure).filter(
-        SalaryStructure.organization_id == org_id,
-        SalaryStructure.structure_code == "PERM-STAFF",
-    ).first()
+    perm = (
+        db.query(SalaryStructure)
+        .filter(
+            SalaryStructure.organization_id == org_id,
+            SalaryStructure.structure_code == "PERM-STAFF",
+        )
+        .first()
+    )
 
-    contract = db.query(SalaryStructure).filter(
-        SalaryStructure.organization_id == org_id,
-        SalaryStructure.structure_code == "CONTRACT-STAFF",
-    ).first()
+    contract = (
+        db.query(SalaryStructure)
+        .filter(
+            SalaryStructure.organization_id == org_id,
+            SalaryStructure.structure_code == "CONTRACT-STAFF",
+        )
+        .first()
+    )
 
     if not perm or not contract:
-        raise ValueError("Salary structures not found. Run seed_payroll_from_excel.py first.")
+        raise ValueError(
+            "Salary structures not found. Run seed_payroll_from_excel.py first."
+        )
 
     return perm, contract
 
@@ -116,7 +133,9 @@ def parse_excel_data(excel_path: Path) -> dict[str, dict]:
         }
 
     # Parse Contract Staff sheet
-    contract = pd.read_excel(excel_path, sheet_name="Payroll (January Contract)", header=2)
+    contract = pd.read_excel(
+        excel_path, sheet_name="Payroll (January Contract)", header=2
+    )
     contract.columns = contract.iloc[0].tolist()
     contract = contract.iloc[1:]
     contract = contract[pd.to_numeric(contract["S/N"], errors="coerce").notna()]
@@ -185,7 +204,8 @@ def main():
 
         # Find employees without assignments
         print("\nFinding employees without salary assignments...")
-        result = db.execute(text("""
+        result = db.execute(
+            text("""
             SELECT e.employee_id, e.employee_code
             FROM hr.employee e
             WHERE e.organization_id = :org_id
@@ -196,10 +216,14 @@ def main():
                 AND ssa.from_date <= '2026-01-31'
                 AND (ssa.to_date IS NULL OR ssa.to_date >= '2026-01-01')
             )
-        """), {"org_id": org_id})
+        """),
+            {"org_id": org_id},
+        )
 
         employees_without_assignment = list(result)
-        print(f"  Found {len(employees_without_assignment)} employees without assignments")
+        print(
+            f"  Found {len(employees_without_assignment)} employees without assignments"
+        )
 
         # Match and create assignments
         print("\nCreating salary assignments...")
@@ -209,10 +233,14 @@ def main():
         for emp_id, emp_code in employees_without_assignment:
             if emp_code in excel_data:
                 data = excel_data[emp_code]
-                structure = perm_struct if data["type"] == "permanent" else contract_struct
+                structure = (
+                    perm_struct if data["type"] == "permanent" else contract_struct
+                )
 
                 if args.dry_run:
-                    print(f"  [DRY RUN] Would assign {emp_code} ({data['name']}) -> {structure.structure_code}, Base: {data['gross']}")
+                    print(
+                        f"  [DRY RUN] Would assign {emp_code} ({data['name']}) -> {structure.structure_code}, Base: {data['gross']}"
+                    )
                 else:
                     assignment = SalaryStructureAssignment(
                         organization_id=org_id,
@@ -223,7 +251,9 @@ def main():
                         created_by_id=user_id,
                     )
                     db.add(assignment)
-                    print(f"  + Assigned {emp_code} ({data['name']}) -> {structure.structure_code}, Base: {data['gross']}")
+                    print(
+                        f"  + Assigned {emp_code} ({data['name']}) -> {structure.structure_code}, Base: {data['gross']}"
+                    )
                 created += 1
             else:
                 print(f"  ⚠ Skipped {emp_code} - not found in Excel")
@@ -246,6 +276,7 @@ def main():
         db.rollback()
         print(f"\nERROR: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
     finally:

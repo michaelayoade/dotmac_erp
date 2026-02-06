@@ -3,6 +3,7 @@ Interview Model - Recruit Schema.
 
 Tracks interview scheduling, rounds, and feedback.
 """
+
 import enum
 import uuid
 from datetime import datetime
@@ -32,6 +33,7 @@ if TYPE_CHECKING:
 
 class InterviewRound(str, enum.Enum):
     """Interview round/stage."""
+
     PHONE_SCREENING = "PHONE_SCREENING"
     TECHNICAL_ROUND_1 = "TECHNICAL_ROUND_1"
     TECHNICAL_ROUND_2 = "TECHNICAL_ROUND_2"
@@ -43,6 +45,7 @@ class InterviewRound(str, enum.Enum):
 
 class InterviewStatus(str, enum.Enum):
     """Interview status."""
+
     SCHEDULED = "SCHEDULED"
     RESCHEDULED = "RESCHEDULED"
     IN_PROGRESS = "IN_PROGRESS"

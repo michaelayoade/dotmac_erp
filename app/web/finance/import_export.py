@@ -114,7 +114,9 @@ def import_dashboard(
 
     context["entity_types"] = entity_types
 
-    return templates.TemplateResponse(request, "finance/import_export/dashboard.html", context)
+    return templates.TemplateResponse(
+        request, "finance/import_export/dashboard.html", context
+    )
 
 
 @router.get("/{entity_type}", response_class=HTMLResponse)
@@ -141,31 +143,75 @@ def import_form(
     entity_columns = {
         "accounts": {
             "required": ["Account Name", "Account Type"],
-            "optional": ["Account Code", "Description", "Currency", "Status", "Parent Account"],
+            "optional": [
+                "Account Code",
+                "Description",
+                "Currency",
+                "Status",
+                "Parent Account",
+            ],
         },
         "customers": {
             "required": ["Display Name OR Company Name"],
-            "optional": ["Phone", "Email", "Currency Code", "Credit Limit", "Payment Terms", "Billing Address"],
+            "optional": [
+                "Phone",
+                "Email",
+                "Currency Code",
+                "Credit Limit",
+                "Payment Terms",
+                "Billing Address",
+            ],
         },
         "suppliers": {
             "required": ["Display Name OR Contact Name"],
-            "optional": ["Phone", "Email", "Currency Code", "Payment Terms", "Billing Address"],
+            "optional": [
+                "Phone",
+                "Email",
+                "Currency Code",
+                "Payment Terms",
+                "Billing Address",
+            ],
         },
         "items": {
             "required": ["Item Name OR Name"],
-            "optional": ["Item Code", "SKU", "Description", "Unit Price", "Selling Price", "Category"],
+            "optional": [
+                "Item Code",
+                "SKU",
+                "Description",
+                "Unit Price",
+                "Selling Price",
+                "Category",
+            ],
         },
         "assets": {
             "required": ["Asset Name"],
-            "optional": ["Asset Number", "Acquisition Date", "Acquisition Cost", "Category", "Useful Life"],
+            "optional": [
+                "Asset Number",
+                "Acquisition Date",
+                "Acquisition Cost",
+                "Category",
+                "Useful Life",
+            ],
         },
         "bank_accounts": {
             "required": ["Bank Name", "Account Number"],
-            "optional": ["Account Type", "Currency", "IBAN", "Branch Name", "Opening Balance"],
+            "optional": [
+                "Account Type",
+                "Currency",
+                "IBAN",
+                "Branch Name",
+                "Opening Balance",
+            ],
         },
         "invoices": {
             "required": ["Customer Name", "Total Amount"],
-            "optional": ["Invoice Number", "Invoice Date", "Due Date", "Tax Amount", "Status"],
+            "optional": [
+                "Invoice Number",
+                "Invoice Date",
+                "Due Date",
+                "Tax Amount",
+                "Status",
+            ],
         },
         "expenses": {
             "required": ["Amount"],
@@ -181,12 +227,18 @@ def import_form(
         },
     }
 
-    context = base_context(request, auth, f"Import {entity_names.get(entity_type, entity_type)}", "import")
+    context = base_context(
+        request, auth, f"Import {entity_names.get(entity_type, entity_type)}", "import"
+    )
     context["entity_type"] = entity_type
     context["entity_name"] = entity_names.get(entity_type, entity_type)
-    context["columns"] = entity_columns.get(entity_type, {"required": [], "optional": []})
+    context["columns"] = entity_columns.get(
+        entity_type, {"required": [], "optional": []}
+    )
 
-    return templates.TemplateResponse(request, "finance/import_export/import_form.html", context)
+    return templates.TemplateResponse(
+        request, "finance/import_export/import_form.html", context
+    )
 
 
 @router.post("/{entity_type}/preview", response_class=JSONResponse)
@@ -210,7 +262,9 @@ async def preview_import(
     except ValueError as e:
         return JSONResponse(content={"detail": str(e)}, status_code=400)
     except Exception as e:
-        return JSONResponse(content={"detail": f"Preview failed: {str(e)}"}, status_code=500)
+        return JSONResponse(
+            content={"detail": f"Preview failed: {str(e)}"}, status_code=500
+        )
 
 
 @router.post("/{entity_type}", response_class=JSONResponse)
@@ -226,7 +280,12 @@ async def execute_import(
     """Execute import operation (web route)."""
     try:
         # Handle both checkbox (sends nothing when unchecked) and explicit "true"/"false" strings
-        skip_dups = skip_duplicates is not None and skip_duplicates.lower() in ("true", "1", "on", "")
+        skip_dups = skip_duplicates is not None and skip_duplicates.lower() in (
+            "true",
+            "1",
+            "on",
+            "",
+        )
         is_dry_run = dry_run is not None and dry_run.lower() in ("true", "1", "on", "")
 
         result = await import_web_service.execute_import(
@@ -242,4 +301,6 @@ async def execute_import(
     except ValueError as e:
         return JSONResponse(content={"detail": str(e)}, status_code=400)
     except Exception as e:
-        return JSONResponse(content={"detail": f"Import failed: {str(e)}"}, status_code=500)
+        return JSONResponse(
+            content={"detail": f"Import failed: {str(e)}"}, status_code=500
+        )

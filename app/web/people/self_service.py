@@ -3,12 +3,13 @@ Self-service web routes for employees.
 
 Thin wrappers around self-service web service.
 """
+
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -19,7 +20,6 @@ from app.web.deps import (
     require_self_service_access,
     require_self_service_expense_approver,
     require_self_service_leave_approver,
-    require_hr_access,
 )
 
 
@@ -191,8 +191,10 @@ async def update_tax_info(
         "country_code": _safe_form_text(form.get("country_code")) or None,
         "personal_email": _safe_form_text(form.get("personal_email")) or None,
         "personal_phone": _safe_form_text(form.get("personal_phone")) or None,
-        "emergency_contact_name": _safe_form_text(form.get("emergency_contact_name")) or None,
-        "emergency_contact_phone": _safe_form_text(form.get("emergency_contact_phone")) or None,
+        "emergency_contact_name": _safe_form_text(form.get("emergency_contact_name"))
+        or None,
+        "emergency_contact_phone": _safe_form_text(form.get("emergency_contact_phone"))
+        or None,
         "bank_name": _safe_form_text(form.get("bank_name")) or None,
         "bank_account_number": _safe_form_text(form.get("bank_account_number")) or None,
         "bank_account_name": _safe_form_text(form.get("bank_account_name")) or None,
@@ -318,7 +320,9 @@ def my_payslips(
     db: Session = Depends(get_db),
 ):
     """Self-service payslips page."""
-    return self_service_web_service.payslips_response(request, auth, db, year=year, page=page)
+    return self_service_web_service.payslips_response(
+        request, auth, db, year=year, page=page
+    )
 
 
 @router.get("/payslips/{slip_id}", response_class=HTMLResponse)
@@ -396,7 +400,18 @@ async def create_expense_claim(
     ticket_id = _safe_form_text(form.get("ticket_id"))
     task_id = _safe_form_text(form.get("task_id"))
 
-    if not all([claim_date_str, purpose, expense_date_str, category_id, description, claimed_amount, recipient_bank_code, recipient_account_number]):
+    if not all(
+        [
+            claim_date_str,
+            purpose,
+            expense_date_str,
+            category_id,
+            description,
+            claimed_amount,
+            recipient_bank_code,
+            recipient_account_number,
+        ]
+    ):
         raise HTTPException(status_code=400, detail="Missing required fields")
 
     claim_date = date.fromisoformat(claim_date_str) if claim_date_str else None
@@ -461,7 +476,9 @@ async def update_expense_claim(
     recipient_bank_code = _safe_form_text(form.get("recipient_bank_code"))
     recipient_account_number = _safe_form_text(form.get("recipient_account_number"))
     if not recipient_bank_code or not recipient_account_number:
-        raise HTTPException(status_code=400, detail="Bank code and account number are required")
+        raise HTTPException(
+            status_code=400, detail="Bank code and account number are required"
+        )
 
     # Extract optional project/ticket/task linkage
     project_id_str = _safe_form_text(form.get("project_id"))
@@ -497,7 +514,9 @@ async def update_expense_claim(
         try:
             claimed_amount = Decimal(claimed_amount_str)
         except (InvalidOperation, TypeError) as exc:
-            raise HTTPException(status_code=400, detail="Invalid claimed amount") from exc
+            raise HTTPException(
+                status_code=400, detail="Invalid claimed amount"
+            ) from exc
 
         items.append(
             {

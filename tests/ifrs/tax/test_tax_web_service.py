@@ -7,8 +7,6 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 
 class MockTaxReturn:
     """Mock TaxReturn model for testing."""

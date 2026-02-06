@@ -232,7 +232,9 @@ def _parse_bool(value: object) -> bool:
     raise InvalidOperation("Invalid boolean value")
 
 
-def _load_import_rows(content: bytes, fmt: str) -> Tuple[List[Dict[str, object]], List[str]]:
+def _load_import_rows(
+    content: bytes, fmt: str
+) -> Tuple[List[Dict[str, object]], List[str]]:
     if fmt == "csv":
         reader = csv.DictReader(StringIO(content.decode("utf-8-sig")))
         if not reader.fieldnames:
@@ -555,7 +557,8 @@ async def plan_import(
         rows, headers = _load_import_rows(content, fmt)
     except RuntimeError:
         return RedirectResponse(
-            url="/procurement/plans?error=XLSX+support+requires+openpyxl", status_code=303
+            url="/procurement/plans?error=XLSX+support+requires+openpyxl",
+            status_code=303,
         )
     except Exception:
         return RedirectResponse(
@@ -653,9 +656,13 @@ async def plan_import(
                 method_value = ProcurementMethod[method_value]
 
         budget_line_code = (
-            None if _is_empty(row.get("budget_line_code")) else str(row.get("budget_line_code")).strip()
+            None
+            if _is_empty(row.get("budget_line_code"))
+            else str(row.get("budget_line_code")).strip()
         )
-        category = None if _is_empty(row.get("category")) else str(row.get("category")).strip()
+        category = (
+            None if _is_empty(row.get("category")) else str(row.get("category")).strip()
+        )
 
         budget_id_value = None
         if not _is_empty(row.get("budget_id")):
@@ -723,9 +730,7 @@ async def plan_import(
     )
     duplicates = [num for num in plans.keys() if num in existing]
     if duplicates:
-        msg = quote(
-            "Plan number(s) already exist: " + ", ".join(sorted(duplicates))
-        )
+        msg = quote("Plan number(s) already exist: " + ", ".join(sorted(duplicates)))
         return RedirectResponse(url=f"/procurement/plans?error={msg}", status_code=303)
 
     service = ProcurementPlanService(db)
@@ -917,21 +922,14 @@ def requisition_export(
                         line.uom or "",
                         line.estimated_unit_price,
                         line.estimated_amount,
-                        str(line.expense_account_id)
-                        if line.expense_account_id
-                        else "",
+                        str(line.expense_account_id) if line.expense_account_id else "",
                         str(line.cost_center_id) if line.cost_center_id else "",
                         str(line.project_id) if line.project_id else "",
-                        line.delivery_date.isoformat()
-                        if line.delivery_date
-                        else "",
+                        line.delivery_date.isoformat() if line.delivery_date else "",
                     ]
                 )
         else:
-            rows.append(
-                header_values
-                + ["", "", "", "", "", "", "", "", "", "", ""]
-            )
+            rows.append(header_values + ["", "", "", "", "", "", "", "", "", "", ""])
 
     filename = "requisitions_export"
     if fmt == "csv":
@@ -1053,9 +1051,7 @@ async def requisition_import(
         try:
             requisition_date = _parse_date(row.get("requisition_date"))
         except InvalidOperation:
-            errors.append(
-                f"Row {row_num}: requisition_date must be YYYY-MM-DD"
-            )
+            errors.append(f"Row {row_num}: requisition_date must be YYYY-MM-DD")
             requisition_date = date.today()
 
         try:
@@ -1136,9 +1132,7 @@ async def requisition_import(
             if estimated_unit_price < 0:
                 raise InvalidOperation("estimated_unit_price must be >= 0")
         except InvalidOperation:
-            errors.append(
-                f"Row {row_num}: estimated_unit_price must be a number >= 0"
-            )
+            errors.append(f"Row {row_num}: estimated_unit_price must be a number >= 0")
             estimated_unit_price = Decimal("0")
 
         try:
@@ -1404,7 +1398,9 @@ def rfq_import_template(
         "procurement_method": ["OPEN_COMPETITIVE"],
         "requisition_id": [""],
         "plan_item_id": [""],
-        "evaluation_criteria": ['[{"name":"Price","weight":60},{"name":"Quality","weight":40}]'],
+        "evaluation_criteria": [
+            '[{"name":"Price","weight":60},{"name":"Quality","weight":40}]'
+        ],
         "terms_and_conditions": ["Net 30 payment terms."],
         "estimated_value": [50000],
         "currency_code": ["NGN"],
@@ -1677,9 +1673,7 @@ async def rfq_import(
                 if estimated_value < 0:
                     raise InvalidOperation("estimated_value must be >= 0")
             except InvalidOperation:
-                errors.append(
-                    f"Row {row_num}: estimated_value must be a number >= 0"
-                )
+                errors.append(f"Row {row_num}: estimated_value must be a number >= 0")
                 estimated_value = None
 
         currency_code_raw = row.get("currency_code", "")
@@ -1971,9 +1965,7 @@ def contract_export(
                 contract.contract_number,
                 contract.title,
                 str(contract.supplier_id),
-                contract.contract_date.isoformat()
-                if contract.contract_date
-                else "",
+                contract.contract_date.isoformat() if contract.contract_date else "",
                 contract.start_date.isoformat() if contract.start_date else "",
                 contract.end_date.isoformat() if contract.end_date else "",
                 contract.contract_value,
@@ -2179,9 +2171,7 @@ async def contract_import(
             try:
                 bpp_clearance_date = _parse_date(row.get("bpp_clearance_date"))
             except InvalidOperation:
-                errors.append(
-                    f"Row {row_num}: bpp_clearance_date must be YYYY-MM-DD"
-                )
+                errors.append(f"Row {row_num}: bpp_clearance_date must be YYYY-MM-DD")
 
         payment_terms = (
             None
@@ -2214,17 +2204,13 @@ async def contract_import(
                 if performance_bond_amount < 0:
                     raise InvalidOperation("performance_bond_amount must be >= 0")
             except InvalidOperation:
-                errors.append(
-                    f"Row {row_num}: performance_bond_amount must be >= 0"
-                )
+                errors.append(f"Row {row_num}: performance_bond_amount must be >= 0")
                 performance_bond_amount = None
 
         retention_percentage = None
         if not _is_empty(row.get("retention_percentage")):
             try:
-                retention_percentage = _parse_decimal(
-                    row.get("retention_percentage")
-                )
+                retention_percentage = _parse_decimal(row.get("retention_percentage"))
                 if retention_percentage < 0:
                     raise InvalidOperation("retention_percentage must be >= 0")
             except InvalidOperation:
@@ -2274,7 +2260,9 @@ async def contract_import(
     )
     duplicates = [num for num in contracts.keys() if num in existing]
     if duplicates:
-        msg = quote("Contract number(s) already exist: " + ", ".join(sorted(duplicates)))
+        msg = quote(
+            "Contract number(s) already exist: " + ", ".join(sorted(duplicates))
+        )
         return RedirectResponse(
             url=f"/procurement/contracts?error={msg}", status_code=303
         )
@@ -2381,10 +2369,12 @@ async def contract_create(
             end_date=end_date,
             contract_value=contract_value,
             currency_code=currency_code[:3],
-            bpp_clearance_number=(form.get("bpp_clearance_number") or "").strip() or None,
+            bpp_clearance_number=(form.get("bpp_clearance_number") or "").strip()
+            or None,
             bpp_clearance_date=bpp_clearance_date,
             payment_terms=(form.get("payment_terms") or "").strip() or None,
-            terms_and_conditions=(form.get("terms_and_conditions") or "").strip() or None,
+            terms_and_conditions=(form.get("terms_and_conditions") or "").strip()
+            or None,
             performance_bond_required=_parse_bool(
                 form.get("performance_bond_required")
             ),
@@ -2410,7 +2400,12 @@ async def contract_create(
             url=f"/procurement/contracts/{contract.contract_id}?created=Contract+created",
             status_code=303,
         )
-    except (ValidationError, InvalidOperation, ValueError, PydanticValidationError) as exc:
+    except (
+        ValidationError,
+        InvalidOperation,
+        ValueError,
+        PydanticValidationError,
+    ) as exc:
         db.rollback()
         return RedirectResponse(
             url=f"/procurement/contracts/new?error={quote(str(exc))}",

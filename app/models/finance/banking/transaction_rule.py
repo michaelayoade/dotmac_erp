@@ -6,7 +6,6 @@ Stores rules for auto-categorizing bank transactions to GL accounts.
 
 import enum
 from datetime import datetime
-from decimal import Decimal
 from typing import Optional
 from uuid import UUID, uuid4
 
@@ -16,7 +15,6 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Integer,
-    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -30,20 +28,22 @@ from app.db import Base
 
 class RuleType(str, enum.Enum):
     """Type of categorization rule."""
-    PAYEE_MATCH = "PAYEE_MATCH"           # Match by payee name/pattern
+
+    PAYEE_MATCH = "PAYEE_MATCH"  # Match by payee name/pattern
     DESCRIPTION_CONTAINS = "DESCRIPTION_CONTAINS"  # Description contains text
-    DESCRIPTION_REGEX = "DESCRIPTION_REGEX"        # Regex pattern match
-    AMOUNT_RANGE = "AMOUNT_RANGE"          # Amount within range
-    REFERENCE_MATCH = "REFERENCE_MATCH"    # Reference number pattern
-    COMBINED = "COMBINED"                   # Multiple conditions
+    DESCRIPTION_REGEX = "DESCRIPTION_REGEX"  # Regex pattern match
+    AMOUNT_RANGE = "AMOUNT_RANGE"  # Amount within range
+    REFERENCE_MATCH = "REFERENCE_MATCH"  # Reference number pattern
+    COMBINED = "COMBINED"  # Multiple conditions
 
 
 class RuleAction(str, enum.Enum):
     """Action to take when rule matches."""
-    CATEGORIZE = "CATEGORIZE"       # Assign to GL account
-    FLAG_REVIEW = "FLAG_REVIEW"     # Flag for manual review
-    SPLIT = "SPLIT"                 # Split across accounts
-    IGNORE = "IGNORE"               # Mark as non-reconciling
+
+    CATEGORIZE = "CATEGORIZE"  # Assign to GL account
+    FLAG_REVIEW = "FLAG_REVIEW"  # Flag for manual review
+    SPLIT = "SPLIT"  # Split across accounts
+    IGNORE = "IGNORE"  # Mark as non-reconciling
 
 
 class TransactionRule(Base):
@@ -110,8 +110,12 @@ class TransactionRule(Base):
     )
 
     # Transaction type filter (credit/debit)
-    applies_to_credits: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    applies_to_debits: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    applies_to_credits: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
+    applies_to_debits: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
 
     # Action configuration
     action: Mapped[RuleAction] = mapped_column(

@@ -5,12 +5,13 @@ Stores pending changes to employee bank/tax information that require
 approval before being applied. Supports the statutory exports feature
 by ensuring data changes go through proper review.
 """
+
 import enum
 import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Optional
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text, func, text
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -61,7 +62,9 @@ class EmployeeInfoChangeRequest(Base):
         Index("idx_info_change_request_org", "organization_id"),
         Index("idx_info_change_request_employee", "employee_id"),
         Index("idx_info_change_request_status", "organization_id", "status"),
-        Index("idx_info_change_request_pending", "organization_id", "status", "created_at"),
+        Index(
+            "idx_info_change_request_pending", "organization_id", "status", "created_at"
+        ),
         {"schema": "hr"},
     )
 

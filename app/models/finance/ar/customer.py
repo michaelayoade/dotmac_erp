@@ -1,13 +1,28 @@
 """
 Customer Model - AR Schema.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -63,11 +78,17 @@ class Customer(Base):
     # Identity
     legal_name: Mapped[str] = mapped_column(String(255), nullable=False)
     trading_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    tax_identification_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    registration_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    tax_identification_number: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )
+    registration_number: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )
 
     # Credit
-    credit_limit: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6), nullable=True)
+    credit_limit: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 6), nullable=True
+    )
     credit_terms_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
     credit_hold: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     payment_terms_id: Mapped[Optional[uuid.UUID]] = mapped_column(
@@ -81,7 +102,9 @@ class Customer(Base):
         nullable=False,
         default=settings.default_functional_currency_code,
     )
-    price_list_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    price_list_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
     ar_control_account_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         nullable=False,
@@ -109,9 +132,13 @@ class Customer(Base):
     )
 
     # Related party
-    is_related_party: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_related_party: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     related_party_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    related_party_relationship: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    related_party_relationship: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )
 
     # Withholding Tax (WHT) Configuration
     # When true, this customer deducts WHT when paying invoices
@@ -138,9 +165,15 @@ class Customer(Base):
     )
 
     # Contact & Address (JSONB for flexibility)
-    billing_address: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    shipping_address: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    primary_contact: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    billing_address: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )
+    shipping_address: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )
+    primary_contact: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )
     bank_details: Mapped[Optional[dict[str, Any]]] = mapped_column(
         JSONB,
         nullable=True,

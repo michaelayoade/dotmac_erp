@@ -21,7 +21,7 @@
                 Offer {{ offer.offer_number }}
             </h1>
             <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                {{ offer.designation.title }} position for {{ offer.applicant.full_name }}
+                {{ offer.designation.designation_name }} position for {{ offer.applicant.full_name }}
             </p>
         </div>
         <div class="flex items-center gap-2">
@@ -93,12 +93,12 @@
                     <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                         <div>
                             <dt class="text-sm text-slate-500 dark:text-slate-400">Designation</dt>
-                            <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-white">{{ offer.designation.title }}</dd>
+                            <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-white">{{ offer.designation.designation_name }}</dd>
                         </div>
                         {% if offer.department %}
                         <div>
                             <dt class="text-sm text-slate-500 dark:text-slate-400">Department</dt>
-                            <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-white">{{ offer.department.name }}</dd>
+                            <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-white">{{ offer.department.department_name }}</dd>
                         </div>
                         {% endif %}
                         <div>

@@ -5,7 +5,6 @@ Tests for SupplierBulkService that handles bulk operations on supplier entities.
 """
 
 import uuid
-from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -14,6 +13,7 @@ from tests.ifrs.bulk.conftest import MockSupplier, MockSupplierType
 
 
 # ============ TestCanDelete ============
+
 
 class TestCanDelete:
     """Tests for the can_delete method."""
@@ -88,6 +88,7 @@ class TestCanDelete:
 
 # ============ TestGetExportValue ============
 
+
 class TestGetExportValue:
     """Tests for the _get_export_value method."""
 
@@ -144,7 +145,11 @@ class TestGetExportValue:
     def test_export_primary_contact_email(self, mock_db, organization_id):
         """Should export primary contact email."""
         supplier = MockSupplier(
-            primary_contact={"name": "John", "email": "john@supplier.com", "phone": "555-0100"}
+            primary_contact={
+                "name": "John",
+                "email": "john@supplier.com",
+                "phone": "555-0100",
+            }
         )
 
         with patch("app.services.finance.ap.bulk.Supplier", MagicMock()):
@@ -158,7 +163,11 @@ class TestGetExportValue:
     def test_export_primary_contact_phone(self, mock_db, organization_id):
         """Should export primary contact phone."""
         supplier = MockSupplier(
-            primary_contact={"name": "John", "email": "john@test.com", "phone": "+1-555-0100"}
+            primary_contact={
+                "name": "John",
+                "email": "john@test.com",
+                "phone": "+1-555-0100",
+            }
         )
 
         with patch("app.services.finance.ap.bulk.Supplier", MagicMock()):
@@ -224,6 +233,7 @@ class TestGetExportValue:
 
 # ============ TestGetExportFilename ============
 
+
 class TestGetExportFilename:
     """Tests for the _get_export_filename method."""
 
@@ -262,6 +272,7 @@ class TestGetExportFilename:
 
 # ============ TestBulkDelete ============
 
+
 class TestBulkDelete:
     """Tests for the bulk_delete method."""
 
@@ -281,7 +292,9 @@ class TestBulkDelete:
             from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
-            result = await service.bulk_delete([supplier1.supplier_id, supplier2.supplier_id])
+            result = await service.bulk_delete(
+                [supplier1.supplier_id, supplier2.supplier_id]
+            )
 
             assert result.success_count == 2
             assert result.failed_count == 0
@@ -310,7 +323,9 @@ class TestBulkDelete:
             from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
-            result = await service.bulk_delete([supplier1.supplier_id, supplier2.supplier_id])
+            result = await service.bulk_delete(
+                [supplier1.supplier_id, supplier2.supplier_id]
+            )
 
             assert result.success_count == 1
             assert result.failed_count == 1
@@ -332,7 +347,9 @@ class TestBulkDelete:
             from app.services.finance.ap.bulk import SupplierBulkService
 
             service = SupplierBulkService(mock_db, organization_id)
-            result = await service.bulk_delete([supplier1.supplier_id, supplier2.supplier_id])
+            result = await service.bulk_delete(
+                [supplier1.supplier_id, supplier2.supplier_id]
+            )
 
             assert result.success_count == 0
             assert result.failed_count == 2
@@ -367,13 +384,16 @@ class TestBulkDelete:
 
 # ============ TestBulkExport ============
 
+
 class TestBulkExport:
     """Tests for the bulk_export method."""
 
     @pytest.mark.asyncio
     async def test_export_csv_headers(self, mock_db, mock_supplier, organization_id):
         """CSV export should include correct headers."""
-        mock_db.query.return_value.filter.return_value.all.return_value = [mock_supplier]
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            mock_supplier
+        ]
 
         with patch("app.services.finance.ap.bulk.Supplier", MagicMock()):
             from app.services.finance.ap.bulk import SupplierBulkService
@@ -393,7 +413,9 @@ class TestBulkExport:
     @pytest.mark.asyncio
     async def test_export_csv_data(self, mock_db, mock_supplier, organization_id):
         """CSV export should include entity data."""
-        mock_db.query.return_value.filter.return_value.all.return_value = [mock_supplier]
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            mock_supplier
+        ]
 
         with patch("app.services.finance.ap.bulk.Supplier", MagicMock()):
             from app.services.finance.ap.bulk import SupplierBulkService
@@ -426,11 +448,15 @@ class TestBulkExport:
             assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_export_streaming_response(self, mock_db, mock_supplier, organization_id):
+    async def test_export_streaming_response(
+        self, mock_db, mock_supplier, organization_id
+    ):
         """Export should return a StreamingResponse."""
         from fastapi.responses import StreamingResponse
 
-        mock_db.query.return_value.filter.return_value.all.return_value = [mock_supplier]
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            mock_supplier
+        ]
 
         with patch("app.services.finance.ap.bulk.Supplier", MagicMock()):
             from app.services.finance.ap.bulk import SupplierBulkService
@@ -443,6 +469,7 @@ class TestBulkExport:
 
 
 # ============ TestFactoryFunction ============
+
 
 class TestFactoryFunction:
     """Tests for the get_supplier_bulk_service factory function."""

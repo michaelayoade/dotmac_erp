@@ -3,6 +3,7 @@
 
 Logs in to get a bearer token, then probes a list of URLs.
 """
+
 import argparse
 import json
 import sys
@@ -77,7 +78,11 @@ def load_routes(path: str | None) -> list[str]:
     if not path:
         return DEFAULT_ROUTES
     with open(path, "r", encoding="utf-8") as handle:
-        return [line.strip() for line in handle if line.strip() and not line.strip().startswith("#")]
+        return [
+            line.strip()
+            for line in handle
+            if line.strip() and not line.strip().startswith("#")
+        ]
 
 
 def load_routes_from_openapi(
@@ -156,7 +161,9 @@ def filter_routes(
     return filtered
 
 
-def get_default_fiscal_period_id(base_url: str, headers: dict, timeout: int) -> str | None:
+def get_default_fiscal_period_id(
+    base_url: str, headers: dict, timeout: int
+) -> str | None:
     status, body = _request(
         f"{base_url}/api/v1/gl/fiscal-periods?limit=1",
         headers=headers,
@@ -174,7 +181,9 @@ def get_default_fiscal_period_id(base_url: str, headers: dict, timeout: int) -> 
     return items[0].get("fiscal_period_id")
 
 
-def substitute_fiscal_period_id(routes: list[str], fiscal_period_id: str | None) -> list[str]:
+def substitute_fiscal_period_id(
+    routes: list[str], fiscal_period_id: str | None
+) -> list[str]:
     if not fiscal_period_id:
         return [path for path in routes if _FISCAL_PERIOD_PLACEHOLDER not in path]
     replaced = []
@@ -189,12 +198,33 @@ def main() -> int:
     parser.add_argument("--username", default="admin")
     parser.add_argument("--password", default="admin123")
     parser.add_argument("--routes-file", help="Optional file with one path per line.")
-    parser.add_argument("--from-openapi", action="store_true", help="Load GET routes from openapi.json.")
-    parser.add_argument("--include-api", action="store_true", help="Include /api* routes when loading from openapi.")
-    parser.add_argument("--exclude-prefix", action="append", default=[], help="Exclude routes by prefix.")
-    parser.add_argument("--include-params", action="store_true", help="Include parameterized routes like /items/{id}.")
-    parser.add_argument("--no-default-excludes", action="store_true", help="Do not apply default skip list.")
-    parser.add_argument("--timeout", type=int, default=30, help="Request timeout in seconds.")
+    parser.add_argument(
+        "--from-openapi", action="store_true", help="Load GET routes from openapi.json."
+    )
+    parser.add_argument(
+        "--include-api",
+        action="store_true",
+        help="Include /api* routes when loading from openapi.",
+    )
+    parser.add_argument(
+        "--exclude-prefix",
+        action="append",
+        default=[],
+        help="Exclude routes by prefix.",
+    )
+    parser.add_argument(
+        "--include-params",
+        action="store_true",
+        help="Include parameterized routes like /items/{id}.",
+    )
+    parser.add_argument(
+        "--no-default-excludes",
+        action="store_true",
+        help="Do not apply default skip list.",
+    )
+    parser.add_argument(
+        "--timeout", type=int, default=30, help="Request timeout in seconds."
+    )
     args = parser.parse_args()
 
     base_url = args.base_url.rstrip("/")

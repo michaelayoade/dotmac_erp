@@ -34,7 +34,10 @@ from app.models.fixed_assets.asset_disposal import DisposalType
 router = APIRouter(
     prefix="/fixed-assets",
     tags=["fixed-assets"],
-    dependencies=[Depends(require_tenant_auth), Depends(require_feature(FEATURE_FIXED_ASSETS))],
+    dependencies=[
+        Depends(require_tenant_auth),
+        Depends(require_feature(FEATURE_FIXED_ASSETS)),
+    ],
 )
 
 
@@ -49,6 +52,7 @@ def get_db():
 # =============================================================================
 # Schemas
 # =============================================================================
+
 
 class AssetCreate(BaseModel):
     """Create asset request."""
@@ -148,6 +152,7 @@ class DisposalRead(BaseModel):
 # Assets
 # =============================================================================
 
+
 @router.post("/assets", response_model=AssetRead, status_code=status.HTTP_201_CREATED)
 def create_asset(
     payload: AssetCreate,
@@ -170,7 +175,9 @@ def create_asset(
         cost_center_id=payload.cost_center_id,
         description=payload.description,
     )
-    return asset_service.create_asset(db, organization_id, input_data, created_by_user_id)
+    return asset_service.create_asset(
+        db, organization_id, input_data, created_by_user_id
+    )
 
 
 @router.get("/assets/{asset_id}", response_model=AssetRead)
@@ -264,7 +271,12 @@ def post_asset_acquisition(
 # Depreciation
 # =============================================================================
 
-@router.post("/depreciation/run", response_model=DepreciationRunRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/depreciation/run",
+    response_model=DepreciationRunRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def run_depreciation(
     payload: DepreciationRunCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -341,7 +353,12 @@ def post_depreciation(
 # Disposals
 # =============================================================================
 
-@router.post("/assets/{asset_id}/dispose", response_model=DisposalRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/assets/{asset_id}/dispose",
+    response_model=DisposalRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def dispose_asset(
     asset_id: UUID,
     payload: DisposalCreate,

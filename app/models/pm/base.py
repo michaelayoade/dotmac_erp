@@ -3,11 +3,12 @@ Project Management Module Base Models and Mixins.
 
 This module provides base classes for all PM models.
 """
+
 import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, func, text
+from sqlalchemy import DateTime, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 

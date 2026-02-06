@@ -1,6 +1,7 @@
 """
 Lease Asset (Right-of-Use Asset) Model - Lease Schema.
 """
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -59,12 +60,16 @@ class LeaseAsset(Base):
         nullable=False,
         default=0,
     )
-    initial_rou_asset_value: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    initial_rou_asset_value: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
 
     # Depreciation parameters
     depreciation_method: Mapped[str] = mapped_column(String(30), nullable=False)
     useful_life_months: Mapped[int] = mapped_column(Numeric(10, 0), nullable=False)
-    residual_value: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    residual_value: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Current values
     accumulated_depreciation: Mapped[Decimal] = mapped_column(

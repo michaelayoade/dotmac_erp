@@ -3,7 +3,7 @@ People assets API router.
 
 Provides assignment endpoints for HR asset tracking.
 """
-from datetime import date
+
 from typing import Optional
 from uuid import UUID
 
@@ -44,7 +44,9 @@ def parse_enum(value: Optional[str], enum_type, field_name: str):
     try:
         return enum_type(value)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid {field_name}: {value}") from exc
+        raise HTTPException(
+            status_code=400, detail=f"Invalid {field_name}: {value}"
+        ) from exc
 
 
 @router.get("/assignments", response_model=AssetAssignmentListResponse)
@@ -75,7 +77,11 @@ def list_assignments(
     )
 
 
-@router.post("/assignments/issue", response_model=AssetAssignmentRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/assignments/issue",
+    response_model=AssetAssignmentRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def issue_asset(
     payload: AssetAssignmentCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -116,7 +122,9 @@ def return_asset(
     return AssetAssignmentRead.model_validate(assignment)
 
 
-@router.post("/assignments/{assignment_id}/transfer", response_model=AssetAssignmentRead)
+@router.post(
+    "/assignments/{assignment_id}/transfer", response_model=AssetAssignmentRead
+)
 def transfer_asset(
     assignment_id: UUID,
     payload: AssetAssignmentTransferRequest,

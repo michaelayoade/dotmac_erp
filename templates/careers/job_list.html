@@ -39,7 +39,7 @@
                     <select name="department_id" id="department_id" class="form-select">
                         <option value="">All Departments</option>
                         {% for dept_id, dept_name, count in departments %}
-                        <option value="{{ dept_id }}" {% if department_id == dept_id %}selected{% endif %}>
+                        <option value="{{ dept_id }}" {% if selected_department_ids and dept_id in selected_department_ids %}selected{% endif %}>
                             {{ dept_name }} ({{ count }})
                         </option>
                         {% endfor %}
@@ -157,7 +157,7 @@
     {% if total_pages > 1 %}
     <nav class="mt-8 flex items-center justify-center gap-2">
         {% if page > 1 %}
-        <a href="?page={{ page - 1 }}{% if search %}&search={{ search }}{% endif %}{% if department_id %}&department_id={{ department_id }}{% endif %}{% if location %}&location={{ location }}{% endif %}{% if employment_type %}&employment_type={{ employment_type }}{% endif %}{% if is_remote %}&is_remote=true{% endif %}"
+        <a href="?page={{ page - 1 }}{% if search %}&search={{ search }}{% endif %}{{ department_query | safe }}{% if location %}&location={{ location }}{% endif %}{% if employment_type %}&employment_type={{ employment_type }}{% endif %}{% if is_remote %}&is_remote=true{% endif %}"
            class="btn btn-secondary">
             Previous
         </a>
@@ -168,7 +168,7 @@
         </span>
 
         {% if page < total_pages %}
-        <a href="?page={{ page + 1 }}{% if search %}&search={{ search }}{% endif %}{% if department_id %}&department_id={{ department_id }}{% endif %}{% if location %}&location={{ location }}{% endif %}{% if employment_type %}&employment_type={{ employment_type }}{% endif %}{% if is_remote %}&is_remote=true{% endif %}"
+        <a href="?page={{ page + 1 }}{% if search %}&search={{ search }}{% endif %}{{ department_query | safe }}{% if location %}&location={{ location }}{% endif %}{% if employment_type %}&employment_type={{ employment_type }}{% endif %}{% if is_remote %}&is_remote=true{% endif %}"
            class="btn btn-secondary">
             Next
         </a>

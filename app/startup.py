@@ -62,24 +62,24 @@ def _estimate_entropy_bytes(secret: str) -> int:
     For base64-encoded secrets, we estimate the raw byte length.
     """
     # Check if it looks like base64 (common for generated secrets)
-    if re.match(r'^[A-Za-z0-9+/=_-]+$', secret):
+    if re.match(r"^[A-Za-z0-9+/=_-]+$", secret):
         # URL-safe base64 or standard base64
         try:
             # Try to decode to get actual byte length
-            decoded = base64.urlsafe_b64decode(secret + '==')
+            decoded = base64.urlsafe_b64decode(secret + "==")
             return len(decoded)
         except Exception:
             try:
-                decoded = base64.b64decode(secret + '==')
+                decoded = base64.b64decode(secret + "==")
                 return len(decoded)
             except Exception:
                 pass
 
     # For non-base64 secrets, estimate based on character set
-    has_upper = bool(re.search(r'[A-Z]', secret))
-    has_lower = bool(re.search(r'[a-z]', secret))
-    has_digit = bool(re.search(r'[0-9]', secret))
-    has_special = bool(re.search(r'[^A-Za-z0-9]', secret))
+    has_upper = bool(re.search(r"[A-Z]", secret))
+    has_lower = bool(re.search(r"[a-z]", secret))
+    has_digit = bool(re.search(r"[0-9]", secret))
+    has_special = bool(re.search(r"[^A-Za-z0-9]", secret))
 
     # Calculate bits per character based on character set
     charset_size = 0
@@ -96,6 +96,7 @@ def _estimate_entropy_bytes(secret: str) -> int:
         return 0
 
     import math
+
     bits_per_char = math.log2(charset_size)
     total_bits = len(secret) * bits_per_char
     return int(total_bits / 8)
@@ -119,7 +120,10 @@ def _validate_fernet_key(key: str) -> tuple[bool, str]:
         # Fernet expects 32 bytes, URL-safe base64 encoded
         decoded = base64.urlsafe_b64decode(key)
         if len(decoded) != 32:
-            return False, f"TOTP_ENCRYPTION_KEY must be exactly 32 bytes when decoded (got {len(decoded)} bytes)"
+            return (
+                False,
+                f"TOTP_ENCRYPTION_KEY must be exactly 32 bytes when decoded (got {len(decoded)} bytes)",
+            )
         return True, ""
     except Exception as e:
         return False, f"TOTP_ENCRYPTION_KEY is not valid URL-safe base64: {e}"
@@ -190,12 +194,14 @@ def validate_required_secrets(db: Session | None = None) -> list[str]:
                 errors.append(
                     f"SECURITY: {name} has insufficient entropy (~{entropy_bytes} bytes). "
                     f"Minimum required: {MIN_JWT_SECRET_BYTES} bytes (256 bits). "
-                    f"Generate with: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+                    f'Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"'
                 )
         elif name == "TOTP_ENCRYPTION_KEY":
             is_valid, error_msg = _validate_fernet_key(value)
             if not is_valid:
-                errors.append(f"SECURITY: {error_msg}. Generate with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\"")
+                errors.append(
+                    f'SECURITY: {error_msg}. Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+                )
 
     return errors
 
@@ -209,8 +215,7 @@ def validate_openbao_connectivity() -> list[str]:
 
     # Check if any required secrets use OpenBao
     uses_openbao = any(
-        is_openbao_ref(os.getenv(name) or "")
-        for name, _ in REQUIRED_SECRETS
+        is_openbao_ref(os.getenv(name) or "") for name, _ in REQUIRED_SECRETS
     )
 
     if not uses_openbao:

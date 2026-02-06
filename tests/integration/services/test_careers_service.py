@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.finance.core_org.organization import Organization
 from app.models.people.hr.department import Department
-from app.models.people.recruit.job_applicant import ApplicantStatus, JobApplicant
+from app.models.people.recruit.job_applicant import ApplicantStatus
 from app.models.people.recruit.job_opening import JobOpening, JobOpeningStatus
 from app.services.careers.careers_service import (
     ApplicationSubmissionError,
@@ -51,7 +51,9 @@ def department(db: Session, org_with_slug: Organization) -> Department:
 
 
 @pytest.fixture
-def open_job(db: Session, org_with_slug: Organization, department: Department) -> JobOpening:
+def open_job(
+    db: Session, org_with_slug: Organization, department: Department
+) -> JobOpening:
     """Create an open job for testing."""
     job = JobOpening(
         organization_id=org_with_slug.organization_id,
@@ -314,7 +316,9 @@ class TestCareersService:
         """Test getting departments with openings."""
         service = CareersService(db)
 
-        departments = service.get_departments_with_openings(org_with_slug.organization_id)
+        departments = service.get_departments_with_openings(
+            org_with_slug.organization_id
+        )
         assert len(departments) == 1
         assert departments[0][1] == "Engineering"
         assert departments[0][2] == 1  # count

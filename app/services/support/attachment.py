@@ -4,9 +4,7 @@ Ticket Attachment Service.
 Handles file uploads and attachments for support tickets.
 """
 
-import hashlib
 import logging
-import os
 import uuid
 from pathlib import Path
 from typing import BinaryIO, List, Optional, Tuple
@@ -15,31 +13,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.support.attachment import TicketAttachment
+from app.services.file_upload import (
+    FileUploadConfig,
+    FileUploadError,
+    FileUploadService,
+    get_support_attachment_upload,
+    resolve_safe_path,
+)
 
 logger = logging.getLogger(__name__)
-
-# Allowed file extensions and MIME types
-ALLOWED_EXTENSIONS = {
-    # Images
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".gif": "image/gif",
-    ".webp": "image/webp",
-    # Documents
-    ".pdf": "application/pdf",
-    ".doc": "application/msword",
-    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ".xls": "application/vnd.ms-excel",
-    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    ".csv": "text/csv",
-    ".txt": "text/plain",
-    # Archives
-    ".zip": "application/zip",
-}
-
-# Maximum file size (10MB)
-MAX_FILE_SIZE = 10 * 1024 * 1024
 
 
 class AttachmentService:
@@ -52,32 +34,22 @@ class AttachmentService:
         Args:
             upload_dir: Base directory for file uploads
         """
-        self.upload_dir = Path(upload_dir).resolve()
-        self.upload_dir.mkdir(parents=True, exist_ok=True)
-
-    def _validate_path_within_upload_dir(self, path: Path) -> Path:
-        """
-        Validate that a path is within the upload directory.
-
-        Prevents path traversal attacks via symlinks or malicious paths.
-
-        Args:
-            path: Path to validate
-
-        Returns:
-            Resolved absolute path
-
-        Raises:
-            ValueError: If path is outside upload directory
-        """
-        resolved = path.resolve()
-        try:
-            resolved.relative_to(self.upload_dir)
-        except ValueError:
-            raise ValueError(
-                f"Path traversal attempt detected: {path} is outside upload directory"
+        base_service = get_support_attachment_upload()
+        base_path = base_service.base_path
+        if upload_dir and Path(upload_dir).resolve() != base_path:
+            cfg = base_service.config
+            self.upload_service = FileUploadService(
+                FileUploadConfig(
+                    base_dir=str(Path(upload_dir).resolve()),
+                    allowed_content_types=cfg.allowed_content_types,
+                    max_size_bytes=cfg.max_size_bytes,
+                    allowed_extensions=cfg.allowed_extensions,
+                    require_magic_bytes=cfg.require_magic_bytes,
+                    compute_checksum=cfg.compute_checksum,
+                )
             )
-        return resolved
+        else:
+            self.upload_service = base_service
 
     def list_attachments(
         self,
@@ -140,21 +112,10 @@ class AttachmentService:
         Returns:
             (is_valid, error_message)
         """
-        # Check file size
-        if file_size > MAX_FILE_SIZE:
-            return (
-                False,
-                f"File too large. Maximum size is {MAX_FILE_SIZE // (1024 * 1024)}MB",
-            )
-
-        # Check extension
-        ext = os.path.splitext(filename)[1].lower()
-        if ext not in ALLOWED_EXTENSIONS:
-            return (
-                False,
-                f"File type not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS.keys())}",
-            )
-
+        try:
+            self.upload_service.validate(content_type, filename, file_size, None)
+        except FileUploadError as exc:
+            return False, str(exc)
         return True, None
 
     def save_file(
@@ -182,47 +143,29 @@ class AttachmentService:
         Returns:
             (attachment, error_message)
         """
-        # Read file content
         content = file_data.read()
         file_size = len(content)
 
-        # Validate
         is_valid, error = self.validate_file(filename, file_size, content_type)
         if not is_valid:
             return None, error
 
-        # Generate unique storage path
-        file_hash = hashlib.sha256(content).hexdigest()[:16]
-        ext = os.path.splitext(filename)[1].lower()
-        storage_filename = f"{uuid.uuid4().hex}_{file_hash}{ext}"
-
-        # Organize by ticket
-        ticket_dir = self.upload_dir / str(ticket_id)
-        ticket_dir.mkdir(parents=True, exist_ok=True)
-
-        storage_path = ticket_dir / storage_filename
-
-        # Validate path is within upload directory (prevent path traversal)
         try:
-            storage_path = self._validate_path_within_upload_dir(storage_path)
-        except ValueError as e:
-            logger.error("Path validation failed: %s", e)
-            return None, "Invalid file path"
-
-        # Save file
-        try:
-            with open(storage_path, "wb") as f:
-                f.write(content)
-        except Exception as e:
-            logger.exception("Failed to save file: %s", e)
-            return None, "Failed to save file"
+            upload_result = self.upload_service.save(
+                content,
+                content_type=content_type,
+                subdirs=[str(ticket_id)],
+                original_filename=filename,
+            )
+        except FileUploadError as exc:
+            return None, str(exc)
 
         # Create database record
         attachment = TicketAttachment(
             ticket_id=ticket_id,
             comment_id=comment_id,
             filename=filename,
-            storage_path=str(storage_path),
+            storage_path=upload_result.relative_path,
             content_type=content_type,
             file_size=file_size,
             uploaded_by_id=uploaded_by_id,
@@ -264,13 +207,20 @@ class AttachmentService:
             return False, "Attachment not found"
 
         if hard_delete:
-            # Delete file from disk
             try:
-                storage_path = Path(attachment.storage_path)
-                # Validate path is within upload directory (prevent path traversal)
-                validated_path = self._validate_path_within_upload_dir(storage_path)
-                if validated_path.exists():
-                    validated_path.unlink()
+                if Path(attachment.storage_path).is_absolute():
+                    validated_path = resolve_safe_path(
+                        self.upload_service.base_path,
+                        str(
+                            Path(attachment.storage_path).relative_to(
+                                self.upload_service.base_path
+                            )
+                        ),
+                    )
+                    if validated_path.exists():
+                        validated_path.unlink()
+                else:
+                    self.upload_service.delete(attachment.storage_path)
             except ValueError as e:
                 logger.error("Path validation failed during delete: %s", e)
             except Exception as e:
@@ -306,11 +256,14 @@ class AttachmentService:
         if not attachment or attachment.is_deleted:
             return None
 
-        # Validate path is within upload directory (prevent path traversal)
         try:
-            validated_path = self._validate_path_within_upload_dir(
-                Path(attachment.storage_path)
-            )
+            if Path(attachment.storage_path).is_absolute():
+                validated_path = Path(attachment.storage_path).resolve()
+                validated_path.relative_to(self.upload_service.base_path)
+            else:
+                validated_path = resolve_safe_path(
+                    self.upload_service.base_path, attachment.storage_path
+                )
         except ValueError as e:
             logger.error("Path validation failed: %s", e)
             return None

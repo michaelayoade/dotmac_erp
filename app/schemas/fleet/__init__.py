@@ -4,6 +4,7 @@ Fleet Management Pydantic Schemas.
 Schemas for Fleet API endpoints covering vehicles, maintenance,
 fuel logs, incidents, documents, and reservations.
 """
+
 from app.schemas.fleet.vehicle import (
     VehicleBase,
     VehicleCreate,

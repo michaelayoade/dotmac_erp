@@ -10,6 +10,7 @@ Steps:
 3. Runs the sync (limited batch for testing)
 4. Reports results
 """
+
 import sys
 import uuid
 
@@ -67,6 +68,7 @@ def main():
         # 1. Get config — try env vars first (encrypted DB values may be
         #    stale after a DB reset), fall back to integration_config table.
         import os
+
         base_url = os.environ.get("ERPNEXT_URL", "")
         api_key = os.environ.get("ERPNEXT_API_KEY", "")
         api_secret = os.environ.get("ERPNEXT_API_SECRET", "")
@@ -111,8 +113,14 @@ def main():
             "Stock Ledger Entry",
             filters=filters,
             fields=[
-                "name", "item_code", "warehouse", "posting_date",
-                "actual_qty", "valuation_rate", "voucher_type", "voucher_no",
+                "name",
+                "item_code",
+                "warehouse",
+                "posting_date",
+                "actual_qty",
+                "valuation_rate",
+                "voucher_type",
+                "voucher_no",
             ],
             order_by="posting_date desc",
             limit_page_length=5,
@@ -164,6 +172,7 @@ def main():
 
         # Verify in DB
         from sqlalchemy import text as sql_text
+
         txn_count = db.execute(
             sql_text("SELECT count(*) FROM inv.inventory_transaction")
         ).scalar()
@@ -172,6 +181,7 @@ def main():
     except Exception as e:
         print(f"\nERROR: {e}")
         import traceback
+
         traceback.print_exc()
         db.rollback()
     finally:

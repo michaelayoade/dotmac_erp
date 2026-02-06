@@ -3,12 +3,13 @@ Payment API Routes.
 
 Handles payment initialization, verification, and webhooks for Paystack integration.
 """
+
 import logging
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
-from pydantic import BaseModel, EmailStr, Field
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
@@ -262,7 +263,9 @@ def initialize_invoice_payment(
 
     # Build callback URL
     # Check for configured base URL first, then fall back to request base
-    callback_base = resolve_value(db, SettingDomain.payments, "paystack_callback_base_url")
+    callback_base = resolve_value(
+        db, SettingDomain.payments, "paystack_callback_base_url"
+    )
     if callback_base:
         base_url = str(callback_base).rstrip("/")
     else:
@@ -317,7 +320,9 @@ def get_payment_status(
         amount=float(intent.amount),
         currency=intent.currency_code,
         paid_at=intent.paid_at.isoformat() if intent.paid_at else None,
-        invoice_number=intent.intent_metadata.get("invoice_number") if intent.intent_metadata else None,
+        invoice_number=intent.intent_metadata.get("invoice_number")
+        if intent.intent_metadata
+        else None,
         customer_payment_id=intent.customer_payment_id,
     )
 
@@ -346,7 +351,9 @@ def get_payment_intent(
         amount=float(intent.amount),
         currency=intent.currency_code,
         paid_at=intent.paid_at.isoformat() if intent.paid_at else None,
-        invoice_number=intent.intent_metadata.get("invoice_number") if intent.intent_metadata else None,
+        invoice_number=intent.intent_metadata.get("invoice_number")
+        if intent.intent_metadata
+        else None,
         customer_payment_id=intent.customer_payment_id,
     )
 
@@ -385,7 +392,9 @@ def verify_payment(
         amount=float(intent.amount),
         currency=intent.currency_code,
         paid_at=intent.paid_at.isoformat() if intent.paid_at else None,
-        invoice_number=intent.intent_metadata.get("invoice_number") if intent.intent_metadata else None,
+        invoice_number=intent.intent_metadata.get("invoice_number")
+        if intent.intent_metadata
+        else None,
         customer_payment_id=intent.customer_payment_id,
     )
 
@@ -418,7 +427,9 @@ def list_banks(
 
     except PaystackError as e:
         logger.error(f"Failed to list banks: {e}")
-        raise HTTPException(status_code=502, detail=f"Payment gateway error: {e.message}")
+        raise HTTPException(
+            status_code=502, detail=f"Payment gateway error: {e.message}"
+        )
 
 
 @router.post("/resolve-account", response_model=ResolveAccountResponse)
@@ -457,7 +468,9 @@ def resolve_bank_account(
                 status_code=400,
                 detail="Invalid account number or bank code",
             )
-        raise HTTPException(status_code=502, detail=f"Payment gateway error: {e.message}")
+        raise HTTPException(
+            status_code=502, detail=f"Payment gateway error: {e.message}"
+        )
 
 
 @router.post("/initialize/expense", response_model=ExpensePaymentResponse)
@@ -480,7 +493,9 @@ def initialize_expense_payment(
     - No existing active payment intent for this claim
     """
     # Check if transfers are enabled
-    transfers_enabled = resolve_value(db, SettingDomain.payments, "paystack_transfers_enabled")
+    transfers_enabled = resolve_value(
+        db, SettingDomain.payments, "paystack_transfers_enabled"
+    )
     if not transfers_enabled:
         raise HTTPException(
             status_code=400,
@@ -536,7 +551,9 @@ def initialize_expense_payment(
         raise HTTPException(status_code=400, detail=str(e))
     except PaystackError as e:
         logger.error(f"Expense payment initialization failed: {e}")
-        raise HTTPException(status_code=502, detail=f"Payment gateway error: {e.message}")
+        raise HTTPException(
+            status_code=502, detail=f"Payment gateway error: {e.message}"
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -571,7 +588,9 @@ def initiate_transfer(
     Authorization: Requires appropriate permission to process payments.
     """
     # Check if transfers are enabled
-    transfers_enabled = resolve_value(db, SettingDomain.payments, "paystack_transfers_enabled")
+    transfers_enabled = resolve_value(
+        db, SettingDomain.payments, "paystack_transfers_enabled"
+    )
     if not transfers_enabled:
         raise HTTPException(
             status_code=400,

@@ -9,7 +9,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import ProgrammingError
 
-from app.models.people.hr import Employee, DocumentType, QualificationType, RelationshipType, SkillCategory
+from app.models.people.hr import (
+    Employee,
+    DocumentType,
+    QualificationType,
+    RelationshipType,
+    SkillCategory,
+)
 from app.services.people.hr import (
     EmployeeService,
     EmployeeDocumentService,
@@ -73,7 +79,9 @@ def list_employee_documents(
     try:
         employee = _load_employee(emp_svc, emp_id)
     except Exception:
-        return RedirectResponse(url="/people/hr/employees?error=Employee+not+found", status_code=303)
+        return RedirectResponse(
+            url="/people/hr/employees?error=Employee+not+found", status_code=303
+        )
 
     doc_type = DocumentType(document_type) if document_type else None
     error_message = error
@@ -82,20 +90,28 @@ def list_employee_documents(
     except ProgrammingError as exc:
         if _is_missing_table_error(exc):
             documents = []
-            error_message = "Employee document tables are not installed. Please run migrations."
+            error_message = (
+                "Employee document tables are not installed. Please run migrations."
+            )
         else:
             raise
 
-    context = base_context(request, auth, f"Documents - {employee.full_name}", "employees", db=db)
-    context.update({
-        "employee": employee,
-        "documents": documents,
-        "document_types": list(DocumentType),
-        "selected_type": document_type,
-        "success": success,
-        "error": error_message,
-    })
-    return templates.TemplateResponse(request, "people/hr/employee/documents.html", context)
+    context = base_context(
+        request, auth, f"Documents - {employee.full_name}", "employees", db=db
+    )
+    context.update(
+        {
+            "employee": employee,
+            "documents": documents,
+            "document_types": list(DocumentType),
+            "selected_type": document_type,
+            "success": success,
+            "error": error_message,
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/hr/employee/documents.html", context
+    )
 
 
 @router.get("/employees/{employee_id}/documents/new", response_class=HTMLResponse)
@@ -112,15 +128,23 @@ def new_document_form(
     try:
         employee = _load_employee(emp_svc, coerce_uuid(employee_id))
     except Exception:
-        return RedirectResponse(url="/people/hr/employees?error=Employee+not+found", status_code=303)
+        return RedirectResponse(
+            url="/people/hr/employees?error=Employee+not+found", status_code=303
+        )
 
-    context = base_context(request, auth, f"Upload Document - {employee.full_name}", "employees", db=db)
-    context.update({
-        "employee": employee,
-        "document_types": list(DocumentType),
-        "form_data": {},
-    })
-    return templates.TemplateResponse(request, "people/hr/employee/document_form.html", context)
+    context = base_context(
+        request, auth, f"Upload Document - {employee.full_name}", "employees", db=db
+    )
+    context.update(
+        {
+            "employee": employee,
+            "document_types": list(DocumentType),
+            "form_data": {},
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/hr/employee/document_form.html", context
+    )
 
 
 @router.post("/employees/{employee_id}/documents/new", response_class=HTMLResponse)
@@ -152,8 +176,12 @@ def create_document(
             file_path=file_path,
             file_name=file_name,
             description=description or None,
-            issue_date=dt.strptime(issue_date, "%Y-%m-%d").date() if issue_date else None,
-            expiry_date=dt.strptime(expiry_date, "%Y-%m-%d").date() if expiry_date else None,
+            issue_date=dt.strptime(issue_date, "%Y-%m-%d").date()
+            if issue_date
+            else None,
+            expiry_date=dt.strptime(expiry_date, "%Y-%m-%d").date()
+            if expiry_date
+            else None,
         )
         db.commit()
         return RedirectResponse(
@@ -164,25 +192,34 @@ def create_document(
         db.rollback()
         emp_svc = EmployeeService(db, org_id)
         employee = _load_employee(emp_svc, emp_id)
-        context = base_context(request, auth, f"Upload Document - {employee.full_name}", "employees", db=db)
-        context.update({
-            "employee": employee,
-            "document_types": list(DocumentType),
-            "form_data": {
-                "document_type": document_type,
-                "document_name": document_name,
-                "file_path": file_path,
-                "file_name": file_name,
-                "description": description,
-                "issue_date": issue_date,
-                "expiry_date": expiry_date,
-            },
-            "error": str(e),
-        })
-        return templates.TemplateResponse(request, "people/hr/employee/document_form.html", context)
+        context = base_context(
+            request, auth, f"Upload Document - {employee.full_name}", "employees", db=db
+        )
+        context.update(
+            {
+                "employee": employee,
+                "document_types": list(DocumentType),
+                "form_data": {
+                    "document_type": document_type,
+                    "document_name": document_name,
+                    "file_path": file_path,
+                    "file_name": file_name,
+                    "description": description,
+                    "issue_date": issue_date,
+                    "expiry_date": expiry_date,
+                },
+                "error": str(e),
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/hr/employee/document_form.html", context
+        )
 
 
-@router.post("/employees/{employee_id}/documents/{document_id}/verify", response_class=HTMLResponse)
+@router.post(
+    "/employees/{employee_id}/documents/{document_id}/verify",
+    response_class=HTMLResponse,
+)
 def verify_document(
     request: Request,
     employee_id: str,
@@ -222,7 +259,10 @@ def verify_document(
         )
 
 
-@router.post("/employees/{employee_id}/documents/{document_id}/delete", response_class=HTMLResponse)
+@router.post(
+    "/employees/{employee_id}/documents/{document_id}/delete",
+    response_class=HTMLResponse,
+)
 def delete_document(
     request: Request,
     employee_id: str,
@@ -273,7 +313,9 @@ def list_employee_qualifications(
     try:
         employee = _load_employee(emp_svc, emp_id)
     except Exception:
-        return RedirectResponse(url="/people/hr/employees?error=Employee+not+found", status_code=303)
+        return RedirectResponse(
+            url="/people/hr/employees?error=Employee+not+found", status_code=303
+        )
 
     error_message = error
     try:
@@ -285,15 +327,21 @@ def list_employee_qualifications(
         else:
             raise
 
-    context = base_context(request, auth, f"Qualifications - {employee.full_name}", "employees", db=db)
-    context.update({
-        "employee": employee,
-        "qualifications": qualifications,
-        "qualification_types": list(QualificationType),
-        "success": success,
-        "error": error_message,
-    })
-    return templates.TemplateResponse(request, "people/hr/employee/qualifications.html", context)
+    context = base_context(
+        request, auth, f"Qualifications - {employee.full_name}", "employees", db=db
+    )
+    context.update(
+        {
+            "employee": employee,
+            "qualifications": qualifications,
+            "qualification_types": list(QualificationType),
+            "success": success,
+            "error": error_message,
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/hr/employee/qualifications.html", context
+    )
 
 
 @router.get("/employees/{employee_id}/qualifications/new", response_class=HTMLResponse)
@@ -310,15 +358,23 @@ def new_qualification_form(
     try:
         employee = _load_employee(emp_svc, coerce_uuid(employee_id))
     except Exception:
-        return RedirectResponse(url="/people/hr/employees?error=Employee+not+found", status_code=303)
+        return RedirectResponse(
+            url="/people/hr/employees?error=Employee+not+found", status_code=303
+        )
 
-    context = base_context(request, auth, f"Add Qualification - {employee.full_name}", "employees", db=db)
-    context.update({
-        "employee": employee,
-        "qualification_types": list(QualificationType),
-        "form_data": {},
-    })
-    return templates.TemplateResponse(request, "people/hr/employee/qualification_form.html", context)
+    context = base_context(
+        request, auth, f"Add Qualification - {employee.full_name}", "employees", db=db
+    )
+    context.update(
+        {
+            "employee": employee,
+            "qualification_types": list(QualificationType),
+            "form_data": {},
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/hr/employee/qualification_form.html", context
+    )
 
 
 @router.post("/employees/{employee_id}/qualifications/new", response_class=HTMLResponse)
@@ -351,7 +407,9 @@ def create_qualification(
             qualification_name=qualification_name,
             institution_name=institution_name,
             field_of_study=field_of_study or None,
-            start_date=dt.strptime(start_date, "%Y-%m-%d").date() if start_date else None,
+            start_date=dt.strptime(start_date, "%Y-%m-%d").date()
+            if start_date
+            else None,
             end_date=dt.strptime(end_date, "%Y-%m-%d").date() if end_date else None,
             is_ongoing=_parse_bool(is_ongoing),
             grade=grade or None,
@@ -421,7 +479,9 @@ def list_employee_certifications(
     try:
         employee = _load_employee(emp_svc, emp_id)
     except Exception:
-        return RedirectResponse(url="/people/hr/employees?error=Employee+not+found", status_code=303)
+        return RedirectResponse(
+            url="/people/hr/employees?error=Employee+not+found", status_code=303
+        )
 
     error_message = error
     try:
@@ -433,14 +493,20 @@ def list_employee_certifications(
         else:
             raise
 
-    context = base_context(request, auth, f"Certifications - {employee.full_name}", "employees", db=db)
-    context.update({
-        "employee": employee,
-        "certifications": certifications,
-        "success": success,
-        "error": error_message,
-    })
-    return templates.TemplateResponse(request, "people/hr/employee/certifications.html", context)
+    context = base_context(
+        request, auth, f"Certifications - {employee.full_name}", "employees", db=db
+    )
+    context.update(
+        {
+            "employee": employee,
+            "certifications": certifications,
+            "success": success,
+            "error": error_message,
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/hr/employee/certifications.html", context
+    )
 
 
 @router.get("/employees/{employee_id}/certifications/new", response_class=HTMLResponse)
@@ -457,14 +523,22 @@ def new_certification_form(
     try:
         employee = _load_employee(emp_svc, coerce_uuid(employee_id))
     except Exception:
-        return RedirectResponse(url="/people/hr/employees?error=Employee+not+found", status_code=303)
+        return RedirectResponse(
+            url="/people/hr/employees?error=Employee+not+found", status_code=303
+        )
 
-    context = base_context(request, auth, f"Add Certification - {employee.full_name}", "employees", db=db)
-    context.update({
-        "employee": employee,
-        "form_data": {},
-    })
-    return templates.TemplateResponse(request, "people/hr/employee/certification_form.html", context)
+    context = base_context(
+        request, auth, f"Add Certification - {employee.full_name}", "employees", db=db
+    )
+    context.update(
+        {
+            "employee": employee,
+            "form_data": {},
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/hr/employee/certification_form.html", context
+    )
 
 
 @router.post("/employees/{employee_id}/certifications/new", response_class=HTMLResponse)
@@ -495,7 +569,9 @@ def create_certification(
             certification_name=certification_name,
             issuing_authority=issuing_authority,
             issue_date=dt.strptime(issue_date, "%Y-%m-%d").date(),
-            expiry_date=dt.strptime(expiry_date, "%Y-%m-%d").date() if expiry_date else None,
+            expiry_date=dt.strptime(expiry_date, "%Y-%m-%d").date()
+            if expiry_date
+            else None,
             does_not_expire=_parse_bool(does_not_expire),
             credential_id=credential_id or None,
             credential_url=credential_url or None,
@@ -565,7 +641,9 @@ def list_employee_dependents(
     try:
         employee = _load_employee(emp_svc, emp_id)
     except Exception:
-        return RedirectResponse(url="/people/hr/employees?error=Employee+not+found", status_code=303)
+        return RedirectResponse(
+            url="/people/hr/employees?error=Employee+not+found", status_code=303
+        )
 
     error_message = error
     try:
@@ -573,19 +651,27 @@ def list_employee_dependents(
     except ProgrammingError as exc:
         if _is_missing_table_error(exc):
             dependents = []
-            error_message = "Employee dependent tables are not installed. Please run migrations."
+            error_message = (
+                "Employee dependent tables are not installed. Please run migrations."
+            )
         else:
             raise
 
-    context = base_context(request, auth, f"Dependents - {employee.full_name}", "employees", db=db)
-    context.update({
-        "employee": employee,
-        "dependents": dependents,
-        "relationship_types": list(RelationshipType),
-        "success": success,
-        "error": error_message,
-    })
-    return templates.TemplateResponse(request, "people/hr/employee/dependents.html", context)
+    context = base_context(
+        request, auth, f"Dependents - {employee.full_name}", "employees", db=db
+    )
+    context.update(
+        {
+            "employee": employee,
+            "dependents": dependents,
+            "relationship_types": list(RelationshipType),
+            "success": success,
+            "error": error_message,
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/hr/employee/dependents.html", context
+    )
 
 
 @router.get("/employees/{employee_id}/dependents/new", response_class=HTMLResponse)
@@ -602,15 +688,23 @@ def new_dependent_form(
     try:
         employee = _load_employee(emp_svc, coerce_uuid(employee_id))
     except Exception:
-        return RedirectResponse(url="/people/hr/employees?error=Employee+not+found", status_code=303)
+        return RedirectResponse(
+            url="/people/hr/employees?error=Employee+not+found", status_code=303
+        )
 
-    context = base_context(request, auth, f"Add Dependent - {employee.full_name}", "employees", db=db)
-    context.update({
-        "employee": employee,
-        "relationship_types": list(RelationshipType),
-        "form_data": {},
-    })
-    return templates.TemplateResponse(request, "people/hr/employee/dependent_form.html", context)
+    context = base_context(
+        request, auth, f"Add Dependent - {employee.full_name}", "employees", db=db
+    )
+    context.update(
+        {
+            "employee": employee,
+            "relationship_types": list(RelationshipType),
+            "form_data": {},
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/hr/employee/dependent_form.html", context
+    )
 
 
 @router.post("/employees/{employee_id}/dependents/new", response_class=HTMLResponse)
@@ -643,14 +737,20 @@ def create_dependent(
             employee_id=emp_id,
             full_name=full_name,
             relationship=RelationshipType(relationship),
-            date_of_birth=dt.strptime(date_of_birth, "%Y-%m-%d").date() if date_of_birth else None,
+            date_of_birth=dt.strptime(date_of_birth, "%Y-%m-%d").date()
+            if date_of_birth
+            else None,
             gender=gender or None,
             phone=phone or None,
             email=email or None,
             is_emergency_contact=_parse_bool(is_emergency_contact),
-            emergency_contact_priority=int(emergency_contact_priority) if emergency_contact_priority else None,
+            emergency_contact_priority=int(emergency_contact_priority)
+            if emergency_contact_priority
+            else None,
             is_beneficiary=_parse_bool(is_beneficiary),
-            beneficiary_percentage=float(beneficiary_percentage) if beneficiary_percentage else None,
+            beneficiary_percentage=float(beneficiary_percentage)
+            if beneficiary_percentage
+            else None,
             notes=notes or None,
         )
         db.commit()
@@ -717,7 +817,9 @@ def list_employee_skills(
     try:
         employee = _load_employee(emp_svc, emp_id)
     except Exception:
-        return RedirectResponse(url="/people/hr/employees?error=Employee+not+found", status_code=303)
+        return RedirectResponse(
+            url="/people/hr/employees?error=Employee+not+found", status_code=303
+        )
 
     error_message = error
     try:
@@ -725,18 +827,26 @@ def list_employee_skills(
     except ProgrammingError as exc:
         if _is_missing_table_error(exc):
             skills = []
-            error_message = "Employee skills tables are not installed. Please run migrations."
+            error_message = (
+                "Employee skills tables are not installed. Please run migrations."
+            )
         else:
             raise
 
-    context = base_context(request, auth, f"Skills - {employee.full_name}", "employees", db=db)
-    context.update({
-        "employee": employee,
-        "employee_skills": skills,
-        "success": success,
-        "error": error_message,
-    })
-    return templates.TemplateResponse(request, "people/hr/employee/skills.html", context)
+    context = base_context(
+        request, auth, f"Skills - {employee.full_name}", "employees", db=db
+    )
+    context.update(
+        {
+            "employee": employee,
+            "employee_skills": skills,
+            "success": success,
+            "error": error_message,
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/hr/employee/skills.html", context
+    )
 
 
 @router.get("/employees/{employee_id}/skills/new", response_class=HTMLResponse)
@@ -754,7 +864,9 @@ def new_skill_form(
     try:
         employee = _load_employee(emp_svc, coerce_uuid(employee_id))
     except Exception:
-        return RedirectResponse(url="/people/hr/employees?error=Employee+not+found", status_code=303)
+        return RedirectResponse(
+            url="/people/hr/employees?error=Employee+not+found", status_code=303
+        )
 
     error_message = None
     try:
@@ -762,19 +874,27 @@ def new_skill_form(
     except ProgrammingError as exc:
         if _is_missing_table_error(exc):
             skills = []
-            error_message = "Skill catalog tables are not installed. Please run migrations."
+            error_message = (
+                "Skill catalog tables are not installed. Please run migrations."
+            )
         else:
             raise
 
-    context = base_context(request, auth, f"Add Skill - {employee.full_name}", "employees", db=db)
-    context.update({
-        "employee": employee,
-        "skills": skills,
-        "skill_categories": list(SkillCategory),
-        "form_data": {},
-        "error": error_message,
-    })
-    return templates.TemplateResponse(request, "people/hr/employee/skill_form.html", context)
+    context = base_context(
+        request, auth, f"Add Skill - {employee.full_name}", "employees", db=db
+    )
+    context.update(
+        {
+            "employee": employee,
+            "skills": skills,
+            "skill_categories": list(SkillCategory),
+            "form_data": {},
+            "error": error_message,
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/hr/employee/skill_form.html", context
+    )
 
 
 @router.post("/employees/{employee_id}/skills/new", response_class=HTMLResponse)

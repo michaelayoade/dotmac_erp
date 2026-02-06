@@ -3,10 +3,11 @@ Quote Web Routes.
 
 HTML template routes for sales quote management.
 """
+
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.ar.web import quote_web_service
@@ -19,6 +20,7 @@ router = APIRouter(prefix="/quotes", tags=["quotes-web"])
 # =============================================================================
 # Quote List
 # =============================================================================
+
 
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
@@ -40,6 +42,7 @@ def quote_list(
 # =============================================================================
 # New Quote
 # =============================================================================
+
 
 @router.get("/new", response_class=HTMLResponse)
 def new_quote_form(
@@ -92,6 +95,7 @@ def create_quote(
 # Quote Detail
 # =============================================================================
 
+
 @router.get("/{quote_id}", response_class=HTMLResponse)
 def quote_detail(
     request: Request,
@@ -106,6 +110,7 @@ def quote_detail(
 # =============================================================================
 # Quote Actions
 # =============================================================================
+
 
 @router.post("/{quote_id}/send", response_class=HTMLResponse)
 def send_quote(

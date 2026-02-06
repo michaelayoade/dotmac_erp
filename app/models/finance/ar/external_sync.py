@@ -52,7 +52,13 @@ class ExternalSync(Base):
             "external_id",
             name="uq_external_sync_source_entity",
         ),
-        Index("idx_external_sync_lookup", "organization_id", "source", "entity_type", "external_id"),
+        Index(
+            "idx_external_sync_lookup",
+            "organization_id",
+            "source",
+            "entity_type",
+            "external_id",
+        ),
         Index("idx_external_sync_local", "organization_id", "local_entity_id"),
         {"schema": "ar"},
     )

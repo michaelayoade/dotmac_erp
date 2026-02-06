@@ -20,7 +20,9 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task
-def sync_crm_tickets(organization_id: str | None = None, incremental: bool = True) -> dict:
+def sync_crm_tickets(
+    organization_id: str | None = None, incremental: bool = True
+) -> dict:
     """
     Sync tickets from CRM to ERP.
 
@@ -98,7 +100,9 @@ def sync_crm_tickets(organization_id: str | None = None, incremental: bool = Tru
 
 
 @shared_task
-def sync_crm_projects(organization_id: str | None = None, incremental: bool = True) -> dict:
+def sync_crm_projects(
+    organization_id: str | None = None, incremental: bool = True
+) -> dict:
     """
     Sync projects from CRM to ERP.
 
@@ -176,7 +180,9 @@ def sync_crm_projects(organization_id: str | None = None, incremental: bool = Tr
 
 
 @shared_task
-def sync_all_crm_entities(organization_id: str | None = None, incremental: bool = True) -> dict:
+def sync_all_crm_entities(
+    organization_id: str | None = None, incremental: bool = True
+) -> dict:
     """
     Sync all CRM entities to ERP.
 
@@ -299,7 +305,9 @@ def crm_health_check() -> dict:
             return {
                 "healthy": is_healthy,
                 "crm_url": settings.crm_api_url,
-                "message": "CRM API accessible" if is_healthy else "CRM API not responding",
+                "message": "CRM API accessible"
+                if is_healthy
+                else "CRM API not responding",
             }
 
     except Exception as e:

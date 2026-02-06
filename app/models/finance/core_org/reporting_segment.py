@@ -2,6 +2,7 @@
 Reporting Segment Model - Core Org.
 IFRS 8 Operating Segments.
 """
+
 import enum
 import uuid
 from datetime import date, datetime

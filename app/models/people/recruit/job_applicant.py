@@ -3,6 +3,7 @@ Job Applicant Model - Recruit Schema.
 
 Tracks candidates applying for job openings.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -35,6 +36,7 @@ if TYPE_CHECKING:
 
 class ApplicantStatus(str, enum.Enum):
     """Applicant pipeline status."""
+
     NEW = "NEW"
     SCREENING = "SCREENING"
     SHORTLISTED = "SHORTLISTED"

@@ -7,10 +7,11 @@ Tests cover:
 - FK resolution in sync service
 - Entity creation and update
 """
+
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -19,8 +20,6 @@ from app.services.erpnext.mappings.material_request import (
     MaterialRequestItemMapping,
     map_material_request_status,
     map_material_request_type,
-    MATERIAL_REQUEST_STATUS_MAP,
-    MATERIAL_REQUEST_TYPE_MAP,
 )
 
 
@@ -73,14 +72,28 @@ class TestMaterialRequestStatusMapping:
     def test_all_erpnext_statuses_are_mapped(self):
         """All expected ERPNext statuses have mappings."""
         expected_statuses = [
-            "Draft", "Submitted", "Pending", "Partially Ordered",
-            "Ordered", "Issued", "Transferred", "Received",
-            "Cancelled", "Stopped",
+            "Draft",
+            "Submitted",
+            "Pending",
+            "Partially Ordered",
+            "Ordered",
+            "Issued",
+            "Transferred",
+            "Received",
+            "Cancelled",
+            "Stopped",
         ]
         for status in expected_statuses:
             result = map_material_request_status(status)
-            assert result in ["DRAFT", "SUBMITTED", "PARTIALLY_ORDERED", "ORDERED",
-                            "ISSUED", "TRANSFERRED", "CANCELLED"]
+            assert result in [
+                "DRAFT",
+                "SUBMITTED",
+                "PARTIALLY_ORDERED",
+                "ORDERED",
+                "ISSUED",
+                "TRANSFERRED",
+                "CANCELLED",
+            ]
 
 
 class TestMaterialRequestTypeMapping:
@@ -152,7 +165,9 @@ class TestMaterialRequestMapping:
         assert result["_requested_by_user"] == "john.doe@example.com"
         assert result["remarks"] == "Urgent requirement for project"
 
-    def test_transform_record_generates_request_number(self, mapping, sample_erpnext_record):
+    def test_transform_record_generates_request_number(
+        self, mapping, sample_erpnext_record
+    ):
         """Request number is generated from ERPNext name."""
         result = mapping.transform_record(sample_erpnext_record)
         assert result["request_number"] == "MAT-REQ-00001"
@@ -268,7 +283,10 @@ class TestMaterialRequestSyncService:
     @pytest.fixture
     def service(self, mock_db, organization_id, user_id):
         """Create sync service instance."""
-        from app.services.erpnext.sync.material_request import MaterialRequestSyncService
+        from app.services.erpnext.sync.material_request import (
+            MaterialRequestSyncService,
+        )
+
         return MaterialRequestSyncService(mock_db, organization_id, user_id)
 
     def test_transform_record_with_items(self, service):

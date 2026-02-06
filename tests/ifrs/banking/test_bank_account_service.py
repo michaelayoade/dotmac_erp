@@ -14,7 +14,6 @@ from app.services.finance.banking.bank_account import (
 )
 from tests.ifrs.banking.conftest import (
     MockBankAccount,
-    MockBankAccountStatus,
     MockGLAccount,
 )
 
@@ -69,9 +68,7 @@ class TestCreateBankAccount:
         mock_result.scalar_one_or_none.return_value = None
         mock_db.execute.return_value = mock_result
 
-        result = service.create(
-            mock_db, org_id, sample_bank_account_input, user_id
-        )
+        result = service.create(mock_db, org_id, sample_bank_account_input, user_id)
 
         mock_db.add.assert_called_once()
         mock_db.flush.assert_called_once()
@@ -198,9 +195,7 @@ class TestGetByAccountNumber:
         mock_result.scalar_one_or_none.return_value = account
         mock_db.execute.return_value = mock_result
 
-        result = service.get_by_account_number(
-            mock_db, org_id, "1234567890", "FNB001"
-        )
+        result = service.get_by_account_number(mock_db, org_id, "1234567890", "FNB001")
 
         assert result == account
 
@@ -241,9 +236,7 @@ class TestListBankAccounts:
 
     def test_list_with_currency_filter(self, service, mock_db, org_id):
         """Test listing accounts with currency filter."""
-        accounts = [
-            MockBankAccount(organization_id=org_id, currency_code="USD")
-        ]
+        accounts = [MockBankAccount(organization_id=org_id, currency_code="USD")]
 
         mock_result = MagicMock()
         mock_scalars = MagicMock()
@@ -301,7 +294,9 @@ class TestUpdateBankAccount:
         mock_db.get.side_effect = [account, None]  # Account found, GL not found
 
         with pytest.raises(HTTPException) as exc:
-            service.update(mock_db, org_id, account.bank_account_id, sample_bank_account_input)
+            service.update(
+                mock_db, org_id, account.bank_account_id, sample_bank_account_input
+            )
 
         assert exc.value.status_code == 404
 
@@ -356,7 +351,9 @@ class TestUpdateReconciledBalance:
         assert result.last_reconciled_balance == recon_balance
         mock_db.flush.assert_called_once()
 
-    def test_update_reconciled_balance_nonexistent_fails(self, service, mock_db, org_id):
+    def test_update_reconciled_balance_nonexistent_fails(
+        self, service, mock_db, org_id
+    ):
         """Test updating reconciled balance of non-existent account fails."""
         from datetime import datetime
         from fastapi import HTTPException

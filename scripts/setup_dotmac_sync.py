@@ -6,6 +6,7 @@ Setup Dotmac Technologies and sync expense data from ERPNext.
 2. Configure ERPNext integration
 3. Sync expense categories and claims
 """
+
 import sys
 import os
 import logging
@@ -23,6 +24,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from sqlalchemy import select
@@ -31,7 +33,6 @@ from app.models.finance.core_org.organization import Organization
 from app.models.person import Person
 from app.models.sync import IntegrationType
 from app.services.integration_config import IntegrationConfigService
-from app.services.erpnext.client import ERPNextConfig
 from app.services.erpnext.sync.orchestrator import (
     ERPNextSyncOrchestrator,
     MigrationConfig,
@@ -61,6 +62,7 @@ def setup_organization(db):
     else:
         print(f"Creating organization: {ORG_NAME}")
         from uuid import uuid4
+
         org = Organization(
             organization_id=uuid4(),
             organization_code=ORG_CODE,
@@ -83,7 +85,7 @@ def setup_erpnext_integration(db, org):
     """Configure ERPNext integration."""
     service = IntegrationConfigService(db)
 
-    print(f"\nConfiguring ERPNext integration...")
+    print("\nConfiguring ERPNext integration...")
     print(f"  URL: {ERPNEXT_URL}")
     print(f"  Company: {ERPNEXT_COMPANY}")
 

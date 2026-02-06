@@ -1,12 +1,24 @@
 """
 Tax Period Model - Tax Schema.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Index, String, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -33,7 +45,9 @@ class TaxPeriod(Base):
 
     __tablename__ = "tax_period"
     __table_args__ = (
-        UniqueConstraint("organization_id", "jurisdiction_id", "period_name", name="uq_tax_period"),
+        UniqueConstraint(
+            "organization_id", "jurisdiction_id", "period_name", name="uq_tax_period"
+        ),
         Index("idx_tax_period_dates", "start_date", "end_date"),
         {"schema": "tax"},
     )
@@ -75,7 +89,9 @@ class TaxPeriod(Base):
         default=TaxPeriodStatus.OPEN,
     )
 
-    is_extension_filed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_extension_filed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     extended_due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(

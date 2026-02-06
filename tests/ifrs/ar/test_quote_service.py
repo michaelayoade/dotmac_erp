@@ -5,7 +5,7 @@ Tests quote creation, workflow, and conversion to invoices/sales orders.
 """
 
 import uuid
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -113,7 +113,9 @@ class MockQuoteLine:
         self.discount_amount = discount_amount
         self.tax_code_id = tax_code_id
         self.tax_amount = tax_amount
-        self.line_total = line_total or (quantity * unit_price - discount_amount + tax_amount)
+        self.line_total = line_total or (
+            quantity * unit_price - discount_amount + tax_amount
+        )
         self.revenue_account_id = revenue_account_id
         self.project_id = project_id
         self.cost_center_id = cost_center_id
@@ -174,7 +176,14 @@ class TestCreate:
     @patch("app.services.finance.ar.quote.QuoteService._add_lines")
     @patch("app.services.finance.ar.quote.QuoteService._recalculate_totals")
     @patch("app.services.finance.ar.quote.Quote")
-    def test_create_quote_with_lines(self, mock_quote_class, mock_recalc, mock_add_lines, mock_generate, mock_get_entity):
+    def test_create_quote_with_lines(
+        self,
+        mock_quote_class,
+        mock_recalc,
+        mock_add_lines,
+        mock_generate,
+        mock_get_entity,
+    ):
         """Test creating a quote with lines."""
         mock_db = MagicMock()
         org_id = str(uuid.uuid4())
@@ -220,7 +229,9 @@ class TestUpdate:
         user_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT)
+        mock_quote = MockQuote(
+            quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT
+        )
         mock_get_quote.return_value = mock_quote
 
         result = QuoteService.update(
@@ -239,7 +250,10 @@ class TestUpdate:
         """Test updating non-existent quote."""
         mock_db = MagicMock()
         from fastapi import HTTPException
-        mock_get_quote.side_effect = HTTPException(status_code=404, detail="Quote not found")
+
+        mock_get_quote.side_effect = HTTPException(
+            status_code=404, detail="Quote not found"
+        )
 
         with pytest.raises(HTTPException) as exc_info:
             QuoteService.update(
@@ -258,7 +272,9 @@ class TestUpdate:
         quote_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.SENT)
+        mock_quote = MockQuote(
+            quote_id=quote_id, organization_id=org_id, status=QuoteStatus.SENT
+        )
         mock_get_quote.return_value = mock_quote
 
         with pytest.raises(ValueError) as exc_info:
@@ -283,7 +299,9 @@ class TestSend:
         user_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT)
+        mock_quote = MockQuote(
+            quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT
+        )
         mock_get_quote.return_value = mock_quote
 
         result = QuoteService.send(
@@ -302,7 +320,10 @@ class TestSend:
         """Test sending non-existent quote."""
         mock_db = MagicMock()
         from fastapi import HTTPException
-        mock_get_quote.side_effect = HTTPException(status_code=404, detail="Quote not found")
+
+        mock_get_quote.side_effect = HTTPException(
+            status_code=404, detail="Quote not found"
+        )
 
         with pytest.raises(HTTPException) as exc_info:
             QuoteService.send(
@@ -321,7 +342,9 @@ class TestSend:
         quote_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.ACCEPTED)
+        mock_quote = MockQuote(
+            quote_id=quote_id, organization_id=org_id, status=QuoteStatus.ACCEPTED
+        )
         mock_get_quote.return_value = mock_quote
 
         with pytest.raises(ValueError) as exc_info:
@@ -345,7 +368,9 @@ class TestMarkViewed:
         quote_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.SENT)
+        mock_quote = MockQuote(
+            quote_id=quote_id, organization_id=org_id, status=QuoteStatus.SENT
+        )
         mock_get_quote.return_value = mock_quote
 
         result = QuoteService.mark_viewed(
@@ -362,7 +387,10 @@ class TestMarkViewed:
         """Test marking non-existent quote as viewed."""
         mock_db = MagicMock()
         from fastapi import HTTPException
-        mock_get_quote.side_effect = HTTPException(status_code=404, detail="Quote not found")
+
+        mock_get_quote.side_effect = HTTPException(
+            status_code=404, detail="Quote not found"
+        )
 
         with pytest.raises(HTTPException) as exc_info:
             QuoteService.mark_viewed(
@@ -380,7 +408,9 @@ class TestMarkViewed:
         quote_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT)
+        mock_quote = MockQuote(
+            quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT
+        )
         mock_get_quote.return_value = mock_quote
 
         result = QuoteService.mark_viewed(
@@ -447,7 +477,10 @@ class TestAccept:
         """Test accepting non-existent quote."""
         mock_db = MagicMock()
         from fastapi import HTTPException
-        mock_get_quote.side_effect = HTTPException(status_code=404, detail="Quote not found")
+
+        mock_get_quote.side_effect = HTTPException(
+            status_code=404, detail="Quote not found"
+        )
 
         with pytest.raises(HTTPException) as exc_info:
             QuoteService.accept(
@@ -465,7 +498,9 @@ class TestAccept:
         quote_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT)
+        mock_quote = MockQuote(
+            quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT
+        )
         mock_get_quote.return_value = mock_quote
 
         with pytest.raises(ValueError) as exc_info:
@@ -512,7 +547,9 @@ class TestReject:
         quote_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.SENT)
+        mock_quote = MockQuote(
+            quote_id=quote_id, organization_id=org_id, status=QuoteStatus.SENT
+        )
         mock_get_quote.return_value = mock_quote
 
         result = QuoteService.reject(
@@ -531,7 +568,10 @@ class TestReject:
         """Test rejecting non-existent quote."""
         mock_db = MagicMock()
         from fastapi import HTTPException
-        mock_get_quote.side_effect = HTTPException(status_code=404, detail="Quote not found")
+
+        mock_get_quote.side_effect = HTTPException(
+            status_code=404, detail="Quote not found"
+        )
 
         with pytest.raises(HTTPException) as exc_info:
             QuoteService.reject(
@@ -549,7 +589,9 @@ class TestReject:
         quote_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT)
+        mock_quote = MockQuote(
+            quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT
+        )
         mock_get_quote.return_value = mock_quote
 
         with pytest.raises(ValueError) as exc_info:
@@ -569,7 +611,13 @@ class TestConvertToInvoice:
     @patch("app.services.finance.ar.quote.InvoiceLine")
     @patch("app.services.finance.ar.quote.Invoice")
     @patch("app.services.finance.ar.quote.SyncNumberingService")
-    def test_convert_to_invoice_success(self, mock_numbering_class, mock_invoice_class, mock_inv_line_class, mock_get_quote):
+    def test_convert_to_invoice_success(
+        self,
+        mock_numbering_class,
+        mock_invoice_class,
+        mock_inv_line_class,
+        mock_get_quote,
+    ):
         """Test converting accepted quote to invoice."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()
@@ -609,7 +657,10 @@ class TestConvertToInvoice:
         """Test converting non-existent quote to invoice."""
         mock_db = MagicMock()
         from fastapi import HTTPException
-        mock_get_quote.side_effect = HTTPException(status_code=404, detail="Quote not found")
+
+        mock_get_quote.side_effect = HTTPException(
+            status_code=404, detail="Quote not found"
+        )
 
         with pytest.raises(HTTPException) as exc_info:
             QuoteService.convert_to_invoice(
@@ -628,7 +679,9 @@ class TestConvertToInvoice:
         quote_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT)
+        mock_quote = MockQuote(
+            quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT
+        )
         mock_get_quote.return_value = mock_quote
 
         with pytest.raises(ValueError) as exc_info:
@@ -649,7 +702,9 @@ class TestConvertToSalesOrder:
     @patch("app.services.finance.ar.quote.SalesOrderLine")
     @patch("app.services.finance.ar.quote.SalesOrder")
     @patch("app.services.finance.ar.quote.SyncNumberingService")
-    def test_convert_to_sales_order_success(self, mock_numbering_class, mock_so_class, mock_so_line_class, mock_get_quote):
+    def test_convert_to_sales_order_success(
+        self, mock_numbering_class, mock_so_class, mock_so_line_class, mock_get_quote
+    ):
         """Test converting accepted quote to sales order."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()
@@ -690,7 +745,10 @@ class TestConvertToSalesOrder:
         """Test converting non-existent quote to sales order."""
         mock_db = MagicMock()
         from fastapi import HTTPException
-        mock_get_quote.side_effect = HTTPException(status_code=404, detail="Quote not found")
+
+        mock_get_quote.side_effect = HTTPException(
+            status_code=404, detail="Quote not found"
+        )
 
         with pytest.raises(HTTPException) as exc_info:
             QuoteService.convert_to_sales_order(
@@ -709,7 +767,9 @@ class TestConvertToSalesOrder:
         quote_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.SENT)
+        mock_quote = MockQuote(
+            quote_id=quote_id, organization_id=org_id, status=QuoteStatus.SENT
+        )
         mock_get_quote.return_value = mock_quote
 
         with pytest.raises(ValueError) as exc_info:
@@ -734,7 +794,9 @@ class TestVoid:
         user_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT)
+        mock_quote = MockQuote(
+            quote_id=quote_id, organization_id=org_id, status=QuoteStatus.DRAFT
+        )
         mock_get_quote.return_value = mock_quote
 
         result = QuoteService.void(
@@ -752,7 +814,10 @@ class TestVoid:
         """Test voiding non-existent quote."""
         mock_db = MagicMock()
         from fastapi import HTTPException
-        mock_get_quote.side_effect = HTTPException(status_code=404, detail="Quote not found")
+
+        mock_get_quote.side_effect = HTTPException(
+            status_code=404, detail="Quote not found"
+        )
 
         with pytest.raises(HTTPException) as exc_info:
             QuoteService.void(
@@ -771,7 +836,9 @@ class TestVoid:
         quote_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_quote = MockQuote(quote_id=quote_id, organization_id=org_id, status=QuoteStatus.CONVERTED)
+        mock_quote = MockQuote(
+            quote_id=quote_id, organization_id=org_id, status=QuoteStatus.CONVERTED
+        )
         mock_get_quote.return_value = mock_quote
 
         with pytest.raises(ValueError) as exc_info:
@@ -883,5 +950,9 @@ class TestListQuotes:
         )
 
         assert len(result) == 1
-        mock_db.query.return_value.filter.return_value.order_by.return_value.offset.assert_called_with(5)
-        mock_db.query.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.assert_called_with(10)
+        mock_db.query.return_value.filter.return_value.order_by.return_value.offset.assert_called_with(
+            5
+        )
+        mock_db.query.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.assert_called_with(
+            10
+        )

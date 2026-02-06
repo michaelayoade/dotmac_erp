@@ -6,7 +6,7 @@ HTML template routes for financial reports and analytics.
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
@@ -27,7 +27,9 @@ def reports_dashboard(
     db: Session = Depends(get_db),
 ):
     """Reports dashboard/hub page."""
-    return reports_web_service.dashboard_response(request, auth, start_date, end_date, db)
+    return reports_web_service.dashboard_response(
+        request, auth, start_date, end_date, db
+    )
 
 
 @router.get("/trial-balance", response_class=HTMLResponse)
@@ -50,7 +52,9 @@ def income_statement_report(
     db: Session = Depends(get_db),
 ):
     """Income statement report page."""
-    return reports_web_service.income_statement_response(request, auth, start_date, end_date, db)
+    return reports_web_service.income_statement_response(
+        request, auth, start_date, end_date, db
+    )
 
 
 @router.get("/balance-sheet", response_class=HTMLResponse)
@@ -115,7 +119,9 @@ def tax_summary_report(
     db: Session = Depends(get_db),
 ):
     """Tax summary report page."""
-    return reports_web_service.tax_summary_response(request, auth, start_date, end_date, db)
+    return reports_web_service.tax_summary_response(
+        request, auth, start_date, end_date, db
+    )
 
 
 @router.get("/expense-summary", response_class=HTMLResponse)
@@ -127,7 +133,9 @@ def expense_summary_report(
     db: Session = Depends(get_db),
 ):
     """Expense summary report page."""
-    return reports_web_service.expense_summary_response(request, auth, start_date, end_date, db)
+    return reports_web_service.expense_summary_response(
+        request, auth, start_date, end_date, db
+    )
 
 
 @router.get("/cash-flow", response_class=HTMLResponse)
@@ -139,7 +147,9 @@ def cash_flow_report(
     db: Session = Depends(get_db),
 ):
     """Cash flow statement report page."""
-    return reports_web_service.cash_flow_response(request, auth, start_date, end_date, db)
+    return reports_web_service.cash_flow_response(
+        request, auth, start_date, end_date, db
+    )
 
 
 @router.get("/changes-in-equity", response_class=HTMLResponse)

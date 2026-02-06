@@ -8,6 +8,7 @@ Supports:
 - Task assignments with due dates and document collection
 - Progress tracking and automated reminders
 """
+
 from __future__ import annotations
 
 import enum
@@ -36,7 +37,10 @@ from app.models.people.base import AuditMixin, ERPNextSyncMixin
 
 if TYPE_CHECKING:
     from app.models.finance.core_org import Organization
-    from app.models.people.hr.checklist_template import ChecklistTemplate, ChecklistTemplateItem
+    from app.models.people.hr.checklist_template import (
+        ChecklistTemplate,
+        ChecklistTemplateItem,
+    )
     from app.models.people.hr.employee import Employee
 
 
@@ -135,8 +139,12 @@ class EmployeeOnboarding(Base, AuditMixin, ERPNextSyncMixin):
         default=BoardingStatus.PENDING,
     )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
-    updated_at: Mapped[Optional[datetime]] = mapped_column(nullable=True, onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        nullable=True, onupdate=func.now()
+    )
 
     # --- New fields for enhanced onboarding ---
 
@@ -389,8 +397,12 @@ class EmployeeSeparation(Base, AuditMixin, ERPNextSyncMixin):
         default=BoardingStatus.PENDING,
     )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
-    updated_at: Mapped[Optional[datetime]] = mapped_column(nullable=True, onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        nullable=True, onupdate=func.now()
+    )
 
     activities: Mapped[list["EmployeeSeparationActivity"]] = relationship(
         "EmployeeSeparationActivity",
@@ -456,8 +468,12 @@ class EmployeePromotion(Base, AuditMixin, ERPNextSyncMixin):
     )
     promotion_date: Mapped[date] = mapped_column(Date, nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
-    updated_at: Mapped[Optional[datetime]] = mapped_column(nullable=True, onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        nullable=True, onupdate=func.now()
+    )
 
     details: Mapped[list["EmployeePromotionDetail"]] = relationship(
         "EmployeePromotionDetail",
@@ -522,8 +538,12 @@ class EmployeeTransfer(Base, AuditMixin, ERPNextSyncMixin):
     )
     transfer_date: Mapped[date] = mapped_column(Date, nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
-    updated_at: Mapped[Optional[datetime]] = mapped_column(nullable=True, onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        nullable=True, onupdate=func.now()
+    )
 
     details: Mapped[list["EmployeeTransferDetail"]] = relationship(
         "EmployeeTransferDetail",

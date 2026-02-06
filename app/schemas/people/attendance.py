@@ -5,6 +5,7 @@ Pydantic schemas for Attendance APIs including:
 - Shift Type
 - Attendance Records
 """
+
 from datetime import date, datetime, time
 from decimal import Decimal
 from typing import List, Optional

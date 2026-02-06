@@ -21,6 +21,7 @@ from app.models.people.payroll import (
     SalarySlipStatus,
 )
 from app.services.common import coerce_uuid
+from app.services.finance.posting.base import BasePostingAdapter
 from app.services.settings_cache import get_cached_setting
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ class GLPostingResult:
 
     success: bool
     journal_entry_id: Optional[uuid.UUID] = None
+    posting_batch_id: Optional[uuid.UUID] = None
     error_message: Optional[str] = None
 
 
@@ -103,7 +105,6 @@ class PayrollGLAdapter:
             # Import GL services (deferred to avoid circular imports)
             from app.models.finance.gl.journal_entry import JournalType
             from app.services.finance.gl import JournalInput, JournalLineInput
-            from app.services.finance.gl.journal import JournalService
 
             # Build journal entry lines
             lines: list[JournalLineInput] = []
@@ -189,7 +190,31 @@ class PayrollGLAdapter:
                 lines=lines,
             )
 
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
+            journal, error = BasePostingAdapter.create_and_approve_journal(
+                db,
+                org_id,
+                journal_input,
+                user_id,
+                error_prefix="Journal creation failed",
+            )
+            if error:
+                return GLPostingResult(success=False, error_message=error.message)
+
+            posting_result = BasePostingAdapter.post_to_ledger(
+                db,
+                organization_id=org_id,
+                journal_entry_id=journal.journal_entry_id,
+                posting_date=posting_date,
+                idempotency_key=f"{org_id}:PAYROLL:SLIP:{slip_id}:post:v1",
+                source_module="PAYROLL",
+                correlation_id=None,
+                posted_by_user_id=user_id,
+                success_message="Salary slip posted successfully",
+            )
+            if not posting_result.success:
+                return GLPostingResult(
+                    success=False, error_message=posting_result.message
+                )
 
             # Link journal to slip
             slip.journal_entry_id = journal.journal_entry_id
@@ -223,6 +248,7 @@ class PayrollGLAdapter:
             return GLPostingResult(
                 success=True,
                 journal_entry_id=journal.journal_entry_id,
+                posting_batch_id=posting_result.posting_batch_id,
             )
 
         except Exception as e:
@@ -405,7 +431,6 @@ class PayrollGLAdapter:
         from app.models.finance.core_org.organization import Organization
         from app.models.finance.gl.journal_entry import JournalType
         from app.services.finance.gl import JournalInput, JournalLineInput
-        from app.services.finance.gl.journal import JournalService
 
         try:
             # Check if already posted
@@ -581,7 +606,31 @@ class PayrollGLAdapter:
                 lines=lines,
             )
 
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
+            journal, error = BasePostingAdapter.create_and_approve_journal(
+                db,
+                org_id,
+                journal_input,
+                user_id,
+                error_prefix="Journal creation failed",
+            )
+            if error:
+                return GLPostingResult(success=False, error_message=error.message)
+
+            posting_result = BasePostingAdapter.post_to_ledger(
+                db,
+                organization_id=org_id,
+                journal_entry_id=journal.journal_entry_id,
+                posting_date=posting_date,
+                idempotency_key=f"{org_id}:PAYROLL:RUN:{payroll.entry_id}:post:v1",
+                source_module="PAYROLL",
+                correlation_id=None,
+                posted_by_user_id=user_id,
+                success_message="Payroll run posted successfully",
+            )
+            if not posting_result.success:
+                return GLPostingResult(
+                    success=False, error_message=posting_result.message
+                )
 
             # Link journal to payroll entry
             payroll.journal_entry_id = journal.journal_entry_id
@@ -607,6 +656,7 @@ class PayrollGLAdapter:
             return GLPostingResult(
                 success=True,
                 journal_entry_id=journal.journal_entry_id,
+                posting_batch_id=posting_result.posting_batch_id,
             )
 
         except Exception as e:

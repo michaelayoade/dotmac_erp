@@ -1,10 +1,10 @@
 """Tests for OnboardingService."""
+
 from datetime import date, datetime, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
-from sqlalchemy.orm import Session
 
 from app.models.people.hr import (
     ActivityStatus,
@@ -15,16 +15,8 @@ from app.models.people.hr import (
     Employee,
     EmployeeOnboarding,
     EmployeeOnboardingActivity,
-    OnboardingCategory,
 )
 from app.services.people.hr import OnboardingService
-from app.services.people.hr.errors import (
-    ActivityNotFoundError,
-    ChecklistTemplateNotFoundError,
-    InvalidSelfServiceTokenError,
-    OnboardingNotFoundError,
-    ValidationError,
-)
 
 
 @pytest.fixture
@@ -65,14 +57,16 @@ def mock_template(org_id, template_id):
 
     # Create mock items
     items = []
-    for i, (name, category, days, assignee) in enumerate([
-        ("Sign employment contract", "PRE_BOARDING", -3, "HR"),
-        ("Complete personal details form", "PRE_BOARDING", -1, "EMPLOYEE"),
-        ("Setup workstation", "DAY_ONE", 0, "IT"),
-        ("Team introduction", "DAY_ONE", 0, "MANAGER"),
-        ("Complete compliance training", "FIRST_WEEK", 5, "EMPLOYEE"),
-        ("Schedule 1-on-1 with manager", "FIRST_MONTH", 14, "EMPLOYEE"),
-    ]):
+    for i, (name, category, days, assignee) in enumerate(
+        [
+            ("Sign employment contract", "PRE_BOARDING", -3, "HR"),
+            ("Complete personal details form", "PRE_BOARDING", -1, "EMPLOYEE"),
+            ("Setup workstation", "DAY_ONE", 0, "IT"),
+            ("Team introduction", "DAY_ONE", 0, "MANAGER"),
+            ("Complete compliance training", "FIRST_WEEK", 5, "EMPLOYEE"),
+            ("Schedule 1-on-1 with manager", "FIRST_MONTH", 14, "EMPLOYEE"),
+        ]
+    ):
         item = MagicMock(spec=ChecklistTemplateItem)
         item.item_id = uuid4()
         item.template_id = template_id
@@ -192,6 +186,7 @@ class TestSelfServiceToken:
     def test_token_generation_length(self):
         """Test that generated tokens are sufficiently long."""
         import secrets
+
         token = secrets.token_urlsafe(32)
         # Base64 encoding of 32 bytes = ~43 characters
         assert len(token) >= 40
@@ -240,7 +235,9 @@ class TestExpectedCompletionDate:
         start_date = date(2024, 2, 1)
 
         # Find max days_from_start from template items
-        max_days = max((item.days_from_start for item in mock_template.items), default=0)
+        max_days = max(
+            (item.days_from_start for item in mock_template.items), default=0
+        )
         # Template has max 14 days_from_start, add 7 day buffer = 21, but min is 30
         expected = start_date + timedelta(days=max(max_days + 7, 30))
 

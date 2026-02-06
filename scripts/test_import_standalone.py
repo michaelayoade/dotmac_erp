@@ -34,12 +34,12 @@ ZOHO_ACCOUNT_TYPE_MAPPING = {
 
 def test_chart_of_accounts(file_path: str) -> None:
     """Test Chart of Accounts CSV import."""
-    print(f"\n{'='*60}")
-    print(f"  CHART OF ACCOUNTS IMPORT TEST")
-    print(f"{'='*60}")
+    print(f"\n{'=' * 60}")
+    print("  CHART OF ACCOUNTS IMPORT TEST")
+    print(f"{'=' * 60}")
     print(f"\nFile: {file_path}\n")
 
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
 
@@ -49,13 +49,13 @@ def test_chart_of_accounts(file_path: str) -> None:
     # Analyze account types
     account_types = {}
     for row in rows:
-        acc_type = row.get('Account Type', 'Unknown')
+        acc_type = row.get("Account Type", "Unknown")
         account_types[acc_type] = account_types.get(acc_type, 0) + 1
 
     print("Account Type Distribution:")
     print("-" * 50)
     for acc_type, count in sorted(account_types.items(), key=lambda x: -x[1]):
-        mapped = ZOHO_ACCOUNT_TYPE_MAPPING.get(acc_type, ('UNKNOWN', 'UNKNOWN'))
+        mapped = ZOHO_ACCOUNT_TYPE_MAPPING.get(acc_type, ("UNKNOWN", "UNKNOWN"))
         status = "✓" if acc_type in ZOHO_ACCOUNT_TYPE_MAPPING else "✗"
         print(f"  {status} {acc_type:25} -> {mapped[0]:12} ({count:3} accounts)")
 
@@ -64,7 +64,7 @@ def test_chart_of_accounts(file_path: str) -> None:
     print("-" * 50)
     statuses = {}
     for row in rows:
-        status = row.get('Account Status', 'Unknown')
+        status = row.get("Account Status", "Unknown")
         statuses[status] = statuses.get(status, 0) + 1
     for status, count in statuses.items():
         print(f"  {status}: {count}")
@@ -72,22 +72,24 @@ def test_chart_of_accounts(file_path: str) -> None:
     # Validate required fields
     print("\nValidation Results:")
     print("-" * 50)
-    missing_name = [r for r in rows if not r.get('Account Name', '').strip()]
-    missing_type = [r for r in rows if not r.get('Account Type', '').strip()]
-    unmapped_types = [r for r in rows if r.get('Account Type', '') not in ZOHO_ACCOUNT_TYPE_MAPPING]
+    missing_name = [r for r in rows if not r.get("Account Name", "").strip()]
+    missing_type = [r for r in rows if not r.get("Account Type", "").strip()]
+    unmapped_types = [
+        r for r in rows if r.get("Account Type", "") not in ZOHO_ACCOUNT_TYPE_MAPPING
+    ]
 
     print(f"  Missing Account Name: {len(missing_name)}")
     print(f"  Missing Account Type: {len(missing_type)}")
     print(f"  Unmapped Account Types: {len(unmapped_types)}")
 
     if unmapped_types:
-        unique_unmapped = set(r.get('Account Type', '') for r in unmapped_types)
+        unique_unmapped = set(r.get("Account Type", "") for r in unmapped_types)
         print(f"    Unmapped types: {unique_unmapped}")
 
     valid_count = len(rows) - len(missing_name) - len(missing_type)
     success_rate = (valid_count / len(rows)) * 100 if rows else 0
 
-    print(f"\nImport Simulation:")
+    print("\nImport Simulation:")
     print("-" * 50)
     print(f"  Total rows: {len(rows)}")
     print(f"  Valid for import: {valid_count}")
@@ -97,9 +99,11 @@ def test_chart_of_accounts(file_path: str) -> None:
     # Category summary
     print("\nCategories to be created:")
     print("-" * 50)
-    categories = set(r.get('Account Type', '') for r in rows if r.get('Account Type', ''))
+    categories = set(
+        r.get("Account Type", "") for r in rows if r.get("Account Type", "")
+    )
     for cat in sorted(categories):
-        ifrs_cat = ZOHO_ACCOUNT_TYPE_MAPPING.get(cat, ('UNKNOWN', 'UNKNOWN'))[0]
+        ifrs_cat = ZOHO_ACCOUNT_TYPE_MAPPING.get(cat, ("UNKNOWN", "UNKNOWN"))[0]
         count = account_types.get(cat, 0)
         print(f"  {cat} -> {ifrs_cat} ({count} accounts)")
 
@@ -108,14 +112,14 @@ def test_chart_of_accounts(file_path: str) -> None:
     print("-" * 50)
     by_ifrs = {}
     for row in rows:
-        acc_type = row.get('Account Type', '')
+        acc_type = row.get("Account Type", "")
         if acc_type in ZOHO_ACCOUNT_TYPE_MAPPING:
             ifrs_cat = ZOHO_ACCOUNT_TYPE_MAPPING[acc_type][0]
             if ifrs_cat not in by_ifrs:
                 by_ifrs[ifrs_cat] = []
-            by_ifrs[ifrs_cat].append(row.get('Account Name', ''))
+            by_ifrs[ifrs_cat].append(row.get("Account Name", ""))
 
-    for ifrs_cat in ['ASSETS', 'LIABILITIES', 'EQUITY', 'REVENUE', 'EXPENSES']:
+    for ifrs_cat in ["ASSETS", "LIABILITIES", "EQUITY", "REVENUE", "EXPENSES"]:
         if ifrs_cat in by_ifrs:
             print(f"\n  {ifrs_cat} ({len(by_ifrs[ifrs_cat])} accounts):")
             for acc in by_ifrs[ifrs_cat][:3]:
@@ -123,9 +127,9 @@ def test_chart_of_accounts(file_path: str) -> None:
             if len(by_ifrs[ifrs_cat]) > 3:
                 print(f"    ... and {len(by_ifrs[ifrs_cat]) - 3} more")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("  TEST COMPLETE - Ready for import!")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
 
 if __name__ == "__main__":

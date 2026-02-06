@@ -3,6 +3,7 @@ Leave Type Model - Leave Schema.
 
 Defines types of leave available in the organization.
 """
+
 import enum
 import uuid
 from datetime import datetime
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
 
 class LeaveTypePolicy(str, enum.Enum):
     """How leave is allocated."""
+
     ANNUAL = "ANNUAL"  # Allocated once per year
     MONTHLY = "MONTHLY"  # Accrued monthly
     EARNED = "EARNED"  # Earned based on attendance
@@ -48,7 +50,9 @@ class LeaveType(Base, AuditMixin, ERPNextSyncMixin):
 
     __tablename__ = "leave_type"
     __table_args__ = (
-        UniqueConstraint("organization_id", "leave_type_code", name="uq_leave_type_org_code"),
+        UniqueConstraint(
+            "organization_id", "leave_type_code", name="uq_leave_type_org_code"
+        ),
         Index("idx_leave_type_active", "organization_id", "is_active"),
         {"schema": "leave"},
     )

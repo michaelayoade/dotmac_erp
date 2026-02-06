@@ -54,7 +54,9 @@ def test_login_and_refresh_reuse_detection(db_session, person, monkeypatch):
     assert exc.value.status_code == 401
     assert "reuse" in str(exc.value.detail).lower()
 
-    session = db_session.query(AuthSession).filter(AuthSession.person_id == person.id).first()
+    session = (
+        db_session.query(AuthSession).filter(AuthSession.person_id == person.id).first()
+    )
     assert session.status == SessionStatus.revoked
     assert session.revoked_at is not None
 

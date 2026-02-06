@@ -1,11 +1,21 @@
 """
 Fiscal Year Model - GL Schema.
 """
+
 import uuid
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -40,7 +50,9 @@ class FiscalYear(Base):
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
 
-    is_adjustment_year: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_adjustment_year: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     is_closed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     closed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),

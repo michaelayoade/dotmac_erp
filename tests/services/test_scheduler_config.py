@@ -9,12 +9,10 @@ Tests for Celery configuration functions:
 - Beat schedule building
 """
 
-import os
 import uuid
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from app.models.domain_settings import SettingDomain
 from app.models.scheduler import ScheduleType
@@ -30,6 +28,7 @@ from app.services.scheduler_config import (
 
 
 # ============ TestEnvValue ============
+
 
 class TestEnvValue:
     """Tests for the _env_value function."""
@@ -60,6 +59,7 @@ class TestEnvValue:
 
 
 # ============ TestEnvInt ============
+
 
 class TestEnvInt:
     """Tests for the _env_int function."""
@@ -106,6 +106,7 @@ class TestEnvInt:
 
 
 # ============ TestGetSettingValue ============
+
 
 class TestGetSettingValue:
     """Tests for the _get_setting_value function."""
@@ -167,6 +168,7 @@ class TestGetSettingValue:
 
 
 # ============ TestEffectiveInt ============
+
 
 class TestEffectiveInt:
     """Tests for the _effective_int function."""
@@ -231,6 +233,7 @@ class TestEffectiveInt:
 
 # ============ TestEffectiveStr ============
 
+
 class TestEffectiveStr:
     """Tests for the _effective_str function."""
 
@@ -270,7 +273,11 @@ class TestEffectiveStr:
         mock_db.query.return_value.filter.return_value.filter.return_value.filter.return_value.first.return_value = None
 
         result = _effective_str(
-            mock_db, SettingDomain.scheduler, "db_key", "MISSING_STR", default="fallback"
+            mock_db,
+            SettingDomain.scheduler,
+            "db_key",
+            "MISSING_STR",
+            default="fallback",
         )
 
         assert result == "fallback"
@@ -289,6 +296,7 @@ class TestEffectiveStr:
 
 
 # ============ TestGetCeleryConfig ============
+
 
 class TestGetCeleryConfig:
     """Tests for the get_celery_config function."""
@@ -399,6 +407,7 @@ class TestGetCeleryConfig:
 
 # ============ TestBuildBeatSchedule ============
 
+
 class TestBuildBeatSchedule:
     """Tests for the build_beat_schedule function."""
 
@@ -429,7 +438,9 @@ class TestBuildBeatSchedule:
         mock_task.args_json = None
         mock_task.kwargs_json = None
 
-        mock_session.query.return_value.filter.return_value.all.return_value = [mock_task]
+        mock_session.query.return_value.filter.return_value.all.return_value = [
+            mock_task
+        ]
 
         schedule = build_beat_schedule()
 
@@ -475,7 +486,9 @@ class TestBuildBeatSchedule:
         mock_task.args_json = None
         mock_task.kwargs_json = None
 
-        mock_session.query.return_value.filter.return_value.all.return_value = [mock_task]
+        mock_session.query.return_value.filter.return_value.all.return_value = [
+            mock_task
+        ]
 
         schedule = build_beat_schedule()
 
@@ -500,7 +513,9 @@ class TestBuildBeatSchedule:
         mock_task.args_json = None
         mock_task.kwargs_json = None
 
-        mock_session.query.return_value.filter.return_value.all.return_value = [mock_task]
+        mock_session.query.return_value.filter.return_value.all.return_value = [
+            mock_task
+        ]
 
         schedule = build_beat_schedule()
 
@@ -523,7 +538,9 @@ class TestBuildBeatSchedule:
         mock_task.args_json = None
         mock_task.kwargs_json = None
 
-        mock_session.query.return_value.filter.return_value.all.return_value = [mock_task]
+        mock_session.query.return_value.filter.return_value.all.return_value = [
+            mock_task
+        ]
 
         schedule = build_beat_schedule()
 
@@ -546,7 +563,9 @@ class TestBuildBeatSchedule:
         mock_task.args_json = ["arg1", "arg2"]
         mock_task.kwargs_json = None
 
-        mock_session.query.return_value.filter.return_value.all.return_value = [mock_task]
+        mock_session.query.return_value.filter.return_value.all.return_value = [
+            mock_task
+        ]
 
         schedule = build_beat_schedule()
 
@@ -569,7 +588,9 @@ class TestBuildBeatSchedule:
         mock_task.args_json = None
         mock_task.kwargs_json = {"key": "value"}
 
-        mock_session.query.return_value.filter.return_value.all.return_value = [mock_task]
+        mock_session.query.return_value.filter.return_value.all.return_value = [
+            mock_task
+        ]
 
         schedule = build_beat_schedule()
 
@@ -592,7 +613,9 @@ class TestBuildBeatSchedule:
         mock_task.args_json = None
         mock_task.kwargs_json = None
 
-        mock_session.query.return_value.filter.return_value.all.return_value = [mock_task]
+        mock_session.query.return_value.filter.return_value.all.return_value = [
+            mock_task
+        ]
 
         schedule = build_beat_schedule()
 

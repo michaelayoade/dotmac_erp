@@ -26,6 +26,7 @@ Usage:
     # List configurations
     python scripts/setup_erpnext.py --org-code DOTMAC --list
 """
+
 import argparse
 import sys
 import os
@@ -66,17 +67,19 @@ def setup_erpnext(args):
 
         # Check if credentials are OpenBao references
         is_vault_key = args.api_key.startswith(("bao://", "vault://", "openbao://"))
-        is_vault_secret = args.api_secret.startswith(("bao://", "vault://", "openbao://"))
+        is_vault_secret = args.api_secret.startswith(
+            ("bao://", "vault://", "openbao://")
+        )
 
         if is_vault_key:
-            print(f"API Key: OpenBao reference")
+            print("API Key: OpenBao reference")
         else:
             print(f"API Key: {args.api_key[:8]}... (will be encrypted)")
 
         if is_vault_secret:
-            print(f"API Secret: OpenBao reference")
+            print("API Secret: OpenBao reference")
         else:
-            print(f"API Secret: ****** (will be encrypted)")
+            print("API Secret: ****** (will be encrypted)")
 
         # Create or update config
         existing = service.get_config(org.organization_id, IntegrationType.ERPNEXT)
@@ -160,7 +163,11 @@ def list_configs(args):
 
         for config in configs:
             status = "Active" if config.is_active else "Inactive"
-            verified = config.last_verified_at.strftime("%Y-%m-%d %H:%M") if config.last_verified_at else "Never"
+            verified = (
+                config.last_verified_at.strftime("%Y-%m-%d %H:%M")
+                if config.last_verified_at
+                else "Never"
+            )
             print(f"\n{config.integration_type.value}:")
             print(f"  Status: {status}")
             print(f"  URL: {config.base_url}")
@@ -223,7 +230,9 @@ def main():
         setup_erpnext(args)
     else:
         parser.print_help()
-        print("\nError: Specify --verify, --list, or provide --url, --api-key, and --api-secret")
+        print(
+            "\nError: Specify --verify, --list, or provide --url, --api-key, and --api-secret"
+        )
         sys.exit(1)
 
 

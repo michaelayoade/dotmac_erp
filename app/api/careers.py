@@ -5,10 +5,11 @@ These endpoints are PUBLIC and do not require authentication.
 Rate limiting is applied to protect against abuse.
 """
 
+import logging
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
@@ -29,6 +30,7 @@ from app.schemas.careers import (
 from app.services.careers.web import CareersWebService
 
 router = APIRouter(prefix="/careers", tags=["careers"])
+logger = logging.getLogger(__name__)
 
 
 def get_db():
@@ -50,6 +52,26 @@ def _require_org(slug: str, db: Session) -> tuple:
     if not ctx:
         raise HTTPException(status_code=404, detail="Organization not found")
     return ctx, service
+
+
+def _parse_department_ids(request: Request) -> list[uuid.UUID]:
+    raw_values = request.query_params.getlist("department_id")
+    if not raw_values:
+        return []
+
+    department_ids: list[uuid.UUID] = []
+    for raw in raw_values:
+        for value in raw.split(","):
+            value = value.strip()
+            if not value:
+                continue
+            try:
+                department_ids.append(uuid.UUID(value))
+            except ValueError:
+                logger.warning(
+                    "Invalid department_id ignored on careers API: %s", value
+                )
+    return department_ids
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -75,8 +97,8 @@ def get_organization_info(org_slug: str, db: Session = Depends(get_db)):
 @router.get("/{org_slug}/jobs", response_model=PublicJobListResponse)
 def list_jobs(
     org_slug: str,
+    request: Request,
     search: Optional[str] = None,
-    department_id: Optional[uuid.UUID] = None,
     location: Optional[str] = None,
     employment_type: Optional[str] = None,
     is_remote: Optional[bool] = None,
@@ -84,11 +106,12 @@ def list_jobs(
     page_size: int = 20,
     db: Session = Depends(get_db),
 ):
+    department_ids = _parse_department_ids(request) if request else []
     ctx, service = _require_org(org_slug, db)
     result = service.list_jobs(
         ctx.org_id,
         search=search,
-        department_id=department_id,
+        department_id=department_ids or None,
         location=location,
         employment_type=employment_type,
         is_remote=is_remote,
@@ -186,7 +209,9 @@ async def upload_resume(
     return ResumeUploadResponse(file_id=file_id, filename=file.filename)
 
 
-@router.post("/{org_slug}/jobs/{job_code}/apply", response_model=ApplicationSubmitResponse)
+@router.post(
+    "/{org_slug}/jobs/{job_code}/apply", response_model=ApplicationSubmitResponse
+)
 async def submit_application(
     request: Request,
     org_slug: str,
@@ -255,7 +280,9 @@ def get_application_status(org_slug: str, token: str, db: Session = Depends(get_
     status_info = service.verify_status_token(ctx.org_id, token)
 
     if not status_info:
-        raise HTTPException(status_code=404, detail="Invalid or expired verification link")
+        raise HTTPException(
+            status_code=404, detail="Invalid or expired verification link"
+        )
 
     return ApplicationStatusResponse(**status_info)
 

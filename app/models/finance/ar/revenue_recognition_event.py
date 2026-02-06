@@ -2,6 +2,7 @@
 Revenue Recognition Event Model - AR Schema.
 IFRS 15 Revenue Recognition Events.
 """
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -50,9 +51,13 @@ class RevenueRecognitionEvent(Base):
         nullable=True,
     )
     amount_recognized: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    cumulative_recognized: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    cumulative_recognized: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
 
-    measurement_details: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    measurement_details: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )
 
     journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),

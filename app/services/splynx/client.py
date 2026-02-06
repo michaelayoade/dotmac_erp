@@ -298,16 +298,30 @@ class SplynxClient:
         endpoint: str,
         params: Optional[dict[str, Any]] = None,
         page_size: int = 100,
+        page_delay: float = 0.0,
     ) -> Generator[dict[str, Any], None, None]:
         """
         Paginate through API results.
 
         Splynx uses offset/limit pagination.
+
+        Args:
+            endpoint: API path to fetch
+            params: Query parameters
+            page_size: Number of records per page
+            page_delay: Seconds to sleep between pages (rate-limit courtesy)
         """
+        import time
+
         params = params or {}
         offset = 0
+        is_first_page = True
 
         while True:
+            if not is_first_page and page_delay > 0:
+                time.sleep(page_delay)
+            is_first_page = False
+
             params["offset"] = offset
             params["limit"] = page_size
 

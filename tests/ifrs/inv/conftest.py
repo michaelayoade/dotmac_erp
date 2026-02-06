@@ -8,7 +8,7 @@ while still testing the service logic.
 import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -56,7 +56,9 @@ class MockItemCategory:
         self.inventory_account_id = inventory_account_id or uuid.uuid4()
         self.cogs_account_id = cogs_account_id or uuid.uuid4()
         self.revenue_account_id = revenue_account_id or uuid.uuid4()
-        self.inventory_adjustment_account_id = inventory_adjustment_account_id or uuid.uuid4()
+        self.inventory_adjustment_account_id = (
+            inventory_adjustment_account_id or uuid.uuid4()
+        )
         self.purchase_variance_account_id = purchase_variance_account_id
         self.is_active = is_active
         self.created_at = created_at or datetime.now(timezone.utc)

@@ -4,7 +4,7 @@ RPT API Router.
 Financial Reporting API endpoints per IAS 1.
 """
 
-from datetime import date, datetime
+from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
@@ -52,7 +52,9 @@ def get_db():
         db.close()
 
 
-def _resolve_statement_type(db: Session, organization_id: UUID, report_id: UUID) -> StatementType:
+def _resolve_statement_type(
+    db: Session, organization_id: UUID, report_id: UUID
+) -> StatementType:
     definition = db.get(ReportDefinition, report_id)
     if not definition or definition.organization_id != organization_id:
         raise HTTPException(status_code=404, detail="Report definition not found")
@@ -68,6 +70,7 @@ def _resolve_statement_type(db: Session, organization_id: UUID, report_id: UUID)
 # =============================================================================
 # Schemas
 # =============================================================================
+
 
 class ReportDefinitionCreate(BaseModel):
     """Create report definition request."""
@@ -354,7 +357,12 @@ class ScheduleExecutionRead(BaseModel):
 # Report Definitions
 # =============================================================================
 
-@router.post("/definitions", response_model=ReportDefinitionRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/definitions",
+    response_model=ReportDefinitionRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_report_definition(
     payload: ReportDefinitionCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -452,7 +460,10 @@ def clone_report_definition(
 # Statement Lines
 # =============================================================================
 
-@router.post("/lines", response_model=StatementLineRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/lines", response_model=StatementLineRead, status_code=status.HTTP_201_CREATED
+)
 def create_statement_line(
     payload: StatementLineCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -482,7 +493,9 @@ def create_statement_line(
     )
 
 
-@router.get("/definitions/{report_id}/lines", response_model=ListResponse[StatementLineRead])
+@router.get(
+    "/definitions/{report_id}/lines", response_model=ListResponse[StatementLineRead]
+)
 def list_statement_lines(
     report_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
@@ -498,7 +511,7 @@ def list_statement_lines(
         organization_id=str(organization_id),
         statement_type=statement_type,
     )
-    lines = lines[offset: offset + limit]
+    lines = lines[offset : offset + limit]
     return ListResponse(
         items=lines,
         count=len(lines),
@@ -532,7 +545,10 @@ def reorder_statement_lines(
 # Report Instances
 # =============================================================================
 
-@router.post("/instances", response_model=ReportInstanceRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/instances", response_model=ReportInstanceRead, status_code=status.HTTP_201_CREATED
+)
 def create_report_instance(
     payload: ReportInstanceCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -645,7 +661,12 @@ def get_report_data(
 # Disclosure Checklist
 # =============================================================================
 
-@router.post("/disclosures/items", response_model=DisclosureItemRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/disclosures/items",
+    response_model=DisclosureItemRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_disclosure_item(
     payload: DisclosureItemCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -704,7 +725,11 @@ def list_disclosure_items(
     )
 
 
-@router.post("/disclosures/completions", response_model=DisclosureCompletionRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/disclosures/completions",
+    response_model=DisclosureCompletionRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def record_disclosure_completion(
     payload: DisclosureCompletionCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -734,7 +759,10 @@ def record_disclosure_completion(
     )
 
 
-@router.post("/disclosures/completions/{completion_id}/review", response_model=DisclosureCompletionRead)
+@router.post(
+    "/disclosures/completions/{completion_id}/review",
+    response_model=DisclosureCompletionRead,
+)
 def review_disclosure_completion(
     completion_id: UUID,
     is_approved: bool = Query(...),
@@ -752,7 +780,9 @@ def review_disclosure_completion(
     )
 
 
-@router.get("/disclosures/instances/{instance_id}/summary", response_model=DisclosureSummaryRead)
+@router.get(
+    "/disclosures/instances/{instance_id}/summary", response_model=DisclosureSummaryRead
+)
 def get_disclosure_summary(
     instance_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
@@ -762,7 +792,9 @@ def get_disclosure_summary(
     """Get disclosure checklist summary for a report instance."""
     instance = report_instance_service.get(db, str(instance_id))
     if not instance.fiscal_period_id:
-        raise HTTPException(status_code=400, detail="Report instance has no fiscal period")
+        raise HTTPException(
+            status_code=400, detail="Report instance has no fiscal period"
+        )
     return disclosure_checklist_service.get_summary(
         db=db,
         organization_id=str(organization_id),
@@ -774,7 +806,10 @@ def get_disclosure_summary(
 # Report Schedules
 # =============================================================================
 
-@router.post("/schedules", response_model=ReportScheduleRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/schedules", response_model=ReportScheduleRead, status_code=status.HTTP_201_CREATED
+)
 def create_report_schedule(
     payload: ReportScheduleCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -884,7 +919,10 @@ def toggle_schedule_status(
     )
 
 
-@router.get("/schedules/{schedule_id}/executions", response_model=ListResponse[ScheduleExecutionRead])
+@router.get(
+    "/schedules/{schedule_id}/executions",
+    response_model=ListResponse[ScheduleExecutionRead],
+)
 def list_schedule_executions(
     schedule_id: UUID,
     organization_id: UUID = Depends(require_organization_id),

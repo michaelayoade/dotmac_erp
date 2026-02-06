@@ -3,6 +3,7 @@ Payment Web Routes.
 
 HTML pages for payment flow.
 """
+
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -38,7 +39,9 @@ def payment_callback(
     """
     context = payment_web_service.payment_callback_context(db, reference, trxref)
     context["is_authenticated"] = auth.is_authenticated
-    return templates.TemplateResponse(request, "finance/payments/callback.html", context)
+    return templates.TemplateResponse(
+        request, "finance/payments/callback.html", context
+    )
 
 
 @router.get("/pay/{invoice_id}", response_class=HTMLResponse)
@@ -53,7 +56,9 @@ def pay_invoice_page(
 
     Shows invoice details and a button to initiate payment.
     """
-    result = payment_web_service.pay_invoice_context(db, auth.organization_id, invoice_id)
+    result = payment_web_service.pay_invoice_context(
+        db, auth.organization_id, invoice_id
+    )
     redirect_url = result.get("redirect_url")
     if redirect_url:
         return RedirectResponse(redirect_url, status_code=302)
@@ -81,7 +86,9 @@ def reimburse_expense_page(
 
     Shows expense claim details and allows initiating a Paystack transfer.
     """
-    result = payment_web_service.reimburse_expense_context(db, auth.organization_id, expense_claim_id)
+    result = payment_web_service.reimburse_expense_context(
+        db, auth.organization_id, expense_claim_id
+    )
     redirect_url = result.get("redirect_url")
     if redirect_url:
         return RedirectResponse(redirect_url, status_code=302)
@@ -112,7 +119,9 @@ def transfer_list(
     """
     context = base_context(request, auth, "Transfers", "expense", db=db)
     context.update(
-        payment_web_service.transfer_list_context(db, auth.organization_id, status, page)
+        payment_web_service.transfer_list_context(
+            db, auth.organization_id, status, page
+        )
     )
 
     return templates.TemplateResponse(
@@ -137,7 +146,9 @@ def payment_history(
     """
     context = base_context(request, auth, "Payment History", "ar", db=db)
     context.update(
-        payment_web_service.payment_history_context(db, auth.organization_id, status, page)
+        payment_web_service.payment_history_context(
+            db, auth.organization_id, status, page
+        )
     )
 
     return templates.TemplateResponse(

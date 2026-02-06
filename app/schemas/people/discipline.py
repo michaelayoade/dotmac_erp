@@ -8,6 +8,7 @@ Pydantic schemas for Discipline APIs including:
 - Case Document
 - Case Response
 """
+
 from datetime import date, datetime
 from typing import List, Optional
 from uuid import UUID

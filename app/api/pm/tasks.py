@@ -3,15 +3,16 @@ Task API Endpoints.
 
 REST API for task management.
 """
+
 from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
+from app.api.deps import require_organization_id
 from app.db import SessionLocal
-from app.models.pm import DependencyType, TaskPriority, TaskStatus
+from app.models.pm import TaskPriority, TaskStatus
 from app.schemas.pm import (
     TaskAssignRequest,
     TaskCompleteResponse,

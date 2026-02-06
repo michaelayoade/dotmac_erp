@@ -7,6 +7,7 @@ Pydantic schemas for Expense APIs including:
 - Cash Advance
 - Corporate Card / Card Transaction
 """
+
 from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional
@@ -582,13 +583,19 @@ class ExpenseLimitRuleBase(BaseModel):
     rule_code: str = Field(max_length=50)
     rule_name: str = Field(max_length=200)
     description: Optional[str] = None
-    scope_type: str = Field(description="EMPLOYEE, GRADE, DESIGNATION, DEPARTMENT, EMPLOYMENT_TYPE, ORGANIZATION")
+    scope_type: str = Field(
+        description="EMPLOYEE, GRADE, DESIGNATION, DEPARTMENT, EMPLOYMENT_TYPE, ORGANIZATION"
+    )
     scope_id: Optional[UUID] = None
-    period_type: str = Field(description="TRANSACTION, DAY, WEEK, MONTH, QUARTER, YEAR, CUSTOM")
+    period_type: str = Field(
+        description="TRANSACTION, DAY, WEEK, MONTH, QUARTER, YEAR, CUSTOM"
+    )
     custom_period_days: Optional[int] = None
     limit_amount: Decimal
     currency_code: str = "NGN"
-    action_type: str = Field(description="BLOCK, WARN, REQUIRE_APPROVAL, REQUIRE_MULTI_APPROVAL, AUTO_ESCALATE")
+    action_type: str = Field(
+        description="BLOCK, WARN, REQUIRE_APPROVAL, REQUIRE_MULTI_APPROVAL, AUTO_ESCALATE"
+    )
     dimension_filters: Optional[DimensionFilters] = None
     action_config: Optional[ActionConfig] = None
     priority: int = 100
@@ -723,7 +730,9 @@ class ExpenseLimitEvaluationBase(BaseModel):
     period_end: Optional[date] = None
     rule_id: Optional[UUID] = None
     rule_code: Optional[str] = None
-    result: str = Field(description="PASSED, BLOCKED, WARNING, APPROVAL_REQUIRED, MULTI_APPROVAL_REQUIRED, ESCALATED")
+    result: str = Field(
+        description="PASSED, BLOCKED, WARNING, APPROVAL_REQUIRED, MULTI_APPROVAL_REQUIRED, ESCALATED"
+    )
     result_message: Optional[str] = None
     context_data: Optional[dict] = None
 

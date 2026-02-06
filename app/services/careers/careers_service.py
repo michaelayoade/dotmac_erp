@@ -21,7 +21,12 @@ from app.models.finance.core_org.organization import Organization
 from app.models.people.hr.department import Department
 from app.models.people.recruit.job_applicant import ApplicantStatus, JobApplicant
 from app.models.people.recruit.job_opening import JobOpening, JobOpeningStatus
+from app.models.people.recruit.job_offer import JobOffer, OfferStatus
 from app.services.careers.candidate_notifications import CandidateNotificationService
+from app.services.people.recruit.notifications import (
+    send_new_applicant_notification,
+    send_offer_response_notification,
+)
 from app.services.careers.resume_service import ResumeService
 
 logger = logging.getLogger(__name__)
@@ -102,7 +107,7 @@ class CareersService:
         org_id: uuid.UUID,
         *,
         search: Optional[str] = None,
-        department_id: Optional[uuid.UUID] = None,
+        department_id: Optional[list[uuid.UUID]] = None,
         location: Optional[str] = None,
         employment_type: Optional[str] = None,
         is_remote: Optional[bool] = None,
@@ -115,7 +120,7 @@ class CareersService:
         Args:
             org_id: Organization UUID
             search: Optional search term for job title/description
-            department_id: Filter by department
+            department_id: Filter by one or more departments
             location: Filter by location (partial match)
             employment_type: Filter by employment type
             is_remote: Filter remote jobs
@@ -145,7 +150,10 @@ class CareersService:
             )
 
         if department_id:
-            base_conditions.append(JobOpening.department_id == department_id)
+            if len(department_id) == 1:
+                base_conditions.append(JobOpening.department_id == department_id[0])
+            else:
+                base_conditions.append(JobOpening.department_id.in_(department_id))
 
         if location:
             base_conditions.append(JobOpening.location.ilike(f"%{location}%"))
@@ -401,6 +409,7 @@ class CareersService:
             job.job_code,
             org_id,
         )
+        send_new_applicant_notification(self.db, org_id, applicant, job)
 
         return applicant
 
@@ -466,6 +475,7 @@ class CareersService:
             applicant_name=applicant.first_name,
             verification_url=verification_url,
             org_name=org.legal_name or org.trading_name or "Our Company",
+            organization_id=org.organization_id,
         )
 
         logger.info("Status verification email sent to %s", email)
@@ -525,6 +535,84 @@ class CareersService:
             "applicant_name": f"{applicant.first_name} {applicant.last_name}",
         }
 
+    def get_offer_by_token(
+        self,
+        org_id: uuid.UUID,
+        token: str,
+    ) -> Optional[JobOffer]:
+        """Get a job offer by candidate portal token."""
+        if not token:
+            return None
+
+        stmt = (
+            select(JobOffer)
+            .options(
+                joinedload(JobOffer.applicant),
+                joinedload(JobOffer.job_opening),
+                joinedload(JobOffer.designation),
+                joinedload(JobOffer.department),
+            )
+            .where(
+                JobOffer.organization_id == org_id,
+                JobOffer.candidate_access_token == token,
+            )
+        )
+        offer = self.db.scalar(stmt)
+        if not offer:
+            return None
+
+        if (
+            offer.candidate_access_expires
+            and datetime.now(timezone.utc) > offer.candidate_access_expires
+        ):
+            return None
+
+        return offer
+
+    def accept_offer_by_token(
+        self, org_id: uuid.UUID, token: str
+    ) -> Optional[JobOffer]:
+        """Accept an offer using the candidate portal token."""
+        offer = self.get_offer_by_token(org_id, token)
+        if not offer:
+            return None
+        if offer.status == OfferStatus.ACCEPTED:
+            return offer
+        from app.services.people.recruit import RecruitmentService
+
+        svc = RecruitmentService(self.db)
+        updated = svc.accept_offer(org_id, offer.offer_id)
+        applicant = self.db.get(JobApplicant, updated.applicant_id)
+        if applicant:
+            send_offer_response_notification(
+                self.db, org_id, applicant, updated, "ACCEPTED"
+            )
+        return updated
+
+    def decline_offer_by_token(
+        self,
+        org_id: uuid.UUID,
+        token: str,
+        *,
+        reason: Optional[str] = None,
+    ) -> Optional[JobOffer]:
+        """Decline an offer using the candidate portal token."""
+        offer = self.get_offer_by_token(org_id, token)
+        if not offer:
+            return None
+        if offer.status == OfferStatus.DECLINED:
+            return offer
+        from app.services.people.recruit import RecruitmentService
+
+        svc = RecruitmentService(self.db)
+        updated = svc.decline_offer(org_id, offer.offer_id, reason=reason)
+        applicant = self.db.get(JobApplicant, updated.applicant_id)
+        if applicant:
+            send_offer_response_notification(
+                self.db, org_id, applicant, updated, "DECLINED"
+            )
+        return updated
+
     def _format_status(self, status: ApplicantStatus) -> str:
         """Format status enum for display."""
         status_labels = {
@@ -570,4 +658,5 @@ class CareersService:
             application_number=applicant.application_number,
             org_name=org.legal_name or org.trading_name or "Our Company",
             org_slug=self._public_org_identifier(org),
+            organization_id=org.organization_id,
         )

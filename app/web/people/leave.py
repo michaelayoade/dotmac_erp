@@ -3,6 +3,7 @@ Leave management web routes.
 
 Provides list pages and CRUD forms for leave types, allocations, applications, and holiday lists.
 """
+
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request

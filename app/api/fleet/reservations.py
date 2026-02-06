@@ -3,6 +3,7 @@ Reservation API Endpoints.
 
 REST API for pool vehicle reservation management.
 """
+
 from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
@@ -26,7 +27,12 @@ from app.schemas.fleet.reservation import (
     ReservationUpdate,
 )
 from app.schemas.fleet.vehicle import VehicleBrief
-from app.services.common import ConflictError, NotFoundError, PaginationParams, ValidationError
+from app.services.common import (
+    ConflictError,
+    NotFoundError,
+    PaginationParams,
+    ValidationError,
+)
 from app.services.fleet.reservation_service import ReservationService
 from app.services.fleet.vehicle_service import VehicleService
 
@@ -82,7 +88,9 @@ def get_available_vehicles(
 ):
     """Get pool vehicles available for the requested time period."""
     service = VehicleService(db, organization_id)
-    vehicles = service.get_available_pool_vehicles(data.start_datetime, data.end_datetime)
+    vehicles = service.get_available_pool_vehicles(
+        data.start_datetime, data.end_datetime
+    )
     return [VehicleBrief.model_validate(v) for v in vehicles]
 
 

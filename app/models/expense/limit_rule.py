@@ -7,6 +7,7 @@ Multi-dimensional limit enforcement system for expense claims:
 - ExpenseLimitEvaluation: Audit trail for limit evaluations
 - ExpensePeriodUsage: Usage cache for period-based limits
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -103,10 +104,19 @@ class ExpenseLimitRule(Base, AuditMixin):
 
     __tablename__ = "expense_limit_rule"
     __table_args__ = (
-        Index("idx_expense_limit_rule_scope", "organization_id", "scope_type", "scope_id"),
-        Index("idx_expense_limit_rule_active", "organization_id", "is_active", "effective_from"),
+        Index(
+            "idx_expense_limit_rule_scope", "organization_id", "scope_type", "scope_id"
+        ),
+        Index(
+            "idx_expense_limit_rule_active",
+            "organization_id",
+            "is_active",
+            "effective_from",
+        ),
         Index("idx_expense_limit_rule_priority", "organization_id", "priority"),
-        UniqueConstraint("organization_id", "rule_code", name="uq_expense_limit_rule_code"),
+        UniqueConstraint(
+            "organization_id", "rule_code", name="uq_expense_limit_rule_code"
+        ),
         {"schema": "expense"},
     )
 
@@ -307,7 +317,12 @@ class ExpenseApproverLimit(Base, AuditMixin):
 
     __tablename__ = "expense_approver_limit"
     __table_args__ = (
-        Index("idx_expense_approver_limit_scope", "organization_id", "scope_type", "scope_id"),
+        Index(
+            "idx_expense_approver_limit_scope",
+            "organization_id",
+            "scope_type",
+            "scope_id",
+        ),
         {"schema": "expense"},
     )
 
@@ -511,7 +526,9 @@ class ExpenseLimitEvaluation(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<ExpenseLimitEvaluation claim={self.claim_id} result={self.result.value}>"
+        return (
+            f"<ExpenseLimitEvaluation claim={self.claim_id} result={self.result.value}>"
+        )
 
 
 class ExpensePeriodUsage(Base):
@@ -524,7 +541,12 @@ class ExpensePeriodUsage(Base):
     __tablename__ = "expense_period_usage"
     __table_args__ = (
         Index("idx_expense_period_usage_employee", "employee_id"),
-        Index("idx_expense_period_usage_period", "organization_id", "period_type", "period_start"),
+        Index(
+            "idx_expense_period_usage_period",
+            "organization_id",
+            "period_type",
+            "period_start",
+        ),
         Index(
             "idx_expense_period_usage_lookup",
             "organization_id",

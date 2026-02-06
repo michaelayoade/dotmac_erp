@@ -13,7 +13,6 @@ from sqlalchemy import (
     BigInteger,
     DateTime,
     Enum,
-    ForeignKey,
     Index,
     String,
     Text,
@@ -28,6 +27,7 @@ from app.db import Base
 
 class AttachmentCategory(str, enum.Enum):
     """Categories for document attachments."""
+
     INVOICE = "INVOICE"
     RECEIPT = "RECEIPT"
     CONTRACT = "CONTRACT"

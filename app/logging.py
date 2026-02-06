@@ -12,6 +12,7 @@ def _get_request_context() -> dict:
     """
     try:
         from app.observability import get_request_id, get_actor_id
+
         context = {}
         request_id = get_request_id()
         if request_id:

@@ -448,6 +448,12 @@ def _load_rbac_claims(db: Session, person_id: str) -> tuple[list[str], list[str]
         "inv:material_requests:create",
         "inv:material_requests:submit",
         "inv:material_requests:delete",
+        "inv:material_requests:approve",
+        "inventory:material_requests:read",
+        "inventory:material_requests:create",
+        "inventory:material_requests:submit",
+        "inventory:material_requests:delete",
+        "inventory:material_requests:approve",
         "leave:applications:approve:tier1",
         "leave:applications:approve:tier2",
         "leave:applications:approve:tier3",
@@ -1119,6 +1125,7 @@ def request_password_reset(db: Session, email: str) -> dict | None:
         "token": token,
         "email": email,
         "person_name": person.display_name or person.first_name,
+        "organization_id": person.organization_id,
     }
 
 

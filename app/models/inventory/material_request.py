@@ -5,6 +5,7 @@ Material Requests are inventory requisitions synced from ERPNext.
 They can be linked to Projects, Support Tickets, and Tasks for
 cross-module inventory tracking.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -31,8 +32,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
 if TYPE_CHECKING:
-    from app.models.inventory.item import Item
-    from app.models.inventory.warehouse import Warehouse
+    pass
 
 
 class MaterialRequestType(str, enum.Enum):
@@ -133,6 +133,7 @@ class MaterialRequest(Base):
     )
 
     remarks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    cancel_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # ERPNext sync tracking
     erpnext_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -227,9 +228,7 @@ class MaterialRequestItem(Base):
     )
 
     # Quantities
-    requested_qty: Mapped[Decimal] = mapped_column(
-        Numeric(20, 6), nullable=False
-    )
+    requested_qty: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     ordered_qty: Mapped[Decimal] = mapped_column(
         Numeric(20, 6), nullable=False, default=Decimal("0")
     )

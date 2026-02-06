@@ -17,6 +17,7 @@ from app.services.finance.tax.tax_period import (
 
 class MockTaxPeriodStatus:
     """Mock status enum."""
+
     OPEN = "open"
     FILED = "filed"
     PAID = "paid"
@@ -25,6 +26,7 @@ class MockTaxPeriodStatus:
 
 class MockTaxPeriodFrequency:
     """Mock frequency enum."""
+
     MONTHLY = "monthly"
     QUARTERLY = "quarterly"
     ANNUAL = "annual"
@@ -75,7 +77,10 @@ class TestTaxPeriodServiceCreatePeriod:
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
-        mock_query.first.side_effect = [mock_jurisdiction, None]  # Found jurisdiction, no overlap
+        mock_query.first.side_effect = [
+            mock_jurisdiction,
+            None,
+        ]  # Found jurisdiction, no overlap
         mock_db.query.return_value = mock_query
 
         input_data = TaxPeriodInput(
@@ -377,9 +382,7 @@ class TestTaxPeriodServiceStatusTransitions:
         from app.models.finance.tax.tax_period import TaxPeriodStatus
 
         org_id = uuid4()
-        mock_period = MockTaxPeriod(
-            organization_id=org_id, status=TaxPeriodStatus.OPEN
-        )
+        mock_period = MockTaxPeriod(organization_id=org_id, status=TaxPeriodStatus.OPEN)
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -433,9 +436,7 @@ class TestTaxPeriodServiceStatusTransitions:
         from app.models.finance.tax.tax_period import TaxPeriodStatus
 
         org_id = uuid4()
-        mock_period = MockTaxPeriod(
-            organization_id=org_id, status=TaxPeriodStatus.PAID
-        )
+        mock_period = MockTaxPeriod(organization_id=org_id, status=TaxPeriodStatus.PAID)
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -519,7 +520,10 @@ class TestTaxPeriodServiceQueries:
 
     def test_list_periods_with_filters(self, mock_db):
         """Test listing periods with filters."""
-        from app.models.finance.tax.tax_period import TaxPeriodStatus, TaxPeriodFrequency
+        from app.models.finance.tax.tax_period import (
+            TaxPeriodStatus,
+            TaxPeriodFrequency,
+        )
 
         periods = [MockTaxPeriod(), MockTaxPeriod()]
 

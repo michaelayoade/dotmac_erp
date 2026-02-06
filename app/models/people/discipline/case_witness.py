@@ -3,6 +3,7 @@ Case Witness Model - HR Schema.
 
 Tracks witnesses associated with disciplinary cases.
 """
+
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional

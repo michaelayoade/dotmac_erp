@@ -1,13 +1,24 @@
 """
 Budget Model - GL Schema.
 """
+
 import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    DateTime,
+    Enum,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -67,11 +78,15 @@ class Budget(Base):
         UUID(as_uuid=True),
         nullable=True,
     )
-    segment_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    segment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
 
     # Currency
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
-    total_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    total_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Status
     status: Mapped[BudgetStatus] = mapped_column(

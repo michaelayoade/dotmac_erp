@@ -1,12 +1,24 @@
 """
 Tax Jurisdiction Model - Tax Schema.
 """
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -20,7 +32,9 @@ class TaxJurisdiction(Base):
 
     __tablename__ = "tax_jurisdiction"
     __table_args__ = (
-        UniqueConstraint("organization_id", "jurisdiction_code", name="uq_tax_jurisdiction"),
+        UniqueConstraint(
+            "organization_id", "jurisdiction_code", name="uq_tax_jurisdiction"
+        ),
         {"schema": "tax"},
     )
 
@@ -48,24 +62,42 @@ class TaxJurisdiction(Base):
     # Corporate income tax rates
     current_tax_rate: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False)
     tax_rate_effective_from: Mapped[date] = mapped_column(Date, nullable=False)
-    future_tax_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 6), nullable=True)
-    future_rate_effective_from: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    future_tax_rate: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 6), nullable=True
+    )
+    future_rate_effective_from: Mapped[Optional[date]] = mapped_column(
+        Date, nullable=True
+    )
 
     # Small business/reduced rate
-    has_reduced_rate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    reduced_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 6), nullable=True)
-    reduced_rate_threshold: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6), nullable=True)
+    has_reduced_rate: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    reduced_rate: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 6), nullable=True
+    )
+    reduced_rate_threshold: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 6), nullable=True
+    )
 
     # Tax filing
-    fiscal_year_end_month: Mapped[int] = mapped_column(Numeric(2, 0), nullable=False, default=12)
-    filing_due_months: Mapped[int] = mapped_column(Numeric(2, 0), nullable=False, default=6)
-    extension_months: Mapped[Optional[int]] = mapped_column(Numeric(2, 0), nullable=True)
+    fiscal_year_end_month: Mapped[int] = mapped_column(
+        Numeric(2, 0), nullable=False, default=12
+    )
+    filing_due_months: Mapped[int] = mapped_column(
+        Numeric(2, 0), nullable=False, default=6
+    )
+    extension_months: Mapped[Optional[int]] = mapped_column(
+        Numeric(2, 0), nullable=True
+    )
 
     # Currency
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
 
     # Tax authority
-    tax_authority_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    tax_authority_name: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True
+    )
     tax_id_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # Accounts

@@ -62,7 +62,10 @@ def get_db():
 # Chart of Accounts
 # =============================================================================
 
-@router.post("/accounts", response_model=AccountRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/accounts", response_model=AccountRead, status_code=status.HTTP_201_CREATED
+)
 def create_account(
     payload: AccountCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -189,7 +192,12 @@ def activate_account(
 # Fiscal Periods
 # =============================================================================
 
-@router.post("/fiscal-periods", response_model=FiscalPeriodRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/fiscal-periods",
+    response_model=FiscalPeriodRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_fiscal_period(
     payload: FiscalPeriodCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -204,7 +212,9 @@ def create_fiscal_period(
         start_date=payload.start_date,
         end_date=payload.end_date,
     )
-    return fiscal_period_service.create_period(db=db, organization_id=organization_id, input=input_data)
+    return fiscal_period_service.create_period(
+        db=db, organization_id=organization_id, input=input_data
+    )
 
 
 @router.get("/fiscal-periods/{period_id}", response_model=FiscalPeriodRead)
@@ -254,7 +264,9 @@ def open_fiscal_period(
     """Open a fiscal period for posting."""
     opened_by_user_id = UUID(auth["person_id"]) if auth.get("person_id") else None
     if not opened_by_user_id:
-        raise HTTPException(status_code=403, detail="User is not associated with a person")
+        raise HTTPException(
+            status_code=403, detail="User is not associated with a person"
+        )
     return fiscal_period_service.open_period(
         db, organization_id, period_id, opened_by_user_id
     )
@@ -269,14 +281,21 @@ def close_fiscal_period(
     db: Session = Depends(get_db),
 ):
     """Close a fiscal period."""
-    return fiscal_period_service.close_period(db, organization_id, period_id, closed_by_user_id)
+    return fiscal_period_service.close_period(
+        db, organization_id, period_id, closed_by_user_id
+    )
 
 
 # =============================================================================
 # Journal Entries
 # =============================================================================
 
-@router.post("/journal-entries", response_model=JournalEntryRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/journal-entries",
+    response_model=JournalEntryRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_journal_entry(
     payload: JournalEntryCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -408,6 +427,7 @@ def reverse_journal_entry(
 # =============================================================================
 # Account Balances
 # =============================================================================
+
 
 @router.get("/balances/{account_id}", response_model=AccountBalanceRead)
 def get_account_balance(

@@ -3,6 +3,7 @@ Shift Pattern Model - Scheduling Schema.
 
 Defines weekly shift patterns for rotation schedules.
 """
+
 import enum
 import uuid
 from datetime import datetime

@@ -3,6 +3,7 @@ Sync History Model - Track sync job runs.
 
 Records each migration/sync execution for audit and monitoring.
 """
+
 import enum
 import uuid
 from datetime import datetime
@@ -17,12 +18,14 @@ from app.db import Base
 
 class SyncType(str, enum.Enum):
     """Type of sync operation."""
+
     FULL = "FULL"
     INCREMENTAL = "INCREMENTAL"
 
 
 class SyncJobStatus(str, enum.Enum):
     """Status of sync job."""
+
     PENDING = "PENDING"
     RUNNING = "RUNNING"
     COMPLETED = "COMPLETED"
@@ -138,11 +141,13 @@ class SyncHistory(Base):
         if self.errors is None:
             self.errors = []
         if len(self.errors) < 100:
-            self.errors.append({
-                "doctype": doctype,
-                "name": name,
-                "error": error,
-            })
+            self.errors.append(
+                {
+                    "doctype": doctype,
+                    "name": name,
+                    "error": error,
+                }
+            )
         self.error_count += 1
 
     def increment_synced(self) -> None:

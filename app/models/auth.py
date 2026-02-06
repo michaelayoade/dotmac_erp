@@ -68,7 +68,9 @@ class UserCredential(Base):
     username: Mapped[str | None] = mapped_column(String(150))
     password_hash: Mapped[str | None] = mapped_column(String(255))
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
-    password_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    password_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
 
     failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

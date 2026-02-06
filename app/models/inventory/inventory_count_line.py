@@ -1,12 +1,22 @@
 """
 Inventory Count Line Model - Inventory Schema.
 """
+
 import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -20,7 +30,9 @@ class InventoryCountLine(Base):
 
     __tablename__ = "inventory_count_line"
     __table_args__ = (
-        UniqueConstraint("count_id", "item_id", "lot_id", name="uq_inventory_count_line"),
+        UniqueConstraint(
+            "count_id", "item_id", "lot_id", name="uq_inventory_count_line"
+        ),
         {"schema": "inv"},
     )
 
@@ -60,14 +72,26 @@ class InventoryCountLine(Base):
     uom: Mapped[str] = mapped_column(String(20), nullable=False)
 
     # Count results
-    counted_quantity: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6), nullable=True)
-    recount_quantity: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6), nullable=True)
-    final_quantity: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6), nullable=True)
+    counted_quantity: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 6), nullable=True
+    )
+    recount_quantity: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 6), nullable=True
+    )
+    final_quantity: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 6), nullable=True
+    )
 
     # Variance
-    variance_quantity: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6), nullable=True)
-    variance_value: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6), nullable=True)
-    variance_percent: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4), nullable=True)
+    variance_quantity: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 6), nullable=True
+    )
+    variance_value: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 6), nullable=True
+    )
+    variance_percent: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 4), nullable=True
+    )
 
     # Cost at count date
     unit_cost: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)

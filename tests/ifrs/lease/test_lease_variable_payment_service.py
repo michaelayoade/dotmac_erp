@@ -5,16 +5,13 @@ Tests for LeaseVariablePaymentService.
 import uuid
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from app.models.finance.lease.lease_contract import LeaseStatus
 from app.models.finance.lease.lease_payment_schedule import PaymentStatus
 from tests.ifrs.lease.conftest import (
-    MockLeaseContract,
-    MockLeaseLiability,
-    MockLeaseAsset,
     MockLeasePaymentSchedule,
 )
 
@@ -55,7 +52,9 @@ class TestLeaseVariablePaymentService:
         from fastapi import HTTPException
 
         mock_payment_schedule.status = PaymentStatus.PAID
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_payment_schedule
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            mock_payment_schedule
+        )
 
         input_data = VariablePaymentInput(
             schedule_id=mock_payment_schedule.schedule_id,
@@ -82,7 +81,9 @@ class TestLeaseVariablePaymentService:
         mock_payment_schedule.status = PaymentStatus.SCHEDULED
         mock_payment_schedule.principal_portion = Decimal("4000.00")
         mock_payment_schedule.interest_portion = Decimal("1000.00")
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_payment_schedule
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            mock_payment_schedule
+        )
 
         input_data = VariablePaymentInput(
             schedule_id=mock_payment_schedule.schedule_id,
@@ -131,7 +132,9 @@ class TestLeaseVariablePaymentService:
         )
 
         mock_contract.status = LeaseStatus.DRAFT
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_contract
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            mock_contract
+        )
 
         input_data = IndexAdjustmentInput(
             lease_id=mock_contract.lease_id,
@@ -248,7 +251,9 @@ class TestLeaseVariablePaymentService:
         from fastapi import HTTPException
 
         mock_payment_schedule.status = PaymentStatus.PAID
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_payment_schedule
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            mock_payment_schedule
+        )
 
         with pytest.raises(HTTPException) as exc_info:
             LeaseVariablePaymentService.mark_payment_paid(
@@ -267,7 +272,9 @@ class TestLeaseVariablePaymentService:
         )
 
         mock_payment_schedule.status = PaymentStatus.SCHEDULED
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_payment_schedule
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            mock_payment_schedule
+        )
 
         payment_ref = uuid.uuid4()
         result = LeaseVariablePaymentService.mark_payment_paid(

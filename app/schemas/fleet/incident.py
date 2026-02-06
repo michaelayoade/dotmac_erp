@@ -3,6 +3,7 @@ Vehicle Incident Pydantic Schemas.
 
 Schemas for incident API endpoints.
 """
+
 from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional

@@ -21,6 +21,7 @@ from app.services.finance.import_export.base import ImportConfig
 
 # ============ Fixtures ============
 
+
 @pytest.fixture
 def organization_id():
     return uuid.UUID("00000000-0000-0000-0000-000000000001")
@@ -62,10 +63,13 @@ def mock_db():
 
 # ============ Test CustomerImporter ============
 
+
 class TestCustomerImporter:
     """Tests for CustomerImporter class."""
 
-    def test_entity_name_is_customer(self, mock_db, import_config, ar_control_account_id):
+    def test_entity_name_is_customer(
+        self, mock_db, import_config, ar_control_account_id
+    ):
         """Entity name should be Customer."""
         importer = CustomerImporter(mock_db, import_config, ar_control_account_id)
         assert importer.entity_name == "Customer"
@@ -81,7 +85,9 @@ class TestCustomerImporter:
         assert "Display Name" in mapping_names
 
         # Find the Display Name mapping and verify it's required
-        display_name_mapping = next(m for m in mappings if m.source_field == "Display Name")
+        display_name_mapping = next(
+            m for m in mappings if m.source_field == "Display Name"
+        )
         assert display_name_mapping.required is True
 
     def test_get_unique_key_returns_display_name(
@@ -133,14 +139,18 @@ class TestCustomerImporter:
         call_kwargs = mock_customer_cls.call_args[1]
         assert call_kwargs["customer_type"] == CustomerType.INDIVIDUAL
 
-    def test_code_counter_increments(self, mock_db, import_config, ar_control_account_id):
+    def test_code_counter_increments(
+        self, mock_db, import_config, ar_control_account_id
+    ):
         """Customer code counter should increment."""
         importer = CustomerImporter(mock_db, import_config, ar_control_account_id)
         assert importer._code_counter == 0
         importer._code_counter += 1
         assert importer._code_counter == 1
 
-    def test_build_address_returns_dict(self, mock_db, import_config, ar_control_account_id):
+    def test_build_address_returns_dict(
+        self, mock_db, import_config, ar_control_account_id
+    ):
         """_build_address should return address dict with non-null values."""
         importer = CustomerImporter(mock_db, import_config, ar_control_account_id)
         row = {
@@ -184,10 +194,13 @@ class TestCustomerImporter:
 
 # ============ Test SupplierImporter ============
 
+
 class TestSupplierImporter:
     """Tests for SupplierImporter class."""
 
-    def test_entity_name_is_supplier(self, mock_db, import_config, ap_control_account_id):
+    def test_entity_name_is_supplier(
+        self, mock_db, import_config, ap_control_account_id
+    ):
         """Entity name should be Supplier."""
         importer = SupplierImporter(mock_db, import_config, ap_control_account_id)
         assert importer.entity_name == "Supplier"
@@ -262,7 +275,9 @@ class TestSupplierImporter:
         call_kwargs = mock_supplier_cls.call_args[1]
         assert call_kwargs["withholding_tax_applicable"] is True
 
-    def test_build_address_remittance(self, mock_db, import_config, ap_control_account_id):
+    def test_build_address_remittance(
+        self, mock_db, import_config, ap_control_account_id
+    ):
         """_build_address should build remittance address from shipping fields."""
         importer = SupplierImporter(mock_db, import_config, ap_control_account_id)
         row = {
@@ -283,6 +298,7 @@ class TestSupplierImporter:
 
 
 # ============ Test Control Account Helpers ============
+
 
 class TestControlAccountHelpers:
     """Tests for get_ar_control_account and get_ap_control_account."""

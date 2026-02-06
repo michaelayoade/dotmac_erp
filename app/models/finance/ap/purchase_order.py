@@ -1,13 +1,26 @@
 """
 Purchase Order Model - AP Schema.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Optional
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, Index, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -60,14 +73,22 @@ class PurchaseOrder(Base):
 
     # Currency
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
-    exchange_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 10), nullable=True)
+    exchange_rate: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 10), nullable=True
+    )
 
     # Amounts
     subtotal: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    tax_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    tax_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
     total_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    amount_invoiced: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
-    amount_received: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    amount_invoiced: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
+    amount_received: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Status
     status: Mapped[POStatus] = mapped_column(
@@ -76,11 +97,15 @@ class PurchaseOrder(Base):
         default=POStatus.DRAFT,
     )
 
-    shipping_address: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    shipping_address: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )
     terms_and_conditions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Budget / Encumbrance
-    budget_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    budget_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
     commitment_journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,

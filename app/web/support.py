@@ -32,7 +32,9 @@ def sla_dashboard(
 ):
     """SLA dashboard with metrics and reports."""
     return support_web_service.sla_dashboard_response(
-        request, auth, db,
+        request,
+        auth,
+        db,
         date_from=date_from,
         date_to=date_to,
     )
@@ -48,7 +50,9 @@ def breached_tickets(
 ):
     """Breached tickets report."""
     return support_web_service.breached_tickets_response(
-        request, auth, db,
+        request,
+        auth,
+        db,
         breach_type=breach_type,
         include_resolved=include_resolved,
     )
@@ -63,7 +67,9 @@ def aging_report(
 ):
     """Ticket aging report."""
     return support_web_service.aging_report_response(
-        request, auth, db,
+        request,
+        auth,
+        db,
         status_filter=status,
     )
 
@@ -91,7 +97,9 @@ def list_tickets(
 ):
     """Support tickets list page."""
     return support_web_service.list_tickets_response(
-        request, auth, db,
+        request,
+        auth,
+        db,
         search=search,
         status=status,
         priority=priority,
@@ -121,7 +129,9 @@ def archived_tickets(
 ):
     """Archived tickets list page."""
     return support_web_service.archived_tickets_response(
-        request, auth, db,
+        request,
+        auth,
+        db,
         search=search,
         page=page,
         per_page=per_page,
@@ -157,7 +167,9 @@ async def create_ticket(
         )
     files = form.getlist("files") if hasattr(form, "getlist") else []
     return support_web_service.create_ticket_response(
-        request, auth, db,
+        request,
+        auth,
+        db,
         subject=subject,
         description=(form.get("description") or None),
         priority=(form.get("priority") or "MEDIUM"),
@@ -199,7 +211,9 @@ def edit_ticket_form(
     db: Session = Depends(get_db),
 ):
     """Edit ticket form page."""
-    return support_web_service.ticket_form_response(request, auth, db, ticket_id=ticket_id)
+    return support_web_service.ticket_form_response(
+        request, auth, db, ticket_id=ticket_id
+    )
 
 
 @router.post("/tickets/{ticket_id}")
@@ -224,7 +238,10 @@ def update_ticket(
 ):
     """Update a ticket."""
     return support_web_service.update_ticket_response(
-        request, auth, db, ticket_id,
+        request,
+        auth,
+        db,
+        ticket_id,
         subject=subject,
         description=description,
         priority=priority,
@@ -272,7 +289,9 @@ def assign_ticket(
     """Assign ticket to an employee."""
     form_data = getattr(request.state, "csrf_form", None)
     if form_data:
-        assigned_to_id = (form_data.get("assigned_to_id") or assigned_to_id or "").strip()
+        assigned_to_id = (
+            form_data.get("assigned_to_id") or assigned_to_id or ""
+        ).strip()
 
     if not assigned_to_id:
         return RedirectResponse(
@@ -307,9 +326,7 @@ def archive_ticket(
     db: Session = Depends(get_db),
 ):
     """Archive (soft delete) a ticket."""
-    return support_web_service.archive_ticket_response(
-        request, auth, db, ticket_id
-    )
+    return support_web_service.archive_ticket_response(request, auth, db, ticket_id)
 
 
 @router.post("/tickets/{ticket_id}/delete")
@@ -325,9 +342,7 @@ def delete_ticket(
             url=f"/support/tickets/{ticket_id}?error=forbidden",
             status_code=303,
         )
-    return support_web_service.delete_ticket_response(
-        request, auth, db, ticket_id
-    )
+    return support_web_service.delete_ticket_response(request, auth, db, ticket_id)
 
 
 @router.post("/tickets/{ticket_id}/restore")
@@ -338,9 +353,7 @@ def restore_ticket(
     db: Session = Depends(get_db),
 ):
     """Restore an archived ticket."""
-    return support_web_service.restore_ticket_response(
-        request, auth, db, ticket_id
-    )
+    return support_web_service.restore_ticket_response(request, auth, db, ticket_id)
 
 
 # ============================================================================
@@ -474,7 +487,9 @@ def create_category(
 ):
     """Create a new category."""
     return support_web_service.create_category_response(
-        request, auth, db,
+        request,
+        auth,
+        db,
         category_code=category_code,
         category_name=category_name,
         description=description,
@@ -521,7 +536,10 @@ def update_category(
 ):
     """Update a category."""
     return support_web_service.update_category_response(
-        request, auth, db, category_id,
+        request,
+        auth,
+        db,
+        category_id,
         category_name=category_name,
         description=description,
         color=color,
@@ -571,7 +589,9 @@ def create_team(
 ):
     """Create a new team."""
     return support_web_service.create_team_response(
-        request, auth, db,
+        request,
+        auth,
+        db,
         team_code=team_code,
         team_name=team_name,
         description=description,
@@ -599,9 +619,7 @@ def edit_team_form(
     db: Session = Depends(get_db),
 ):
     """Edit team form."""
-    return support_web_service.team_form_response(
-        request, auth, db, team_id=team_id
-    )
+    return support_web_service.team_form_response(request, auth, db, team_id=team_id)
 
 
 @router.post("/teams/{team_id}")
@@ -618,7 +636,10 @@ def update_team(
 ):
     """Update a team."""
     return support_web_service.update_team_response(
-        request, auth, db, team_id,
+        request,
+        auth,
+        db,
+        team_id,
         team_name=team_name,
         description=description,
         lead_id=lead_id if lead_id else None,
@@ -703,7 +724,9 @@ async def bulk_update_status(
     notes = form.get("notes")
 
     return support_web_service.bulk_update_status_response(
-        request, auth, db,
+        request,
+        auth,
+        db,
         ticket_ids=list(ticket_ids),
         new_status=new_status,
         notes=notes if notes else None,
@@ -728,7 +751,9 @@ async def bulk_assign(
         )
 
     return support_web_service.bulk_assign_response(
-        request, auth, db,
+        request,
+        auth,
+        db,
         ticket_ids=list(ticket_ids),
         assigned_to_id=assigned_to_id,
     )
@@ -745,6 +770,8 @@ async def bulk_archive(
     ticket_ids = form.getlist("ticket_ids")
 
     return support_web_service.bulk_archive_response(
-        request, auth, db,
+        request,
+        auth,
+        db,
         ticket_ids=list(ticket_ids),
     )

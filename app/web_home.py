@@ -73,9 +73,7 @@ def operations_dashboard(
     context.update(
         operations_dashboard_web_service.dashboard_context(db, auth.organization_id)
     )
-    return templates.TemplateResponse(
-        request, "operations/dashboard.html", context
-    )
+    return templates.TemplateResponse(request, "operations/dashboard.html", context)
 
 
 @router.get("/gl/accounts/new", tags=["web"])

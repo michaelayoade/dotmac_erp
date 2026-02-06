@@ -3,6 +3,7 @@ Designation Model - HR Schema.
 
 Job titles/positions within the organization.
 """
+
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional

@@ -3,6 +3,7 @@ Expense Claim Model - Expense Schema.
 
 Employee expense claims with AP integration.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
 
 class ExpenseClaimStatus(str, enum.Enum):
     """Expense claim workflow status."""
+
     DRAFT = "DRAFT"
     SUBMITTED = "SUBMITTED"
     PENDING_APPROVAL = "PENDING_APPROVAL"
@@ -53,7 +55,9 @@ class ExpenseCategory(Base, AuditMixin, ERPNextSyncMixin):
 
     __tablename__ = "expense_category"
     __table_args__ = (
-        UniqueConstraint("organization_id", "category_code", name="uq_expense_category_code"),
+        UniqueConstraint(
+            "organization_id", "category_code", name="uq_expense_category_code"
+        ),
         {"schema": "expense"},
     )
 

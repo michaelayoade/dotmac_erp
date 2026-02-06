@@ -248,7 +248,9 @@ class TestToggleEntityStatus:
 class TestActivateDeactivateEntity:
     """Tests for activate_entity and deactivate_entity functions."""
 
-    def test_activate_entity_convenience(self, mock_db_session, organization_id, entity_id):
+    def test_activate_entity_convenience(
+        self, mock_db_session, organization_id, entity_id
+    ):
         """Test activate_entity convenience function."""
         supplier = MockSupplier(
             supplier_id=entity_id,
@@ -266,7 +268,9 @@ class TestActivateDeactivateEntity:
 
         assert result.is_active is True
 
-    def test_deactivate_entity_convenience(self, mock_db_session, organization_id, entity_id):
+    def test_deactivate_entity_convenience(
+        self, mock_db_session, organization_id, entity_id
+    ):
         """Test deactivate_entity convenience function."""
         supplier = MockSupplier(
             supplier_id=entity_id,
@@ -284,7 +288,9 @@ class TestActivateDeactivateEntity:
 
         assert result.is_active is False
 
-    def test_deactivate_with_pre_check(self, mock_db_session, organization_id, entity_id):
+    def test_deactivate_with_pre_check(
+        self, mock_db_session, organization_id, entity_id
+    ):
         """Test deactivate_entity with pre_check callback."""
         supplier = MockSupplier(
             supplier_id=entity_id,

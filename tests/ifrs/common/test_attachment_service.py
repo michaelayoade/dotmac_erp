@@ -16,12 +16,19 @@ from app.services.finance.common.attachment import (
     AttachmentService,
     AttachmentInput,
     AttachmentView,
-    ALLOWED_CONTENT_TYPES,
-    MAX_FILE_SIZE,
-    _coerce_uuid,
-    _compute_checksum,
-    _format_file_size,
 )
+from app.services.file_upload import (
+    FileUploadError,
+    coerce_uuid as _coerce_uuid,
+    compute_checksum_from_file as _compute_checksum,
+    format_file_size as _format_file_size,
+    get_finance_attachment_upload,
+)
+
+# Derive allowed types and max size from the canonical upload config
+_finance_upload = get_finance_attachment_upload()
+ALLOWED_CONTENT_TYPES = _finance_upload.config.allowed_content_types
+MAX_FILE_SIZE = _finance_upload.config.max_size_bytes
 from tests.ifrs.common.conftest import MockAttachment
 
 
@@ -149,8 +156,11 @@ class TestGetUploadPath:
     def test_get_upload_path_creates_directory(self, org_id):
         """Test that upload path creates directory structure."""
         with tempfile.TemporaryDirectory() as tmpdir:
+            mock_svc = MagicMock()
+            mock_svc.base_path = Path(tmpdir)
             with patch(
-                "app.services.finance.common.attachment.UPLOAD_BASE_DIR", tmpdir
+                "app.services.finance.common.attachment._upload_service",
+                return_value=mock_svc,
             ):
                 path = AttachmentService.get_upload_path(org_id, "SUPPLIER_INVOICE")
                 assert path.exists()
@@ -160,8 +170,11 @@ class TestGetUploadPath:
     def test_get_upload_path_lowercases_entity_type(self, org_id):
         """Test that entity type is lowercased in path."""
         with tempfile.TemporaryDirectory() as tmpdir:
+            mock_svc = MagicMock()
+            mock_svc.base_path = Path(tmpdir)
             with patch(
-                "app.services.finance.common.attachment.UPLOAD_BASE_DIR", tmpdir
+                "app.services.finance.common.attachment._upload_service",
+                return_value=mock_svc,
             ):
                 path = AttachmentService.get_upload_path(org_id, "PURCHASE_ORDER")
                 assert "purchase_order" in str(path)
@@ -174,27 +187,35 @@ class TestSaveFile:
         """Test successful file save."""
         file_content = BytesIO(b"PDF file content here")
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+        mock_upload_result = MagicMock()
+        mock_upload_result.relative_path = "org/invoice/file.pdf"
+        mock_upload_result.file_size = 21
+        mock_upload_result.checksum = "abc123"
+
+        mock_svc = MagicMock()
+        mock_svc.save.return_value = mock_upload_result
+
+        with patch(
+            "app.services.finance.common.attachment._upload_service",
+            return_value=mock_svc,
+        ):
             with patch(
-                "app.services.finance.common.attachment.UPLOAD_BASE_DIR", tmpdir
-            ):
-                with patch(
-                    "app.services.finance.common.attachment.Attachment"
-                ) as MockAttachmentClass:
-                    mock_attachment = MockAttachment(
-                        organization_id=org_id,
-                        entity_id=uuid4(),
-                        uploaded_by=user_id,
-                    )
-                    MockAttachmentClass.return_value = mock_attachment
+                "app.services.finance.common.attachment.Attachment"
+            ) as MockAttachmentClass:
+                mock_attachment = MockAttachment(
+                    organization_id=org_id,
+                    entity_id=uuid4(),
+                    uploaded_by=user_id,
+                )
+                MockAttachmentClass.return_value = mock_attachment
 
-                    result = AttachmentService.save_file(
-                        mock_db, org_id, sample_attachment_input, file_content, user_id
-                    )
+                result = AttachmentService.save_file(
+                    mock_db, org_id, sample_attachment_input, file_content, user_id
+                )
 
-                    mock_db.add.assert_called_once()
-                    mock_db.commit.assert_called_once()
-                    mock_db.refresh.assert_called_once()
+                mock_db.add.assert_called_once()
+                mock_db.commit.assert_called_once()
+                mock_db.refresh.assert_called_once()
 
     def test_save_file_invalid_content_type_fails(
         self, mock_db, org_id, user_id, entity_id
@@ -230,16 +251,19 @@ class TestSaveFile:
         # Create file larger than max size
         large_content = BytesIO(b"x" * (MAX_FILE_SIZE + 1000))
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch(
-                "app.services.finance.common.attachment.UPLOAD_BASE_DIR", tmpdir
-            ):
-                with pytest.raises(ValueError) as exc:
-                    AttachmentService.save_file(
-                        mock_db, org_id, valid_input, large_content, user_id
-                    )
+        mock_svc = MagicMock()
+        mock_svc.save.side_effect = FileUploadError("File too large")
 
-                assert "too large" in str(exc.value).lower()
+        with patch(
+            "app.services.finance.common.attachment._upload_service",
+            return_value=mock_svc,
+        ):
+            with pytest.raises(ValueError) as exc:
+                AttachmentService.save_file(
+                    mock_db, org_id, valid_input, large_content, user_id
+                )
+
+            assert "too large" in str(exc.value).lower()
 
 
 class TestGetAttachment:
@@ -274,12 +298,21 @@ class TestGetFilePath:
         """Test that full path is returned."""
         attachment = MockAttachment(file_path="org123/invoice/file.pdf")
 
-        with patch(
-            "app.services.finance.common.attachment.UPLOAD_BASE_DIR", "/uploads"
-        ):
-            result = AttachmentService.get_file_path(attachment)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create the expected file so resolve_safe_path succeeds
+            target = Path(tmpdir) / "org123" / "invoice"
+            target.mkdir(parents=True, exist_ok=True)
+            (target / "file.pdf").touch()
 
-        assert str(result) == "/uploads/org123/invoice/file.pdf"
+            mock_svc = MagicMock()
+            mock_svc.base_path = Path(tmpdir)
+            with patch(
+                "app.services.finance.common.attachment._upload_service",
+                return_value=mock_svc,
+            ):
+                result = AttachmentService.get_file_path(attachment)
+
+            assert str(result) == str(Path(tmpdir) / "org123/invoice/file.pdf")
 
 
 class TestListForEntity:

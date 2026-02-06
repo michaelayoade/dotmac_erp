@@ -2,6 +2,7 @@
 Currency Translation Adjustment Model - Core FX.
 IAS 21 - Foreign Operations CTA.
 """
+
 import enum
 import uuid
 from datetime import datetime

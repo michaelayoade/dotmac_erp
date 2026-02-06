@@ -22,6 +22,7 @@ from app.models.inventory.inventory_transaction import (
     TransactionType,
 )
 from app.models.inventory.item import CostingMethod, Item
+from app.models.inventory.item_category import ItemCategory
 from app.models.inventory.warehouse import Warehouse
 from app.services.common import coerce_uuid
 
@@ -247,6 +248,7 @@ class InventoryBalanceService:
         item = db.get(Item, itm_id)
         if not item or item.organization_id != org_id:
             return None
+        category = db.get(ItemCategory, item.category_id)
 
         warehouse = None
         if warehouse_id:
@@ -327,8 +329,19 @@ class InventoryBalanceService:
         total_available = total_on_hand - total_reserved
 
         # Check stock alerts
-        reorder_point = item.reorder_point or Decimal("0")
-        minimum_stock = item.minimum_stock or Decimal("0")
+        effective_reorder_point = (
+            item.reorder_point
+            if item.reorder_point is not None
+            else (category.reorder_point if category else None)
+        )
+        effective_minimum_stock = (
+            item.minimum_stock
+            if item.minimum_stock is not None
+            else (category.minimum_stock if category else None)
+        )
+
+        reorder_point = effective_reorder_point or Decimal("0")
+        minimum_stock = effective_minimum_stock or Decimal("0")
         maximum_stock = item.maximum_stock
 
         return ItemStockSummary(
@@ -338,8 +351,8 @@ class InventoryBalanceService:
             total_on_hand=total_on_hand,
             total_reserved=total_reserved,
             total_available=total_available,
-            reorder_point=item.reorder_point,
-            minimum_stock=item.minimum_stock,
+            reorder_point=effective_reorder_point,
+            minimum_stock=effective_minimum_stock,
             maximum_stock=item.maximum_stock,
             below_reorder=total_available <= reorder_point if reorder_point else False,
             below_minimum=total_available < minimum_stock if minimum_stock else False,
@@ -366,36 +379,81 @@ class InventoryBalanceService:
         """
         org_id = coerce_uuid(organization_id)
 
-        # Get items with reorder point set
+        # Get items with reorder point or minimum stock (item-level or category fallback)
         items = (
-            db.query(Item)
+            db.query(Item, ItemCategory)
+            .join(ItemCategory, Item.category_id == ItemCategory.category_id)
             .filter(
                 and_(
                     Item.organization_id == org_id,
                     Item.is_active == True,
                     Item.track_inventory == True,
-                    Item.reorder_point.isnot(None),
-                    Item.reorder_point > 0,
+                    or_(
+                        and_(
+                            Item.reorder_point.isnot(None),
+                            Item.reorder_point > 0,
+                        ),
+                        and_(
+                            Item.reorder_point.is_(None),
+                            ItemCategory.reorder_point.isnot(None),
+                            ItemCategory.reorder_point > 0,
+                        ),
+                        and_(
+                            include_below_minimum,
+                            Item.minimum_stock.isnot(None),
+                            Item.minimum_stock > 0,
+                        ),
+                        and_(
+                            include_below_minimum,
+                            Item.minimum_stock.is_(None),
+                            ItemCategory.minimum_stock.isnot(None),
+                            ItemCategory.minimum_stock > 0,
+                        ),
+                    ),
                 )
             )
             .all()
         )
 
         low_stock = []
-        for item in items:
+        for item, category in items:
             on_hand = InventoryBalanceService.get_on_hand(db, org_id, item.item_id)
             reserved = InventoryBalanceService.get_reserved(db, org_id, item.item_id)
             available = on_hand - reserved
 
-            reorder_point = cast(Decimal, item.reorder_point)
-            is_low = available <= reorder_point
-            if include_below_minimum and item.minimum_stock is not None:
-                is_low = is_low or available < item.minimum_stock
+            effective_reorder_point = (
+                item.reorder_point
+                if item.reorder_point is not None
+                else (category.reorder_point if category else None)
+            )
+            effective_minimum_stock = (
+                item.minimum_stock
+                if item.minimum_stock is not None
+                else (category.minimum_stock if category else None)
+            )
+
+            reorder_point = (
+                cast(Decimal, effective_reorder_point)
+                if effective_reorder_point is not None
+                else None
+            )
+            minimum_stock = (
+                cast(Decimal, effective_minimum_stock)
+                if effective_minimum_stock is not None
+                else None
+            )
+
+            is_low = False
+            if reorder_point is not None:
+                is_low = available <= reorder_point
+            if include_below_minimum and minimum_stock is not None:
+                is_low = is_low or available < minimum_stock
 
             if is_low:
                 # Calculate suggested order quantity
                 reorder_qty = item.reorder_quantity or Decimal("0")
-                max_stock = item.maximum_stock or (reorder_point * 2)
+                basis_point = reorder_point or minimum_stock or Decimal("0")
+                max_stock = item.maximum_stock or (basis_point * 2)
                 suggested_qty = max(reorder_qty, max_stock - on_hand)
 
                 low_stock.append(
@@ -405,7 +463,7 @@ class InventoryBalanceService:
                         item_name=item.item_name,
                         quantity_on_hand=on_hand,
                         quantity_available=available,
-                        reorder_point=reorder_point,
+                        reorder_point=basis_point,
                         reorder_quantity=item.reorder_quantity,
                         suggested_order_qty=suggested_qty
                         if suggested_qty > 0

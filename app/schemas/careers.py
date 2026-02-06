@@ -89,7 +89,9 @@ class ApplicationSubmitRequest(BaseModel):
     current_job_title: Optional[str] = Field(None, max_length=200)
     years_of_experience: Optional[int] = Field(None, ge=0, le=50)
     highest_qualification: Optional[str] = Field(None, max_length=100)
-    skills: Optional[str] = Field(None, max_length=1000, description="Comma-separated skills")
+    skills: Optional[str] = Field(
+        None, max_length=1000, description="Comma-separated skills"
+    )
     city: Optional[str] = Field(None, max_length=80)
     country_code: Optional[str] = Field(None, min_length=2, max_length=2)
     captcha_token: Optional[str] = Field(None, description="CAPTCHA response token")

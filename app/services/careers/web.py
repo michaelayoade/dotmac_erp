@@ -112,7 +112,7 @@ class CareersWebService:
         org_id: uuid.UUID,
         *,
         search: Optional[str] = None,
-        department_id: Optional[uuid.UUID] = None,
+        department_id: Optional[list[uuid.UUID]] = None,
         location: Optional[str] = None,
         employment_type: Optional[str] = None,
         is_remote: Optional[bool] = None,

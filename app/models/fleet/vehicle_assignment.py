@@ -3,6 +3,7 @@ Vehicle Assignment Model - Fleet Schema.
 
 Tracks vehicle assignment history to employees and departments.
 """
+
 import uuid
 from datetime import date
 from typing import TYPE_CHECKING, Optional

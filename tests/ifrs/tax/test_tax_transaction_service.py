@@ -15,7 +15,6 @@ from app.services.finance.tax.tax_transaction import (
     TaxTransactionService,
     TaxTransactionInput,
     TaxReturnSummary,
-    TaxByCodeSummary,
 )
 
 
@@ -180,7 +179,9 @@ class TestCreateTransaction:
         assert exc.value.status_code == 404
         assert "Tax code not found" in exc.value.detail
 
-    def test_create_transaction_wrong_organization(self, mock_db, org_id, mock_tax_code):
+    def test_create_transaction_wrong_organization(
+        self, mock_db, org_id, mock_tax_code
+    ):
         """Test that tax code from different org raises error."""
         from fastapi import HTTPException
 
@@ -219,7 +220,7 @@ class TestCreateFromInvoiceLine:
         invoice_id = uuid4()
         invoice_line_id = uuid4()
 
-        with patch.object(TaxTransactionService, 'create_transaction') as mock_create:
+        with patch.object(TaxTransactionService, "create_transaction") as mock_create:
             mock_create.return_value = MockTaxTransaction()
 
             result = TaxTransactionService.create_from_invoice_line(
@@ -245,14 +246,16 @@ class TestCreateFromInvoiceLine:
             assert input_data.source_document_type == "AR_INVOICE"
             assert input_data.counterparty_type == "CUSTOMER"
 
-    def test_create_input_tax_from_purchase_invoice(self, mock_db, org_id, mock_tax_code):
+    def test_create_input_tax_from_purchase_invoice(
+        self, mock_db, org_id, mock_tax_code
+    ):
         """Test creating input tax from AP invoice line."""
         mock_db.get.return_value = mock_tax_code
 
         invoice_id = uuid4()
         invoice_line_id = uuid4()
 
-        with patch.object(TaxTransactionService, 'create_transaction') as mock_create:
+        with patch.object(TaxTransactionService, "create_transaction") as mock_create:
             mock_create.return_value = MockTaxTransaction()
 
             result = TaxTransactionService.create_from_invoice_line(
@@ -283,7 +286,7 @@ class TestCreateFromInvoiceLine:
         mock_tax_code.tax_rate = Decimal("0.15")
         mock_db.get.return_value = mock_tax_code
 
-        with patch.object(TaxTransactionService, 'create_transaction') as mock_create:
+        with patch.object(TaxTransactionService, "create_transaction") as mock_create:
             mock_create.return_value = MockTaxTransaction()
 
             TaxTransactionService.create_from_invoice_line(
@@ -311,7 +314,7 @@ class TestCreateFromInvoiceLine:
         mock_tax_code.recovery_rate = Decimal("0.80")  # 80% recoverable
         mock_db.get.return_value = mock_tax_code
 
-        with patch.object(TaxTransactionService, 'create_transaction') as mock_create:
+        with patch.object(TaxTransactionService, "create_transaction") as mock_create:
             mock_create.return_value = MockTaxTransaction()
 
             TaxTransactionService.create_from_invoice_line(
@@ -340,7 +343,7 @@ class TestCreateFromInvoiceLine:
         mock_tax_code.is_recoverable = False
         mock_db.get.return_value = mock_tax_code
 
-        with patch.object(TaxTransactionService, 'create_transaction') as mock_create:
+        with patch.object(TaxTransactionService, "create_transaction") as mock_create:
             mock_create.return_value = MockTaxTransaction()
 
             TaxTransactionService.create_from_invoice_line(
@@ -366,7 +369,7 @@ class TestCreateFromInvoiceLine:
         """Test that output tax has no recovery amounts."""
         mock_db.get.return_value = mock_tax_code
 
-        with patch.object(TaxTransactionService, 'create_transaction') as mock_create:
+        with patch.object(TaxTransactionService, "create_transaction") as mock_create:
             mock_create.return_value = MockTaxTransaction()
 
             TaxTransactionService.create_from_invoice_line(
@@ -391,7 +394,7 @@ class TestCreateFromInvoiceLine:
         """Test functional currency conversion with exchange rate."""
         mock_db.get.return_value = mock_tax_code
 
-        with patch.object(TaxTransactionService, 'create_transaction') as mock_create:
+        with patch.object(TaxTransactionService, "create_transaction") as mock_create:
             mock_create.return_value = MockTaxTransaction()
 
             TaxTransactionService.create_from_invoice_line(
@@ -493,9 +496,9 @@ class TestGetReturnSummary:
         mock_db.query.return_value.filter.return_value.scalar.side_effect = [
             Decimal("5000.00"),  # output_tax
             Decimal("2000.00"),  # input_recoverable
-            Decimal("500.00"),   # input_non_recoverable
-            Decimal("300.00"),   # withholding_tax
-            10,                  # transaction_count
+            Decimal("500.00"),  # input_non_recoverable
+            Decimal("300.00"),  # withholding_tax
+            10,  # transaction_count
         ]
 
         result = TaxTransactionService.get_return_summary(
@@ -514,9 +517,7 @@ class TestGetReturnSummary:
         """Test return summary with no transactions."""
         mock_db.query.return_value.filter.return_value.scalar.return_value = None
 
-        result = TaxTransactionService.get_return_summary(
-            mock_db, org_id, uuid4()
-        )
+        result = TaxTransactionService.get_return_summary(mock_db, org_id, uuid4())
 
         assert result.output_tax == Decimal("0")
         assert result.input_tax_recoverable == Decimal("0")
@@ -562,9 +563,7 @@ class TestListTransactions:
         mock_query.all.return_value = transactions
         mock_db.query.return_value = mock_query
 
-        result = TaxTransactionService.list(
-            mock_db, organization_id=str(org_id)
-        )
+        result = TaxTransactionService.list(mock_db, organization_id=str(org_id))
 
         assert len(result) == 3
 

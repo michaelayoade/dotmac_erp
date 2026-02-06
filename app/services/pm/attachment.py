@@ -5,9 +5,7 @@ Handles file uploads and attachments for projects and tasks.
 Uses the common.attachment model with polymorphic association.
 """
 
-import hashlib
 import logging
-import os
 import uuid
 from pathlib import Path
 from typing import BinaryIO, List, Optional, Tuple
@@ -16,31 +14,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.common.attachment import Attachment, AttachmentCategory
+from app.services.file_upload import (
+    FileUploadConfig,
+    FileUploadError,
+    FileUploadService,
+    get_pm_attachment_upload,
+    resolve_safe_path,
+)
 
 logger = logging.getLogger(__name__)
-
-# Allowed file extensions and MIME types
-ALLOWED_EXTENSIONS = {
-    # Images
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".gif": "image/gif",
-    ".webp": "image/webp",
-    # Documents
-    ".pdf": "application/pdf",
-    ".doc": "application/msword",
-    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ".xls": "application/vnd.ms-excel",
-    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    ".csv": "text/csv",
-    ".txt": "text/plain",
-    # Archives
-    ".zip": "application/zip",
-}
-
-# Maximum file size (10MB)
-MAX_FILE_SIZE = 10 * 1024 * 1024
 
 
 class ProjectAttachmentService:
@@ -53,8 +35,22 @@ class ProjectAttachmentService:
         Args:
             upload_dir: Base directory for file uploads
         """
-        self.upload_dir = Path(upload_dir)
-        self.upload_dir.mkdir(parents=True, exist_ok=True)
+        base_service = get_pm_attachment_upload()
+        base_path = base_service.base_path
+        if upload_dir and Path(upload_dir).resolve() != base_path:
+            cfg = base_service.config
+            self.upload_service = FileUploadService(
+                FileUploadConfig(
+                    base_dir=str(Path(upload_dir).resolve()),
+                    allowed_content_types=cfg.allowed_content_types,
+                    max_size_bytes=cfg.max_size_bytes,
+                    allowed_extensions=cfg.allowed_extensions,
+                    require_magic_bytes=cfg.require_magic_bytes,
+                    compute_checksum=cfg.compute_checksum,
+                )
+            )
+        else:
+            self.upload_service = base_service
 
     def list_attachments(
         self,
@@ -116,21 +112,10 @@ class ProjectAttachmentService:
         Returns:
             (is_valid, error_message)
         """
-        # Check file size
-        if file_size > MAX_FILE_SIZE:
-            return (
-                False,
-                f"File too large. Maximum size is {MAX_FILE_SIZE // (1024 * 1024)}MB",
-            )
-
-        # Check extension
-        ext = os.path.splitext(filename)[1].lower()
-        if ext not in ALLOWED_EXTENSIONS:
-            return (
-                False,
-                f"File type not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS.keys())}",
-            )
-
+        try:
+            self.upload_service.validate(content_type, filename, file_size, None)
+        except FileUploadError as exc:
+            return False, str(exc)
         return True, None
 
     def save_file(
@@ -162,33 +147,22 @@ class ProjectAttachmentService:
         Returns:
             (attachment, error_message)
         """
-        # Read file content
         content = file_data.read()
         file_size = len(content)
 
-        # Validate
         is_valid, error = self.validate_file(filename, file_size, content_type)
         if not is_valid:
             return None, error
 
-        # Generate unique storage path
-        file_hash = hashlib.sha256(content).hexdigest()[:16]
-        ext = os.path.splitext(filename)[1].lower()
-        storage_filename = f"{uuid.uuid4().hex}_{file_hash}{ext}"
-
-        # Organize by entity type and ID
-        entity_dir = self.upload_dir / entity_type.lower() / str(entity_id)
-        entity_dir.mkdir(parents=True, exist_ok=True)
-
-        storage_path = entity_dir / storage_filename
-
-        # Save file
         try:
-            with open(storage_path, "wb") as f:
-                f.write(content)
-        except Exception as e:
-            logger.exception("Failed to save file: %s", e)
-            return None, "Failed to save file"
+            upload_result = self.upload_service.save(
+                content,
+                content_type=content_type,
+                subdirs=[entity_type.lower(), str(entity_id)],
+                original_filename=filename,
+            )
+        except FileUploadError as exc:
+            return None, str(exc)
 
         # Determine category
         category = (
@@ -203,13 +177,13 @@ class ProjectAttachmentService:
             entity_type=entity_type,
             entity_id=entity_id,
             file_name=filename,
-            file_path=str(storage_path),
+            file_path=upload_result.relative_path,
             content_type=content_type,
             file_size=file_size,
             category=category,
             description=description,
             storage_provider="LOCAL",
-            checksum=hashlib.sha256(content).hexdigest(),
+            checksum=upload_result.checksum,
             uploaded_by=uploaded_by_id,
         )
         db.add(attachment)
@@ -252,8 +226,13 @@ class ProjectAttachmentService:
         if hard_delete:
             # Delete file from disk
             try:
-                if os.path.exists(attachment.file_path):
-                    os.remove(attachment.file_path)
+                if Path(attachment.file_path).is_absolute():
+                    resolved = Path(attachment.file_path).resolve()
+                    resolved.relative_to(self.upload_service.base_path)
+                    if resolved.exists():
+                        resolved.unlink()
+                else:
+                    self.upload_service.delete(attachment.file_path)
             except Exception as e:
                 logger.warning("Failed to delete file: %s", e)
 
@@ -285,11 +264,23 @@ class ProjectAttachmentService:
         if not attachment:
             return None
 
-        if not os.path.exists(attachment.file_path):
+        try:
+            if Path(attachment.file_path).is_absolute():
+                resolved = Path(attachment.file_path).resolve()
+                resolved.relative_to(self.upload_service.base_path)
+            else:
+                resolved = resolve_safe_path(
+                    self.upload_service.base_path, attachment.file_path
+                )
+        except ValueError:
             logger.warning("Attachment file not found: %s", attachment.file_path)
             return None
 
-        return attachment.file_path
+        if not resolved.exists():
+            logger.warning("Attachment file not found: %s", resolved)
+            return None
+
+        return str(resolved)
 
 
 # Singleton instance

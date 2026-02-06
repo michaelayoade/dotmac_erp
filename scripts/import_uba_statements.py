@@ -13,7 +13,6 @@ from __future__ import annotations
 import argparse
 import io
 import logging
-import os
 import re
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -33,7 +32,6 @@ from app.models.finance.banking.bank_account import (
     BankAccountType,
 )
 from app.models.finance.banking.bank_statement import (
-    BankStatementStatus,
     StatementLineType,
 )
 from app.models.finance.gl.account import Account
@@ -42,7 +40,9 @@ from app.services.finance.banking.bank_statement import (
     StatementLineInput,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 # Path to statement files
@@ -174,7 +174,9 @@ def open_workbook(filepath: Path, password: Optional[str] = None):
         raise
 
 
-def parse_uba_statement(filepath: Path, password: Optional[str] = None) -> Optional[ParsedStatement]:
+def parse_uba_statement(
+    filepath: Path, password: Optional[str] = None
+) -> Optional[ParsedStatement]:
     """
     Parse UBA statement format.
 
@@ -234,16 +236,18 @@ def parse_uba_statement(filepath: Path, password: Optional[str] = None) -> Optio
             if (not debit or debit == 0) and (not credit or credit == 0):
                 continue
 
-            transactions.append({
-                "line_number": len(transactions) + 1,
-                "date_posted": tran_date,
-                "value_date": value_date or tran_date,
-                "description": narration,
-                "reference": chq_no,
-                "debit": debit if debit and debit > 0 else None,
-                "credit": credit if credit and credit > 0 else None,
-                "balance": balance,
-            })
+            transactions.append(
+                {
+                    "line_number": len(transactions) + 1,
+                    "date_posted": tran_date,
+                    "value_date": value_date or tran_date,
+                    "description": narration,
+                    "reference": chq_no,
+                    "debit": debit if debit and debit > 0 else None,
+                    "credit": credit if credit and credit > 0 else None,
+                    "balance": balance,
+                }
+            )
 
         logger.info(f"  Parsed {len(transactions)} transactions from {filepath.name}")
 
@@ -264,6 +268,7 @@ def parse_uba_statement(filepath: Path, password: Optional[str] = None) -> Optio
     except Exception as e:
         logger.error(f"Error parsing {filepath.name}: {e}")
         import traceback
+
         traceback.print_exc()
         return None
 
@@ -327,15 +332,16 @@ def convert_to_statement_lines(
 
     for i, txn in enumerate(transactions):
         amount = txn["debit"] or txn["credit"] or Decimal("0")
-        txn_type = (
-            StatementLineType.debit if txn["debit"]
-            else StatementLineType.credit
-        )
+        txn_type = StatementLineType.debit if txn["debit"] else StatementLineType.credit
 
         # Convert raw_data to JSON-serializable format
         raw_data = {
-            "date_posted": txn["date_posted"].isoformat() if txn.get("date_posted") else None,
-            "value_date": txn["value_date"].isoformat() if txn.get("value_date") else None,
+            "date_posted": txn["date_posted"].isoformat()
+            if txn.get("date_posted")
+            else None,
+            "value_date": txn["value_date"].isoformat()
+            if txn.get("value_date")
+            else None,
             "description": txn.get("description"),
             "reference": txn.get("reference"),
             "debit": str(txn["debit"]) if txn.get("debit") else None,
@@ -343,17 +349,19 @@ def convert_to_statement_lines(
             "balance": str(txn["balance"]) if txn.get("balance") else None,
         }
 
-        lines.append(StatementLineInput(
-            line_number=start_line + i,
-            transaction_date=txn["date_posted"],
-            value_date=txn["value_date"],
-            transaction_type=txn_type,
-            amount=amount,
-            description=txn["description"],
-            reference=txn.get("reference"),
-            running_balance=txn.get("balance"),
-            raw_data=raw_data,
-        ))
+        lines.append(
+            StatementLineInput(
+                line_number=start_line + i,
+                transaction_date=txn["date_posted"],
+                value_date=txn["value_date"],
+                transaction_type=txn_type,
+                amount=amount,
+                description=txn["description"],
+                reference=txn.get("reference"),
+                running_balance=txn.get("balance"),
+                raw_data=raw_data,
+            )
+        )
 
     return lines
 
@@ -370,9 +378,7 @@ def import_statements(dry_run: bool = False):
 
     with SessionLocal() as db:
         # Get organization ID from existing bank account
-        existing = db.execute(
-            select(BankAccount).limit(1)
-        ).scalars().first()
+        existing = db.execute(select(BankAccount).limit(1)).scalars().first()
 
         if not existing:
             logger.error("No existing bank account found to determine org ID")
@@ -430,7 +436,9 @@ def import_statements(dry_run: bool = False):
                 continue
 
             # Sort by date and remove duplicates
-            all_transactions.sort(key=lambda x: (x["date_posted"], x["description"][:30]))
+            all_transactions.sort(
+                key=lambda x: (x["date_posted"], x["description"][:30])
+            )
 
             # Deduplicate based on date + amount + description prefix
             seen = set()
@@ -517,19 +525,24 @@ def import_statements(dry_run: bool = False):
             except Exception as e:
                 logger.error(f"  Failed to import: {e}")
                 import traceback
+
                 traceback.print_exc()
 
         if not dry_run:
             db.commit()
             logger.info("")
             logger.info("=" * 60)
-            logger.info(f"Import Complete: {total_imported} transactions imported, {total_skipped} skipped")
+            logger.info(
+                f"Import Complete: {total_imported} transactions imported, {total_skipped} skipped"
+            )
             logger.info("=" * 60)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Import UBA bank statements")
-    parser.add_argument("--dry-run", action="store_true", help="Parse only, don't import")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Parse only, don't import"
+    )
     args = parser.parse_args()
 
     import_statements(dry_run=args.dry_run)

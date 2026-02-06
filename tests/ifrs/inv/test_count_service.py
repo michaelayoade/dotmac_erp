@@ -5,7 +5,7 @@ Tests inventory count workflow: create, record, complete, approve, post.
 """
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -229,7 +229,9 @@ def mock_db():
 class TestCreateCount:
     """Tests for create_count method."""
 
-    def test_raises_error_on_duplicate_number(self, mock_db, org_id, user_id, fiscal_period_id):
+    def test_raises_error_on_duplicate_number(
+        self, mock_db, org_id, user_id, fiscal_period_id
+    ):
         """Should raise HTTPException when count number already exists."""
         existing = MockInventoryCount(organization_id=org_id, count_number="CNT-001")
         mock_db.query.return_value.filter.return_value.first.return_value = existing
@@ -246,7 +248,9 @@ class TestCreateCount:
         assert exc.value.status_code == 400
         assert "already exists" in str(exc.value.detail)
 
-    def test_creates_count_with_draft_status(self, mock_db, org_id, user_id, fiscal_period_id):
+    def test_creates_count_with_draft_status(
+        self, mock_db, org_id, user_id, fiscal_period_id
+    ):
         """Should create count in DRAFT status."""
         mock_db.query.return_value.filter.return_value.first.return_value = None
         mock_db.query.return_value.filter.return_value.all.return_value = []  # No items
@@ -258,13 +262,18 @@ class TestCreateCount:
             count_description="Test count",
         )
 
-        with patch('app.services.inventory.balance.InventoryBalanceService.get_on_hand', return_value=Decimal("0")):
+        with patch(
+            "app.services.inventory.balance.InventoryBalanceService.get_on_hand",
+            return_value=Decimal("0"),
+        ):
             InventoryCountService.create_count(mock_db, org_id, input, user_id)
 
         mock_db.add.assert_called()
         mock_db.commit.assert_called()
 
-    def test_creates_count_for_warehouse(self, mock_db, org_id, user_id, fiscal_period_id, warehouse_id, mock_warehouse):
+    def test_creates_count_for_warehouse(
+        self, mock_db, org_id, user_id, fiscal_period_id, warehouse_id, mock_warehouse
+    ):
         """Should create count scoped to specific warehouse."""
         mock_db.query.return_value.filter.return_value.first.return_value = None
         mock_db.query.return_value.filter.return_value.all.return_value = []  # No items
@@ -277,12 +286,17 @@ class TestCreateCount:
             warehouse_id=warehouse_id,
         )
 
-        with patch('app.services.inventory.balance.InventoryBalanceService.get_on_hand', return_value=Decimal("0")):
+        with patch(
+            "app.services.inventory.balance.InventoryBalanceService.get_on_hand",
+            return_value=Decimal("0"),
+        ):
             InventoryCountService.create_count(mock_db, org_id, input, user_id)
 
         mock_db.add.assert_called()
 
-    def test_creates_lines_for_items_with_stock(self, mock_db, org_id, user_id, fiscal_period_id, mock_item, mock_warehouse):
+    def test_creates_lines_for_items_with_stock(
+        self, mock_db, org_id, user_id, fiscal_period_id, mock_item, mock_warehouse
+    ):
         """Should create count lines for items with stock."""
         mock_db.query.return_value.filter.return_value.first.return_value = None
         mock_db.query.return_value.filter.return_value.all.side_effect = [
@@ -296,13 +310,18 @@ class TestCreateCount:
             fiscal_period_id=fiscal_period_id,
         )
 
-        with patch('app.services.inventory.balance.InventoryBalanceService.get_on_hand', return_value=Decimal("100")):
+        with patch(
+            "app.services.inventory.balance.InventoryBalanceService.get_on_hand",
+            return_value=Decimal("100"),
+        ):
             InventoryCountService.create_count(mock_db, org_id, input, user_id)
 
         # Should add header + at least one line
         assert mock_db.add.call_count >= 1
 
-    def test_creates_lines_for_all_items_on_full_count(self, mock_db, org_id, user_id, fiscal_period_id, mock_item, mock_warehouse):
+    def test_creates_lines_for_all_items_on_full_count(
+        self, mock_db, org_id, user_id, fiscal_period_id, mock_item, mock_warehouse
+    ):
         """Should include zero-stock items in full count."""
         mock_db.query.return_value.filter.return_value.first.return_value = None
         mock_db.query.return_value.filter.return_value.all.side_effect = [
@@ -317,7 +336,10 @@ class TestCreateCount:
             is_full_count=True,
         )
 
-        with patch('app.services.inventory.balance.InventoryBalanceService.get_on_hand', return_value=Decimal("0")):
+        with patch(
+            "app.services.inventory.balance.InventoryBalanceService.get_on_hand",
+            return_value=Decimal("0"),
+        ):
             InventoryCountService.create_count(mock_db, org_id, input, user_id)
 
         # Should still add line for zero-stock item
@@ -330,7 +352,9 @@ class TestCreateCount:
 class TestRecordCount:
     """Tests for record_count method."""
 
-    def test_raises_error_when_count_not_found(self, mock_db, org_id, count_id, user_id, item_id, warehouse_id):
+    def test_raises_error_when_count_not_found(
+        self, mock_db, org_id, count_id, user_id, item_id, warehouse_id
+    ):
         """Should raise HTTPException when count not found."""
         mock_db.get.return_value = None
 
@@ -341,11 +365,15 @@ class TestRecordCount:
         )
 
         with pytest.raises(HTTPException) as exc:
-            InventoryCountService.record_count(mock_db, org_id, count_id, input, user_id)
+            InventoryCountService.record_count(
+                mock_db, org_id, count_id, input, user_id
+            )
 
         assert exc.value.status_code == 404
 
-    def test_raises_error_when_count_posted(self, mock_db, org_id, mock_count, user_id, item_id, warehouse_id):
+    def test_raises_error_when_count_posted(
+        self, mock_db, org_id, mock_count, user_id, item_id, warehouse_id
+    ):
         """Should raise HTTPException when count is already posted."""
         mock_count.status = CountStatus.POSTED
         mock_db.get.return_value = mock_count
@@ -364,7 +392,9 @@ class TestRecordCount:
         assert exc.value.status_code == 400
         assert "posted" in str(exc.value.detail).lower()
 
-    def test_raises_error_when_count_cancelled(self, mock_db, org_id, mock_count, user_id, item_id, warehouse_id):
+    def test_raises_error_when_count_cancelled(
+        self, mock_db, org_id, mock_count, user_id, item_id, warehouse_id
+    ):
         """Should raise HTTPException when count is cancelled."""
         mock_count.status = CountStatus.CANCELLED
         mock_db.get.return_value = mock_count
@@ -382,7 +412,9 @@ class TestRecordCount:
 
         assert exc.value.status_code == 400
 
-    def test_updates_existing_line(self, mock_db, org_id, mock_count, user_id, item_id, warehouse_id):
+    def test_updates_existing_line(
+        self, mock_db, org_id, mock_count, user_id, item_id, warehouse_id
+    ):
         """Should update existing count line."""
         existing_line = MockCountLine(
             count_id=mock_count.count_id,
@@ -393,7 +425,9 @@ class TestRecordCount:
             unit_cost=Decimal("10.00"),
         )
         mock_db.get.return_value = mock_count
-        mock_db.query.return_value.filter.return_value.first.return_value = existing_line
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            existing_line
+        )
         mock_db.query.return_value.filter.return_value.scalar.return_value = 1
 
         input = CountLineInput(
@@ -410,7 +444,9 @@ class TestRecordCount:
         assert existing_line.final_quantity == Decimal("95")
         assert existing_line.variance_quantity == Decimal("-5")  # 95 - 100
 
-    def test_calculates_variance_correctly(self, mock_db, org_id, mock_count, user_id, item_id, warehouse_id):
+    def test_calculates_variance_correctly(
+        self, mock_db, org_id, mock_count, user_id, item_id, warehouse_id
+    ):
         """Should calculate variance quantity and value correctly."""
         existing_line = MockCountLine(
             count_id=mock_count.count_id,
@@ -421,7 +457,9 @@ class TestRecordCount:
             unit_cost=Decimal("25.00"),
         )
         mock_db.get.return_value = mock_count
-        mock_db.query.return_value.filter.return_value.first.return_value = existing_line
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            existing_line
+        )
         mock_db.query.return_value.filter.return_value.scalar.return_value = 1
 
         input = CountLineInput(
@@ -437,7 +475,9 @@ class TestRecordCount:
         assert existing_line.variance_quantity == Decimal("-10")
         assert existing_line.variance_value == Decimal("-250.00")  # -10 * 25
 
-    def test_calculates_variance_percent(self, mock_db, org_id, mock_count, user_id, item_id, warehouse_id):
+    def test_calculates_variance_percent(
+        self, mock_db, org_id, mock_count, user_id, item_id, warehouse_id
+    ):
         """Should calculate variance percentage correctly."""
         existing_line = MockCountLine(
             count_id=mock_count.count_id,
@@ -448,7 +488,9 @@ class TestRecordCount:
             unit_cost=Decimal("10.00"),
         )
         mock_db.get.return_value = mock_count
-        mock_db.query.return_value.filter.return_value.first.return_value = existing_line
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            existing_line
+        )
         mock_db.query.return_value.filter.return_value.scalar.return_value = 1
 
         input = CountLineInput(
@@ -463,10 +505,16 @@ class TestRecordCount:
 
         assert existing_line.variance_percent == Decimal("-20.00")  # -20%
 
-    def test_creates_new_line_for_unsnapshotted_item(self, mock_db, org_id, mock_count, user_id, mock_item, warehouse_id):
+    def test_creates_new_line_for_unsnapshotted_item(
+        self, mock_db, org_id, mock_count, user_id, mock_item, warehouse_id
+    ):
         """Should create new line for items not in original snapshot."""
-        mock_db.get.side_effect = lambda model, id: mock_count if id == mock_count.count_id else mock_item
-        mock_db.query.return_value.filter.return_value.first.return_value = None  # No existing line
+        mock_db.get.side_effect = (
+            lambda model, id: mock_count if id == mock_count.count_id else mock_item
+        )
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            None  # No existing line
+        )
         mock_db.query.return_value.filter.return_value.scalar.return_value = 0
 
         input = CountLineInput(
@@ -481,7 +529,9 @@ class TestRecordCount:
 
         mock_db.add.assert_called()
 
-    def test_updates_status_to_in_progress(self, mock_db, org_id, mock_count, user_id, item_id, warehouse_id):
+    def test_updates_status_to_in_progress(
+        self, mock_db, org_id, mock_count, user_id, item_id, warehouse_id
+    ):
         """Should update count status from DRAFT to IN_PROGRESS."""
         mock_count.status = CountStatus.DRAFT
         existing_line = MockCountLine(
@@ -492,7 +542,9 @@ class TestRecordCount:
             counted_quantity=None,
         )
         mock_db.get.return_value = mock_count
-        mock_db.query.return_value.filter.return_value.first.return_value = existing_line
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            existing_line
+        )
         mock_db.query.return_value.filter.return_value.scalar.return_value = 0
 
         input = CountLineInput(
@@ -507,7 +559,9 @@ class TestRecordCount:
 
         assert mock_count.status == CountStatus.IN_PROGRESS
 
-    def test_records_recount(self, mock_db, org_id, mock_count, user_id, item_id, warehouse_id):
+    def test_records_recount(
+        self, mock_db, org_id, mock_count, user_id, item_id, warehouse_id
+    ):
         """Should record recount when line already counted."""
         existing_line = MockCountLine(
             count_id=mock_count.count_id,
@@ -518,7 +572,9 @@ class TestRecordCount:
             unit_cost=Decimal("10.00"),
         )
         mock_db.get.return_value = mock_count
-        mock_db.query.return_value.filter.return_value.first.return_value = existing_line
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            existing_line
+        )
         mock_db.query.return_value.filter.return_value.scalar.return_value = 0
 
         input = CountLineInput(
@@ -565,7 +621,9 @@ class TestCompleteCount:
         mock_count.status = CountStatus.IN_PROGRESS
         mock_db.get.return_value = mock_count
 
-        result = InventoryCountService.complete_count(mock_db, org_id, mock_count.count_id)
+        result = InventoryCountService.complete_count(
+            mock_db, org_id, mock_count.count_id
+        )
 
         assert result.status == CountStatus.COMPLETED
         mock_db.commit.assert_called()
@@ -586,7 +644,9 @@ class TestApproveCount:
 
         assert exc.value.status_code == 404
 
-    def test_raises_error_when_not_completed(self, mock_db, org_id, mock_count, user_id):
+    def test_raises_error_when_not_completed(
+        self, mock_db, org_id, mock_count, user_id
+    ):
         """Should raise HTTPException when count not COMPLETED."""
         mock_count.status = CountStatus.IN_PROGRESS
         mock_db.get.return_value = mock_count
@@ -604,7 +664,9 @@ class TestApproveCount:
         mock_count.status = CountStatus.COMPLETED
         mock_db.get.return_value = mock_count
 
-        InventoryCountService.approve_count(mock_db, org_id, mock_count.count_id, user_id)
+        InventoryCountService.approve_count(
+            mock_db, org_id, mock_count.count_id, user_id
+        )
 
         assert mock_count.approved_by_user_id == user_id
         assert mock_count.approved_at is not None
@@ -625,28 +687,38 @@ class TestPostCount:
 
         assert exc.value.status_code == 404
 
-    def test_raises_error_when_already_posted(self, mock_db, org_id, mock_count, user_id):
+    def test_raises_error_when_already_posted(
+        self, mock_db, org_id, mock_count, user_id
+    ):
         """Should raise HTTPException when already posted."""
         mock_count.status = CountStatus.POSTED
         mock_db.get.return_value = mock_count
 
         with pytest.raises(HTTPException) as exc:
-            InventoryCountService.post_count(mock_db, org_id, mock_count.count_id, user_id)
+            InventoryCountService.post_count(
+                mock_db, org_id, mock_count.count_id, user_id
+            )
 
         assert exc.value.status_code == 400
         assert "already posted" in str(exc.value.detail).lower()
 
-    def test_raises_error_when_not_completed(self, mock_db, org_id, mock_count, user_id):
+    def test_raises_error_when_not_completed(
+        self, mock_db, org_id, mock_count, user_id
+    ):
         """Should raise HTTPException when count not COMPLETED."""
         mock_count.status = CountStatus.IN_PROGRESS
         mock_db.get.return_value = mock_count
 
         with pytest.raises(HTTPException) as exc:
-            InventoryCountService.post_count(mock_db, org_id, mock_count.count_id, user_id)
+            InventoryCountService.post_count(
+                mock_db, org_id, mock_count.count_id, user_id
+            )
 
         assert exc.value.status_code == 400
 
-    def test_creates_adjustment_transactions(self, mock_db, org_id, mock_count, user_id, mock_item):
+    def test_creates_adjustment_transactions(
+        self, mock_db, org_id, mock_count, user_id, mock_item
+    ):
         """Should create adjustment transactions for lines with variances."""
         mock_count.status = CountStatus.COMPLETED
         variance_line = MockCountLine(
@@ -659,11 +731,19 @@ class TestPostCount:
             unit_cost=Decimal("10.00"),
             uom="EACH",
         )
-        mock_db.get.side_effect = lambda model, id: mock_count if id == mock_count.count_id else mock_item
-        mock_db.query.return_value.filter.return_value.all.return_value = [variance_line]
+        mock_db.get.side_effect = (
+            lambda model, id: mock_count if id == mock_count.count_id else mock_item
+        )
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            variance_line
+        ]
 
-        with patch('app.services.inventory.transaction.InventoryTransactionService.create_adjustment') as mock_adjust:
-            InventoryCountService.post_count(mock_db, org_id, mock_count.count_id, user_id)
+        with patch(
+            "app.services.inventory.transaction.InventoryTransactionService.create_adjustment"
+        ) as mock_adjust:
+            InventoryCountService.post_count(
+                mock_db, org_id, mock_count.count_id, user_id
+            )
 
             mock_adjust.assert_called_once()
 
@@ -673,8 +753,12 @@ class TestPostCount:
         mock_db.get.return_value = mock_count
         mock_db.query.return_value.filter.return_value.all.return_value = []  # No lines
 
-        with patch('app.services.inventory.transaction.InventoryTransactionService.create_adjustment'):
-            InventoryCountService.post_count(mock_db, org_id, mock_count.count_id, user_id)
+        with patch(
+            "app.services.inventory.transaction.InventoryTransactionService.create_adjustment"
+        ):
+            InventoryCountService.post_count(
+                mock_db, org_id, mock_count.count_id, user_id
+            )
 
         assert mock_count.status == CountStatus.POSTED
         assert mock_count.posted_by_user_id == user_id
@@ -711,8 +795,12 @@ class TestGetCountSummary:
             negative_variance_value=Decimal("-50"),
         )
 
-        with patch.object(InventoryCountService, 'get_count_summary', return_value=expected_summary):
-            result = InventoryCountService.get_count_summary(mock_db, org_id, mock_count.count_id)
+        with patch.object(
+            InventoryCountService, "get_count_summary", return_value=expected_summary
+        ):
+            result = InventoryCountService.get_count_summary(
+                mock_db, org_id, mock_count.count_id
+            )
 
         assert isinstance(result, CountSummary)
         assert result.count_id == mock_count.count_id
@@ -734,8 +822,12 @@ class TestGetCountSummary:
             negative_variance_value=Decimal("0"),
         )
 
-        with patch.object(InventoryCountService, 'get_count_summary', return_value=expected_summary):
-            result = InventoryCountService.get_count_summary(mock_db, org_id, mock_count.count_id)
+        with patch.object(
+            InventoryCountService, "get_count_summary", return_value=expected_summary
+        ):
+            result = InventoryCountService.get_count_summary(
+                mock_db, org_id, mock_count.count_id
+            )
 
         assert result.total_variance_value == Decimal("0")
         assert result.positive_variance_value == Decimal("0")
@@ -818,7 +910,8 @@ class TestListLines:
         line1 = MockCountLine(count_id=count_id)
         line2 = MockCountLine(count_id=count_id)
         mock_db.query.return_value.filter.return_value.limit.return_value.offset.return_value.all.return_value = [
-            line1, line2
+            line1,
+            line2,
         ]
 
         result = InventoryCountService.list_lines(mock_db, str(count_id))

@@ -64,7 +64,9 @@ class SettingScope(enum.Enum):
 class DomainSetting(Base):
     __tablename__ = "domain_settings"
     __table_args__ = (
-        UniqueConstraint("domain", "key", "organization_id", name="uq_domain_settings_domain_key_org"),
+        UniqueConstraint(
+            "domain", "key", "organization_id", name="uq_domain_settings_domain_key_org"
+        ),
         CheckConstraint(
             "(value_type = 'json' AND value_text IS NULL) "
             "OR (value_type IN ('string', 'integer') AND value_json IS NULL) "
@@ -100,7 +102,9 @@ class DomainSetting(Base):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
     )
 
     # Relationship to history
@@ -142,7 +146,9 @@ class DomainSettingHistory(Base):
     domain: Mapped[str] = mapped_column(String(50), nullable=False)
     key: Mapped[str] = mapped_column(String(120), nullable=False)
     organization_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True, comment="Organization ID (NULL = global setting)"
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="Organization ID (NULL = global setting)",
     )
 
     # Change action

@@ -4,6 +4,7 @@ Staging Tables for ERPNext Data Migration.
 Raw data is synced here first for validation and review before
 importing to production tables.
 """
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -29,11 +30,12 @@ from app.db import Base
 
 class StagingStatus:
     """Validation status constants."""
-    PENDING = "PENDING"      # Not yet validated
-    VALID = "VALID"          # Passed all validations
-    INVALID = "INVALID"      # Has validation errors
-    IMPORTED = "IMPORTED"    # Successfully imported to production
-    SKIPPED = "SKIPPED"      # Skipped (e.g., already exists)
+
+    PENDING = "PENDING"  # Not yet validated
+    VALID = "VALID"  # Passed all validations
+    INVALID = "INVALID"  # Has validation errors
+    IMPORTED = "IMPORTED"  # Successfully imported to production
+    SKIPPED = "SKIPPED"  # Skipped (e.g., already exists)
 
 
 class StagingEmployee(Base):
@@ -70,7 +72,9 @@ class StagingEmployee(Base):
 
     # ERPNext source identifiers
     source_name: Mapped[str] = mapped_column(
-        String(140), nullable=False, comment="ERPNext document name (e.g., HR-EMP-00001)"
+        String(140),
+        nullable=False,
+        comment="ERPNext document name (e.g., HR-EMP-00001)",
     )
     source_modified: Mapped[Optional[datetime]] = mapped_column(
         DateTime, nullable=True, comment="ERPNext modified timestamp"
@@ -100,7 +104,9 @@ class StagingEmployee(Base):
     # Organization references (ERPNext names, not UUIDs)
     department_name: Mapped[Optional[str]] = mapped_column(String(140), nullable=True)
     designation_name: Mapped[Optional[str]] = mapped_column(String(140), nullable=True)
-    employment_type_name: Mapped[Optional[str]] = mapped_column(String(140), nullable=True)
+    employment_type_name: Mapped[Optional[str]] = mapped_column(
+        String(140), nullable=True
+    )
     grade_name: Mapped[Optional[str]] = mapped_column(String(140), nullable=True)
     reports_to_name: Mapped[Optional[str]] = mapped_column(String(140), nullable=True)
 
@@ -159,7 +165,9 @@ class StagingDepartment(Base):
         default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
-    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
     batch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     # ERPNext source
@@ -170,19 +178,27 @@ class StagingDepartment(Base):
     # Mapped fields
     department_code: Mapped[str] = mapped_column(String(50), nullable=False)
     department_name: Mapped[str] = mapped_column(String(140), nullable=False)
-    parent_department_name: Mapped[Optional[str]] = mapped_column(String(140), nullable=True)
+    parent_department_name: Mapped[Optional[str]] = mapped_column(
+        String(140), nullable=True
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Validation
-    validation_status: Mapped[str] = mapped_column(String(20), nullable=False, default=StagingStatus.PENDING)
+    validation_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=StagingStatus.PENDING
+    )
     validation_errors: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
     validation_warnings: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
     # Import tracking
     imported_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    imported_department_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    imported_department_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
 
 
 class StagingDesignation(Base):
@@ -201,7 +217,9 @@ class StagingDesignation(Base):
         default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
-    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
     batch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     source_name: Mapped[str] = mapped_column(String(140), nullable=False)
@@ -212,14 +230,20 @@ class StagingDesignation(Base):
     designation_name: Mapped[str] = mapped_column(String(140), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
-    validation_status: Mapped[str] = mapped_column(String(20), nullable=False, default=StagingStatus.PENDING)
+    validation_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=StagingStatus.PENDING
+    )
     validation_errors: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
     validation_warnings: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
     imported_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    imported_designation_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    imported_designation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
 
 
 class StagingEmploymentType(Base):
@@ -237,7 +261,9 @@ class StagingEmploymentType(Base):
         default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
-    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
     batch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     source_name: Mapped[str] = mapped_column(String(140), nullable=False)
@@ -248,13 +274,19 @@ class StagingEmploymentType(Base):
     type_name: Mapped[str] = mapped_column(String(100), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
-    validation_status: Mapped[str] = mapped_column(String(20), nullable=False, default=StagingStatus.PENDING)
+    validation_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=StagingStatus.PENDING
+    )
     validation_errors: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
     imported_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    imported_employment_type_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    imported_employment_type_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
 
 
 class StagingEmployeeGrade(Base):
@@ -272,7 +304,9 @@ class StagingEmployeeGrade(Base):
         default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
-    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
     batch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     source_name: Mapped[str] = mapped_column(String(140), nullable=False)
@@ -281,16 +315,24 @@ class StagingEmployeeGrade(Base):
 
     grade_code: Mapped[str] = mapped_column(String(30), nullable=False)
     grade_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    default_base_pay: Mapped[Optional[Decimal]] = mapped_column(Numeric(15, 2), nullable=True)
+    default_base_pay: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(15, 2), nullable=True
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
-    validation_status: Mapped[str] = mapped_column(String(20), nullable=False, default=StagingStatus.PENDING)
+    validation_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=StagingStatus.PENDING
+    )
     validation_errors: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
     imported_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    imported_grade_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    imported_grade_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
 
 
 class StagingSyncBatch(Base):
@@ -313,17 +355,23 @@ class StagingSyncBatch(Base):
         default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
-    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
 
-    source_system: Mapped[str] = mapped_column(String(50), nullable=False, default="erpnext")
+    source_system: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="erpnext"
+    )
     entity_types: Mapped[Optional[list]] = mapped_column(
         JSONB, nullable=True, comment="Entity types included in this batch"
     )
 
     # Status
     status: Mapped[str] = mapped_column(
-        String(30), nullable=False, default="SYNCING",
-        comment="SYNCING, SYNCED, VALIDATING, VALIDATED, IMPORTING, IMPORTED, FAILED"
+        String(30),
+        nullable=False,
+        default="SYNCING",
+        comment="SYNCING, SYNCED, VALIDATING, VALIDATED, IMPORTING, IMPORTED, FAILED",
     )
 
     # Counts
@@ -338,11 +386,15 @@ class StagingSyncBatch(Base):
     )
 
     # Timestamps
-    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
     synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     validated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     imported_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # User tracking
-    initiated_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    initiated_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

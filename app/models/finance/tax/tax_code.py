@@ -1,13 +1,26 @@
 """
 Tax Code Model - Tax Schema.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -71,11 +84,17 @@ class TaxCode(Base):
     is_compound: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_inclusive: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_recoverable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    recovery_rate: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False, default=1)
+    recovery_rate: Mapped[Decimal] = mapped_column(
+        Numeric(5, 4), nullable=False, default=1
+    )
 
     # Purchase/sales applicability
-    applies_to_purchases: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    applies_to_sales: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    applies_to_purchases: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
+    applies_to_sales: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
 
     # Reporting
     tax_return_box: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)

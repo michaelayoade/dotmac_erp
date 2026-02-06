@@ -115,7 +115,9 @@ def edit_employee_form(
     db: Session = Depends(get_db),
 ):
     """Edit employee form page."""
-    return hr_web_service.employee_edit_form_response(request, auth, db, str(employee_id))
+    return hr_web_service.employee_edit_form_response(
+        request, auth, db, str(employee_id)
+    )
 
 
 @router.post("/employees/{employee_id}/edit")

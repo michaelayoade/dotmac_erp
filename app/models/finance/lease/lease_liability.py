@@ -1,6 +1,7 @@
 """
 Lease Liability Model - Lease Schema.
 """
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -35,7 +36,9 @@ class LeaseLiability(Base):
 
     # Initial measurement
     initial_measurement_date: Mapped[date] = mapped_column(Date, nullable=False)
-    initial_liability_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    initial_liability_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
 
     # PV of lease payments
     pv_fixed_payments: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
@@ -64,7 +67,9 @@ class LeaseLiability(Base):
     discount_rate: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False)
 
     # Current balance
-    current_liability_balance: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    current_liability_balance: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
 
     # Interest tracking
     total_interest_expense: Mapped[Decimal] = mapped_column(
@@ -86,8 +91,12 @@ class LeaseLiability(Base):
     )
 
     # Classification
-    current_portion: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
-    non_current_portion: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    current_portion: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
+    non_current_portion: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Accounts
     lease_liability_account_id: Mapped[uuid.UUID] = mapped_column(

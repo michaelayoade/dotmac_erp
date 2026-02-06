@@ -52,7 +52,10 @@ class TestRolesAPI:
         """Test listing roles with pagination."""
         # Create multiple roles
         for i in range(5):
-            r = Role(name=f"paginated_role_{i}_{uuid.uuid4().hex[:8]}", description=f"Role {i}")
+            r = Role(
+                name=f"paginated_role_{i}_{uuid.uuid4().hex[:8]}",
+                description=f"Role {i}",
+            )
             db_session.add(r)
         db_session.commit()
 
@@ -186,9 +189,7 @@ class TestPermissionsAPI:
         db_session.commit()
         db_session.refresh(perm)
 
-        response = client.delete(
-            f"/rbac/permissions/{perm.id}", headers=auth_headers
-        )
+        response = client.delete(f"/rbac/permissions/{perm.id}", headers=auth_headers)
         assert response.status_code == 204
 
 
@@ -209,16 +210,16 @@ class TestRolePermissionsAPI:
         assert data["role_id"] == str(role.id)
         assert data["permission_id"] == str(permission.id)
 
-    def test_get_role_permission(self, client, auth_headers, db_session, role, permission):
+    def test_get_role_permission(
+        self, client, auth_headers, db_session, role, permission
+    ):
         """Test getting a role-permission link."""
         link = RolePermission(role_id=role.id, permission_id=permission.id)
         db_session.add(link)
         db_session.commit()
         db_session.refresh(link)
 
-        response = client.get(
-            f"/rbac/role-permissions/{link.id}", headers=auth_headers
-        )
+        response = client.get(f"/rbac/role-permissions/{link.id}", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == str(link.id)
@@ -231,7 +232,9 @@ class TestRolePermissionsAPI:
         assert "items" in data
         assert "count" in data
 
-    def test_list_role_permissions_filtered(self, client, auth_headers, db_session, role, permission):
+    def test_list_role_permissions_filtered(
+        self, client, auth_headers, db_session, role, permission
+    ):
         """Test listing role-permissions with filter."""
         link = RolePermission(role_id=role.id, permission_id=permission.id)
         db_session.add(link)
@@ -244,7 +247,9 @@ class TestRolePermissionsAPI:
         data = response.json()
         assert len(data["items"]) >= 1
 
-    def test_delete_role_permission(self, client, auth_headers, db_session, role, permission):
+    def test_delete_role_permission(
+        self, client, auth_headers, db_session, role, permission
+    ):
         """Test deleting a role-permission link."""
         link = RolePermission(role_id=role.id, permission_id=permission.id)
         db_session.add(link)
@@ -266,9 +271,7 @@ class TestPersonRolesAPI:
             "person_id": str(person.id),
             "role_id": str(role.id),
         }
-        response = client.post(
-            "/rbac/person-roles", json=payload, headers=auth_headers
-        )
+        response = client.post("/rbac/person-roles", json=payload, headers=auth_headers)
         assert response.status_code == 201
         data = response.json()
         assert data["person_id"] == str(person.id)
@@ -281,9 +284,7 @@ class TestPersonRolesAPI:
         db_session.commit()
         db_session.refresh(link)
 
-        response = client.get(
-            f"/rbac/person-roles/{link.id}", headers=auth_headers
-        )
+        response = client.get(f"/rbac/person-roles/{link.id}", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == str(link.id)
@@ -296,7 +297,9 @@ class TestPersonRolesAPI:
         assert "items" in data
         assert "count" in data
 
-    def test_list_person_roles_filtered_by_person(self, client, auth_headers, db_session, person, role):
+    def test_list_person_roles_filtered_by_person(
+        self, client, auth_headers, db_session, person, role
+    ):
         """Test listing person-roles filtered by person."""
         link = PersonRole(person_id=person.id, role_id=role.id)
         db_session.add(link)
@@ -316,9 +319,7 @@ class TestPersonRolesAPI:
         db_session.commit()
         db_session.refresh(link)
 
-        response = client.delete(
-            f"/rbac/person-roles/{link.id}", headers=auth_headers
-        )
+        response = client.delete(f"/rbac/person-roles/{link.id}", headers=auth_headers)
         assert response.status_code == 204
 
 

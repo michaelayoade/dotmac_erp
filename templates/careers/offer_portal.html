@@ -1,0 +1,99 @@
+{% extends "careers/base_careers.html" %}
+
+{% block title %}Offer - {{ org_name }}{% endblock %}
+
+{% block content %}
+<section class="py-10">
+    <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 space-y-6">
+        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Offer</p>
+                    <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Offer Letter</h1>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">{{ offer.offer_number }}</p>
+                </div>
+                <a href="/careers/{{ org_slug }}/offer/{{ offer.candidate_access_token }}/pdf" class="btn btn-primary">
+                    Download Offer PDF
+                </a>
+            </div>
+        </div>
+
+        {% if message %}
+        <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-900/20 dark:text-emerald-100">
+            {{ message | replace('+', ' ') }}
+        </div>
+        {% endif %}
+
+        <div class="grid gap-6 md:grid-cols-2">
+            <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Position Details</h2>
+                <dl class="mt-4 space-y-3 text-sm">
+                    <div>
+                        <dt class="text-slate-500 dark:text-slate-400">Job Title</dt>
+                        <dd class="font-medium text-slate-900 dark:text-white">{{ offer.job_opening.job_title }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-slate-500 dark:text-slate-400">Designation</dt>
+                        <dd class="font-medium text-slate-900 dark:text-white">{{ offer.designation.designation_name }}</dd>
+                    </div>
+                    {% if offer.department %}
+                    <div>
+                        <dt class="text-slate-500 dark:text-slate-400">Department</dt>
+                        <dd class="font-medium text-slate-900 dark:text-white">{{ offer.department.department_name }}</dd>
+                    </div>
+                    {% endif %}
+                    <div>
+                        <dt class="text-slate-500 dark:text-slate-400">Employment Type</dt>
+                        <dd class="font-medium text-slate-900 dark:text-white">{{ offer.employment_type | replace('_', ' ') | title }}</dd>
+                    </div>
+                </dl>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Offer Summary</h2>
+                <dl class="mt-4 space-y-3 text-sm">
+                    <div>
+                        <dt class="text-slate-500 dark:text-slate-400">Base Salary</dt>
+                        <dd class="font-medium text-slate-900 dark:text-white">{{ offer.currency_code }} {{ "{:,.2f}".format(offer.base_salary) }} / {{ offer.pay_frequency | lower }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-slate-500 dark:text-slate-400">Offer Valid Until</dt>
+                        <dd class="font-medium text-slate-900 dark:text-white">{{ offer.valid_until.strftime('%b %d, %Y') }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-slate-500 dark:text-slate-400">Expected Start Date</dt>
+                        <dd class="font-medium text-slate-900 dark:text-white">{{ offer.expected_joining_date.strftime('%b %d, %Y') }}</dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+
+        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Respond to Offer</h2>
+            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                Please review the offer letter and choose to accept or decline.
+            </p>
+
+            {% if offer.status.value in ['EXTENDED', 'APPROVED'] %}
+            <div class="mt-5 flex flex-col gap-3 sm:flex-row">
+                <form method="post" action="/careers/{{ org_slug }}/offer/{{ offer.candidate_access_token }}/accept">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-success w-full sm:w-auto">Accept Offer</button>
+                </form>
+                <form method="post" action="/careers/{{ org_slug }}/offer/{{ offer.candidate_access_token }}/decline" class="flex-1">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <div class="flex flex-col gap-3 sm:flex-row">
+                        <input type="text" name="reason" placeholder="Reason for declining (optional)" class="form-input w-full">
+                        <button type="submit" class="btn btn-danger w-full sm:w-auto">Decline Offer</button>
+                    </div>
+                </form>
+            </div>
+            {% else %}
+            <div class="mt-4 rounded-lg bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-800/50 dark:text-slate-300">
+                This offer has already been {{ offer.status.value | lower }}.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}

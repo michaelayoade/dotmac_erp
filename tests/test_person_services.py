@@ -22,7 +22,9 @@ def _unique_email() -> str:
 
 
 # Skip all tests in this module - they require PostgreSQL for UUID handling
-pytestmark = pytest.mark.skip(reason="Requires PostgreSQL for UUID/organization_id support")
+pytestmark = pytest.mark.skip(
+    reason="Requires PostgreSQL for UUID/organization_id support"
+)
 
 
 def test_create_person(db_session):
@@ -66,11 +68,21 @@ def test_list_people_filter_by_email(db_session):
     email = _unique_email()
     person_service.people.create(
         db_session,
-        PersonCreate(organization_id=TEST_ORG_ID, first_name="Alice", last_name="Test", email=email),
+        PersonCreate(
+            organization_id=TEST_ORG_ID,
+            first_name="Alice",
+            last_name="Test",
+            email=email,
+        ),
     )
     person_service.people.create(
         db_session,
-        PersonCreate(organization_id=TEST_ORG_ID, first_name="Bob", last_name="Other", email=_unique_email()),
+        PersonCreate(
+            organization_id=TEST_ORG_ID,
+            first_name="Bob",
+            last_name="Other",
+            email=_unique_email(),
+        ),
     )
 
     results = person_service.people.list(
@@ -92,12 +104,22 @@ def test_list_people_filter_by_status(db_session):
     email1 = _unique_email()
     person1 = person_service.people.create(
         db_session,
-        PersonCreate(organization_id=TEST_ORG_ID, first_name="Active", last_name="User", email=email1),
+        PersonCreate(
+            organization_id=TEST_ORG_ID,
+            first_name="Active",
+            last_name="User",
+            email=email1,
+        ),
     )
     email2 = _unique_email()
     person2 = person_service.people.create(
         db_session,
-        PersonCreate(organization_id=TEST_ORG_ID, first_name="Inactive", last_name="User", email=email2),
+        PersonCreate(
+            organization_id=TEST_ORG_ID,
+            first_name="Inactive",
+            last_name="User",
+            email=email2,
+        ),
     )
     # Update second person to inactive
     person_service.people.update(
@@ -138,7 +160,12 @@ def test_list_people_active_only(db_session):
     """Test listing only active people."""
     person = person_service.people.create(
         db_session,
-        PersonCreate(organization_id=TEST_ORG_ID, first_name="ToDelete", last_name="User", email=_unique_email()),
+        PersonCreate(
+            organization_id=TEST_ORG_ID,
+            first_name="ToDelete",
+            last_name="User",
+            email=_unique_email(),
+        ),
     )
     person_service.people.delete(db_session, str(person.id))
 
@@ -160,7 +187,12 @@ def test_update_person(db_session):
     """Test updating a person."""
     person = person_service.people.create(
         db_session,
-        PersonCreate(organization_id=TEST_ORG_ID, first_name="Original", last_name="Name", email=_unique_email()),
+        PersonCreate(
+            organization_id=TEST_ORG_ID,
+            first_name="Original",
+            last_name="Name",
+            email=_unique_email(),
+        ),
     )
     updated = person_service.people.update(
         db_session,
@@ -175,7 +207,12 @@ def test_delete_person(db_session):
     """Test deleting a person."""
     person = person_service.people.create(
         db_session,
-        PersonCreate(organization_id=TEST_ORG_ID, first_name="ToDelete", last_name="User", email=_unique_email()),
+        PersonCreate(
+            organization_id=TEST_ORG_ID,
+            first_name="ToDelete",
+            last_name="User",
+            email=_unique_email(),
+        ),
     )
     person_id = person.id
     person_service.people.delete(db_session, str(person_id))
@@ -183,6 +220,7 @@ def test_delete_person(db_session):
     # Verify person is deleted
     from fastapi import HTTPException
     import pytest
+
     with pytest.raises(HTTPException) as exc_info:
         person_service.people.get(db_session, str(person_id))
     assert exc_info.value.status_code == 404

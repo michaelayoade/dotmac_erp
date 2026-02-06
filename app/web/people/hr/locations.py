@@ -3,7 +3,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.people.hr.web.location_web import location_web_service
@@ -16,6 +16,7 @@ router = APIRouter()
 # =============================================================================
 # Locations (Branches)
 # =============================================================================
+
 
 @router.get("/locations", response_class=HTMLResponse)
 def list_locations(

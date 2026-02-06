@@ -1,6 +1,7 @@
 """
 Budget Line Model - GL Schema.
 """
+
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -53,14 +54,18 @@ class BudgetLine(Base):
         UUID(as_uuid=True),
         nullable=True,
     )
-    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
 
     # Amount
     budget_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
 
     # Revisions
     original_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    revision_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    revision_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

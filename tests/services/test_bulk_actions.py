@@ -6,7 +6,7 @@ for delete, export, and status updates.
 """
 
 import uuid
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -16,10 +16,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
 from app.services.bulk_actions import BulkActionService
-from app.schemas.bulk_actions import BulkActionResult
 
 
 # ============ Concrete Test Implementation ============
+
 
 class TestModel(Base):
     """Real SQLAlchemy model so that and_() receives proper column objects."""
@@ -62,6 +62,7 @@ class ConcreteBulkService(BulkActionService[TestModel]):
 
 # ============ TestBulkActionServiceInit ============
 
+
 class TestBulkActionServiceInit:
     """Tests for BulkActionService initialization."""
 
@@ -93,6 +94,7 @@ class TestBulkActionServiceInit:
 
 
 # ============ TestGetBaseQuery ============
+
 
 class TestGetBaseQuery:
     """Tests for the _get_base_query method."""
@@ -128,6 +130,7 @@ class TestGetBaseQuery:
 
 # ============ TestBulkDelete ============
 
+
 class TestBulkDelete:
     """Tests for the bulk_delete method."""
 
@@ -158,9 +161,14 @@ class TestBulkDelete:
         """All entities should be deleted successfully."""
         entity1 = MagicMock()
         entity2 = MagicMock()
-        mock_db.query.return_value.filter.return_value.all.return_value = [entity1, entity2]
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            entity1,
+            entity2,
+        ]
 
-        service = ConcreteBulkService(mock_db, organization_id, can_delete_result=(True, ""))
+        service = ConcreteBulkService(
+            mock_db, organization_id, can_delete_result=(True, "")
+        )
 
         result = await service.bulk_delete([uuid.uuid4(), uuid.uuid4()])
 
@@ -176,7 +184,10 @@ class TestBulkDelete:
         entity1.name = "Entity1"
         entity2 = MagicMock()
         entity2.name = "Entity2"
-        mock_db.query.return_value.filter.return_value.all.return_value = [entity1, entity2]
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            entity1,
+            entity2,
+        ]
 
         def can_delete_check(entity):
             if entity.name == "Entity1":
@@ -198,7 +209,10 @@ class TestBulkDelete:
         """Should handle all entities being blocked from deletion."""
         entity1 = MagicMock()
         entity2 = MagicMock()
-        mock_db.query.return_value.filter.return_value.all.return_value = [entity1, entity2]
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            entity1,
+            entity2,
+        ]
 
         service = ConcreteBulkService(
             mock_db, organization_id, can_delete_result=(False, "Cannot delete")
@@ -216,7 +230,9 @@ class TestBulkDelete:
         entity = MagicMock()
         mock_db.query.return_value.filter.return_value.all.return_value = [entity]
 
-        service = ConcreteBulkService(mock_db, organization_id, can_delete_result=(True, ""))
+        service = ConcreteBulkService(
+            mock_db, organization_id, can_delete_result=(True, "")
+        )
 
         await service.bulk_delete([uuid.uuid4()])
 
@@ -243,7 +259,9 @@ class TestBulkDelete:
         mock_db.query.return_value.filter.return_value.all.return_value = [entity]
         mock_db.delete.side_effect = Exception("Database error")
 
-        service = ConcreteBulkService(mock_db, organization_id, can_delete_result=(True, ""))
+        service = ConcreteBulkService(
+            mock_db, organization_id, can_delete_result=(True, "")
+        )
 
         result = await service.bulk_delete([uuid.uuid4()])
 
@@ -252,6 +270,7 @@ class TestBulkDelete:
 
 
 # ============ TestBulkUpdateStatus ============
+
 
 class TestBulkUpdateStatus:
     """Tests for the bulk_update_status method."""
@@ -263,7 +282,10 @@ class TestBulkUpdateStatus:
         entity1.status = "pending"
         entity2 = MagicMock()
         entity2.status = "pending"
-        mock_db.query.return_value.filter.return_value.all.return_value = [entity1, entity2]
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            entity1,
+            entity2,
+        ]
 
         service = ConcreteBulkService(mock_db, organization_id)
 
@@ -306,7 +328,10 @@ class TestBulkUpdateStatus:
         entity1 = MagicMock()
         entity1.is_active = True
         entity2 = MagicMock(spec=["id"])  # No is_active field
-        mock_db.query.return_value.filter.return_value.all.return_value = [entity1, entity2]
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            entity1,
+            entity2,
+        ]
 
         service = ConcreteBulkService(mock_db, organization_id)
 
@@ -319,6 +344,7 @@ class TestBulkUpdateStatus:
 
 
 # ============ TestBulkActivateDeactivate ============
+
 
 class TestBulkActivateDeactivate:
     """Tests for bulk_activate and bulk_deactivate methods."""
@@ -353,6 +379,7 @@ class TestBulkActivateDeactivate:
 
 
 # ============ TestBulkExport ============
+
 
 class TestBulkExport:
     """Tests for the bulk_export method."""
@@ -467,6 +494,7 @@ class TestBulkExport:
 
 
 # ============ TestGetExportValue ============
+
 
 class TestGetExportValue:
     """Tests for the _get_export_value method."""
@@ -584,6 +612,7 @@ class TestGetExportValue:
 
 
 # ============ TestGetExportFilename ============
+
 
 class TestGetExportFilename:
     """Tests for the _get_export_filename method."""

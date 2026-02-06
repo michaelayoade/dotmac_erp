@@ -3,6 +3,7 @@ Job Offer Model - Recruit Schema.
 
 Tracks job offers extended to candidates.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -11,6 +12,7 @@ from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     Date,
+    DateTime,
     Enum,
     ForeignKey,
     Index,
@@ -35,6 +37,7 @@ if TYPE_CHECKING:
 
 class OfferStatus(str, enum.Enum):
     """Job offer status."""
+
     DRAFT = "DRAFT"
     PENDING_APPROVAL = "PENDING_APPROVAL"
     APPROVED = "APPROVED"
@@ -178,6 +181,19 @@ class JobOffer(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
     decline_reason: Mapped[Optional[str]] = mapped_column(
         Text,
         nullable=True,
+    )
+
+    # Candidate portal access
+    candidate_access_token: Mapped[Optional[str]] = mapped_column(
+        String(120),
+        nullable=True,
+        index=True,
+        comment="Token for candidate offer portal access",
+    )
+    candidate_access_expires: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Expiration time for candidate portal access token",
     )
 
     # Conversion tracking

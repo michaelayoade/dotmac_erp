@@ -8,7 +8,6 @@ from datetime import date
 from decimal import Decimal
 from enum import Enum
 
-import pytest
 
 from app.services.finance.common.formatters import (
     parse_date,
@@ -188,17 +187,26 @@ class TestParseEnumSafe:
     def test_empty_returns_default(self):
         """Test empty value returns default."""
         assert parse_enum_safe(SampleStatus, "") is None
-        assert parse_enum_safe(SampleStatus, "", SampleStatus.PENDING) == SampleStatus.PENDING
+        assert (
+            parse_enum_safe(SampleStatus, "", SampleStatus.PENDING)
+            == SampleStatus.PENDING
+        )
 
     def test_none_returns_default(self):
         """Test None value returns default."""
         assert parse_enum_safe(SampleStatus, None) is None
-        assert parse_enum_safe(SampleStatus, None, SampleStatus.ACTIVE) == SampleStatus.ACTIVE
+        assert (
+            parse_enum_safe(SampleStatus, None, SampleStatus.ACTIVE)
+            == SampleStatus.ACTIVE
+        )
 
     def test_invalid_returns_default(self):
         """Test invalid value returns default."""
         assert parse_enum_safe(SampleStatus, "invalid") is None
-        assert parse_enum_safe(SampleStatus, "invalid", SampleStatus.PENDING) == SampleStatus.PENDING
+        assert (
+            parse_enum_safe(SampleStatus, "invalid", SampleStatus.PENDING)
+            == SampleStatus.PENDING
+        )
 
 
 # Tests for format_enum

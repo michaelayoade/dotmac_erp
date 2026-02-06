@@ -3,17 +3,14 @@ Tests for LeaseContractService.
 """
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.models.finance.lease.lease_contract import LeaseClassification, LeaseStatus
 from tests.ifrs.lease.conftest import (
     MockLeaseContract,
-    MockLeaseLiability,
-    MockLeaseAsset,
 )
 
 
@@ -106,7 +103,9 @@ class TestLeaseContractService:
 
         assert exc_info.value.status_code == 404
 
-    def test_approve_contract_success(self, mock_db, org_id, mock_contract, approver_id):
+    def test_approve_contract_success(
+        self, mock_db, org_id, mock_contract, approver_id
+    ):
         """Test successful contract approval."""
         from app.services.finance.lease.lease_contract import LeaseContractService
 
@@ -140,7 +139,9 @@ class TestLeaseContractService:
 
         assert exc_info.value.status_code == 404
 
-    def test_approve_contract_wrong_status(self, mock_db, org_id, mock_contract, approver_id):
+    def test_approve_contract_wrong_status(
+        self, mock_db, org_id, mock_contract, approver_id
+    ):
         """Test approving contract with wrong status fails."""
         from app.services.finance.lease.lease_contract import LeaseContractService
         from fastapi import HTTPException
@@ -159,7 +160,9 @@ class TestLeaseContractService:
         assert exc_info.value.status_code == 400
         assert "Cannot approve" in exc_info.value.detail
 
-    def test_approve_contract_sod_violation(self, mock_db, org_id, mock_contract, user_id):
+    def test_approve_contract_sod_violation(
+        self, mock_db, org_id, mock_contract, user_id
+    ):
         """Test segregation of duties violation (creator cannot approve)."""
         from app.services.finance.lease.lease_contract import LeaseContractService
         from fastapi import HTTPException
@@ -247,7 +250,9 @@ class TestLeaseContractService:
         from app.services.finance.lease.lease_contract import LeaseContractService
 
         mock_contracts = [
-            MockLeaseContract(organization_id=org_id, classification=LeaseClassification.FINANCE)
+            MockLeaseContract(
+                organization_id=org_id, classification=LeaseClassification.FINANCE
+            )
         ]
         mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_contracts
 
@@ -280,9 +285,13 @@ class TestLeaseContractService:
         """Test getting lease liability."""
         from app.services.finance.lease.lease_contract import LeaseContractService
 
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_liability
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            mock_liability
+        )
 
-        result = LeaseContractService.get_liability(mock_db, str(mock_liability.lease_id))
+        result = LeaseContractService.get_liability(
+            mock_db, str(mock_liability.lease_id)
+        )
 
         assert result is not None
         assert result.liability_id == mock_liability.liability_id

@@ -76,7 +76,7 @@
                         <option value="">Select designation</option>
                         {% for designation in designations %}
                         <option value="{{ designation.designation_id }}" {% if (form_data.get('designation_id') or (offer.designation_id|string if offer else '')) == designation.designation_id|string %}selected{% endif %}>
-                            {{ designation.title }}
+                            {{ designation.designation_name }}
                         </option>
                         {% endfor %}
                     </select>
@@ -87,7 +87,7 @@
                         <option value="">Select department</option>
                         {% for dept in departments %}
                         <option value="{{ dept.department_id }}" {% if (form_data.get('department_id') or (offer.department_id|string if offer else '')) == dept.department_id|string %}selected{% endif %}>
-                            {{ dept.name }}
+                            {{ dept.department_name }}
                         </option>
                         {% endfor %}
                     </select>

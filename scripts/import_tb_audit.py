@@ -16,7 +16,6 @@ from openpyxl import load_workbook
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.config import settings
 from app.db import SessionLocal
 from app.models.finance.gl.account import Account, AccountType, NormalBalance
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
@@ -27,7 +26,6 @@ from app.models.finance.gl.journal_entry_line import JournalEntryLine
 from app.models.finance.core_org.organization import Organization
 from app.services.finance.gl.ledger_posting import (
     LedgerPostingService,
-    PostingEntry,
     PostingRequest,
 )
 
@@ -216,8 +214,15 @@ def read_tb(year: str) -> dict[str, Decimal]:
         if name == "Accumulated Depreciation":
             current_section = "ACCUM_DEP"
             continue
-        elif name in ["FIXED ASSETS", "Current Assets", "Payables & Other Liabilities",
-                      "EQUITY", "REVENUE", "COST OF SALES", "EXPENSES"]:
+        elif name in [
+            "FIXED ASSETS",
+            "Current Assets",
+            "Payables & Other Liabilities",
+            "EQUITY",
+            "REVENUE",
+            "COST OF SALES",
+            "EXPENSES",
+        ]:
             current_section = name
             continue
 
@@ -328,7 +333,9 @@ def ensure_accounts(db, org_id: UUID, category_ids: dict[str, UUID]) -> dict[str
                 account_name=acct_name,
                 category_id=cat_id,
                 account_type=AccountType.POSTING,
-                normal_balance=NormalBalance.DEBIT if normal_bal == "DEBIT" else NormalBalance.CREDIT,
+                normal_balance=NormalBalance.DEBIT
+                if normal_bal == "DEBIT"
+                else NormalBalance.CREDIT,
                 is_active=True,
                 is_posting_allowed=True,
             )
@@ -452,7 +459,7 @@ def create_opening_balance_journal(
                     journal_entry_id=journal.journal_entry_id,
                     line_number=line_num,
                     account_id=re_account_id,
-                    description=f"Current Year Profit (P&L closing to RE)",
+                    description="Current Year Profit (P&L closing to RE)",
                     debit_amount=Decimal("0"),
                     credit_amount=diff,
                     debit_amount_functional=Decimal("0"),
@@ -466,7 +473,7 @@ def create_opening_balance_journal(
                     journal_entry_id=journal.journal_entry_id,
                     line_number=line_num,
                     account_id=re_account_id,
-                    description=f"Current Year Loss (P&L closing to RE)",
+                    description="Current Year Loss (P&L closing to RE)",
                     debit_amount=abs(diff),
                     credit_amount=Decimal("0"),
                     debit_amount_functional=abs(diff),
@@ -481,7 +488,9 @@ def create_opening_balance_journal(
     journal.total_credit = total_credit
     db.flush()
 
-    print(f"  Created journal {journal.journal_number}: Dr {total_debit:,.2f} / Cr {total_credit:,.2f}")
+    print(
+        f"  Created journal {journal.journal_number}: Dr {total_debit:,.2f} / Cr {total_credit:,.2f}"
+    )
 
     return journal.journal_entry_id
 
@@ -515,7 +524,11 @@ def main():
 
     try:
         # Verify org exists
-        org = db.query(Organization).filter(Organization.organization_id == ORG_ID).first()
+        org = (
+            db.query(Organization)
+            .filter(Organization.organization_id == ORG_ID)
+            .first()
+        )
         if not org:
             print(f"ERROR: Organization {ORG_ID} not found!")
             return
@@ -550,7 +563,7 @@ def main():
             db.commit()
 
             # Post journal
-            print(f"\n5. Posting journal...")
+            print("\n5. Posting journal...")
             success = post_journal(db, ORG_ID, journal_id, date(year, 1, 1))
             db.commit()
 
@@ -565,6 +578,7 @@ def main():
         db.rollback()
         print(f"\nERROR: {e}")
         import traceback
+
         traceback.print_exc()
     finally:
         db.close()

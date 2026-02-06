@@ -13,15 +13,13 @@ from pathlib import Path
 from typing import Optional
 
 from app.config import settings
+from app.services.file_upload import (
+    FileUploadError,
+    get_resume_upload,
+    resolve_safe_path,
+)
 
 logger = logging.getLogger(__name__)
-
-# Magic bytes for common document formats
-MAGIC_BYTES = {
-    ".pdf": [b"%PDF"],
-    ".doc": [b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"],  # OLE compound document
-    ".docx": [b"PK\x03\x04"],  # ZIP archive (OOXML)
-}
 
 
 class ResumeServiceError(Exception):
@@ -59,6 +57,7 @@ class ResumeService:
         self.allowed_extensions = {
             ext.strip().lower() for ext in settings.resume_allowed_extensions.split(",")
         }
+        self.upload_service = get_resume_upload()
 
     def validate_file(
         self, filename: str, file_size: int, file_data: Optional[bytes] = None
@@ -74,27 +73,15 @@ class ResumeService:
         Returns:
             Tuple of (is_valid, error_message)
         """
-        # Check file extension
-        ext = Path(filename).suffix.lower()
-        if ext not in self.allowed_extensions:
-            allowed = ", ".join(sorted(self.allowed_extensions))
-            return False, f"File type not allowed. Accepted formats: {allowed}"
-
-        # Check file size
-        if file_size > self.max_size:
-            max_mb = self.max_size / (1024 * 1024)
-            return False, f"File too large. Maximum size is {max_mb:.0f}MB"
-
-        # Validate magic bytes if data provided
-        if file_data and ext in MAGIC_BYTES:
-            valid_magic = False
-            for magic in MAGIC_BYTES[ext]:
-                if file_data[: len(magic)] == magic:
-                    valid_magic = True
-                    break
-            if not valid_magic:
-                return False, "File content does not match the expected format"
-
+        try:
+            self.upload_service.validate(
+                content_type=None,
+                filename=filename,
+                file_size=file_size,
+                file_data=file_data,
+            )
+        except FileUploadError as exc:
+            return False, str(exc)
         return True, None
 
     def save_resume(
@@ -122,23 +109,20 @@ class ResumeService:
                 raise FileTooLargeError(error)
             raise InvalidFileTypeError(error or "Invalid file")
 
-        # Generate unique file ID
-        file_id = str(uuid.uuid4())
-        ext = Path(filename).suffix.lower()
+        try:
+            upload_result = self.upload_service.save(
+                file_data,
+                content_type=None,
+                subdirs=[str(org_id)],
+                original_filename=filename,
+            )
+        except FileUploadError as exc:
+            raise InvalidFileTypeError(str(exc)) from exc
 
-        # Create org-specific directory
-        org_dir = self.upload_dir / str(org_id)
-        org_dir.mkdir(parents=True, exist_ok=True)
-
-        # Save file with UUID name (prevents path traversal and name conflicts)
-        saved_filename = f"{file_id}{ext}"
-        file_path = org_dir / saved_filename
-
-        file_path.write_bytes(file_data)
+        file_id = Path(upload_result.filename).stem
         logger.info("Resume saved: %s for org %s", file_id, org_id)
 
-        relative_path = f"{org_id}/{saved_filename}"
-        return file_id, relative_path
+        return file_id, upload_result.relative_path
 
     def get_resume_path(self, org_id: uuid.UUID, file_id: str) -> Optional[Path]:
         """
@@ -151,16 +135,15 @@ class ResumeService:
         Returns:
             Path to file if found, None otherwise
         """
-        org_dir = self.upload_dir / str(org_id)
-        if not org_dir.exists():
-            return None
-
-        # Find file with any allowed extension
         for ext in self.allowed_extensions:
-            file_path = org_dir / f"{file_id}{ext}"
+            try:
+                file_path = resolve_safe_path(
+                    self.upload_service.base_path, f"{org_id}/{file_id}{ext}"
+                )
+            except ValueError:
+                continue
             if file_path.exists():
                 return file_path
-
         return None
 
     def delete_resume(self, org_id: uuid.UUID, file_id: str) -> bool:

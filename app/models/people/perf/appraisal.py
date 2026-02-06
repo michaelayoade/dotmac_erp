@@ -3,6 +3,7 @@ Appraisal Model - Performance Schema.
 
 Individual employee appraisals within a cycle.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -36,12 +37,13 @@ if TYPE_CHECKING:
 
 class AppraisalStatus(str, enum.Enum):
     """Appraisal workflow status."""
+
     DRAFT = "DRAFT"
-    SELF_ASSESSMENT = "SELF_ASSESSMENT"     # Employee filling in
-    PENDING_REVIEW = "PENDING_REVIEW"       # Submitted for manager review
-    UNDER_REVIEW = "UNDER_REVIEW"           # Manager is reviewing
+    SELF_ASSESSMENT = "SELF_ASSESSMENT"  # Employee filling in
+    PENDING_REVIEW = "PENDING_REVIEW"  # Submitted for manager review
+    UNDER_REVIEW = "UNDER_REVIEW"  # Manager is reviewing
     PENDING_CALIBRATION = "PENDING_CALIBRATION"
-    CALIBRATION = "CALIBRATION"             # HR calibrating
+    CALIBRATION = "CALIBRATION"  # HR calibrating
     COMPLETED = "COMPLETED"
     CANCELLED = "CANCELLED"
 

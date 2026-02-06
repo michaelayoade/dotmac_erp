@@ -3,7 +3,7 @@ Tests for ReportSchedulerService.
 """
 
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
@@ -11,14 +11,15 @@ from fastapi import HTTPException
 
 from tests.ifrs.rpt.conftest import (
     MockReportDefinition,
-    MockReportSchedule,
 )
 
 
 class TestReportSchedulerServiceCreate:
     """Tests for create_schedule method."""
 
-    def test_create_schedule_success(self, mock_db, org_id, user_id, mock_report_definition):
+    def test_create_schedule_success(
+        self, mock_db, org_id, user_id, mock_report_definition
+    ):
         """Test successful schedule creation."""
         from app.services.finance.rpt.report_scheduler import (
             ReportSchedulerService,
@@ -61,9 +62,7 @@ class TestReportSchedulerServiceCreate:
         )
 
         with pytest.raises(HTTPException) as exc:
-            ReportSchedulerService.create_schedule(
-                mock_db, org_id, input_data, user_id
-            )
+            ReportSchedulerService.create_schedule(mock_db, org_id, input_data, user_id)
 
         assert exc.value.status_code == 404
         assert "not found" in exc.value.detail.lower()
@@ -89,9 +88,7 @@ class TestReportSchedulerServiceCreate:
         )
 
         with pytest.raises(HTTPException) as exc:
-            ReportSchedulerService.create_schedule(
-                mock_db, org_id, input_data, user_id
-            )
+            ReportSchedulerService.create_schedule(mock_db, org_id, input_data, user_id)
 
         assert exc.value.status_code == 400
         assert "inactive" in exc.value.detail.lower()
@@ -118,9 +115,7 @@ class TestReportSchedulerServiceCreate:
         )
 
         with pytest.raises(HTTPException) as exc:
-            ReportSchedulerService.create_schedule(
-                mock_db, org_id, input_data, user_id
-            )
+            ReportSchedulerService.create_schedule(mock_db, org_id, input_data, user_id)
 
         assert exc.value.status_code == 400
         assert "not supported" in exc.value.detail.lower()
@@ -239,9 +234,7 @@ class TestReportSchedulerServiceActivation:
         mock_db.get.return_value = None
 
         with pytest.raises(HTTPException) as exc:
-            ReportSchedulerService.activate(
-                mock_db, org_id, uuid.uuid4()
-            )
+            ReportSchedulerService.activate(mock_db, org_id, uuid.uuid4())
 
         assert exc.value.status_code == 404
 
@@ -268,9 +261,7 @@ class TestReportSchedulerServiceActivation:
         mock_db.get.return_value = None
 
         with pytest.raises(HTTPException) as exc:
-            ReportSchedulerService.deactivate(
-                mock_db, org_id, uuid.uuid4()
-            )
+            ReportSchedulerService.deactivate(mock_db, org_id, uuid.uuid4())
 
         assert exc.value.status_code == 404
 
@@ -325,7 +316,9 @@ class TestReportSchedulerServiceQueries:
 
         assert len(result) == 1
 
-    def test_get_due_schedules_with_org_filter(self, mock_db, org_id, mock_report_schedule):
+    def test_get_due_schedules_with_org_filter(
+        self, mock_db, org_id, mock_report_schedule
+    ):
         """Test getting due schedules with organization filter."""
         from app.services.finance.rpt.report_scheduler import ReportSchedulerService
 
@@ -341,7 +334,9 @@ class TestReportSchedulerServiceQueries:
 
         assert len(result) == 1
 
-    def test_get_upcoming_schedules(self, mock_db, org_id, mock_report_schedule, mock_report_definition):
+    def test_get_upcoming_schedules(
+        self, mock_db, org_id, mock_report_schedule, mock_report_definition
+    ):
         """Test getting upcoming schedules."""
         from app.services.finance.rpt.report_scheduler import ReportSchedulerService
 

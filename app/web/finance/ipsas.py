@@ -543,9 +543,7 @@ def approve_virement(
     svc.get_or_404(UUID(virement_id), organization_id=auth.organization_id)
     svc.approve(UUID(virement_id), auth.user_id)
     db.commit()
-    return RedirectResponse(
-        f"/finance/ipsas/virements/{virement_id}", status_code=303
-    )
+    return RedirectResponse(f"/finance/ipsas/virements/{virement_id}", status_code=303)
 
 
 @router.post("/virements/{virement_id}/apply")
@@ -562,9 +560,7 @@ def apply_virement(
     svc.get_or_404(UUID(virement_id), organization_id=auth.organization_id)
     svc.apply(UUID(virement_id))
     db.commit()
-    return RedirectResponse(
-        f"/finance/ipsas/virements/{virement_id}", status_code=303
-    )
+    return RedirectResponse(f"/finance/ipsas/virements/{virement_id}", status_code=303)
 
 
 # =============================================================================

@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 # Chart of Accounts
 # =============================================================================
 
+
 class AccountBase(BaseModel):
     """Base account schema."""
 
@@ -86,6 +87,7 @@ class AccountRead(BaseModel):
 # Fiscal Period
 # =============================================================================
 
+
 class FiscalPeriodBase(BaseModel):
     """Base fiscal period schema."""
 
@@ -121,6 +123,7 @@ class FiscalPeriodRead(BaseModel):
 # =============================================================================
 # Journal Entry
 # =============================================================================
+
 
 class JournalLineCreate(BaseModel):
     """Journal line for entry creation."""
@@ -186,6 +189,7 @@ class JournalEntryRead(BaseModel):
 # =============================================================================
 # Account Balance
 # =============================================================================
+
 
 class AccountBalanceRead(BaseModel):
     """Account balance response."""

@@ -7,14 +7,8 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from app.models.finance.lease.lease_contract import LeaseStatus
-from tests.ifrs.lease.conftest import (
-    MockLeaseContract,
-    MockLeaseLiability,
-    MockLeaseAsset,
-)
 
 
 class TestLeasePostingAdapterInitialRecognition:
@@ -127,7 +121,9 @@ class TestLeasePostingAdapterInterestAccrual:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_liability
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            mock_liability
+        )
 
         result = LeasePostingAdapter.post_interest_accrual(
             mock_db,
@@ -148,7 +144,9 @@ class TestLeasePostingAdapterInterestAccrual:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_liability
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            mock_liability
+        )
 
         result = LeasePostingAdapter.post_interest_accrual(
             mock_db,
@@ -214,7 +212,9 @@ class TestLeasePostingAdapterPayment:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_liability
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            mock_liability
+        )
 
         result = LeasePostingAdapter.post_lease_payment(
             mock_db,
@@ -371,11 +371,14 @@ class TestLeasePostingAdapterSuccessCases:
             mock_asset,
         ]
 
-        with patch(
-            "app.services.finance.lease.lease_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc:
+        with (
+            patch(
+                "app.services.finance.lease.lease_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+        ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
             mock_journal_svc.create_journal.return_value = mock_journal_result
@@ -410,11 +413,14 @@ class TestLeasePostingAdapterSuccessCases:
             mock_asset,
         ]
 
-        with patch(
-            "app.services.finance.lease.lease_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc:
+        with (
+            patch(
+                "app.services.finance.lease.lease_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+        ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
             mock_journal_svc.create_journal.return_value = mock_journal_result
@@ -441,13 +447,18 @@ class TestLeasePostingAdapterSuccessCases:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_liability
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            mock_liability
+        )
 
-        with patch(
-            "app.services.finance.lease.lease_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc:
+        with (
+            patch(
+                "app.services.finance.lease.lease_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+        ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
             mock_journal_svc.create_journal.return_value = mock_journal_result
@@ -476,13 +487,18 @@ class TestLeasePostingAdapterSuccessCases:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_liability
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            mock_liability
+        )
 
-        with patch(
-            "app.services.finance.lease.lease_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc:
+        with (
+            patch(
+                "app.services.finance.lease.lease_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+        ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
             mock_journal_svc.create_journal.return_value = mock_journal_result
@@ -514,11 +530,14 @@ class TestLeasePostingAdapterSuccessCases:
         mock_db.get.return_value = mock_active_contract
         mock_db.query.return_value.filter.return_value.first.return_value = mock_asset
 
-        with patch(
-            "app.services.finance.lease.lease_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc:
+        with (
+            patch(
+                "app.services.finance.lease.lease_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+        ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
             mock_journal_svc.create_journal.return_value = mock_journal_result
@@ -558,11 +577,14 @@ class TestLeasePostingAdapterSuccessCases:
             mock_asset,
         ]
 
-        with patch(
-            "app.services.finance.lease.lease_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc:
+        with (
+            patch(
+                "app.services.finance.lease.lease_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+        ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
             mock_journal_svc.create_journal.return_value = mock_journal_result
@@ -601,11 +623,14 @@ class TestLeasePostingAdapterSuccessCases:
             mock_asset,
         ]
 
-        with patch(
-            "app.services.finance.lease.lease_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc:
+        with (
+            patch(
+                "app.services.finance.lease.lease_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+        ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
             mock_journal_svc.create_journal.return_value = mock_journal_result

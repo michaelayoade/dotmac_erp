@@ -10,6 +10,7 @@ REST API endpoints for:
 - Reservations
 - Assignments
 """
+
 from fastapi import APIRouter, Depends
 
 from app.api.deps import require_tenant_permission

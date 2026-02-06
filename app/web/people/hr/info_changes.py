@@ -32,7 +32,11 @@ def info_change_requests(
     db: Session = Depends(get_db),
 ):
     """List info change requests for HR review."""
-    org_id = auth.organization_id if isinstance(auth.organization_id, UUID) else UUID(auth.organization_id)
+    org_id = (
+        auth.organization_id
+        if isinstance(auth.organization_id, UUID)
+        else UUID(auth.organization_id)
+    )
     parsed_status = None
     if status:
         try:
@@ -67,16 +71,20 @@ def info_change_requests(
     requests = list(db.scalars(stmt).all())
 
     context = base_context(request, auth, "Info Change Requests", "info-changes", db=db)
-    context.update({
-        "requests": requests,
-        "statuses": [s.value for s in InfoChangeStatus],
-        "types": [t.value for t in InfoChangeType],
-        "status": parsed_status.value if parsed_status else "",
-        "change_type": parsed_change_type.value if parsed_change_type else "",
-        "employee_id": employee_id or "",
-        "limit": limit,
-    })
-    return templates.TemplateResponse(request, "people/hr/info_change_requests.html", context)
+    context.update(
+        {
+            "requests": requests,
+            "statuses": [s.value for s in InfoChangeStatus],
+            "types": [t.value for t in InfoChangeType],
+            "status": parsed_status.value if parsed_status else "",
+            "change_type": parsed_change_type.value if parsed_change_type else "",
+            "employee_id": employee_id or "",
+            "limit": limit,
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/hr/info_change_requests.html", context
+    )
 
 
 @router.get("/info-changes/{request_id}", response_class=HTMLResponse)
@@ -89,7 +97,11 @@ def info_change_request_detail(
     db: Session = Depends(get_db),
 ):
     """Detail view for a specific info change request."""
-    org_id = auth.organization_id if isinstance(auth.organization_id, UUID) else UUID(auth.organization_id)
+    org_id = (
+        auth.organization_id
+        if isinstance(auth.organization_id, UUID)
+        else UUID(auth.organization_id)
+    )
     req = db.scalar(
         select(EmployeeInfoChangeRequest)
         .options(joinedload(EmployeeInfoChangeRequest.employee))
@@ -102,12 +114,16 @@ def info_change_request_detail(
         raise HTTPException(status_code=404, detail="Request not found")
 
     context = base_context(request, auth, "Info Change Request", "info-changes", db=db)
-    context.update({
-        "request_item": req,
-        "success": success,
-        "error": error,
-    })
-    return templates.TemplateResponse(request, "people/hr/info_change_request_detail.html", context)
+    context.update(
+        {
+            "request_item": req,
+            "success": success,
+            "error": error,
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/hr/info_change_request_detail.html", context
+    )
 
 
 @router.post("/info-changes/{request_id}/approve")
@@ -118,10 +134,18 @@ def approve_info_change_request(
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
     """Approve a change request."""
-    org_id = auth.organization_id if isinstance(auth.organization_id, UUID) else UUID(auth.organization_id)
-    person_id = auth.person_id if isinstance(auth.person_id, UUID) else UUID(auth.person_id)
+    org_id = (
+        auth.organization_id
+        if isinstance(auth.organization_id, UUID)
+        else UUID(auth.organization_id)
+    )
+    person_id = (
+        auth.person_id if isinstance(auth.person_id, UUID) else UUID(auth.person_id)
+    )
     svc = InfoChangeService(db)
-    svc.approve_request(org_id, request_id, reviewer_id=person_id, reviewer_notes=reviewer_notes)
+    svc.approve_request(
+        org_id, request_id, reviewer_id=person_id, reviewer_notes=reviewer_notes
+    )
     db.commit()
     return RedirectResponse(
         url=f"/people/hr/info-changes/{request_id}?success=Approved",
@@ -137,10 +161,18 @@ def reject_info_change_request(
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
     """Reject a change request."""
-    org_id = auth.organization_id if isinstance(auth.organization_id, UUID) else UUID(auth.organization_id)
-    person_id = auth.person_id if isinstance(auth.person_id, UUID) else UUID(auth.person_id)
+    org_id = (
+        auth.organization_id
+        if isinstance(auth.organization_id, UUID)
+        else UUID(auth.organization_id)
+    )
+    person_id = (
+        auth.person_id if isinstance(auth.person_id, UUID) else UUID(auth.person_id)
+    )
     svc = InfoChangeService(db)
-    svc.reject_request(org_id, request_id, reviewer_id=person_id, reviewer_notes=reviewer_notes)
+    svc.reject_request(
+        org_id, request_id, reviewer_id=person_id, reviewer_notes=reviewer_notes
+    )
     db.commit()
     return RedirectResponse(
         url=f"/people/hr/info-changes/{request_id}?success=Rejected",

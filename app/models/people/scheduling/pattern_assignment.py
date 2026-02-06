@@ -3,6 +3,7 @@ Shift Pattern Assignment Model - Scheduling Schema.
 
 Links employees to shift patterns for their department.
 """
+
 import uuid
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Optional

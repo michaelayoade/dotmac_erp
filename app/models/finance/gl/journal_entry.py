@@ -2,11 +2,12 @@
 Journal Entry Model - GL Schema.
 Document 07: Journal entries and posting.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -15,7 +16,6 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
-    Integer,
     Numeric,
     String,
     Text,
@@ -23,7 +23,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -113,8 +113,12 @@ class JournalEntry(Base, VersionedMixin):
     )
 
     # Totals
-    total_debit: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
-    total_credit: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    total_debit: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
+    total_credit: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
     total_debit_functional: Mapped[Decimal] = mapped_column(
         Numeric(20, 6),
         nullable=False,
@@ -156,14 +160,18 @@ class JournalEntry(Base, VersionedMixin):
         nullable=True,
         comment="AR, AP, FA, LEASE, INV, TAX, FIN_INST, CONS",
     )
-    source_document_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    source_document_type: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )
     source_document_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
 
     # Intercompany
-    is_intercompany: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_intercompany: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     intercompany_org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,

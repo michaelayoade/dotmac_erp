@@ -18,6 +18,7 @@ from app.models.finance.core_config import (
     ResetFrequency,
     SequenceType,
 )
+from app.services.finance.common.sequence_utils import format_number, should_reset
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +143,32 @@ class NumberingService:
         await self.db.flush()
         return sequence
 
+    async def _get_or_create_sequence_for_update(
+        self,
+        organization_id: uuid.UUID,
+        sequence_type: SequenceType,
+    ) -> NumberingSequence:
+        stmt = (
+            select(NumberingSequence)
+            .where(
+                NumberingSequence.organization_id == organization_id,
+                NumberingSequence.sequence_type == sequence_type,
+            )
+            .with_for_update()
+        )
+        result = await self.db.execute(stmt)
+        sequence = result.scalar_one_or_none()
+        if sequence:
+            return sequence
+        sequence = NumberingSequence(
+            organization_id=organization_id,
+            sequence_type=sequence_type,
+            **_default_sequence_kwargs(sequence_type),
+        )
+        self.db.add(sequence)
+        await self.db.flush()
+        return sequence
+
     async def get_sequence_by_id(
         self,
         sequence_id: uuid.UUID,
@@ -174,12 +201,11 @@ class NumberingService:
         if reference_date is None:
             reference_date = date.today()
 
-        sequence = await self.get_or_create_sequence(organization_id, sequence_type)
+        sequence = await self._get_or_create_sequence_for_update(
+            organization_id, sequence_type
+        )
 
-        # Check if we need to reset the sequence
-        should_reset = self._should_reset(sequence, reference_date)
-
-        if should_reset:
+        if should_reset(sequence, reference_date):
             sequence.current_number = 0
             sequence.current_year = reference_date.year
             sequence.current_month = reference_date.month
@@ -189,66 +215,16 @@ class NumberingService:
         sequence.last_used_at = datetime.now()
 
         # Generate the formatted number
-        number = self._format_number(sequence, reference_date)
+        number = format_number(sequence, reference_date)
 
         await self.db.flush()
         return number
 
     def _should_reset(self, sequence: NumberingSequence, reference_date: date) -> bool:
-        """Check if the sequence counter should be reset."""
-        if sequence.reset_frequency == ResetFrequency.NEVER:
-            return False
-
-        if sequence.current_year is None:
-            return True
-
-        if sequence.reset_frequency == ResetFrequency.YEARLY:
-            return bool(reference_date.year != sequence.current_year)
-
-        if sequence.reset_frequency == ResetFrequency.MONTHLY:
-            return bool(
-                reference_date.year != sequence.current_year
-                or reference_date.month != sequence.current_month
-            )
-
-        return False
+        return should_reset(sequence, reference_date)
 
     def _format_number(self, sequence: NumberingSequence, reference_date: date) -> str:
-        """Format the document number based on sequence configuration."""
-        parts = []
-
-        # Add prefix
-        if sequence.prefix:
-            parts.append(sequence.prefix)
-
-        # Add year
-        if sequence.include_year:
-            if sequence.year_format == 2:
-                parts.append(str(reference_date.year)[-2:])
-            else:
-                parts.append(str(reference_date.year))
-
-        # Add month
-        if sequence.include_month:
-            parts.append(f"{reference_date.month:02d}")
-
-        # Build date portion
-        date_str = "".join(parts)
-
-        # Format sequence number with padding
-        seq_str = str(sequence.current_number).zfill(sequence.min_digits)
-
-        # Combine with separator
-        if date_str:
-            result = f"{date_str}{sequence.separator}{seq_str}"
-        else:
-            result = seq_str
-
-        # Add suffix
-        if sequence.suffix:
-            result += sequence.suffix
-
-        return result
+        return format_number(sequence, reference_date)
 
     def preview_format(
         self, sequence: NumberingSequence, sample_number: int = 1
@@ -433,12 +409,25 @@ class SyncNumberingService:
         if reference_date is None:
             reference_date = date.today()
 
-        sequence = self.get_or_create_sequence(organization_id, sequence_type)
+        sequence = (
+            self.db.query(NumberingSequence)
+            .filter(
+                NumberingSequence.organization_id == organization_id,
+                NumberingSequence.sequence_type == sequence_type,
+            )
+            .with_for_update()
+            .first()
+        )
+        if not sequence:
+            sequence = NumberingSequence(
+                organization_id=organization_id,
+                sequence_type=sequence_type,
+                **_default_sequence_kwargs(sequence_type),
+            )
+            self.db.add(sequence)
+            self.db.flush()
 
-        # Check if we need to reset the sequence
-        should_reset = self._should_reset(sequence, reference_date)
-
-        if should_reset:
+        if should_reset(sequence, reference_date):
             sequence.current_number = 0
             sequence.current_year = reference_date.year
             sequence.current_month = reference_date.month
@@ -448,63 +437,13 @@ class SyncNumberingService:
         sequence.last_used_at = datetime.now()
 
         # Generate the formatted number
-        number = self._format_number(sequence, reference_date)
+        number = format_number(sequence, reference_date)
 
         self.db.flush()
         return number
 
     def _should_reset(self, sequence: NumberingSequence, reference_date: date) -> bool:
-        """Check if the sequence counter should be reset."""
-        if sequence.reset_frequency == ResetFrequency.NEVER:
-            return False
-
-        if sequence.current_year is None:
-            return True
-
-        if sequence.reset_frequency == ResetFrequency.YEARLY:
-            return bool(reference_date.year != sequence.current_year)
-
-        if sequence.reset_frequency == ResetFrequency.MONTHLY:
-            return bool(
-                reference_date.year != sequence.current_year
-                or reference_date.month != sequence.current_month
-            )
-
-        return False
+        return should_reset(sequence, reference_date)
 
     def _format_number(self, sequence: NumberingSequence, reference_date: date) -> str:
-        """Format the document number based on sequence configuration."""
-        parts = []
-
-        # Add prefix
-        if sequence.prefix:
-            parts.append(sequence.prefix)
-
-        # Add year
-        if sequence.include_year:
-            if sequence.year_format == 2:
-                parts.append(str(reference_date.year)[-2:])
-            else:
-                parts.append(str(reference_date.year))
-
-        # Add month
-        if sequence.include_month:
-            parts.append(f"{reference_date.month:02d}")
-
-        # Build date portion
-        date_str = "".join(parts)
-
-        # Format sequence number with padding
-        seq_str = str(sequence.current_number).zfill(sequence.min_digits)
-
-        # Combine with separator
-        if date_str:
-            result = f"{date_str}{sequence.separator}{seq_str}"
-        else:
-            result = seq_str
-
-        # Add suffix
-        if sequence.suffix:
-            result += sequence.suffix
-
-        return result
+        return format_number(sequence, reference_date)

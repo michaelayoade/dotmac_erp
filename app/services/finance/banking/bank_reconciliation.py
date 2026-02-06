@@ -110,7 +110,7 @@ class BankReconciliationService:
 
         # Get prior outstanding items
         prior_recon = self._get_prior_reconciliation(
-            db, bank_account_id, input.reconciliation_date
+            db, bank_account_id, input.reconciliation_date, organization_id
         )
         prior_deposits = Decimal("0")
         prior_payments = Decimal("0")
@@ -607,17 +607,19 @@ class BankReconciliationService:
         db: Session,
         bank_account_id: UUID,
         before_date: date,
+        organization_id: Optional[UUID] = None,
     ) -> Optional[BankReconciliation]:
         """Get most recent approved reconciliation before a date."""
+        conditions = [
+            BankReconciliation.bank_account_id == bank_account_id,
+            BankReconciliation.status == ReconciliationStatus.approved,
+            BankReconciliation.reconciliation_date < before_date,
+        ]
+        if organization_id is not None:
+            conditions.append(BankReconciliation.organization_id == organization_id)
         query = (
             select(BankReconciliation)
-            .where(
-                and_(
-                    BankReconciliation.bank_account_id == bank_account_id,
-                    BankReconciliation.status == ReconciliationStatus.approved,
-                    BankReconciliation.reconciliation_date < before_date,
-                )
-            )
+            .where(and_(*conditions))
             .order_by(BankReconciliation.reconciliation_date.desc())
             .limit(1)
         )

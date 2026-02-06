@@ -9,7 +9,6 @@ Handles:
 """
 
 import logging
-from datetime import date
 from typing import Any, Optional
 from uuid import UUID
 
@@ -54,12 +53,14 @@ def process_cycle_phase_transitions() -> dict:
                     success = service.advance_cycle_phase(cycle, target_status)
 
                     if success:
-                        results["transitions"].append({
-                            "cycle_id": str(cycle.cycle_id),
-                            "cycle_name": cycle.cycle_name,
-                            "from_status": old_status,
-                            "to_status": target_status.value,
-                        })
+                        results["transitions"].append(
+                            {
+                                "cycle_id": str(cycle.cycle_id),
+                                "cycle_name": cycle.cycle_name,
+                                "from_status": old_status,
+                                "to_status": target_status.value,
+                            }
+                        )
 
                 except Exception as e:
                     logger.error(
@@ -67,10 +68,12 @@ def process_cycle_phase_transitions() -> dict:
                         cycle.cycle_id,
                         e,
                     )
-                    results["errors"].append({
-                        "cycle_id": str(cycle.cycle_id),
-                        "error": str(e),
-                    })
+                    results["errors"].append(
+                        {
+                            "cycle_id": str(cycle.cycle_id),
+                            "error": str(e),
+                        }
+                    )
 
             db.commit()
 
@@ -127,9 +130,11 @@ def generate_cycle_appraisals(cycle_id: str, template_id: Optional[str] = None) 
                 return results
 
             if cycle.status != AppraisalCycleStatus.ACTIVE:
-                results["errors"].append({
-                    "error": f"Cycle is not ACTIVE (status: {cycle.status.value})",
-                })
+                results["errors"].append(
+                    {
+                        "error": f"Cycle is not ACTIVE (status: {cycle.status.value})",
+                    }
+                )
                 return results
 
             service = PerformanceAutomationService(db)
@@ -151,7 +156,9 @@ def generate_cycle_appraisals(cycle_id: str, template_id: Optional[str] = None) 
             db.commit()
 
         except Exception as e:
-            logger.exception("Appraisal generation failed for cycle %s: %s", cycle_id, e)
+            logger.exception(
+                "Appraisal generation failed for cycle %s: %s", cycle_id, e
+            )
             db.rollback()
             results["errors"].append({"error": str(e)})
 
@@ -204,7 +211,9 @@ def calculate_cycle_progress(cycle_id: str) -> dict:
             return progress
 
         except Exception as e:
-            logger.exception("Progress calculation failed for cycle %s: %s", cycle_id, e)
+            logger.exception(
+                "Progress calculation failed for cycle %s: %s", cycle_id, e
+            )
             return {"error": str(e)}
 
 
@@ -270,11 +279,13 @@ def sync_all_cycle_progress() -> dict:
             # Get all non-completed cycles
             cycles = db.scalars(
                 select(AppraisalCycle).where(
-                    AppraisalCycle.status.in_([
-                        AppraisalCycleStatus.ACTIVE,
-                        AppraisalCycleStatus.REVIEW,
-                        AppraisalCycleStatus.CALIBRATION,
-                    ]),
+                    AppraisalCycle.status.in_(
+                        [
+                            AppraisalCycleStatus.ACTIVE,
+                            AppraisalCycleStatus.REVIEW,
+                            AppraisalCycleStatus.CALIBRATION,
+                        ]
+                    ),
                 )
             ).all()
 
@@ -283,21 +294,29 @@ def sync_all_cycle_progress() -> dict:
             for cycle in cycles:
                 try:
                     progress = service.get_cycle_progress(cycle)
-                    results["cycle_progress"].append({
-                        "cycle_id": str(cycle.cycle_id),
-                        "cycle_name": cycle.cycle_name,
-                        "status": cycle.status.value,
-                        "total_appraisals": progress["total_appraisals"],
-                        "completed_pct": progress["progress"].get("completed_pct", 0),
-                    })
+                    results["cycle_progress"].append(
+                        {
+                            "cycle_id": str(cycle.cycle_id),
+                            "cycle_name": cycle.cycle_name,
+                            "status": cycle.status.value,
+                            "total_appraisals": progress["total_appraisals"],
+                            "completed_pct": progress["progress"].get(
+                                "completed_pct", 0
+                            ),
+                        }
+                    )
                     results["cycles_processed"] += 1
 
                 except Exception as e:
-                    logger.error("Progress calc failed for cycle %s: %s", cycle.cycle_id, e)
-                    results["errors"].append({
-                        "cycle_id": str(cycle.cycle_id),
-                        "error": str(e),
-                    })
+                    logger.error(
+                        "Progress calc failed for cycle %s: %s", cycle.cycle_id, e
+                    )
+                    results["errors"].append(
+                        {
+                            "cycle_id": str(cycle.cycle_id),
+                            "error": str(e),
+                        }
+                    )
 
         except Exception as e:
             logger.exception("Cycle progress sync failed: %s", e)
@@ -351,9 +370,11 @@ def activate_cycle(cycle_id: str, template_id: Optional[str] = None) -> dict:
                 return results
 
             if cycle.status != AppraisalCycleStatus.DRAFT:
-                results["errors"].append({
-                    "error": f"Cycle cannot be activated (status: {cycle.status.value})",
-                })
+                results["errors"].append(
+                    {
+                        "error": f"Cycle cannot be activated (status: {cycle.status.value})",
+                    }
+                )
                 return results
 
             # Activate the cycle

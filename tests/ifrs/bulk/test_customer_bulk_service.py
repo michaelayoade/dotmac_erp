@@ -4,8 +4,6 @@ Tests for app/services/ifrs/ar/bulk.py
 Tests for CustomerBulkService that handles bulk operations on customer entities.
 """
 
-import uuid
-from datetime import datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -15,6 +13,7 @@ from tests.ifrs.bulk.conftest import MockCustomer, MockCustomerType, MockRiskCat
 
 
 # ============ TestCanDelete ============
+
 
 class TestCanDelete:
     """Tests for the can_delete method."""
@@ -88,6 +87,7 @@ class TestCanDelete:
 
 
 # ============ TestGetExportValue ============
+
 
 class TestGetExportValue:
     """Tests for the _get_export_value method."""
@@ -205,7 +205,11 @@ class TestGetExportValue:
     def test_export_primary_contact_email(self, mock_db, organization_id):
         """Should export primary contact email."""
         customer = MockCustomer(
-            primary_contact={"name": "Jane", "email": "jane@customer.com", "phone": "555-0200"}
+            primary_contact={
+                "name": "Jane",
+                "email": "jane@customer.com",
+                "phone": "555-0200",
+            }
         )
 
         with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
@@ -219,7 +223,11 @@ class TestGetExportValue:
     def test_export_primary_contact_phone(self, mock_db, organization_id):
         """Should export primary contact phone."""
         customer = MockCustomer(
-            primary_contact={"name": "Jane", "email": "jane@test.com", "phone": "+1-555-0200"}
+            primary_contact={
+                "name": "Jane",
+                "email": "jane@test.com",
+                "phone": "+1-555-0200",
+            }
         )
 
         with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
@@ -295,6 +303,7 @@ class TestGetExportValue:
 
 # ============ TestGetExportFilename ============
 
+
 class TestGetExportFilename:
     """Tests for the _get_export_filename method."""
 
@@ -332,6 +341,7 @@ class TestGetExportFilename:
 
 # ============ TestBulkDelete ============
 
+
 class TestBulkDelete:
     """Tests for the bulk_delete method."""
 
@@ -351,7 +361,9 @@ class TestBulkDelete:
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
-            result = await service.bulk_delete([customer1.customer_id, customer2.customer_id])
+            result = await service.bulk_delete(
+                [customer1.customer_id, customer2.customer_id]
+            )
 
             assert result.success_count == 2
             assert result.failed_count == 0
@@ -379,7 +391,9 @@ class TestBulkDelete:
             from app.services.finance.ar.bulk import CustomerBulkService
 
             service = CustomerBulkService(mock_db, organization_id)
-            result = await service.bulk_delete([customer1.customer_id, customer2.customer_id])
+            result = await service.bulk_delete(
+                [customer1.customer_id, customer2.customer_id]
+            )
 
             assert result.success_count == 1
             assert result.failed_count == 1
@@ -400,13 +414,16 @@ class TestBulkDelete:
 
 # ============ TestBulkExport ============
 
+
 class TestBulkExport:
     """Tests for the bulk_export method."""
 
     @pytest.mark.asyncio
     async def test_export_csv_headers(self, mock_db, mock_customer, organization_id):
         """CSV export should include correct headers."""
-        mock_db.query.return_value.filter.return_value.all.return_value = [mock_customer]
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            mock_customer
+        ]
 
         with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
@@ -427,7 +444,9 @@ class TestBulkExport:
     @pytest.mark.asyncio
     async def test_export_csv_data(self, mock_db, mock_customer, organization_id):
         """CSV export should include entity data."""
-        mock_db.query.return_value.filter.return_value.all.return_value = [mock_customer]
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            mock_customer
+        ]
 
         with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
@@ -444,6 +463,7 @@ class TestBulkExport:
 
 
 # ============ TestFactoryFunction ============
+
 
 class TestFactoryFunction:
     """Tests for the get_customer_bulk_service factory function."""

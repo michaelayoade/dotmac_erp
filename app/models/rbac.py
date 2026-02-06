@@ -23,7 +23,9 @@ class Role(Base):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
     )
 
     permissions = relationship("RolePermission", back_populates="role")
@@ -45,7 +47,9 @@ class Permission(Base):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
     )
 
     roles = relationship("RolePermission", back_populates="permission")
@@ -54,7 +58,9 @@ class Permission(Base):
 class RolePermission(Base):
     __tablename__ = "role_permissions"
     __table_args__ = (
-        UniqueConstraint("role_id", "permission_id", name="uq_role_permissions_role_permission"),
+        UniqueConstraint(
+            "role_id", "permission_id", name="uq_role_permissions_role_permission"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

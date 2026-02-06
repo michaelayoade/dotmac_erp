@@ -1,12 +1,22 @@
 """
 Consolidated Balance Model - Consolidation Schema.
 """
+
 import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, UniqueConstraint, func, text
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -54,7 +64,9 @@ class ConsolidatedBalance(Base):
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
 
     # Sum of subsidiary balances (before elimination)
-    subsidiary_balance_sum: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    subsidiary_balance_sum: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
 
     # Equity method investments
     equity_method_balance: Mapped[Decimal] = mapped_column(
@@ -79,8 +91,12 @@ class ConsolidatedBalance(Base):
         nullable=False,
         default=0,
     )
-    other_eliminations: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
-    total_eliminations: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    other_eliminations: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
+    total_eliminations: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Translation adjustment
     translation_adjustment: Mapped[Decimal] = mapped_column(
@@ -90,10 +106,14 @@ class ConsolidatedBalance(Base):
     )
 
     # NCI (for equity accounts)
-    nci_share: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    nci_share: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Consolidated balance
-    consolidated_balance: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    consolidated_balance: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
 
     # Parent share
     parent_share: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)

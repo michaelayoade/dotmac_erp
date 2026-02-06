@@ -3,6 +3,7 @@ Job Opening Model - Recruit Schema.
 
 Defines job vacancies/positions to fill.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
 
 class JobOpeningStatus(str, enum.Enum):
     """Job opening status."""
+
     DRAFT = "DRAFT"
     OPEN = "OPEN"
     ON_HOLD = "ON_HOLD"

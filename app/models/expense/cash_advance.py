@@ -3,6 +3,7 @@ Cash Advance Model - Expense Schema.
 
 Employee cash advances with settlement tracking.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -32,6 +33,7 @@ if TYPE_CHECKING:
 
 class CashAdvanceStatus(str, enum.Enum):
     """Cash advance workflow status."""
+
     DRAFT = "DRAFT"
     SUBMITTED = "SUBMITTED"
     PENDING_APPROVAL = "PENDING_APPROVAL"

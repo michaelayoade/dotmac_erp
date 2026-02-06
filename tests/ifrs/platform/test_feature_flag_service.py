@@ -2,7 +2,6 @@
 Tests for FeatureFlagService.
 """
 
-import uuid
 from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
@@ -15,12 +14,22 @@ from tests.ifrs.platform.conftest import MockColumn, MockSystemConfiguration
 @contextmanager
 def patch_feature_flag_service():
     """Helper context manager that sets up all required patches for FeatureFlagService."""
-    with patch('app.services.finance.platform.feature_flag.SystemConfiguration') as mock_config:
+    with patch(
+        "app.services.finance.platform.feature_flag.SystemConfiguration"
+    ) as mock_config:
         mock_config.organization_id = MockColumn()
         mock_config.config_key = MockColumn()
-        with patch('app.services.finance.platform.feature_flag.and_', return_value=MagicMock()):
-            with patch('app.services.finance.platform.feature_flag.or_', return_value=MagicMock()):
-                with patch('app.services.finance.platform.feature_flag.coerce_uuid', side_effect=lambda x: x):
+        with patch(
+            "app.services.finance.platform.feature_flag.and_", return_value=MagicMock()
+        ):
+            with patch(
+                "app.services.finance.platform.feature_flag.or_",
+                return_value=MagicMock(),
+            ):
+                with patch(
+                    "app.services.finance.platform.feature_flag.coerce_uuid",
+                    side_effect=lambda x: x,
+                ):
                     yield mock_config
 
 
@@ -30,10 +39,14 @@ class TestFeatureFlagService:
     @pytest.fixture
     def service(self):
         """Import the service with mocked dependencies."""
-        with patch.dict('sys.modules', {
-            'app.models.ifrs.core_config.system_configuration': MagicMock(),
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "app.models.ifrs.core_config.system_configuration": MagicMock(),
+            },
+        ):
             from app.services.finance.platform.feature_flag import FeatureFlagService
+
             return FeatureFlagService
 
     def test_is_enabled_returns_true_for_org_flag(
@@ -45,10 +58,15 @@ class TestFeatureFlagService:
             config_key="feature.MULTI_CURRENCY",
             config_value="true",
         )
-        mock_db_session.query.return_value.filter.return_value.first.return_value = org_flag
+        mock_db_session.query.return_value.filter.return_value.first.return_value = (
+            org_flag
+        )
 
-        with patch('app.services.finance.platform.feature_flag.SystemConfiguration'):
-            with patch('app.services.finance.platform.feature_flag.coerce_uuid', side_effect=lambda x: x):
+        with patch("app.services.finance.platform.feature_flag.SystemConfiguration"):
+            with patch(
+                "app.services.finance.platform.feature_flag.coerce_uuid",
+                side_effect=lambda x: x,
+            ):
                 result = service.is_enabled(
                     mock_db_session,
                     organization_id=organization_id,
@@ -66,10 +84,15 @@ class TestFeatureFlagService:
             config_key="feature.ADVANCED_REPORTING",
             config_value="false",
         )
-        mock_db_session.query.return_value.filter.return_value.first.return_value = org_flag
+        mock_db_session.query.return_value.filter.return_value.first.return_value = (
+            org_flag
+        )
 
-        with patch('app.services.finance.platform.feature_flag.SystemConfiguration'):
-            with patch('app.services.finance.platform.feature_flag.coerce_uuid', side_effect=lambda x: x):
+        with patch("app.services.finance.platform.feature_flag.SystemConfiguration"):
+            with patch(
+                "app.services.finance.platform.feature_flag.coerce_uuid",
+                side_effect=lambda x: x,
+            ):
                 result = service.is_enabled(
                     mock_db_session,
                     organization_id=organization_id,
@@ -129,8 +152,13 @@ class TestFeatureFlagService:
             )
             mock_db_session.query.return_value.filter.return_value.first.return_value = org_flag
 
-            with patch('app.services.finance.platform.feature_flag.SystemConfiguration'):
-                with patch('app.services.finance.platform.feature_flag.coerce_uuid', side_effect=lambda x: x):
+            with patch(
+                "app.services.finance.platform.feature_flag.SystemConfiguration"
+            ):
+                with patch(
+                    "app.services.finance.platform.feature_flag.coerce_uuid",
+                    side_effect=lambda x: x,
+                ):
                     result = service.is_enabled(
                         mock_db_session,
                         organization_id=organization_id,
@@ -177,12 +205,19 @@ class TestFeatureFlagService:
         """set_feature should create new flag when not exists."""
         mock_db_session.query.return_value.filter.return_value.first.return_value = None
 
-        with patch('app.services.finance.platform.feature_flag.SystemConfiguration') as MockConfig:
+        with patch(
+            "app.services.finance.platform.feature_flag.SystemConfiguration"
+        ) as MockConfig:
             mock_instance = MagicMock()
             MockConfig.return_value = mock_instance
-            with patch('app.services.finance.platform.feature_flag.ConfigType') as MockType:
+            with patch(
+                "app.services.finance.platform.feature_flag.ConfigType"
+            ) as MockType:
                 MockType.BOOLEAN = "BOOLEAN"
-                with patch('app.services.finance.platform.feature_flag.coerce_uuid', side_effect=lambda x: x):
+                with patch(
+                    "app.services.finance.platform.feature_flag.coerce_uuid",
+                    side_effect=lambda x: x,
+                ):
                     service.set_feature(
                         mock_db_session,
                         organization_id=organization_id,
@@ -203,10 +238,15 @@ class TestFeatureFlagService:
             config_key="feature.EXISTING",
             config_value="true",
         )
-        mock_db_session.query.return_value.filter.return_value.first.return_value = existing_flag
+        mock_db_session.query.return_value.filter.return_value.first.return_value = (
+            existing_flag
+        )
 
-        with patch('app.services.finance.platform.feature_flag.SystemConfiguration'):
-            with patch('app.services.finance.platform.feature_flag.coerce_uuid', side_effect=lambda x: x):
+        with patch("app.services.finance.platform.feature_flag.SystemConfiguration"):
+            with patch(
+                "app.services.finance.platform.feature_flag.coerce_uuid",
+                side_effect=lambda x: x,
+            ):
                 service.set_feature(
                     mock_db_session,
                     organization_id=organization_id,
@@ -219,21 +259,29 @@ class TestFeatureFlagService:
         mock_db_session.add.assert_not_called()
         mock_db_session.commit.assert_called_once()
 
-    def test_set_system_default_creates_new(
-        self, service, mock_db_session, user_id
-    ):
+    def test_set_system_default_creates_new(self, service, mock_db_session, user_id):
         """set_system_default should create new system flag."""
         mock_db_session.query.return_value.filter.return_value.first.return_value = None
 
-        with patch('app.services.finance.platform.feature_flag.SystemConfiguration') as MockConfig:
+        with patch(
+            "app.services.finance.platform.feature_flag.SystemConfiguration"
+        ) as MockConfig:
             mock_instance = MagicMock()
             MockConfig.return_value = mock_instance
             MockConfig.organization_id = MockColumn()
             MockConfig.config_key = MockColumn()
-            with patch('app.services.finance.platform.feature_flag.ConfigType') as MockType:
+            with patch(
+                "app.services.finance.platform.feature_flag.ConfigType"
+            ) as MockType:
                 MockType.BOOLEAN = "BOOLEAN"
-                with patch('app.services.finance.platform.feature_flag.and_', return_value=MagicMock()):
-                    with patch('app.services.finance.platform.feature_flag.coerce_uuid', side_effect=lambda x: x):
+                with patch(
+                    "app.services.finance.platform.feature_flag.and_",
+                    return_value=MagicMock(),
+                ):
+                    with patch(
+                        "app.services.finance.platform.feature_flag.coerce_uuid",
+                        side_effect=lambda x: x,
+                    ):
                         service.set_system_default(
                             mock_db_session,
                             feature_code="GLOBAL_FEATURE",
@@ -253,7 +301,9 @@ class TestFeatureFlagService:
             config_key="feature.GLOBAL",
             config_value="false",
         )
-        mock_db_session.query.return_value.filter.return_value.first.return_value = existing_flag
+        mock_db_session.query.return_value.filter.return_value.first.return_value = (
+            existing_flag
+        )
 
         with patch_feature_flag_service():
             service.set_system_default(
@@ -274,10 +324,15 @@ class TestFeatureFlagService:
             config_key="feature.REQUIRED",
             config_value="true",
         )
-        mock_db_session.query.return_value.filter.return_value.first.return_value = org_flag
+        mock_db_session.query.return_value.filter.return_value.first.return_value = (
+            org_flag
+        )
 
-        with patch('app.services.finance.platform.feature_flag.SystemConfiguration'):
-            with patch('app.services.finance.platform.feature_flag.coerce_uuid', side_effect=lambda x: x):
+        with patch("app.services.finance.platform.feature_flag.SystemConfiguration"):
+            with patch(
+                "app.services.finance.platform.feature_flag.coerce_uuid",
+                side_effect=lambda x: x,
+            ):
                 # Should not raise
                 service.require_feature(
                     mock_db_session,
@@ -312,8 +367,11 @@ class TestFeatureFlagService:
         )
         mock_db_session.query.return_value.filter.return_value.filter.return_value.first.return_value = existing_flag
 
-        with patch('app.services.finance.platform.feature_flag.SystemConfiguration'):
-            with patch('app.services.finance.platform.feature_flag.coerce_uuid', side_effect=lambda x: x):
+        with patch("app.services.finance.platform.feature_flag.SystemConfiguration"):
+            with patch(
+                "app.services.finance.platform.feature_flag.coerce_uuid",
+                side_effect=lambda x: x,
+            ):
                 result = service.delete_feature(
                     mock_db_session,
                     organization_id=organization_id,
@@ -330,8 +388,11 @@ class TestFeatureFlagService:
         """delete_feature should return False when flag not found."""
         mock_db_session.query.return_value.filter.return_value.filter.return_value.first.return_value = None
 
-        with patch('app.services.finance.platform.feature_flag.SystemConfiguration'):
-            with patch('app.services.finance.platform.feature_flag.coerce_uuid', side_effect=lambda x: x):
+        with patch("app.services.finance.platform.feature_flag.SystemConfiguration"):
+            with patch(
+                "app.services.finance.platform.feature_flag.coerce_uuid",
+                side_effect=lambda x: x,
+            ):
                 result = service.delete_feature(
                     mock_db_session,
                     organization_id=organization_id,
@@ -369,7 +430,7 @@ class TestFeatureFlagService:
 
     def test_list_uses_list_all_flags(self, service, mock_db_session, organization_id):
         """list should delegate to list_all_flags."""
-        with patch.object(service, 'list_all_flags') as mock_list:
+        with patch.object(service, "list_all_flags") as mock_list:
             mock_list.return_value = []
             service.list(
                 mock_db_session,

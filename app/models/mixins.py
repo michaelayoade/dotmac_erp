@@ -4,6 +4,7 @@ Model Mixins - Reusable model components.
 Provides common functionality across models like audit trails,
 soft delete, optimistic locking, and sync tracking.
 """
+
 import uuid
 from datetime import datetime, timezone
 from typing import Optional

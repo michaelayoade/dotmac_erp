@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_tenant_auth
@@ -40,6 +40,7 @@ router = APIRouter(
 
 class OpeningBalanceLineResponse(BaseModel):
     """Response model for a single opening balance line."""
+
     account_name: str
     account_type: str
     debit: float
@@ -52,6 +53,7 @@ class OpeningBalanceLineResponse(BaseModel):
 
 class OpeningBalancePreviewResponse(BaseModel):
     """Response model for opening balance preview."""
+
     total_rows: int
     total_debit: float
     total_credit: float
@@ -66,7 +68,9 @@ class OpeningBalancePreviewResponse(BaseModel):
     lines: List[OpeningBalanceLineResponse]
 
     @classmethod
-    def from_preview(cls, preview: OpeningBalancePreview) -> "OpeningBalancePreviewResponse":
+    def from_preview(
+        cls, preview: OpeningBalancePreview
+    ) -> "OpeningBalancePreviewResponse":
         return cls(
             total_rows=preview.total_rows,
             total_debit=float(preview.total_debit),
@@ -97,6 +101,7 @@ class OpeningBalancePreviewResponse(BaseModel):
 
 class OpeningBalanceImportResponse(BaseModel):
     """Response model for opening balance import result."""
+
     success: bool
     journal_entry_id: Optional[str]
     journal_number: Optional[str]
@@ -107,10 +112,14 @@ class OpeningBalanceImportResponse(BaseModel):
     warnings: List[str]
 
     @classmethod
-    def from_result(cls, result: OpeningBalanceResult) -> "OpeningBalanceImportResponse":
+    def from_result(
+        cls, result: OpeningBalanceResult
+    ) -> "OpeningBalanceImportResponse":
         return cls(
             success=result.success,
-            journal_entry_id=str(result.journal_entry_id) if result.journal_entry_id else None,
+            journal_entry_id=str(result.journal_entry_id)
+            if result.journal_entry_id
+            else None,
             journal_number=result.journal_number,
             total_debit=float(result.total_debit),
             total_credit=float(result.total_credit),
@@ -135,13 +144,37 @@ async def get_template() -> Dict[str, Any]:
     return {
         "template": get_opening_balance_template(),
         "columns": [
-            {"name": "Account Name", "required": True, "description": "Name of the account"},
-            {"name": "Account Type", "required": False, "description": "Type of account (Asset, Liability, etc.)"},
-            {"name": "Debit", "required": True, "description": "Debit amount (0 if credit)"},
-            {"name": "Credit", "required": True, "description": "Credit amount (0 if debit)"},
-            {"name": "Normal Balance", "required": False, "description": "DEBIT or CREDIT"},
+            {
+                "name": "Account Name",
+                "required": True,
+                "description": "Name of the account",
+            },
+            {
+                "name": "Account Type",
+                "required": False,
+                "description": "Type of account (Asset, Liability, etc.)",
+            },
+            {
+                "name": "Debit",
+                "required": True,
+                "description": "Debit amount (0 if credit)",
+            },
+            {
+                "name": "Credit",
+                "required": True,
+                "description": "Credit amount (0 if debit)",
+            },
+            {
+                "name": "Normal Balance",
+                "required": False,
+                "description": "DEBIT or CREDIT",
+            },
             {"name": "Notes", "required": False, "description": "Additional notes"},
-            {"name": "COA Match", "required": False, "description": "Exact account name to match in Chart of Accounts"},
+            {
+                "name": "COA Match",
+                "required": False,
+                "description": "Exact account name to match in Chart of Accounts",
+            },
         ],
         "example_rows": [
             {
@@ -188,7 +221,7 @@ async def preview_opening_balance(
     if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only CSV files are supported"
+            detail="Only CSV files are supported",
         )
 
     # Parse entry date
@@ -197,13 +230,13 @@ async def preview_opening_balance(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid date format. Use YYYY-MM-DD"
+            detail="Invalid date format. Use YYYY-MM-DD",
         )
 
     content = await file.read()
 
     # Save to temp file
-    with tempfile.NamedTemporaryFile(mode='wb', suffix='.csv', delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp:
         tmp.write(content)
         tmp_path = tmp.name
 
@@ -221,7 +254,7 @@ async def preview_opening_balance(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Preview failed: {str(e)}"
+            detail=f"Preview failed: {str(e)}",
         )
     finally:
         Path(tmp_path).unlink(missing_ok=True)
@@ -231,8 +264,12 @@ async def preview_opening_balance(
 async def import_opening_balance(
     file: UploadFile = File(...),
     entry_date: str = Form(..., description="Opening balance date (YYYY-MM-DD)"),
-    description: str = Form(default="Opening Balance Entry", description="Journal entry description"),
-    auto_create_accounts: bool = Form(default=False, description="Auto-create missing accounts"),
+    description: str = Form(
+        default="Opening Balance Entry", description="Journal entry description"
+    ),
+    auto_create_accounts: bool = Form(
+        default=False, description="Auto-create missing accounts"
+    ),
     db: Session = Depends(get_db_session),
     org_id: UUID = Depends(get_current_org_id),
     user_id: UUID = Depends(get_current_user_id),
@@ -252,7 +289,7 @@ async def import_opening_balance(
     if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only CSV files are supported"
+            detail="Only CSV files are supported",
         )
 
     # Parse entry date
@@ -261,13 +298,13 @@ async def import_opening_balance(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid date format. Use YYYY-MM-DD"
+            detail="Invalid date format. Use YYYY-MM-DD",
         )
 
     content = await file.read()
 
     # Save to temp file
-    with tempfile.NamedTemporaryFile(mode='wb', suffix='.csv', delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp:
         tmp.write(content)
         tmp_path = tmp.name
 
@@ -292,7 +329,7 @@ async def import_opening_balance(
                     "message": "Import failed",
                     "errors": result.errors,
                     "warnings": result.warnings,
-                }
+                },
             )
 
         return OpeningBalanceImportResponse.from_result(result)
@@ -303,7 +340,7 @@ async def import_opening_balance(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Import failed: {str(e)}"
+            detail=f"Import failed: {str(e)}",
         )
     finally:
         Path(tmp_path).unlink(missing_ok=True)
@@ -333,8 +370,7 @@ async def get_import_status(
 
     if not journal:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Journal entry not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Journal entry not found"
         )
 
     line_count = db.execute(

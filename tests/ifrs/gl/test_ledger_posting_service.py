@@ -19,6 +19,7 @@ from app.services.finance.gl.ledger_posting import (
     PostingResult,
 )
 
+
 class MockJournalEntry:
     """Mock journal entry model."""
 

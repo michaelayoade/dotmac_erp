@@ -16,7 +16,9 @@ class TestScheduledTasksAPI:
         assert "count" in data
         assert isinstance(data["items"], list)
 
-    def test_list_scheduled_tasks_with_pagination(self, client, auth_headers, db_session):
+    def test_list_scheduled_tasks_with_pagination(
+        self, client, auth_headers, db_session
+    ):
         """Test listing scheduled tasks with pagination."""
         # Create multiple tasks
         for i in range(5):
@@ -30,9 +32,7 @@ class TestScheduledTasksAPI:
             db_session.add(task)
         db_session.commit()
 
-        response = client.get(
-            "/scheduler/tasks?limit=2&offset=0", headers=auth_headers
-        )
+        response = client.get("/scheduler/tasks?limit=2&offset=0", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) <= 2

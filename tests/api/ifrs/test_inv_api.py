@@ -114,7 +114,9 @@ class TestInventoryTransactionsAPI:
         mock_txn = MockInventoryTransaction(organization_id=org_id)
         fiscal_period_id = uuid.uuid4()
 
-        with patch("app.api.inventory.inventory_transaction_service.create_transaction") as mock_create:
+        with patch(
+            "app.api.inventory.inventory_transaction_service.create_transaction"
+        ) as mock_create:
             mock_create.return_value = mock_txn
 
             payload = inv_api.TransactionCreate(
@@ -173,7 +175,9 @@ class TestInventoryTransactionsAPI:
 
     def test_list_transactions_with_filters(self, mock_db, mock_auth_dict, org_id):
         """Test listing transactions with filters."""
-        mock_txns = [MockInventoryTransaction(organization_id=org_id, transaction_type="RECEIPT")]
+        mock_txns = [
+            MockInventoryTransaction(organization_id=org_id, transaction_type="RECEIPT")
+        ]
 
         with patch("app.api.inventory.inventory_transaction_service.list") as mock_list:
             mock_list.return_value = mock_txns
@@ -199,7 +203,9 @@ class TestInventoryTransactionsAPI:
         mock_result.entry_number = "JE-INV-0001"
         mock_result.message = "Posted successfully"
 
-        with patch("app.api.inventory.inv_posting_adapter.post_transaction") as mock_post:
+        with patch(
+            "app.api.inventory.inv_posting_adapter.post_transaction"
+        ) as mock_post:
             mock_post.return_value = mock_result
 
             result = inv_api.post_inventory_transaction(
@@ -221,7 +227,9 @@ class TestFIFOValuationAPI:
         """Test adding a FIFO layer."""
         mock_result = MagicMock()
 
-        with patch("app.api.inventory.fifo_valuation_service.add_inventory_layer") as mock_add:
+        with patch(
+            "app.api.inventory.fifo_valuation_service.add_inventory_layer"
+        ) as mock_add:
             mock_add.return_value = mock_result
 
             payload = inv_api.AddLayerCreate(
@@ -245,10 +253,14 @@ class TestFIFOValuationAPI:
         mock_result = MagicMock()
         mock_result.quantity_consumed = Decimal("50")
         mock_result.total_cost = Decimal("500")
-        mock_result.cost_layers_used = [{"layer_date": str(date.today()), "quantity": 50, "unit_cost": 10}]
+        mock_result.cost_layers_used = [
+            {"layer_date": str(date.today()), "quantity": 50, "unit_cost": 10}
+        ]
         mock_result.remaining_quantity = Decimal("50")
 
-        with patch("app.api.inventory.fifo_valuation_service.consume_inventory_fifo") as mock_consume:
+        with patch(
+            "app.api.inventory.fifo_valuation_service.consume_inventory_fifo"
+        ) as mock_consume:
             mock_consume.return_value = mock_result
 
             result = inv_api.consume_fifo(
@@ -270,7 +282,9 @@ class TestFIFOValuationAPI:
         mock_result.total_cost = Decimal("1000")
         mock_result.weighted_average_cost = Decimal("10")
 
-        with patch("app.api.inventory.fifo_valuation_service.get_fifo_inventory") as mock_get:
+        with patch(
+            "app.api.inventory.fifo_valuation_service.get_fifo_inventory"
+        ) as mock_get:
             mock_get.return_value = mock_result
 
             result = inv_api.get_fifo_inventory(
@@ -294,7 +308,9 @@ class TestFIFOValuationAPI:
         mock_result.carrying_amount = Decimal("700")
         mock_result.write_down = Decimal("300")
 
-        with patch("app.api.inventory.fifo_valuation_service.calculate_write_down") as mock_calc:
+        with patch(
+            "app.api.inventory.fifo_valuation_service.calculate_write_down"
+        ) as mock_calc:
             mock_calc.return_value = mock_result
 
             result = inv_api.calculate_nrv_write_down(
@@ -320,7 +336,9 @@ class TestFIFOValuationAPI:
             "total_write_down": "500.00",
         }
 
-        with patch("app.api.inventory.fifo_valuation_service.get_valuation_summary") as mock_get:
+        with patch(
+            "app.api.inventory.fifo_valuation_service.get_valuation_summary"
+        ) as mock_get:
             mock_get.return_value = mock_result
 
             result = inv_api.get_fifo_valuation_summary(
@@ -415,7 +433,9 @@ class TestLotTrackingAPI:
         """Test allocating from a lot."""
         mock_lot = MockLot(quantity_available=Decimal("50"))
 
-        with patch("app.api.inventory.lot_serial_service.allocate_from_lot") as mock_allocate:
+        with patch(
+            "app.api.inventory.lot_serial_service.allocate_from_lot"
+        ) as mock_allocate:
             mock_allocate.return_value = mock_lot
 
             result = inv_api.allocate_from_lot(
@@ -432,7 +452,9 @@ class TestLotTrackingAPI:
         """Test deallocating from a lot."""
         mock_lot = MockLot(quantity_available=Decimal("100"))
 
-        with patch("app.api.inventory.lot_serial_service.deallocate_from_lot") as mock_deallocate:
+        with patch(
+            "app.api.inventory.lot_serial_service.deallocate_from_lot"
+        ) as mock_deallocate:
             mock_deallocate.return_value = mock_lot
 
             result = inv_api.deallocate_from_lot(
@@ -448,7 +470,9 @@ class TestLotTrackingAPI:
         """Test consuming from a lot."""
         mock_lot = MockLot(quantity_on_hand=Decimal("50"))
 
-        with patch("app.api.inventory.lot_serial_service.consume_from_lot") as mock_consume:
+        with patch(
+            "app.api.inventory.lot_serial_service.consume_from_lot"
+        ) as mock_consume:
             mock_consume.return_value = mock_lot
 
             result = inv_api.consume_from_lot(
@@ -464,7 +488,9 @@ class TestLotTrackingAPI:
         """Test quarantining a lot."""
         mock_lot = MockLot(is_quarantined=True)
 
-        with patch("app.api.inventory.lot_serial_service.quarantine_lot") as mock_quarantine:
+        with patch(
+            "app.api.inventory.lot_serial_service.quarantine_lot"
+        ) as mock_quarantine:
             mock_quarantine.return_value = mock_lot
 
             result = inv_api.quarantine_lot(
@@ -480,7 +506,9 @@ class TestLotTrackingAPI:
         """Test releasing lot from quarantine."""
         mock_lot = MockLot(is_quarantined=False)
 
-        with patch("app.api.inventory.lot_serial_service.release_quarantine") as mock_release:
+        with patch(
+            "app.api.inventory.lot_serial_service.release_quarantine"
+        ) as mock_release:
             mock_release.return_value = mock_lot
 
             result = inv_api.release_quarantine(
@@ -521,7 +549,9 @@ class TestLotTrackingAPI:
         """Test getting expiring lots."""
         mock_lots = [MockLot(expiry_date=date(2024, 2, 15)) for _ in range(3)]
 
-        with patch("app.api.inventory.lot_serial_service.get_expiring_lots") as mock_get:
+        with patch(
+            "app.api.inventory.lot_serial_service.get_expiring_lots"
+        ) as mock_get:
             mock_get.return_value = mock_lots
 
             result = inv_api.get_expiring_lots(

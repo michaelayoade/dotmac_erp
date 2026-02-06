@@ -22,6 +22,7 @@ router = APIRouter(prefix="/fixed-assets", tags=["fa-web"])
 # Assets
 # =============================================================================
 
+
 @router.get("/assets", response_class=HTMLResponse)
 def list_assets(
     request: Request,
@@ -190,6 +191,7 @@ async def bulk_export_assets(
 # Asset Categories
 # =============================================================================
 
+
 @router.get("/categories", response_class=HTMLResponse)
 def list_categories(
     request: Request,
@@ -270,6 +272,7 @@ def toggle_category(
 # Depreciation
 # =============================================================================
 
+
 @router.get("/depreciation", response_class=HTMLResponse)
 def depreciation_schedule(
     request: Request,
@@ -288,7 +291,9 @@ def depreciation_schedule(
             period=period,
         )
     )
-    return templates.TemplateResponse(request, "fixed_assets/depreciation.html", context)
+    return templates.TemplateResponse(
+        request, "fixed_assets/depreciation.html", context
+    )
 
 
 @router.post("/depreciation/run")

@@ -3,6 +3,7 @@ Maintenance Record Model - Fleet Schema.
 
 Tracks vehicle maintenance and service records.
 """
+
 import uuid
 from datetime import date
 from decimal import Decimal
@@ -39,7 +40,9 @@ class MaintenanceRecord(Base, FleetBaseMixin, AuditMixin):
         Index("idx_fleet_maint_vehicle_date", "vehicle_id", "scheduled_date"),
         Index("idx_fleet_maint_status", "organization_id", "status"),
         Index("idx_fleet_maint_type", "organization_id", "maintenance_type"),
-        Index("idx_fleet_maint_scheduled", "organization_id", "status", "scheduled_date"),
+        Index(
+            "idx_fleet_maint_scheduled", "organization_id", "status", "scheduled_date"
+        ),
         {"schema": "fleet"},
     )
 

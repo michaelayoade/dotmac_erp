@@ -2,9 +2,9 @@
 """
 Run ERPNext HR sync directly (not as a Celery task).
 """
+
 import sys
 import os
-import uuid
 import logging
 
 # Add project root to path
@@ -24,7 +24,11 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 from app.db import SessionLocal
 from app.models.finance.core_org.organization import Organization
 from app.services.erpnext.client import ERPNextConfig
-from app.services.erpnext.sync.orchestrator import ERPNextSyncOrchestrator, MigrationConfig, SyncType
+from app.services.erpnext.sync.orchestrator import (
+    ERPNextSyncOrchestrator,
+    MigrationConfig,
+    SyncType,
+)
 from app.models.sync import IntegrationType
 
 
@@ -41,7 +45,11 @@ def _get_erpnext_config(db, org):
     if not creds:
         return None
 
-    if not creds.get("base_url") or not creds.get("api_key") or not creds.get("api_secret"):
+    if (
+        not creds.get("base_url")
+        or not creds.get("api_key")
+        or not creds.get("api_secret")
+    ):
         return None
 
     return ERPNextConfig(
@@ -62,9 +70,11 @@ def run_sync(org_code: str = "DEFAULT", entity_types: list[str] | None = None):
     """
     with SessionLocal() as db:
         # Find organization
-        org = db.query(Organization).filter(
-            Organization.organization_code == org_code
-        ).first()
+        org = (
+            db.query(Organization)
+            .filter(Organization.organization_code == org_code)
+            .first()
+        )
 
         if not org:
             print(f"Organization not found: {org_code}")
@@ -95,7 +105,7 @@ def run_sync(org_code: str = "DEFAULT", entity_types: list[str] | None = None):
             entity_types=entity_types,
         )
 
-        print(f"\nStarting sync...")
+        print("\nStarting sync...")
         print(f"Entity types: {entity_types or 'all'}")
         print("-" * 50)
 
@@ -119,7 +129,7 @@ def run_sync(org_code: str = "DEFAULT", entity_types: list[str] | None = None):
             print(f"Skipped: {history.skipped_count}")
             print(f"Errors: {history.error_count}")
 
-            if hasattr(history, 'details') and history.details:
+            if hasattr(history, "details") and history.details:
                 print("\n--- Details ---")
                 for entity_type, stats in history.details.items():
                     if isinstance(stats, dict):

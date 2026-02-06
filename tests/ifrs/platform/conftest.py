@@ -6,11 +6,10 @@ while still testing the service logic.
 """
 
 import uuid
-from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any, Optional
-from unittest.mock import MagicMock, patch
+from typing import Optional
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -102,7 +101,9 @@ class MockIdempotencyRecord:
         self.response_status = response_status
         self.response_body = response_body
         self.created_at = created_at or datetime.now(timezone.utc)
-        self.expires_at = expires_at or (datetime.now(timezone.utc) + timedelta(hours=24))
+        self.expires_at = expires_at or (
+            datetime.now(timezone.utc) + timedelta(hours=24)
+        )
 
 
 class MockNumberingSequence:

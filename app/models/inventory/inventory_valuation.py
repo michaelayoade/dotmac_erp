@@ -1,12 +1,23 @@
 """
 Inventory Valuation Model - Inventory Schema.
 """
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, Numeric, String, UniqueConstraint, func, text
+from sqlalchemy import (
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -92,11 +103,15 @@ class InventoryValuation(Base):
 
     # Lower of cost and NRV
     carrying_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    write_down_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    write_down_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Currency
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
-    functional_currency_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    functional_currency_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
 
     # Write-down journal
     write_down_journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(

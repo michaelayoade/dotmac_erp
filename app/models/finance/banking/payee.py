@@ -21,19 +21,20 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID as SAUUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
 
 
 class PayeeType(str, enum.Enum):
     """Type of payee."""
-    VENDOR = "VENDOR"       # Supplier/vendor payments
-    CUSTOMER = "CUSTOMER"   # Customer receipts
-    EMPLOYEE = "EMPLOYEE"   # Payroll, reimbursements
-    BANK = "BANK"           # Bank fees, interest
-    TAX = "TAX"             # Tax authorities
-    UTILITY = "UTILITY"     # Utility companies
+
+    VENDOR = "VENDOR"  # Supplier/vendor payments
+    CUSTOMER = "CUSTOMER"  # Customer receipts
+    EMPLOYEE = "EMPLOYEE"  # Payroll, reimbursements
+    BANK = "BANK"  # Bank fees, interest
+    TAX = "TAX"  # Tax authorities
+    UTILITY = "UTILITY"  # Utility companies
     OTHER = "OTHER"
 
 

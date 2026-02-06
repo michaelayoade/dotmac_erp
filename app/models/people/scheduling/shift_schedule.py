@@ -3,6 +3,7 @@ Shift Schedule Model - Scheduling Schema.
 
 Generated monthly schedules for employees showing their assigned shifts per day.
 """
+
 import enum
 import uuid
 from datetime import date, datetime

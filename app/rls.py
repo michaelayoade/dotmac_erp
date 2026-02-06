@@ -21,6 +21,7 @@ Usage:
         # queries here are scoped to the organization
         pass
 """
+
 import uuid
 from contextlib import asynccontextmanager, contextmanager
 from typing import AsyncGenerator, Generator, Optional

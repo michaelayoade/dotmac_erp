@@ -152,7 +152,7 @@
             <label for="notes" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Notes</label>
             <textarea id="notes" name="notes" rows="3"
                       placeholder="Any additional notes about this payee..."
-                      class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{{ payee.notes if payee else '' }}</textarea>
+                      class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{{ (payee.notes | sanitize_html) if payee and payee.notes else '' }}</textarea>
         </div>
 
         <!-- Statistics (Edit mode only) -->

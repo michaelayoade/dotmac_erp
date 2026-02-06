@@ -12,11 +12,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from app.models.audit import AuditEvent, AuditActorType
+from app.models.audit import AuditActorType
 from app.services.audit import AuditEvents
 
 
 # ============ TestParseActorType ============
+
 
 class TestParseActorType:
     """Tests for the parse_actor_type method."""
@@ -64,6 +65,7 @@ class TestParseActorType:
 
 
 # ============ TestAuditEventsCreate ============
+
 
 class TestAuditEventsCreate:
     """Tests for AuditEvents.create method."""
@@ -160,6 +162,7 @@ class TestAuditEventsCreate:
 
 # ============ TestAuditEventsGet ============
 
+
 class TestAuditEventsGet:
     """Tests for AuditEvents.get method."""
 
@@ -191,6 +194,7 @@ class TestAuditEventsGet:
 
 
 # ============ TestAuditEventsList ============
+
 
 class TestAuditEventsList:
     """Tests for AuditEvents.list method."""
@@ -547,6 +551,7 @@ class TestAuditEventsList:
 
 # ============ TestLogRequest ============
 
+
 class TestLogRequest:
     """Tests for AuditEvents.log_request method."""
 
@@ -769,6 +774,7 @@ class TestLogRequest:
 
 
 # ============ TestAuditEventsDelete ============
+
 
 class TestAuditEventsDelete:
     """Tests for AuditEvents.delete method."""

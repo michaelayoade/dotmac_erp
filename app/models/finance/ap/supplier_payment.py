@@ -1,13 +1,26 @@
 """
 Supplier Payment Model - AP Schema.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Index, Numeric, String, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -39,7 +52,9 @@ class SupplierPayment(Base):
 
     __tablename__ = "supplier_payment"
     __table_args__ = (
-        UniqueConstraint("organization_id", "payment_number", name="uq_supplier_payment"),
+        UniqueConstraint(
+            "organization_id", "payment_number", name="uq_supplier_payment"
+        ),
         Index("idx_supplier_payment_supplier", "supplier_id"),
         {"schema": "ap"},
     )
@@ -75,14 +90,18 @@ class SupplierPayment(Base):
     # Amounts
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    exchange_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 10), nullable=True)
+    exchange_rate: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 10), nullable=True
+    )
     functional_currency_amount: Mapped[Decimal] = mapped_column(
         Numeric(20, 6),
         nullable=False,
     )
 
     # Bank
-    bank_account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    bank_account_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
     reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Status
@@ -124,7 +143,9 @@ class SupplierPayment(Base):
     )
 
     # Remittance
-    remittance_advice_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    remittance_advice_sent: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     remittance_sent_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
         nullable=True,

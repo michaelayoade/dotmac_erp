@@ -1,13 +1,24 @@
 """
 Lease Modification Model - Lease Schema.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Numeric, Text, func, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Numeric,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -58,26 +69,42 @@ class LeaseModification(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Is this a separate lease? (IFRS 16.44)
-    is_separate_lease: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_separate_lease: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
 
     # Values before modification
     liability_before: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     rou_asset_before: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    remaining_lease_term_before: Mapped[int] = mapped_column(Numeric(10, 0), nullable=False)
-    discount_rate_before: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False)
+    remaining_lease_term_before: Mapped[int] = mapped_column(
+        Numeric(10, 0), nullable=False
+    )
+    discount_rate_before: Mapped[Decimal] = mapped_column(
+        Numeric(10, 6), nullable=False
+    )
 
     # Modification parameters
-    new_lease_payments: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6), nullable=True)
-    revised_discount_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 6), nullable=True)
-    revised_lease_term_months: Mapped[Optional[int]] = mapped_column(Numeric(10, 0), nullable=True)
+    new_lease_payments: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 6), nullable=True
+    )
+    revised_discount_rate: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 6), nullable=True
+    )
+    revised_lease_term_months: Mapped[Optional[int]] = mapped_column(
+        Numeric(10, 0), nullable=True
+    )
 
     # Values after modification
     liability_after: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     rou_asset_after: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
 
     # Adjustment amounts
-    liability_adjustment: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    rou_asset_adjustment: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    liability_adjustment: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
+    rou_asset_adjustment: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
     gain_loss_on_modification: Mapped[Decimal] = mapped_column(
         Numeric(20, 6),
         nullable=False,

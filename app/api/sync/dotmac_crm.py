@@ -6,6 +6,7 @@ Handles:
 - Entity lookup for expense claim dropdowns
 - Expense totals for CRM entities
 """
+
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -145,7 +146,9 @@ def bulk_sync(
         except Exception as e:
             savepoint.rollback()
             logger.exception("Failed to sync project %s", proj.crm_id)
-            errors.append(SyncError(entity_type="project", crm_id=proj.crm_id, error=str(e)))
+            errors.append(
+                SyncError(entity_type="project", crm_id=proj.crm_id, error=str(e))
+            )
 
     # Sync tickets
     tickets_synced = 0
@@ -158,7 +161,9 @@ def bulk_sync(
         except Exception as e:
             savepoint.rollback()
             logger.exception("Failed to sync ticket %s", ticket.crm_id)
-            errors.append(SyncError(entity_type="ticket", crm_id=ticket.crm_id, error=str(e)))
+            errors.append(
+                SyncError(entity_type="ticket", crm_id=ticket.crm_id, error=str(e))
+            )
 
     # Sync work orders last (references projects/tickets)
     work_orders_synced = 0
@@ -171,7 +176,9 @@ def bulk_sync(
         except Exception as e:
             savepoint.rollback()
             logger.exception("Failed to sync work order %s", wo.crm_id)
-            errors.append(SyncError(entity_type="work_order", crm_id=wo.crm_id, error=str(e)))
+            errors.append(
+                SyncError(entity_type="work_order", crm_id=wo.crm_id, error=str(e))
+            )
 
     db.commit()
 
@@ -209,7 +216,9 @@ def list_crm_projects(
     """
     org_id = UUID(auth["organization_id"])
     service = DotMacCRMSyncService(db)
-    return service.list_projects(org_id, search=search, status=status, limit=min(limit, 100))
+    return service.list_projects(
+        org_id, search=search, status=status, limit=min(limit, 100)
+    )
 
 
 @router.get("/tickets", response_model=list[CRMTicketRead])
@@ -245,7 +254,9 @@ def list_crm_work_orders(
     """
     org_id = UUID(auth["organization_id"])
     service = DotMacCRMSyncService(db)
-    return service.list_work_orders(org_id, search=search, employee_id=employee_id, limit=min(limit, 100))
+    return service.list_work_orders(
+        org_id, search=search, employee_id=employee_id, limit=min(limit, 100)
+    )
 
 
 # ============ Expense Totals Endpoint (ERP → CRM) ============
@@ -346,8 +357,6 @@ def list_inventory(
     )
     db.commit()
     return result
-
-
 
 
 @router.get("/inventory/{item_id}", response_model=InventoryItemDetail)

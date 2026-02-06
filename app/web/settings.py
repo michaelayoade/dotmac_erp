@@ -11,7 +11,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.services.module_settings_web import MODULE_SETTINGS_BY_KEY, module_settings_web_service
+from app.services.module_settings_web import (
+    MODULE_SETTINGS_BY_KEY,
+    module_settings_web_service,
+)
 from app.templates import templates
 from app.web.deps import base_context, get_db, require_settings_access, WebAuthContext
 

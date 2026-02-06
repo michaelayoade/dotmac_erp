@@ -3,6 +3,7 @@ Vehicle Model - Fleet Schema.
 
 Core entity representing vehicles in the organization's fleet.
 """
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -20,7 +21,6 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
-    func,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship

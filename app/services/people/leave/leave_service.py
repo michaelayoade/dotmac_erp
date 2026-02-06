@@ -26,7 +26,8 @@ from app.models.people.leave import (
     LeaveTypePolicy,
 )
 from app.services.audit_dispatcher import fire_audit_event
-from app.services.common import PaginatedResult, PaginationParams
+from app.services.common import PaginatedResult, PaginationParams, ValidationError
+from app.services.state_machine import StateMachine
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +141,7 @@ STATUS_TRANSITIONS = {
     LeaveApplicationStatus.REJECTED: set(),  # Terminal state
     LeaveApplicationStatus.CANCELLED: set(),  # Terminal state
 }
+_STATE_MACHINE = StateMachine(STATUS_TRANSITIONS)
 
 
 class LeaveService:
@@ -177,6 +179,18 @@ class LeaveService:
     ) -> None:
         self.db = db
         self.ctx = ctx
+
+    def _validate_transition(
+        self,
+        current_status: LeaveApplicationStatus,
+        new_status: LeaveApplicationStatus,
+    ) -> None:
+        try:
+            _STATE_MACHINE.validate(current_status, new_status)
+        except ValidationError:
+            raise LeaveApplicationStatusError(
+                current_status.value, new_status.value
+            ) from None
 
     # =========================================================================
     # Leave Types
@@ -1085,10 +1099,7 @@ class LeaveService:
         """Approve a leave application."""
         application = self.get_application(org_id, application_id)
 
-        if application.status != LeaveApplicationStatus.SUBMITTED:
-            raise LeaveApplicationStatusError(
-                application.status.value, LeaveApplicationStatus.APPROVED.value
-            )
+        self._validate_transition(application.status, LeaveApplicationStatus.APPROVED)
 
         application.status = LeaveApplicationStatus.APPROVED
         application.approved_by_id = approver_id
@@ -1175,10 +1186,7 @@ class LeaveService:
         """Reject a leave application."""
         application = self.get_application(org_id, application_id)
 
-        if application.status != LeaveApplicationStatus.SUBMITTED:
-            raise LeaveApplicationStatusError(
-                application.status.value, LeaveApplicationStatus.REJECTED.value
-            )
+        self._validate_transition(application.status, LeaveApplicationStatus.REJECTED)
 
         application.status = LeaveApplicationStatus.REJECTED
         application.approved_by_id = approver_id
@@ -1252,11 +1260,7 @@ class LeaveService:
         """Cancel a leave application."""
         application = self.get_application(org_id, application_id)
 
-        valid_transitions = STATUS_TRANSITIONS.get(application.status, set())
-        if LeaveApplicationStatus.CANCELLED not in valid_transitions:
-            raise LeaveApplicationStatusError(
-                application.status.value, LeaveApplicationStatus.CANCELLED.value
-            )
+        self._validate_transition(application.status, LeaveApplicationStatus.CANCELLED)
 
         # If approved, restore balance
         if application.status == LeaveApplicationStatus.APPROVED:

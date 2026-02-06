@@ -15,25 +15,37 @@ from tests.ifrs.platform.conftest import MockColumn
 @contextmanager
 def patch_authorization_service():
     """Helper context manager that sets up all required patches for AuthorizationService."""
-    with patch('app.services.finance.platform.authorization.Permission') as mock_perm:
+    with patch("app.services.finance.platform.authorization.Permission") as mock_perm:
         mock_perm.key = MockColumn()
         mock_perm.is_active = MockColumn()
         mock_perm.id = MockColumn()
-        with patch('app.services.finance.platform.authorization.Role') as mock_role:
+        with patch("app.services.finance.platform.authorization.Role") as mock_role:
             mock_role.name = MockColumn()
             mock_role.is_active = MockColumn()
             mock_role.id = MockColumn()
-            with patch('app.services.finance.platform.authorization.PersonRole') as mock_pr:
+            with patch(
+                "app.services.finance.platform.authorization.PersonRole"
+            ) as mock_pr:
                 mock_pr.person_id = MockColumn()
                 mock_pr.role_id = MockColumn()
-                with patch('app.services.finance.platform.authorization.RolePermission') as mock_rp:
+                with patch(
+                    "app.services.finance.platform.authorization.RolePermission"
+                ) as mock_rp:
                     mock_rp.role_id = MockColumn()
                     mock_rp.permission_id = MockColumn()
-                    with patch('app.services.finance.platform.authorization.Person') as mock_person:
+                    with patch(
+                        "app.services.finance.platform.authorization.Person"
+                    ) as mock_person:
                         mock_person.id = MockColumn()
                         mock_person.organization_id = MockColumn()
-                        with patch('app.services.finance.platform.authorization.and_', return_value=MagicMock()):
-                            with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+                        with patch(
+                            "app.services.finance.platform.authorization.and_",
+                            return_value=MagicMock(),
+                        ):
+                            with patch(
+                                "app.services.finance.platform.authorization.coerce_uuid",
+                                side_effect=lambda x: x,
+                            ):
                                 yield mock_perm, mock_role, mock_pr, mock_rp
 
 
@@ -48,7 +60,9 @@ class MockPersonRole:
 class MockRole:
     """Mock Role model."""
 
-    def __init__(self, id: uuid.UUID = None, name: str = "admin", is_active: bool = True):
+    def __init__(
+        self, id: uuid.UUID = None, name: str = "admin", is_active: bool = True
+    ):
         self.id = id or uuid.uuid4()
         self.name = name
         self.is_active = is_active
@@ -57,7 +71,9 @@ class MockRole:
 class MockPermission:
     """Mock Permission model."""
 
-    def __init__(self, id: uuid.UUID = None, key: str = "gl.journal.post", is_active: bool = True):
+    def __init__(
+        self, id: uuid.UUID = None, key: str = "gl.journal.post", is_active: bool = True
+    ):
         self.id = id or uuid.uuid4()
         self.key = key
         self.is_active = is_active
@@ -77,13 +93,19 @@ class TestAuthorizationService:
     @pytest.fixture
     def service(self):
         """Import the service with mocked dependencies."""
-        with patch.dict('sys.modules', {
-            'app.models.rbac': MagicMock(),
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "app.models.rbac": MagicMock(),
+            },
+        ):
             from app.services.finance.platform.authorization import AuthorizationService
+
             return AuthorizationService
 
-    @pytest.mark.skip(reason="Complex mock chain for in_() + and_() - functionality tested via integration tests")
+    @pytest.mark.skip(
+        reason="Complex mock chain for in_() + and_() - functionality tested via integration tests"
+    )
     def test_check_permission_returns_true_when_granted(
         self, service, mock_db_session, user_id
     ):
@@ -96,8 +118,11 @@ class TestAuthorizationService:
         """check_permission should return False when user has no roles."""
         mock_db_session.query.return_value.filter.return_value.all.return_value = []
 
-        with patch('app.services.finance.platform.authorization.PersonRole'):
-            with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch("app.services.finance.platform.authorization.PersonRole"):
+            with patch(
+                "app.services.finance.platform.authorization.coerce_uuid",
+                side_effect=lambda x: x,
+            ):
                 result = service.check_permission(
                     mock_db_session,
                     user_id=user_id,
@@ -111,12 +136,17 @@ class TestAuthorizationService:
     ):
         """check_permission should return False when permission doesn't exist."""
         person_role = MockPersonRole(person_id=user_id)
-        mock_db_session.query.return_value.filter.return_value.all.return_value = [person_role]
+        mock_db_session.query.return_value.filter.return_value.all.return_value = [
+            person_role
+        ]
         mock_db_session.query.return_value.filter.return_value.first.return_value = None
 
-        with patch('app.services.finance.platform.authorization.Permission'):
-            with patch('app.services.finance.platform.authorization.PersonRole'):
-                with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch("app.services.finance.platform.authorization.Permission"):
+            with patch("app.services.finance.platform.authorization.PersonRole"):
+                with patch(
+                    "app.services.finance.platform.authorization.coerce_uuid",
+                    side_effect=lambda x: x,
+                ):
                     result = service.check_permission(
                         mock_db_session,
                         user_id=user_id,
@@ -129,7 +159,7 @@ class TestAuthorizationService:
         self, service, mock_db_session, user_id
     ):
         """require_permission should not raise when permission is granted."""
-        with patch.object(service, 'check_permission', return_value=True):
+        with patch.object(service, "check_permission", return_value=True):
             # Should not raise
             service.require_permission(
                 mock_db_session,
@@ -141,7 +171,7 @@ class TestAuthorizationService:
         self, service, mock_db_session, user_id
     ):
         """require_permission should raise 403 when permission is denied."""
-        with patch.object(service, 'check_permission', return_value=False):
+        with patch.object(service, "check_permission", return_value=False):
             with pytest.raises(HTTPException) as exc_info:
                 service.require_permission(
                     mock_db_session,
@@ -165,9 +195,12 @@ class TestAuthorizationService:
             person_role,  # PersonRole lookup
         ]
 
-        with patch('app.services.finance.platform.authorization.Role'):
-            with patch('app.services.finance.platform.authorization.PersonRole'):
-                with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch("app.services.finance.platform.authorization.Role"):
+            with patch("app.services.finance.platform.authorization.PersonRole"):
+                with patch(
+                    "app.services.finance.platform.authorization.coerce_uuid",
+                    side_effect=lambda x: x,
+                ):
                     result = service.check_role(
                         mock_db_session,
                         user_id=user_id,
@@ -186,9 +219,12 @@ class TestAuthorizationService:
             None,  # PersonRole not found
         ]
 
-        with patch('app.services.finance.platform.authorization.Role'):
-            with patch('app.services.finance.platform.authorization.PersonRole'):
-                with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch("app.services.finance.platform.authorization.Role"):
+            with patch("app.services.finance.platform.authorization.PersonRole"):
+                with patch(
+                    "app.services.finance.platform.authorization.coerce_uuid",
+                    side_effect=lambda x: x,
+                ):
                     result = service.check_role(
                         mock_db_session,
                         user_id=user_id,
@@ -197,11 +233,9 @@ class TestAuthorizationService:
 
         assert result is False
 
-    def test_require_role_passes_when_assigned(
-        self, service, mock_db_session, user_id
-    ):
+    def test_require_role_passes_when_assigned(self, service, mock_db_session, user_id):
         """require_role should not raise when role is assigned."""
-        with patch.object(service, 'check_role', return_value=True):
+        with patch.object(service, "check_role", return_value=True):
             # Should not raise
             service.require_role(
                 mock_db_session,
@@ -213,7 +247,7 @@ class TestAuthorizationService:
         self, service, mock_db_session, user_id
     ):
         """require_role should raise 403 when role is not assigned."""
-        with patch.object(service, 'check_role', return_value=False):
+        with patch.object(service, "check_role", return_value=False):
             with pytest.raises(HTTPException) as exc_info:
                 service.require_role(
                     mock_db_session,
@@ -231,7 +265,10 @@ class TestAuthorizationService:
         other_user = uuid.uuid4()
         previous_actors = [other_user]
 
-        with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch(
+            "app.services.finance.platform.authorization.coerce_uuid",
+            side_effect=lambda x: x,
+        ):
             result = service.validate_sod(
                 mock_db_session,
                 user_id=user_id,
@@ -242,13 +279,14 @@ class TestAuthorizationService:
 
         assert result == (True, None)
 
-    def test_validate_sod_fails_for_same_actor(
-        self, service, mock_db_session, user_id
-    ):
+    def test_validate_sod_fails_for_same_actor(self, service, mock_db_session, user_id):
         """validate_sod should fail when user is a previous actor."""
         previous_actors = [user_id]
 
-        with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch(
+            "app.services.finance.platform.authorization.coerce_uuid",
+            side_effect=lambda x: x,
+        ):
             result = service.validate_sod(
                 mock_db_session,
                 user_id=user_id,
@@ -266,7 +304,10 @@ class TestAuthorizationService:
         """validate_sod_rule should fail for CANNOT_BE_CREATOR when user is creator."""
         context = {"created_by_user_id": user_id}
 
-        with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch(
+            "app.services.finance.platform.authorization.coerce_uuid",
+            side_effect=lambda x: x,
+        ):
             result = service.validate_sod_rule(
                 mock_db_session,
                 user_id=user_id,
@@ -283,7 +324,10 @@ class TestAuthorizationService:
         """validate_sod_rule should fail for CANNOT_BE_PREVIOUS_APPROVER."""
         context = {"previous_approvers": [user_id]}
 
-        with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch(
+            "app.services.finance.platform.authorization.coerce_uuid",
+            side_effect=lambda x: x,
+        ):
             result = service.validate_sod_rule(
                 mock_db_session,
                 user_id=user_id,
@@ -301,7 +345,10 @@ class TestAuthorizationService:
         other_user = uuid.uuid4()
         context = {"created_by_user_id": other_user}
 
-        with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch(
+            "app.services.finance.platform.authorization.coerce_uuid",
+            side_effect=lambda x: x,
+        ):
             result = service.validate_sod_rule(
                 mock_db_session,
                 user_id=user_id,
@@ -349,8 +396,11 @@ class TestAuthorizationService:
         """get_user_permissions should return empty list for user with no roles."""
         mock_db_session.query.return_value.filter.return_value.all.return_value = []
 
-        with patch('app.services.finance.platform.authorization.PersonRole'):
-            with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch("app.services.finance.platform.authorization.PersonRole"):
+            with patch(
+                "app.services.finance.platform.authorization.coerce_uuid",
+                side_effect=lambda x: x,
+            ):
                 result = service.get_user_permissions(
                     mock_db_session,
                     user_id=user_id,
@@ -358,20 +408,23 @@ class TestAuthorizationService:
 
         assert result == []
 
-    def test_get_user_roles_returns_role_names(
-        self, service, mock_db_session, user_id
-    ):
+    def test_get_user_roles_returns_role_names(self, service, mock_db_session, user_id):
         """get_user_roles should return list of role names."""
         role_id = uuid.uuid4()
         person_role = MockPersonRole(person_id=user_id, role_id=role_id)
         role = MockRole(id=role_id, name="admin")
 
-        mock_db_session.query.return_value.join.return_value.filter.return_value.all.return_value = [person_role]
+        mock_db_session.query.return_value.join.return_value.filter.return_value.all.return_value = [
+            person_role
+        ]
         mock_db_session.query.return_value.filter.return_value.all.return_value = [role]
 
-        with patch('app.services.finance.platform.authorization.Role'):
-            with patch('app.services.finance.platform.authorization.PersonRole'):
-                with patch('app.services.finance.platform.authorization.coerce_uuid', side_effect=lambda x: x):
+        with patch("app.services.finance.platform.authorization.Role"):
+            with patch("app.services.finance.platform.authorization.PersonRole"):
+                with patch(
+                    "app.services.finance.platform.authorization.coerce_uuid",
+                    side_effect=lambda x: x,
+                ):
                     result = service.get_user_roles(
                         mock_db_session,
                         user_id=user_id,
@@ -383,7 +436,7 @@ class TestAuthorizationService:
         self, service, mock_db_session, user_id
     ):
         """check_any_permission should return True if any permission is granted."""
-        with patch.object(service, 'check_permission', side_effect=[False, True]):
+        with patch.object(service, "check_permission", side_effect=[False, True]):
             result = service.check_any_permission(
                 mock_db_session,
                 user_id=user_id,
@@ -396,7 +449,7 @@ class TestAuthorizationService:
         self, service, mock_db_session, user_id
     ):
         """check_any_permission should return False if no permission is granted."""
-        with patch.object(service, 'check_permission', return_value=False):
+        with patch.object(service, "check_permission", return_value=False):
             result = service.check_any_permission(
                 mock_db_session,
                 user_id=user_id,
@@ -409,7 +462,7 @@ class TestAuthorizationService:
         self, service, mock_db_session, user_id
     ):
         """check_all_permissions should return True if all permissions granted."""
-        with patch.object(service, 'check_permission', return_value=True):
+        with patch.object(service, "check_permission", return_value=True):
             result = service.check_all_permissions(
                 mock_db_session,
                 user_id=user_id,
@@ -422,7 +475,7 @@ class TestAuthorizationService:
         self, service, mock_db_session, user_id
     ):
         """check_all_permissions should return False if any permission denied."""
-        with patch.object(service, 'check_permission', side_effect=[True, False]):
+        with patch.object(service, "check_permission", side_effect=[True, False]):
             result = service.check_all_permissions(
                 mock_db_session,
                 user_id=user_id,

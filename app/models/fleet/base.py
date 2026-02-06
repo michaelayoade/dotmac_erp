@@ -3,6 +3,7 @@ Fleet Module Base Models and Mixins.
 
 Provides base classes for all Fleet models.
 """
+
 import uuid
 from datetime import datetime
 from typing import Optional

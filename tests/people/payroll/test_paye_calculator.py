@@ -7,14 +7,12 @@ This test suite verifies the Nigeria Tax Act 2025 PAYE calculation logic.
 import uuid
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from app.services.people.payroll.paye_calculator import (
     PAYECalculator,
-    PAYEBreakdown,
-    TaxBandBreakdown,
 )
 from app.models.people.payroll.tax_band import TaxBand
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
@@ -55,11 +53,41 @@ def nta_2025_bands(org_id) -> list[TaxBand]:
     """Create NTA 2025 tax bands."""
     bands_data = [
         {"name": "NTA 2025 - 0%", "min": 0, "max": 800000, "rate": "0.00", "seq": 1},
-        {"name": "NTA 2025 - 15%", "min": 800000, "max": 3000000, "rate": "0.15", "seq": 2},
-        {"name": "NTA 2025 - 18%", "min": 3000000, "max": 12000000, "rate": "0.18", "seq": 3},
-        {"name": "NTA 2025 - 21%", "min": 12000000, "max": 25000000, "rate": "0.21", "seq": 4},
-        {"name": "NTA 2025 - 23%", "min": 25000000, "max": 50000000, "rate": "0.23", "seq": 5},
-        {"name": "NTA 2025 - 25%", "min": 50000000, "max": None, "rate": "0.25", "seq": 6},
+        {
+            "name": "NTA 2025 - 15%",
+            "min": 800000,
+            "max": 3000000,
+            "rate": "0.15",
+            "seq": 2,
+        },
+        {
+            "name": "NTA 2025 - 18%",
+            "min": 3000000,
+            "max": 12000000,
+            "rate": "0.18",
+            "seq": 3,
+        },
+        {
+            "name": "NTA 2025 - 21%",
+            "min": 12000000,
+            "max": 25000000,
+            "rate": "0.21",
+            "seq": 4,
+        },
+        {
+            "name": "NTA 2025 - 23%",
+            "min": 25000000,
+            "max": 50000000,
+            "rate": "0.23",
+            "seq": 5,
+        },
+        {
+            "name": "NTA 2025 - 25%",
+            "min": 50000000,
+            "max": None,
+            "rate": "0.25",
+            "seq": 6,
+        },
     ]
 
     bands = []
@@ -282,7 +310,12 @@ class TestPAYECalculator:
         assert result.rent_relief == Decimal("240000")  # 20% of 1.2M
 
         # Verify taxable income
-        expected_taxable = Decimal("6000000") - Decimal("288000") - Decimal("90000") - Decimal("240000")
+        expected_taxable = (
+            Decimal("6000000")
+            - Decimal("288000")
+            - Decimal("90000")
+            - Decimal("240000")
+        )
         assert result.taxable_income == expected_taxable  # 5,382,000
 
         # Verify tax calculation
@@ -330,7 +363,9 @@ class TestPAYECalculator:
         assert len(result.band_breakdowns) == 6
         assert result.annual_tax > Decimal("0")
 
-    def test_calculate_with_tax_exempt(self, mock_db, org_id, employee_id, nta_2025_bands):
+    def test_calculate_with_tax_exempt(
+        self, mock_db, org_id, employee_id, nta_2025_bands
+    ):
         """Test tax exempt employee pays no tax."""
         mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = nta_2025_bands
 
@@ -474,7 +509,9 @@ class TestPAYECalculatorSeeding:
     def test_seed_does_not_duplicate(self, mock_db, org_id, nta_2025_bands):
         """Test seeding doesn't duplicate existing bands."""
         # Return existing band
-        mock_db.query.return_value.filter.return_value.first.return_value = nta_2025_bands[0]
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            nta_2025_bands[0]
+        )
 
         calculator = PAYECalculator(mock_db)
         bands = calculator.seed_nta_2025_bands(org_id)
@@ -586,7 +623,9 @@ class TestPAYEEdgeCases:
         assert result.taxable_income == Decimal("0")
         assert result.annual_tax == Decimal("0")
 
-    def test_expired_profile_not_used(self, mock_db, org_id, employee_id, nta_2025_bands):
+    def test_expired_profile_not_used(
+        self, mock_db, org_id, employee_id, nta_2025_bands
+    ):
         """Test that expired tax profile is not used."""
         mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = nta_2025_bands
 

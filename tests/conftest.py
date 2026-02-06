@@ -12,12 +12,12 @@ from jose import jwt
 from sqlalchemy import create_engine, String, TypeDecorator, Text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from sqlalchemy.pool import StaticPool
-from sqlalchemy import dialects
 
 
 # Create a SQLite-compatible UUID type that stores as VARCHAR
 class SQLiteUUID(TypeDecorator):
     """UUID type that works with SQLite by storing as VARCHAR."""
+
     impl = String(36)
     cache_ok = True
 
@@ -38,12 +38,14 @@ class SQLiteUUID(TypeDecorator):
 # Monkey-patch the postgresql UUID import to use our SQLite-compatible version
 # This is done BEFORE any app model imports so they use the patched version
 import sqlalchemy.dialects.postgresql as pg_dialect
+
 _original_uuid = pg_dialect.UUID
 _original_jsonb = getattr(pg_dialect, "JSONB", None)
 
 
 class PatchedUUID(SQLiteUUID):
     """Patched UUID that uses SQLite-compatible storage."""
+
     cache_ok = True
 
     def __init__(self, as_uuid=True):
@@ -57,6 +59,7 @@ pg_dialect.UUID = PatchedUUID
 
 class PatchedJSONB(Text):
     """Patched JSONB that uses TEXT storage for SQLite."""
+
     cache_ok = True
 
 
@@ -106,7 +109,7 @@ _MockAsyncSessionLocal = MockAsyncSessionLocalProxy()
 
 
 # Create a mock db module
-mock_db_module = ModuleType('app.db')
+mock_db_module = ModuleType("app.db")
 mock_db_module.Base = TestBase
 mock_db_module.SessionLocal = _TestSessionLocal
 mock_db_module.AsyncSessionLocal = _MockAsyncSessionLocal
@@ -115,6 +118,7 @@ mock_db_module.get_async_session_local = lambda: _TestSessionLocal
 mock_db_module.get_auth_db_session = lambda: _TestSessionLocal()
 mock_db_module.get_auth_db = lambda: _TestSessionLocal()
 
+
 def _get_db_session():
     db = _TestSessionLocal()
     try:
@@ -122,13 +126,14 @@ def _get_db_session():
     finally:
         db.close()
 
+
 mock_db_module.get_db_session = _get_db_session
 
 # Also mock app.config to prevent .env loading
-mock_config_module = ModuleType('app.config')
+mock_config_module = ModuleType("app.config")
 
 # Mock app.rls module with no-op functions for SQLite (RLS uses PostgreSQL-specific features)
-mock_rls_module = ModuleType('app.rls')
+mock_rls_module = ModuleType("app.rls")
 
 
 # No-op sync RLS functions for SQLite
@@ -217,7 +222,9 @@ class MockSettings:
     default_presentation_currency_code = "USD"
     landing_hero_badge = "IFRS-ready accounting"
     landing_hero_title = "Close faster with audit-ready accounting"
-    landing_hero_subtitle = "Multi-entity support, clean audit trail, and accurate AR/AP aging."
+    landing_hero_subtitle = (
+        "Multi-entity support, clean audit trail, and accurate AR/AP aging."
+    )
     landing_cta_primary = "Start trial"
     landing_cta_secondary = "View sample reports"
     landing_content_json = None
@@ -240,9 +247,9 @@ mock_config_module.settings = MockSettings()
 mock_config_module.Settings = MockSettings
 
 # Insert mocks before any app imports
-sys.modules['app.config'] = mock_config_module
-sys.modules['app.db'] = mock_db_module
-sys.modules['app.rls'] = mock_rls_module
+sys.modules["app.config"] = mock_config_module
+sys.modules["app.db"] = mock_db_module
+sys.modules["app.rls"] = mock_rls_module
 
 # Set environment variables
 os.environ["JWT_SECRET"] = "test-secret"
@@ -252,14 +259,29 @@ os.environ["TOTP_ISSUER"] = "StarterTemplate"
 
 # Now import the models - they'll use our mocked db module
 from app.models.person import Person
-from app.models.auth import UserCredential, Session as AuthSession, SessionStatus, ApiKey, MFAMethod
+from app.models.auth import (
+    UserCredential,
+    Session as AuthSession,
+    SessionStatus,
+    ApiKey,
+    MFAMethod,
+)
 from app.models.rbac import Role, Permission, RolePermission, PersonRole
 from app.models.audit import AuditEvent, AuditActorType
-from app.models.domain_settings import DomainSetting, DomainSettingHistory, SettingDomain
+from app.models.domain_settings import (
+    DomainSetting,
+    DomainSettingHistory,
+    SettingDomain,
+)
 from app.models.scheduler import ScheduledTask, ScheduleType
-from app.models.expense import ExpenseClaim, ExpenseClaimItem, ExpenseCategory, ExpenseClaimAction
+from app.models.expense import (
+    ExpenseClaim,
+    ExpenseClaimItem,
+    ExpenseCategory,
+    ExpenseClaimAction,
+)
+
 # IdempotencyRecord uses PostgreSQL-specific defaults; omit from default SQLite tables.
-from app.models.finance.platform import IdempotencyRecord
 # Import discipline models to resolve Employee relationship
 from app.models.people.discipline import DisciplinaryCase  # noqa: F401
 
@@ -287,6 +309,8 @@ SQLITE_COMPATIBLE_TABLES = [
 
 # Create only SQLite-compatible tables, tolerating per-table failures
 import warnings
+
+
 def _strip_sqlite_server_defaults(tables):
     for table in tables:
         for column in table.columns:
@@ -296,6 +320,7 @@ def _strip_sqlite_server_defaults(tables):
             default_text = str(getattr(default, "arg", default)).lower()
             if "gen_random_uuid" in default_text or "uuid_generate" in default_text:
                 column.server_default = None
+
 
 _strip_sqlite_server_defaults(SQLITE_COMPATIBLE_TABLES)
 for table in SQLITE_COMPATIBLE_TABLES:
@@ -370,7 +395,11 @@ def client(db_session):
     from app.api.settings import get_db as settings_get_db
     from app.api.scheduler import get_db as scheduler_get_db
     from app.services.auth_dependencies import _get_db as auth_deps_get_db
-    from app.services.settings_seed import seed_auth_settings, seed_audit_settings, seed_scheduler_settings
+    from app.services.settings_seed import (
+        seed_auth_settings,
+        seed_audit_settings,
+        seed_scheduler_settings,
+    )
 
     def override_get_db():
         yield db_session
@@ -390,17 +419,21 @@ def client(db_session):
     seed_scheduler_settings(db_session)
 
     # Mock the app startup seeding to avoid duplicate seeding
-    with patch('app.main.seed_auth_settings', create=True), \
-         patch('app.main.seed_audit_settings', create=True), \
-         patch('app.main.seed_scheduler_settings', create=True), \
-         patch('app.main.SessionLocal', return_value=MagicMock(), create=True):
+    with (
+        patch("app.main.seed_auth_settings", create=True),
+        patch("app.main.seed_audit_settings", create=True),
+        patch("app.main.seed_scheduler_settings", create=True),
+        patch("app.main.SessionLocal", return_value=MagicMock(), create=True),
+    ):
         with TestClient(app, raise_server_exceptions=False) as test_client:
             yield test_client
 
     app.dependency_overrides.clear()
 
 
-def _create_access_token(person_id: str, session_id: str, roles: list[str] = None, scopes: list[str] = None) -> str:
+def _create_access_token(
+    person_id: str, session_id: str, roles: list[str] = None, scopes: list[str] = None
+) -> str:
     """Create a JWT access token for testing."""
     secret = os.getenv("JWT_SECRET", "test-secret")
     algorithm = os.getenv("JWT_ALGORITHM", "HS256")

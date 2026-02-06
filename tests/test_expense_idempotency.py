@@ -107,10 +107,14 @@ def test_double_approve_is_idempotent(db_session):
     assert first.status == ExpenseClaimStatus.APPROVED
     assert second.status == ExpenseClaimStatus.APPROVED
 
-    actions = db_session.query(ExpenseClaimAction).filter(
-        ExpenseClaimAction.claim_id == claim.claim_id,
-        ExpenseClaimAction.action_type == ExpenseClaimActionType.APPROVE,
-    ).all()
+    actions = (
+        db_session.query(ExpenseClaimAction)
+        .filter(
+            ExpenseClaimAction.claim_id == claim.claim_id,
+            ExpenseClaimAction.action_type == ExpenseClaimActionType.APPROVE,
+        )
+        .all()
+    )
     assert len(actions) == 1
     assert actions[0].status == ExpenseClaimActionStatus.COMPLETED
 
@@ -130,9 +134,13 @@ def test_double_mark_paid_is_idempotent(db_session):
     assert first.status == ExpenseClaimStatus.PAID
     assert second.status == ExpenseClaimStatus.PAID
 
-    actions = db_session.query(ExpenseClaimAction).filter(
-        ExpenseClaimAction.claim_id == claim.claim_id,
-        ExpenseClaimAction.action_type == ExpenseClaimActionType.MARK_PAID,
-    ).all()
+    actions = (
+        db_session.query(ExpenseClaimAction)
+        .filter(
+            ExpenseClaimAction.claim_id == claim.claim_id,
+            ExpenseClaimAction.action_type == ExpenseClaimActionType.MARK_PAID,
+        )
+        .all()
+    )
     assert len(actions) == 1
     assert actions[0].status == ExpenseClaimActionStatus.COMPLETED

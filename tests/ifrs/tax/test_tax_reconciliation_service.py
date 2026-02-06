@@ -13,7 +13,6 @@ from uuid import uuid4
 from app.services.finance.tax.tax_reconciliation import (
     TaxReconciliationService,
     TaxReconciliationInput,
-    ReconciliationLine,
 )
 
 
@@ -181,7 +180,9 @@ class TestCreateReconciliation:
         mock_db.commit.assert_called_once()
         mock_db.refresh.assert_called_once()
 
-    def test_create_reconciliation_with_adjustments(self, mock_db, org_id, mock_jurisdiction):
+    def test_create_reconciliation_with_adjustments(
+        self, mock_db, org_id, mock_jurisdiction
+    ):
         """Test reconciliation with various adjustments."""
         mock_db.get.return_value = mock_jurisdiction
         mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -228,7 +229,9 @@ class TestCreateReconciliation:
         assert exc.value.status_code == 404
         assert "Jurisdiction not found" in exc.value.detail
 
-    def test_create_reconciliation_wrong_organization(self, mock_db, org_id, mock_jurisdiction):
+    def test_create_reconciliation_wrong_organization(
+        self, mock_db, org_id, mock_jurisdiction
+    ):
         """Test that jurisdiction from different org raises error."""
         from fastapi import HTTPException
 
@@ -250,7 +253,9 @@ class TestCreateReconciliation:
 
         assert exc.value.status_code == 404
 
-    def test_create_reconciliation_duplicate_fails(self, mock_db, org_id, mock_jurisdiction):
+    def test_create_reconciliation_duplicate_fails(
+        self, mock_db, org_id, mock_jurisdiction
+    ):
         """Test that duplicate reconciliation raises error."""
         from fastapi import HTTPException
 
@@ -436,7 +441,9 @@ class TestGetReconciliationLines:
         lines = TaxReconciliationService.get_reconciliation_lines(reconciliation)
 
         # Should not raise division by zero
-        perm_diff_line = next(l for l in lines if l.description == "Permanent differences")
+        perm_diff_line = next(
+            l for l in lines if l.description == "Permanent differences"
+        )
         assert perm_diff_line.rate_effect == Decimal("0")
 
 
@@ -459,7 +466,9 @@ class TestValidateReconciliation:
             total_tax_expense=Decimal("210000.00"),
         )
 
-        is_valid, error = TaxReconciliationService.validate_reconciliation(reconciliation)
+        is_valid, error = TaxReconciliationService.validate_reconciliation(
+            reconciliation
+        )
 
         assert is_valid is True
         assert error is None
@@ -481,7 +490,9 @@ class TestValidateReconciliation:
             total_tax_expense=Decimal("215000.00"),
         )
 
-        is_valid, error = TaxReconciliationService.validate_reconciliation(reconciliation)
+        is_valid, error = TaxReconciliationService.validate_reconciliation(
+            reconciliation
+        )
 
         assert is_valid is True
         assert error is None
@@ -502,7 +513,9 @@ class TestValidateReconciliation:
             total_tax_expense=Decimal("220000.00"),  # Doesn't match
         )
 
-        is_valid, error = TaxReconciliationService.validate_reconciliation(reconciliation)
+        is_valid, error = TaxReconciliationService.validate_reconciliation(
+            reconciliation
+        )
 
         assert is_valid is False
         assert "does not balance" in error
@@ -523,7 +536,9 @@ class TestValidateReconciliation:
             total_tax_expense=Decimal("210000.005"),  # Within 0.01 tolerance
         )
 
-        is_valid, error = TaxReconciliationService.validate_reconciliation(reconciliation)
+        is_valid, error = TaxReconciliationService.validate_reconciliation(
+            reconciliation
+        )
 
         assert is_valid is True
 
@@ -536,7 +551,9 @@ class TestGetReconciliation:
         reconciliation = MockTaxReconciliation()
         mock_db.get.return_value = reconciliation
 
-        result = TaxReconciliationService.get(mock_db, str(reconciliation.reconciliation_id))
+        result = TaxReconciliationService.get(
+            mock_db, str(reconciliation.reconciliation_id)
+        )
 
         assert result == reconciliation
 
@@ -559,7 +576,9 @@ class TestGetByPeriodJurisdiction:
         """Test finding reconciliation by period and jurisdiction."""
         reconciliation = MockTaxReconciliation(organization_id=org_id)
 
-        mock_db.query.return_value.filter.return_value.first.return_value = reconciliation
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            reconciliation
+        )
 
         result = TaxReconciliationService.get_by_period_jurisdiction(
             mock_db,

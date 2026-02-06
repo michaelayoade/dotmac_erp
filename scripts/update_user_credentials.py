@@ -25,12 +25,17 @@ DEFAULT_PASSWORD = "Dotmac@123"
 
 
 def _person_display_name(person: Person) -> str:
-    display = person.display_name or f"{person.first_name or ''} {person.last_name or ''}".strip()
+    display = (
+        person.display_name
+        or f"{person.first_name or ''} {person.last_name or ''}".strip()
+    )
     return display.strip()
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Update usernames/passwords for local users.")
+    parser = argparse.ArgumentParser(
+        description="Update usernames/passwords for local users."
+    )
     parser.add_argument(
         "--apply",
         action="store_true",

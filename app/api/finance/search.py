@@ -24,12 +24,21 @@ router = APIRouter(
 
 @router.get("/suggestions")
 def get_suggestions(
-    entity_type: str = Query(..., description="Entity type to search (customers, suppliers, accounts, items, tax_codes, bank_accounts)"),
+    entity_type: str = Query(
+        ...,
+        description="Entity type to search (customers, suppliers, accounts, items, tax_codes, bank_accounts)",
+    ),
     q: str = Query(..., min_length=1, description="Search query"),
     limit: int = Query(default=10, ge=1, le=20, description="Maximum results"),
-    account_type: Optional[str] = Query(default=None, description="Filter accounts by type"),
-    category_id: Optional[str] = Query(default=None, description="Filter items by category"),
-    tax_type: Optional[str] = Query(default=None, description="Filter tax codes by type"),
+    account_type: Optional[str] = Query(
+        default=None, description="Filter accounts by type"
+    ),
+    category_id: Optional[str] = Query(
+        default=None, description="Filter items by category"
+    ),
+    tax_type: Optional[str] = Query(
+        default=None, description="Filter tax codes by type"
+    ),
     org_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_session),
 ) -> Dict[str, Any]:
@@ -70,7 +79,9 @@ def get_suggestions(
 @router.get("/global")
 def global_search(
     q: str = Query(..., min_length=2, description="Search query"),
-    limit: int = Query(default=5, ge=1, le=10, description="Max results per entity type"),
+    limit: int = Query(
+        default=5, ge=1, le=10, description="Max results per entity type"
+    ),
     org_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_session),
 ) -> Dict[str, Any]:

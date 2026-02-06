@@ -21,9 +21,7 @@ class ListResponse(BaseModel, Generic[T]):
     """
 
     items: list[T]
-    total: int = Field(
-        description="Total number of items matching the query"
-    )
+    total: int = Field(description="Total number of items matching the query")
     limit: int = Field(description="Maximum items per page")
     offset: int = Field(description="Number of items skipped")
 

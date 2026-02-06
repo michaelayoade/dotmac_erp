@@ -73,7 +73,7 @@ class MockLeaseContract:
         approved_at: Optional[datetime] = None,
         created_at: datetime = None,
         updated_at: Optional[datetime] = None,
-        **kwargs
+        **kwargs,
     ):
         self.lease_id = lease_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -156,7 +156,7 @@ class MockLeaseLiability:
         created_at: datetime = None,
         updated_at: Optional[datetime] = None,
         incremental_borrowing_rate: Decimal = Decimal("0.05"),
-        **kwargs
+        **kwargs,
     ):
         self.liability_id = liability_id or uuid.uuid4()
         self.lease_id = lease_id or uuid.uuid4()
@@ -214,7 +214,7 @@ class MockLeaseAsset:
         last_depreciation_period_id: Optional[uuid.UUID] = None,
         created_at: datetime = None,
         updated_at: Optional[datetime] = None,
-        **kwargs
+        **kwargs,
     ):
         self.asset_id = asset_id or uuid.uuid4()
         self.lease_id = lease_id or uuid.uuid4()
@@ -234,8 +234,12 @@ class MockLeaseAsset:
         self.modification_adjustments = modification_adjustments
         self.carrying_amount = carrying_amount
         self.rou_asset_account_id = rou_asset_account_id or uuid.uuid4()
-        self.accumulated_depreciation_account_id = accumulated_depreciation_account_id or uuid.uuid4()
-        self.depreciation_expense_account_id = depreciation_expense_account_id or uuid.uuid4()
+        self.accumulated_depreciation_account_id = (
+            accumulated_depreciation_account_id or uuid.uuid4()
+        )
+        self.depreciation_expense_account_id = (
+            depreciation_expense_account_id or uuid.uuid4()
+        )
         self.last_depreciation_date = last_depreciation_date
         self.last_depreciation_period_id = last_depreciation_period_id
         self.created_at = created_at or datetime.now(timezone.utc)
@@ -274,7 +278,7 @@ class MockLeaseModification:
         approved_by_user_id: Optional[uuid.UUID] = None,
         approved_at: Optional[datetime] = None,
         created_at: datetime = None,
-        **kwargs
+        **kwargs,
     ):
         self.modification_id = modification_id or uuid.uuid4()
         self.lease_id = lease_id or uuid.uuid4()
@@ -333,7 +337,7 @@ class MockLeasePaymentSchedule:
         payment_journal_entry_id: Optional[uuid.UUID] = None,
         created_at: datetime = None,
         updated_at: Optional[datetime] = None,
-        **kwargs
+        **kwargs,
     ):
         self.schedule_id = schedule_id or uuid.uuid4()
         self.lease_id = lease_id or uuid.uuid4()

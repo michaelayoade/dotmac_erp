@@ -3,6 +3,7 @@ Lifecycle Management Pydantic Schemas.
 
 Schemas for onboarding, separation, promotions, and transfers.
 """
+
 from datetime import date, datetime
 from typing import List, Optional
 from uuid import UUID

@@ -4,6 +4,7 @@ Provides IP-based rate limiting with configurable limits per endpoint.
 Uses in-memory storage for development/single instance, with Redis
 backend option for production clusters.
 """
+
 from __future__ import annotations
 
 import logging
@@ -308,7 +309,9 @@ def _make_rate_limit_key(request: Request, config: RateLimitConfig) -> str:
     return f"{_get_client_ip(request)}:{request.url.path}"
 
 
-async def rate_limit_middleware(request: Request, call_next: RequestResponseEndpoint) -> Response:
+async def rate_limit_middleware(
+    request: Request, call_next: RequestResponseEndpoint
+) -> Response:
     """Middleware that enforces rate limits on configured endpoints."""
     path = request.url.path
 

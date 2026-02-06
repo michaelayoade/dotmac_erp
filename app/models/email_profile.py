@@ -36,15 +36,24 @@ class EmailModule(str, enum.Enum):
     """Module identifier for email routing.
 
     Aligned with main application modules:
-    - PEOPLE: HR, Payroll, Leave, Recruitment, Training, Onboarding
-    - FINANCE: GL, AR, AP, Banking, Tax, FA, Expense
-    - OPERATIONS: Support tickets, Projects, Scheduling
+    - SUPPORT: Support tickets and helpdesk
+    - PEOPLE_PAYROLL: HR, Payroll, Recruitment, Leave, Training, Onboarding
+    - FINANCE: GL, AR, AP, Banking, Tax, FA
+    - INVENTORY_FLEET: Inventory and Fleet operations
+    - PROCUREMENT: Procurement workflows
+    - EXPENSE: Expense claims
     - ADMIN: System settings, User management, Audit, Password resets
+    - PEOPLE / OPERATIONS: Legacy routing values (kept for backward compatibility)
     """
 
+    SUPPORT = "SUPPORT"
+    PEOPLE_PAYROLL = "PEOPLE_PAYROLL"
     PEOPLE = "PEOPLE"  # HR, Payroll, Recruitment, Leave, Training
-    FINANCE = "FINANCE"  # GL, AR, AP, Banking, Tax, Expense
-    OPERATIONS = "OPERATIONS"  # Support, Projects, Scheduling
+    FINANCE = "FINANCE"  # GL, AR, AP, Banking, Tax
+    INVENTORY_FLEET = "INVENTORY_FLEET"
+    PROCUREMENT = "PROCUREMENT"
+    EXPENSE = "EXPENSE"
+    OPERATIONS = "OPERATIONS"  # Legacy: Support, Projects, Scheduling
     ADMIN = "ADMIN"  # System administration, User management, Password resets
 
 
@@ -221,7 +230,8 @@ class ModuleEmailRouting(Base):
     __tablename__ = "module_email_routing"
     __table_args__ = (
         UniqueConstraint(
-            "organization_id", "module",
+            "organization_id",
+            "module",
             name="uq_module_email_routing_org_module",
         ),
         Index("idx_module_email_routing_org", "organization_id"),
@@ -252,7 +262,12 @@ class ModuleEmailRouting(Base):
     email_profile_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("public.email_profile.profile_id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
+    )
+    use_default: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        comment="Use global SMTP defaults instead of a module-specific profile",
     )
 
     # Timestamps

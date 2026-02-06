@@ -3,6 +3,7 @@ Bank Directory Model - Core Org.
 
 System-wide directory of Nigerian banks with codes and aliases for lookup.
 """
+
 from datetime import datetime
 from typing import Optional
 

@@ -106,9 +106,7 @@ def process_fiscal_period_reminders() -> dict[str, Any]:
                     "Failed to send reminder for period %s",
                     period.fiscal_period_id,
                 )
-                results["errors"].append(
-                    f"Period {period.fiscal_period_id}: {str(e)}"
-                )
+                results["errors"].append(f"Period {period.fiscal_period_id}: {str(e)}")
 
         db.commit()
 
@@ -168,9 +166,7 @@ def process_tax_period_reminders() -> dict[str, Any]:
                 if not recipients:
                     continue
 
-                sent = service.send_tax_period_reminder(
-                    period, recipients, notice_type
-                )
+                sent = service.send_tax_period_reminder(period, recipients, notice_type)
                 results["notifications_sent"] += sent
 
             except Exception as e:
@@ -188,7 +184,13 @@ def process_tax_period_reminders() -> dict[str, Any]:
             try:
                 recipients = _get_finance_recipients(
                     db,
-                    ["accountant", "finance_manager", "tax_accountant", "controller", "cfo"],
+                    [
+                        "accountant",
+                        "finance_manager",
+                        "tax_accountant",
+                        "controller",
+                        "cfo",
+                    ],
                 )
 
                 if not recipients:
@@ -345,9 +347,7 @@ def process_ar_collection_reminders() -> dict[str, Any]:
                     "Failed to send collection reminder for invoice %s",
                     invoice.invoice_id,
                 )
-                results["errors"].append(
-                    f"Invoice {invoice.invoice_id}: {str(e)}"
-                )
+                results["errors"].append(f"Invoice {invoice.invoice_id}: {str(e)}")
 
         db.commit()
 

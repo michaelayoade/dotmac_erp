@@ -3,6 +3,7 @@ Salary Component Model - Payroll Schema.
 
 Defines earning and deduction types with GL account mappings.
 """
+
 import enum
 import uuid
 from datetime import datetime

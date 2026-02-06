@@ -2,7 +2,7 @@
 Tests for BankReconciliationService.
 """
 
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -18,11 +18,9 @@ from tests.ifrs.banking.conftest import (
     MockBankAccount,
     MockBankReconciliation,
     MockBankReconciliationLine,
-    MockBankStatement,
     MockBankStatementLine,
     MockJournalEntry,
     MockJournalEntryLine,
-    MockReconciliationStatus,
 )
 
 
@@ -77,13 +75,18 @@ class TestCreateReconciliation:
         with patch.object(service, "_get_gl_balance", return_value=Decimal("1500.00")):
             with patch.object(service, "_get_prior_reconciliation", return_value=None):
                 # Patch the model's calculate_difference to avoid None type issues
-                with patch.object(BankReconciliation, "calculate_difference", return_value=None):
+                with patch.object(
+                    BankReconciliation, "calculate_difference", return_value=None
+                ):
                     result = service.create_reconciliation(
-                        mock_db, org_id, bank_account.bank_account_id,
-                        sample_recon_input, user_id
+                        mock_db,
+                        org_id,
+                        bank_account.bank_account_id,
+                        sample_recon_input,
+                        user_id,
                     )
 
-        mock_db.add.assert_called_once()
+        assert mock_db.add.call_count >= 1  # Reconciliation + optional AuditLog
         mock_db.flush.assert_called()
 
     def test_create_reconciliation_nonexistent_account_fails(
@@ -95,9 +98,7 @@ class TestCreateReconciliation:
         mock_db.get.return_value = None
 
         with pytest.raises(HTTPException) as exc:
-            service.create_reconciliation(
-                mock_db, org_id, uuid4(), sample_recon_input
-            )
+            service.create_reconciliation(mock_db, org_id, uuid4(), sample_recon_input)
 
         assert exc.value.status_code == 404
 
@@ -422,8 +423,12 @@ class TestGetReconciliationReport:
         )
         recon.bank_account = bank_account
         recon.lines = [
-            MockBankReconciliationLine(is_cleared=True, statement_amount=Decimal("100.00")),
-            MockBankReconciliationLine(is_adjustment=True, statement_amount=Decimal("50.00")),
+            MockBankReconciliationLine(
+                is_cleared=True, statement_amount=Decimal("100.00")
+            ),
+            MockBankReconciliationLine(
+                is_adjustment=True, statement_amount=Decimal("50.00")
+            ),
             MockBankReconciliationLine(is_outstanding=True, outstanding_type="deposit"),
         ]
         mock_db.get.return_value = recon
@@ -586,10 +591,11 @@ class TestListFilters:
     def test_list_by_bank_account(self, service, mock_db, org_id):
         """Test listing reconciliations filtered by bank account."""
         bank_account_id = uuid4()
-        recons = [MockBankReconciliation(
-            organization_id=org_id,
-            bank_account_id=bank_account_id
-        )]
+        recons = [
+            MockBankReconciliation(
+                organization_id=org_id, bank_account_id=bank_account_id
+            )
+        ]
 
         mock_result = MagicMock()
         mock_scalars = MagicMock()
@@ -612,9 +618,7 @@ class TestListFilters:
         mock_db.execute.return_value = mock_result
 
         result = service.list(
-            mock_db, org_id,
-            start_date=date(2024, 1, 1),
-            end_date=date(2024, 12, 31)
+            mock_db, org_id, start_date=date(2024, 1, 1), end_date=date(2024, 12, 31)
         )
 
         assert result == recons
@@ -685,14 +689,21 @@ class TestCreateReconciliationWithPrior:
         )
 
         with patch.object(service, "_get_gl_balance", return_value=Decimal("1500.00")):
-            with patch.object(service, "_get_prior_reconciliation", return_value=prior_recon):
-                with patch.object(BankReconciliation, "calculate_difference", return_value=None):
+            with patch.object(
+                service, "_get_prior_reconciliation", return_value=prior_recon
+            ):
+                with patch.object(
+                    BankReconciliation, "calculate_difference", return_value=None
+                ):
                     result = service.create_reconciliation(
-                        mock_db, org_id, bank_account.bank_account_id,
-                        sample_recon_input, user_id
+                        mock_db,
+                        org_id,
+                        bank_account.bank_account_id,
+                        sample_recon_input,
+                        user_id,
                     )
 
-        mock_db.add.assert_called_once()
+        assert mock_db.add.call_count >= 1  # Reconciliation + optional AuditLog
 
 
 class TestApproveWithNotes:
@@ -711,8 +722,7 @@ class TestApproveWithNotes:
         mock_db.get.return_value = recon
 
         result = service.approve(
-            mock_db, recon.reconciliation_id, user_id,
-            notes="All items verified"
+            mock_db, recon.reconciliation_id, user_id, notes="All items verified"
         )
 
         assert result.review_notes == "All items verified"
@@ -756,7 +766,9 @@ class TestCalculateMatchScore:
             debit_amount=Decimal("100.00"),
             credit_amount=None,
         )
-        gl_line.journal_entry = MockJournalEntry(entry_date=date.today() - timedelta(days=5))
+        gl_line.journal_entry = MockJournalEntry(
+            entry_date=date.today() - timedelta(days=5)
+        )
 
         score = service._calculate_match_score(stmt_line, gl_line)
 
@@ -821,8 +833,12 @@ class TestAutoMatchWithItems:
 
         mock_db.execute.side_effect = [mock_stmt_result, mock_gl_result]
 
-        with patch.object(service, "add_match", return_value=MockBankReconciliationLine()):
-            result = service.auto_match(mock_db, recon.reconciliation_id, created_by=user_id)
+        with patch.object(
+            service, "add_match", return_value=MockBankReconciliationLine()
+        ):
+            result = service.auto_match(
+                mock_db, recon.reconciliation_id, created_by=user_id
+            )
 
         assert result.matches_found >= 0  # Depends on match score threshold
 
@@ -847,7 +863,9 @@ class TestAutoMatchWithItems:
 
         mock_db.execute.side_effect = [mock_stmt_result, mock_gl_result]
 
-        result = service.auto_match(mock_db, recon.reconciliation_id, created_by=user_id)
+        result = service.auto_match(
+            mock_db, recon.reconciliation_id, created_by=user_id
+        )
 
         assert result.matches_found == 0
         assert result.matches_created == 0

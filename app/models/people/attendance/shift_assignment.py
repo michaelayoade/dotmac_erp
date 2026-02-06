@@ -3,6 +3,7 @@ Shift Assignment Model - Attendance Schema.
 
 Tracks employee shift assignments over time.
 """
+
 import uuid
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Optional

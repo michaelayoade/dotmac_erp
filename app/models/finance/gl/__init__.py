@@ -2,6 +2,7 @@
 General Ledger Schema - Document 07, 08.
 Chart of accounts, fiscal periods, journal entries, posted ledger.
 """
+
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.models.finance.gl.account import Account, AccountType, NormalBalance
 from app.models.finance.gl.fiscal_year import FiscalYear

@@ -3,10 +3,11 @@ Sales Order Web Routes.
 
 HTML template routes for sales order management.
 """
+
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.ar.web import sales_order_web_service
@@ -19,6 +20,7 @@ router = APIRouter(prefix="/sales-orders", tags=["sales-orders-web"])
 # =============================================================================
 # Sales Order List
 # =============================================================================
+
 
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
@@ -41,6 +43,7 @@ def sales_order_list(
 # New Sales Order
 # =============================================================================
 
+
 @router.get("/new", response_class=HTMLResponse)
 def new_so_form(
     request: Request,
@@ -50,7 +53,9 @@ def new_so_form(
     db: Session = Depends(get_db),
 ):
     """New sales order form."""
-    return sales_order_web_service.new_form_response(request, auth, db, customer_id, quote_id)
+    return sales_order_web_service.new_form_response(
+        request, auth, db, customer_id, quote_id
+    )
 
 
 @router.post("/new", response_class=HTMLResponse)
@@ -107,6 +112,7 @@ def create_sales_order(
 # Sales Order Detail
 # =============================================================================
 
+
 @router.get("/{so_id}", response_class=HTMLResponse)
 def sales_order_detail(
     request: Request,
@@ -121,6 +127,7 @@ def sales_order_detail(
 # =============================================================================
 # Sales Order Actions
 # =============================================================================
+
 
 @router.post("/{so_id}/submit", response_class=HTMLResponse)
 def submit_order(
@@ -204,6 +211,7 @@ def create_invoice_from_order(
 # Shipment Actions
 # =============================================================================
 
+
 @router.get("/{so_id}/ship", response_class=HTMLResponse)
 def ship_order_form(
     request: Request,
@@ -251,4 +259,6 @@ def mark_delivered(
     db: Session = Depends(get_db),
 ):
     """Mark shipment as delivered."""
-    return sales_order_web_service.mark_delivered_response(request, auth, db, shipment_id)
+    return sales_order_web_service.mark_delivered_response(
+        request, auth, db, shipment_id
+    )

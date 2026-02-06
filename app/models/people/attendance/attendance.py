@@ -3,9 +3,10 @@ Attendance Model - Attendance Schema.
 
 Tracks daily employee attendance records.
 """
+
 import enum
 import uuid
-from datetime import date, datetime, time
+from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
@@ -19,7 +20,6 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
-    Time,
     UniqueConstraint,
     func,
     text,
@@ -38,6 +38,7 @@ if TYPE_CHECKING:
 
 class AttendanceStatus(str, enum.Enum):
     """Attendance marking status."""
+
     PRESENT = "PRESENT"
     ABSENT = "ABSENT"
     HALF_DAY = "HALF_DAY"
@@ -55,7 +56,9 @@ class Attendance(Base, AuditMixin, ERPNextSyncMixin):
 
     __tablename__ = "attendance"
     __table_args__ = (
-        UniqueConstraint("employee_id", "attendance_date", name="uq_attendance_emp_date"),
+        UniqueConstraint(
+            "employee_id", "attendance_date", name="uq_attendance_emp_date"
+        ),
         Index("idx_attendance_date", "organization_id", "attendance_date"),
         Index("idx_attendance_employee", "employee_id", "attendance_date"),
         Index("idx_attendance_status", "organization_id", "status", "attendance_date"),

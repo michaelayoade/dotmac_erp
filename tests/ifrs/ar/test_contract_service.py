@@ -145,7 +145,9 @@ class MockPerformanceObligation:
         self.obligation_number = obligation_number
         self.description = description
         self.is_distinct = is_distinct
-        self.satisfaction_pattern = satisfaction_pattern or MockSatisfactionPattern.POINT_IN_TIME
+        self.satisfaction_pattern = (
+            satisfaction_pattern or MockSatisfactionPattern.POINT_IN_TIME
+        )
         self.over_time_method = over_time_method
         self.progress_measure = progress_measure
         self.standalone_selling_price = standalone_selling_price
@@ -188,6 +190,7 @@ class MockRevenueRecognitionEvent:
 
 
 # ===================== CREATE CONTRACT TESTS =====================
+
 
 class TestCreateContract:
     """Tests for contract creation."""
@@ -406,6 +409,7 @@ class TestCreateContract:
 
 # ===================== ACTIVATE CONTRACT TESTS =====================
 
+
 class TestActivateContract:
     """Tests for contract activation."""
 
@@ -432,10 +436,14 @@ class TestActivateContract:
 
         # Mock queries
         db.query.return_value.filter.return_value.first.return_value = mock_contract
-        db.query.return_value.filter.return_value.count.return_value = 1  # Has obligations
+        db.query.return_value.filter.return_value.count.return_value = (
+            1  # Has obligations
+        )
 
         # Set up status comparison
-        with patch("app.services.finance.ar.contract.ContractStatus") as mock_status_class:
+        with patch(
+            "app.services.finance.ar.contract.ContractStatus"
+        ) as mock_status_class:
             mock_status_class.DRAFT = mock_status
             mock_status_class.ACTIVE = MagicMock()
             mock_status_class.ACTIVE.value = "ACTIVE"
@@ -477,7 +485,9 @@ class TestActivateContract:
 
         db.query.return_value.filter.return_value.first.return_value = mock_contract
 
-        with patch("app.services.finance.ar.contract.ContractStatus") as mock_status_class:
+        with patch(
+            "app.services.finance.ar.contract.ContractStatus"
+        ) as mock_status_class:
             mock_status_class.DRAFT = MagicMock()
             mock_status_class.DRAFT.value = "DRAFT"
 
@@ -508,7 +518,9 @@ class TestActivateContract:
         db.query.return_value.filter.return_value.first.return_value = mock_contract
         db.query.return_value.filter.return_value.count.return_value = 0
 
-        with patch("app.services.finance.ar.contract.ContractStatus") as mock_status_class:
+        with patch(
+            "app.services.finance.ar.contract.ContractStatus"
+        ) as mock_status_class:
             mock_status_class.DRAFT = mock_status
 
             with pytest.raises(HTTPException) as exc_info:
@@ -520,15 +532,22 @@ class TestActivateContract:
 
 # ===================== ADD PERFORMANCE OBLIGATION TESTS =====================
 
+
 class TestAddPerformanceObligation:
     """Tests for adding performance obligations."""
 
-    @patch("app.services.finance.ar.contract.ContractService.reallocate_transaction_price")
+    @patch(
+        "app.services.finance.ar.contract.ContractService.reallocate_transaction_price"
+    )
     @patch("app.services.finance.ar.contract.PerformanceObligation")
     @patch("app.services.finance.ar.contract.ContractStatus")
     @patch("app.services.finance.ar.contract.Contract")
     def test_add_obligation_success(
-        self, mock_contract_class, mock_status_class, mock_obligation_class, mock_reallocate
+        self,
+        mock_contract_class,
+        mock_status_class,
+        mock_obligation_class,
+        mock_reallocate,
     ):
         """Test successfully adding a performance obligation."""
         db = MagicMock()
@@ -546,7 +565,9 @@ class TestAddPerformanceObligation:
         mock_contract.status = mock_draft  # Contract is in DRAFT status
 
         db.query.return_value.filter.return_value.first.return_value = mock_contract
-        db.query.return_value.filter.return_value.count.return_value = 1  # Existing count
+        db.query.return_value.filter.return_value.count.return_value = (
+            1  # Existing count
+        )
 
         mock_obligation = MockPerformanceObligation(
             contract_id=contract_id,
@@ -589,7 +610,9 @@ class TestAddPerformanceObligation:
         )
 
         with pytest.raises(HTTPException) as exc_info:
-            ContractService.add_performance_obligation(db, org_id, contract_id, input_data)
+            ContractService.add_performance_obligation(
+                db, org_id, contract_id, input_data
+            )
 
         assert exc_info.value.status_code == 404
 
@@ -616,7 +639,9 @@ class TestAddPerformanceObligation:
             revenue_account_id=uuid4(),
         )
 
-        with patch("app.services.finance.ar.contract.ContractStatus") as mock_status_class:
+        with patch(
+            "app.services.finance.ar.contract.ContractStatus"
+        ) as mock_status_class:
             mock_status_class.DRAFT = MagicMock()
             mock_status_class.ACTIVE = MagicMock()
 
@@ -629,6 +654,7 @@ class TestAddPerformanceObligation:
 
 
 # ===================== REALLOCATE TRANSACTION PRICE TESTS =====================
+
 
 class TestReallocateTransactionPrice:
     """Tests for transaction price reallocation."""
@@ -662,7 +688,8 @@ class TestReallocateTransactionPrice:
 
         db.query.return_value.filter.return_value.first.return_value = mock_contract
         db.query.return_value.filter.return_value.all.return_value = [
-            obligation1, obligation2
+            obligation1,
+            obligation2,
         ]
 
         ContractService.reallocate_transaction_price(db, org_id, contract_id)
@@ -714,14 +741,13 @@ class TestReallocateTransactionPrice:
 
 # ===================== UPDATE PROGRESS TESTS =====================
 
+
 class TestUpdateProgress:
     """Tests for over-time revenue recognition progress updates."""
 
     @patch("app.services.finance.ar.contract.RevenueRecognitionEvent")
     @patch("app.services.finance.ar.contract.PerformanceObligation")
-    def test_update_progress_success(
-        self, mock_obligation_class, mock_event_class
-    ):
+    def test_update_progress_success(self, mock_obligation_class, mock_event_class):
         """Test successful progress update."""
         db = MagicMock()
         org_id = uuid4()
@@ -749,7 +775,9 @@ class TestUpdateProgress:
             progress_percentage=Decimal("25"),
         )
 
-        with patch("app.services.finance.ar.contract.SatisfactionPattern") as mock_pattern:
+        with patch(
+            "app.services.finance.ar.contract.SatisfactionPattern"
+        ) as mock_pattern:
             mock_pattern.OVER_TIME = MockSatisfactionPattern.OVER_TIME
 
             result = ContractService.update_progress(db, org_id, input_data, user_id)
@@ -794,7 +822,9 @@ class TestUpdateProgress:
             progress_percentage=Decimal("100"),
         )
 
-        with patch("app.services.finance.ar.contract.SatisfactionPattern") as mock_pattern:
+        with patch(
+            "app.services.finance.ar.contract.SatisfactionPattern"
+        ) as mock_pattern:
             mock_pattern.OVER_TIME = MockSatisfactionPattern.OVER_TIME
 
             result = ContractService.update_progress(db, org_id, input_data, user_id)
@@ -842,7 +872,9 @@ class TestUpdateProgress:
             progress_percentage=Decimal("50"),
         )
 
-        with patch("app.services.finance.ar.contract.SatisfactionPattern") as mock_pattern:
+        with patch(
+            "app.services.finance.ar.contract.SatisfactionPattern"
+        ) as mock_pattern:
             mock_pattern.OVER_TIME = MagicMock()  # Different from POINT_IN_TIME
 
             with pytest.raises(HTTPException) as exc_info:
@@ -871,7 +903,9 @@ class TestUpdateProgress:
             progress_percentage=Decimal("50"),
         )
 
-        with patch("app.services.finance.ar.contract.SatisfactionPattern") as mock_pattern:
+        with patch(
+            "app.services.finance.ar.contract.SatisfactionPattern"
+        ) as mock_pattern:
             mock_pattern.OVER_TIME = MockSatisfactionPattern.OVER_TIME
 
             with pytest.raises(HTTPException) as exc_info:
@@ -903,7 +937,9 @@ class TestUpdateProgress:
             progress_percentage=Decimal("40"),  # Trying to decrease
         )
 
-        with patch("app.services.finance.ar.contract.SatisfactionPattern") as mock_pattern:
+        with patch(
+            "app.services.finance.ar.contract.SatisfactionPattern"
+        ) as mock_pattern:
             mock_pattern.OVER_TIME = MockSatisfactionPattern.OVER_TIME
 
             with pytest.raises(HTTPException) as exc_info:
@@ -914,6 +950,7 @@ class TestUpdateProgress:
 
 
 # ===================== SATISFY POINT IN TIME TESTS =====================
+
 
 class TestSatisfyPointInTime:
     """Tests for point-in-time revenue recognition."""
@@ -946,7 +983,9 @@ class TestSatisfyPointInTime:
         )
         mock_event_class.return_value = mock_event
 
-        with patch("app.services.finance.ar.contract.SatisfactionPattern") as mock_pattern:
+        with patch(
+            "app.services.finance.ar.contract.SatisfactionPattern"
+        ) as mock_pattern:
             mock_pattern.POINT_IN_TIME = MockSatisfactionPattern.POINT_IN_TIME
 
             result = ContractService.satisfy_point_in_time(
@@ -989,7 +1028,9 @@ class TestSatisfyPointInTime:
 
         db.query.return_value.filter.return_value.first.return_value = mock_obligation
 
-        with patch("app.services.finance.ar.contract.SatisfactionPattern") as mock_pattern:
+        with patch(
+            "app.services.finance.ar.contract.SatisfactionPattern"
+        ) as mock_pattern:
             mock_pattern.POINT_IN_TIME = MagicMock()
 
             with pytest.raises(HTTPException) as exc_info:
@@ -1014,7 +1055,9 @@ class TestSatisfyPointInTime:
 
         db.query.return_value.filter.return_value.first.return_value = mock_obligation
 
-        with patch("app.services.finance.ar.contract.SatisfactionPattern") as mock_pattern:
+        with patch(
+            "app.services.finance.ar.contract.SatisfactionPattern"
+        ) as mock_pattern:
             mock_pattern.POINT_IN_TIME = MockSatisfactionPattern.POINT_IN_TIME
 
             with pytest.raises(HTTPException) as exc_info:
@@ -1028,14 +1071,13 @@ class TestSatisfyPointInTime:
 
 # ===================== MODIFY CONTRACT TESTS =====================
 
+
 class TestModifyContract:
     """Tests for contract modifications."""
 
     @patch("app.services.finance.ar.contract.ContractService._reallocate_prospectively")
     @patch("app.services.finance.ar.contract.Contract")
-    def test_modify_contract_prospective(
-        self, mock_contract_class, mock_reallocate
-    ):
+    def test_modify_contract_prospective(self, mock_contract_class, mock_reallocate):
         """Test prospective contract modification."""
         db = MagicMock()
         org_id = uuid4()
@@ -1054,7 +1096,9 @@ class TestModifyContract:
 
         db.query.return_value.filter.return_value.first.return_value = mock_contract
 
-        with patch("app.services.finance.ar.contract.ContractStatus") as mock_status_class:
+        with patch(
+            "app.services.finance.ar.contract.ContractStatus"
+        ) as mock_status_class:
             mock_status_class.ACTIVE = mock_status
 
             result = ContractService.modify_contract(
@@ -1072,7 +1116,9 @@ class TestModifyContract:
         mock_reallocate.assert_called_once()
         db.commit.assert_called_once()
 
-    @patch("app.services.finance.ar.contract.ContractService._reallocate_cumulative_catchup")
+    @patch(
+        "app.services.finance.ar.contract.ContractService._reallocate_cumulative_catchup"
+    )
     @patch("app.services.finance.ar.contract.Contract")
     def test_modify_contract_cumulative_catchup(
         self, mock_contract_class, mock_reallocate
@@ -1095,7 +1141,9 @@ class TestModifyContract:
 
         db.query.return_value.filter.return_value.first.return_value = mock_contract
 
-        with patch("app.services.finance.ar.contract.ContractStatus") as mock_status_class:
+        with patch(
+            "app.services.finance.ar.contract.ContractStatus"
+        ) as mock_status_class:
             mock_status_class.ACTIVE = mock_status
 
             result = ContractService.modify_contract(
@@ -1121,9 +1169,7 @@ class TestModifyContract:
         db.query.return_value.filter.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc_info:
-            ContractService.modify_contract(
-                db, org_id, contract_id, date.today()
-            )
+            ContractService.modify_contract(db, org_id, contract_id, date.today())
 
         assert exc_info.value.status_code == 404
 
@@ -1142,18 +1188,19 @@ class TestModifyContract:
 
         db.query.return_value.filter.return_value.first.return_value = mock_contract
 
-        with patch("app.services.finance.ar.contract.ContractStatus") as mock_status_class:
+        with patch(
+            "app.services.finance.ar.contract.ContractStatus"
+        ) as mock_status_class:
             mock_status_class.ACTIVE = MagicMock()
 
             with pytest.raises(HTTPException) as exc_info:
-                ContractService.modify_contract(
-                    db, org_id, contract_id, date.today()
-                )
+                ContractService.modify_contract(db, org_id, contract_id, date.today())
 
         assert exc_info.value.status_code == 400
 
 
 # ===================== COMPLETE CONTRACT TESTS =====================
+
 
 class TestCompleteContract:
     """Tests for contract completion."""
@@ -1171,9 +1218,13 @@ class TestCompleteContract:
         mock_contract = MockContract(contract_id=contract_id, organization_id=org_id)
 
         db.query.return_value.filter.return_value.first.return_value = mock_contract
-        db.query.return_value.filter.return_value.count.return_value = 0  # No unsatisfied
+        db.query.return_value.filter.return_value.count.return_value = (
+            0  # No unsatisfied
+        )
 
-        with patch("app.services.finance.ar.contract.ContractStatus") as mock_status_class:
+        with patch(
+            "app.services.finance.ar.contract.ContractStatus"
+        ) as mock_status_class:
             mock_status_class.COMPLETED = MagicMock()
 
             result = ContractService.complete_contract(db, org_id, contract_id)
@@ -1208,7 +1259,9 @@ class TestCompleteContract:
         mock_contract = MockContract(contract_id=contract_id, organization_id=org_id)
 
         db.query.return_value.filter.return_value.first.return_value = mock_contract
-        db.query.return_value.filter.return_value.count.return_value = 2  # 2 unsatisfied
+        db.query.return_value.filter.return_value.count.return_value = (
+            2  # 2 unsatisfied
+        )
 
         with pytest.raises(HTTPException) as exc_info:
             ContractService.complete_contract(db, org_id, contract_id)
@@ -1218,6 +1271,7 @@ class TestCompleteContract:
 
 
 # ===================== GETTER TESTS =====================
+
 
 class TestGetters:
     """Tests for getter methods."""
@@ -1296,6 +1350,7 @@ class TestGetters:
 
 # ===================== LIST TESTS =====================
 
+
 class TestListContracts:
     """Tests for listing contracts."""
 
@@ -1360,6 +1415,7 @@ class TestListContracts:
 
 
 # ===================== INTERNAL REALLOCATION TESTS =====================
+
 
 class TestInternalReallocation:
     """Tests for internal reallocation methods."""

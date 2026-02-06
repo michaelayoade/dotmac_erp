@@ -27,6 +27,7 @@ from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 from app.models.person import Gender as PersonGender
 from app.models.person import Person
 from app.models.rbac import PersonRole, Role
+from app.models.email_profile import EmailModule
 from app.services.email import send_email
 from app.services.notification import NotificationService
 
@@ -590,11 +591,20 @@ class InfoChangeService:
         subject: str,
         body_html: str,
         body_text: str,
+        organization_id: UUID | None,
     ) -> None:
         if not to_email:
             return
         try:
-            send_email(self.db, to_email, subject, body_html, body_text)
+            send_email(
+                self.db,
+                to_email,
+                subject,
+                body_html,
+                body_text,
+                module=EmailModule.PEOPLE_PAYROLL,
+                organization_id=organization_id,
+            )
         except Exception as exc:
             logger.warning("Failed to send info change email to %s: %s", to_email, exc)
 
@@ -663,7 +673,13 @@ class InfoChangeService:
                 f"<p>{employee_name} submitted a request to update their {change_label}.</p>"
                 f'<p><a href="{action_url}">Review request</a></p>'
             )
-            self._send_email_safe(admin.email, subject, body_html, body_text)
+            self._send_email_safe(
+                admin.email,
+                subject,
+                body_html,
+                body_text,
+                request.organization_id,
+            )
 
     def _notify_decision(
         self,
@@ -722,4 +738,10 @@ class InfoChangeService:
             f"{f'<p>Reason: {request.reviewer_notes}</p>' if request.reviewer_notes else ''}"
             f'<p><a href="{action_url}">View details</a></p>'
         )
-        self._send_email_safe(employee_email, subject, body_html, body_text)
+        self._send_email_safe(
+            employee_email,
+            subject,
+            body_html,
+            body_text,
+            request.organization_id,
+        )

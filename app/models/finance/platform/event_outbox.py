@@ -2,6 +2,7 @@
 Event Outbox - Transactional outbox for reliable event delivery.
 Document 10: Event-Driven Architecture.
 """
+
 import enum
 import uuid
 from datetime import datetime

@@ -1,13 +1,27 @@
 """
 Asset Model - FA Schema.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Index, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -89,7 +103,9 @@ class Asset(Base):
     in_service_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     acquisition_cost: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
-    functional_currency_cost: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    functional_currency_cost: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
 
     # Source document
     source_type: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
@@ -107,7 +123,9 @@ class Asset(Base):
     depreciation_method: Mapped[str] = mapped_column(String(30), nullable=False)
     useful_life_months: Mapped[int] = mapped_column(Numeric(10, 0), nullable=False)
     remaining_life_months: Mapped[int] = mapped_column(Numeric(10, 0), nullable=False)
-    residual_value: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    residual_value: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
     depreciation_start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Current values
@@ -117,8 +135,12 @@ class Asset(Base):
         default=0,
     )
     net_book_value: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    revalued_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6), nullable=True)
-    impairment_loss: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    revalued_amount: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 6), nullable=True
+    )
+    impairment_loss: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Status
     status: Mapped[AssetStatus] = mapped_column(
@@ -142,16 +164,26 @@ class Asset(Base):
     warranty_expiry_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Insurance
-    insured_value: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6), nullable=True)
-    insurance_policy_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    insured_value: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 6), nullable=True
+    )
+    insurance_policy_number: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
 
     # Disposal
     disposal_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    disposal_proceeds: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6), nullable=True)
-    disposal_gain_loss: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6), nullable=True)
+    disposal_proceeds: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 6), nullable=True
+    )
+    disposal_gain_loss: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 6), nullable=True
+    )
 
     # Component accounting (IAS 16)
-    is_component_parent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_component_parent: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     parent_asset_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("fa.asset.asset_id"),

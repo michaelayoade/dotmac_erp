@@ -16,6 +16,7 @@ Usage:
         --username "admin" \
         --password "secure-password"
 """
+
 import argparse
 
 from dotenv import load_dotenv

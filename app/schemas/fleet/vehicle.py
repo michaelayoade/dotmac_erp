@@ -3,6 +3,7 @@ Vehicle Pydantic Schemas.
 
 Schemas for Vehicle API endpoints.
 """
+
 from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional

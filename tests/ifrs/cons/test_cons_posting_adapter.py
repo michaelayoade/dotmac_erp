@@ -636,9 +636,7 @@ class TestPostTranslationAdjustment:
         assert result.success is False
         assert "run not found" in result.message.lower()
 
-    def test_post_cta_entity_not_found(
-        self, mock_db, group_id, user_id, mock_run
-    ):
+    def test_post_cta_entity_not_found(self, mock_db, group_id, user_id, mock_run):
         """Test CTA posting when entity not found."""
 
         def get_side_effect(model, id):
@@ -915,9 +913,7 @@ class TestPostNCIAllocation:
         assert result.success is False
         assert "run not found" in result.message.lower()
 
-    def test_post_nci_entity_not_found(
-        self, mock_db, group_id, user_id, mock_run
-    ):
+    def test_post_nci_entity_not_found(self, mock_db, group_id, user_id, mock_run):
         """Test NCI posting when entity not found."""
 
         def get_side_effect(model, id):

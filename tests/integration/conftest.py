@@ -16,7 +16,6 @@ Or run directly: pytest tests/integration/ifrs/test_*.py
 """
 
 import os
-import sys
 import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -24,16 +23,19 @@ from typing import Generator
 
 # Load environment variables FIRST
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # Set required environment variables before any app imports
 os.environ.setdefault("JWT_SECRET", "test-secret-key-for-integration-tests")
 os.environ.setdefault("JWT_ALGORITHM", "HS256")
-os.environ.setdefault("TOTP_ENCRYPTION_KEY", "QLUJktsTSfZEbST4R-37XmQ0tCkiVCBXZN2Zt053w8g=")
+os.environ.setdefault(
+    "TOTP_ENCRYPTION_KEY", "QLUJktsTSfZEbST4R-37XmQ0tCkiVCBXZN2Zt053w8g="
+)
 os.environ.setdefault("TOTP_ISSUER", "TestApp")
 
 import pytest
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 
@@ -135,6 +137,7 @@ def user_id() -> uuid.UUID:
 # =============================================================================
 # IFRS Model Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def fiscal_year(db: Session, org_id: uuid.UUID):
@@ -330,6 +333,7 @@ def revenue_account(db: Session, org_id: uuid.UUID, account_category):
 # Fixed Assets Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def fa_asset_account(db: Session, org_id: uuid.UUID, account_category):
     """Create a fixed asset account for testing."""
@@ -441,6 +445,7 @@ def asset_category(
 # AP Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def supplier(db: Session, org_id: uuid.UUID, ap_control_account):
     """Create a supplier for testing."""
@@ -499,6 +504,7 @@ def supplier_invoice(db: Session, org_id: uuid.UUID, supplier, user_id: uuid.UUI
 # AR Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def customer(db: Session, org_id: uuid.UUID, ar_control_account):
     """Create a customer for testing."""
@@ -523,6 +529,7 @@ def customer(db: Session, org_id: uuid.UUID, ar_control_account):
 # =============================================================================
 # Inventory Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def warehouse(db: Session, org_id: uuid.UUID):
@@ -560,7 +567,14 @@ def inventory_adjustment_account(db: Session, org_id: uuid.UUID, account_categor
 
 
 @pytest.fixture
-def item_category(db: Session, org_id: uuid.UUID, inventory_account, cogs_account, revenue_account, inventory_adjustment_account):
+def item_category(
+    db: Session,
+    org_id: uuid.UUID,
+    inventory_account,
+    cogs_account,
+    revenue_account,
+    inventory_adjustment_account,
+):
     """Create an item category for testing."""
     from app.models.inventory.item_category import ItemCategory
 
@@ -580,7 +594,14 @@ def item_category(db: Session, org_id: uuid.UUID, inventory_account, cogs_accoun
 
 
 @pytest.fixture
-def inventory_item(db: Session, org_id: uuid.UUID, item_category, inventory_account, cogs_account, revenue_account):
+def inventory_item(
+    db: Session,
+    org_id: uuid.UUID,
+    item_category,
+    inventory_account,
+    cogs_account,
+    revenue_account,
+):
     """Create an inventory item for testing."""
     from app.models.inventory.item import Item, CostingMethod
 
@@ -617,7 +638,10 @@ def initial_inventory_transaction(
     fiscal_period,
 ):
     """Create initial inventory through a receipt transaction."""
-    from app.models.inventory.inventory_transaction import InventoryTransaction, TransactionType
+    from app.models.inventory.inventory_transaction import (
+        InventoryTransaction,
+        TransactionType,
+    )
 
     txn = InventoryTransaction(
         organization_id=org_id,
@@ -666,6 +690,7 @@ def inventory_with_balance(
 # AR Invoice Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def ar_invoice(db: Session, org_id: uuid.UUID, customer, user_id: uuid.UUID):
     """Create an AR invoice for testing."""
@@ -697,6 +722,7 @@ def ar_invoice(db: Session, org_id: uuid.UUID, customer, user_id: uuid.UUID):
 # Inventory Lot Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def inventory_lot(db: Session, org_id: uuid.UUID, inventory_item, warehouse):
     """Create an inventory lot for testing."""
@@ -723,6 +749,7 @@ def inventory_lot(db: Session, org_id: uuid.UUID, inventory_item, warehouse):
 # =============================================================================
 # Numbering Sequence Fixtures (needed for inventory transactions)
 # =============================================================================
+
 
 @pytest.fixture
 def inv_transaction_sequence(db: Session, org_id: uuid.UUID):

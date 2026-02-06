@@ -37,6 +37,8 @@ class ItemCategoryInput:
     description: Optional[str] = None
     parent_category_id: Optional[UUID] = None
     purchase_variance_account_id: Optional[UUID] = None
+    reorder_point: Optional[Decimal] = None
+    minimum_stock: Optional[Decimal] = None
 
 
 @dataclass
@@ -134,6 +136,8 @@ class ItemCategoryService(ListResponseMixin):
             revenue_account_id=input.revenue_account_id,
             inventory_adjustment_account_id=input.inventory_adjustment_account_id,
             purchase_variance_account_id=input.purchase_variance_account_id,
+            reorder_point=input.reorder_point,
+            minimum_stock=input.minimum_stock,
             is_active=True,
         )
 

@@ -3,6 +3,7 @@ Scorecard Model - Performance Schema.
 
 Employee performance scorecards and balanced scorecards.
 """
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal

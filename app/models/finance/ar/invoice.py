@@ -1,13 +1,27 @@
 """
 Invoice Model - AR Schema.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -93,7 +107,9 @@ class Invoice(Base, VersionedMixin):
 
     # Currency
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
-    exchange_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 10), nullable=True)
+    exchange_rate: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 10), nullable=True
+    )
     exchange_rate_type_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
@@ -101,9 +117,13 @@ class Invoice(Base, VersionedMixin):
 
     # Amounts
     subtotal: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    tax_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    tax_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
     total_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    amount_paid: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    amount_paid: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
     # balance_due is computed: total_amount - amount_paid
     functional_currency_amount: Mapped[Decimal] = mapped_column(
         Numeric(20, 6),
@@ -122,8 +142,12 @@ class Invoice(Base, VersionedMixin):
         UUID(as_uuid=True),
         nullable=True,
     )
-    billing_address: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    shipping_address: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    billing_address: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )
+    shipping_address: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     internal_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -157,14 +181,18 @@ class Invoice(Base, VersionedMixin):
     )
 
     # Intercompany
-    is_intercompany: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_intercompany: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     intercompany_org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
 
     # Source
-    source_document_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    source_document_type: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )
     source_document_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,

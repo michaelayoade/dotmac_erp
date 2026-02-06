@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import or_
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -150,13 +150,16 @@ class TransactionCategorizationService:
             BatchCategorizationResult with all results
         """
         # Get unmatched lines
-        lines = (
-            db.query(BankStatementLine)
-            .filter(
-                BankStatementLine.statement_id == statement_id,
-                BankStatementLine.is_matched == False,
+        lines = list(
+            db.execute(
+                select(BankStatementLine)
+                .where(
+                    BankStatementLine.statement_id == statement_id,
+                    BankStatementLine.is_matched == False,
+                )
+                .order_by(BankStatementLine.line_number)
             )
-            .order_by(BankStatementLine.line_number)
+            .scalars()
             .all()
         )
 
@@ -192,16 +195,21 @@ class TransactionCategorizationService:
             return None
 
         # Find potential duplicates (same account, date, amount, type)
+        # Scoped to organization_id to prevent cross-tenant matches
         duplicate = (
-            db.query(BankStatementLine)
-            .join(BankStatement)
-            .filter(
-                BankStatement.bank_account_id == statement.bank_account_id,
-                BankStatementLine.line_id != line.line_id,
-                BankStatementLine.transaction_date == line.transaction_date,
-                BankStatementLine.amount == line.amount,
-                BankStatementLine.transaction_type == line.transaction_type,
+            db.execute(
+                select(BankStatementLine)
+                .join(BankStatement)
+                .where(
+                    BankStatement.bank_account_id == statement.bank_account_id,
+                    BankStatement.organization_id == organization_id,
+                    BankStatementLine.line_id != line.line_id,
+                    BankStatementLine.transaction_date == line.transaction_date,
+                    BankStatementLine.amount == line.amount,
+                    BankStatementLine.transaction_type == line.transaction_type,
+                )
             )
+            .scalars()
             .first()
         )
 
@@ -235,12 +243,14 @@ class TransactionCategorizationService:
             return None
 
         # Get active payees
-        payees = (
-            db.query(Payee)
-            .filter(
-                Payee.organization_id == organization_id,
-                Payee.is_active == True,
+        payees = list(
+            db.execute(
+                select(Payee).where(
+                    Payee.organization_id == organization_id,
+                    Payee.is_active == True,
+                )
             )
+            .scalars()
             .all()
         )
 
@@ -279,17 +289,20 @@ class TransactionCategorizationService:
         statement = db.get(BankStatement, line.statement_id)
         bank_account_id = statement.bank_account_id if statement else None
 
-        rules = (
-            db.query(TransactionRule)
-            .filter(
-                TransactionRule.organization_id == organization_id,
-                TransactionRule.is_active == True,
-                or_(
-                    TransactionRule.bank_account_id == None,
-                    TransactionRule.bank_account_id == bank_account_id,
-                ),
+        rules = list(
+            db.execute(
+                select(TransactionRule)
+                .where(
+                    TransactionRule.organization_id == organization_id,
+                    TransactionRule.is_active == True,
+                    or_(
+                        TransactionRule.bank_account_id == None,
+                        TransactionRule.bank_account_id == bank_account_id,
+                    ),
+                )
+                .order_by(TransactionRule.priority.desc())
             )
-            .order_by(TransactionRule.priority.desc())
+            .scalars()
             .all()
         )
 
@@ -600,11 +613,13 @@ class TransactionCategorizationService:
         """Update a payee."""
         org_id = coerce_uuid(organization_id)
         payee = (
-            db.query(Payee)
-            .filter(
-                Payee.payee_id == coerce_uuid(payee_id),
-                Payee.organization_id == org_id,
+            db.execute(
+                select(Payee).where(
+                    Payee.payee_id == coerce_uuid(payee_id),
+                    Payee.organization_id == org_id,
+                )
             )
+            .scalars()
             .first()
         )
         if not payee:
@@ -640,22 +655,26 @@ class TransactionCategorizationService:
         offset: int = 0,
     ) -> List[Payee]:
         """List payees with filters."""
-        query = db.query(Payee).filter(Payee.organization_id == organization_id)
+        stmt = select(Payee).where(Payee.organization_id == organization_id)
 
         if payee_type:
-            query = query.filter(Payee.payee_type == payee_type)
+            stmt = stmt.where(Payee.payee_type == payee_type)
         if is_active is not None:
-            query = query.filter(Payee.is_active == is_active)
+            stmt = stmt.where(Payee.is_active == is_active)
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            stmt = stmt.where(
                 or_(
                     Payee.payee_name.ilike(search_pattern),
                     Payee.name_patterns.ilike(search_pattern),
                 )
             )
 
-        return query.order_by(Payee.payee_name).offset(offset).limit(limit).all()
+        return list(
+            db.execute(stmt.order_by(Payee.payee_name).offset(offset).limit(limit))
+            .scalars()
+            .all()
+        )
 
     def increment_payee_match(
         self,
@@ -666,11 +685,13 @@ class TransactionCategorizationService:
         """Increment match count for a payee."""
         org_id = coerce_uuid(organization_id)
         payee = (
-            db.query(Payee)
-            .filter(
-                Payee.payee_id == coerce_uuid(payee_id),
-                Payee.organization_id == org_id,
+            db.execute(
+                select(Payee).where(
+                    Payee.payee_id == coerce_uuid(payee_id),
+                    Payee.organization_id == org_id,
+                )
             )
+            .scalars()
             .first()
         )
         if payee:
@@ -735,11 +756,13 @@ class TransactionCategorizationService:
         """Update a rule."""
         org_id = coerce_uuid(organization_id)
         rule = (
-            db.query(TransactionRule)
-            .filter(
-                TransactionRule.rule_id == coerce_uuid(rule_id),
-                TransactionRule.organization_id == org_id,
+            db.execute(
+                select(TransactionRule).where(
+                    TransactionRule.rule_id == coerce_uuid(rule_id),
+                    TransactionRule.organization_id == org_id,
+                )
             )
+            .scalars()
             .first()
         )
         if not rule:
@@ -782,26 +805,31 @@ class TransactionCategorizationService:
         offset: int = 0,
     ) -> List[TransactionRule]:
         """List rules with filters."""
-        query = db.query(TransactionRule).filter(
+        stmt = select(TransactionRule).where(
             TransactionRule.organization_id == organization_id
         )
 
         if rule_type:
-            query = query.filter(TransactionRule.rule_type == rule_type)
+            stmt = stmt.where(TransactionRule.rule_type == rule_type)
         if is_active is not None:
-            query = query.filter(TransactionRule.is_active == is_active)
+            stmt = stmt.where(TransactionRule.is_active == is_active)
         if bank_account_id:
-            query = query.filter(
+            stmt = stmt.where(
                 or_(
                     TransactionRule.bank_account_id == None,
                     TransactionRule.bank_account_id == bank_account_id,
                 )
             )
 
-        return (
-            query.order_by(TransactionRule.priority.desc(), TransactionRule.rule_name)
-            .offset(offset)
-            .limit(limit)
+        return list(
+            db.execute(
+                stmt.order_by(
+                    TransactionRule.priority.desc(), TransactionRule.rule_name
+                )
+                .offset(offset)
+                .limit(limit)
+            )
+            .scalars()
             .all()
         )
 
@@ -815,11 +843,13 @@ class TransactionCategorizationService:
         """Record user feedback on a rule suggestion."""
         org_id = coerce_uuid(organization_id)
         rule = (
-            db.query(TransactionRule)
-            .filter(
-                TransactionRule.rule_id == coerce_uuid(rule_id),
-                TransactionRule.organization_id == org_id,
+            db.execute(
+                select(TransactionRule).where(
+                    TransactionRule.rule_id == coerce_uuid(rule_id),
+                    TransactionRule.organization_id == org_id,
+                )
             )
+            .scalars()
             .first()
         )
         if rule:
@@ -854,11 +884,13 @@ class TransactionCategorizationService:
 
         # Check if payee already exists
         existing = (
-            db.query(Payee)
-            .filter(
-                Payee.organization_id == organization_id,
-                Payee.payee_name == payee_name,
+            db.execute(
+                select(Payee).where(
+                    Payee.organization_id == organization_id,
+                    Payee.payee_name == payee_name,
+                )
             )
+            .scalars()
             .first()
         )
 

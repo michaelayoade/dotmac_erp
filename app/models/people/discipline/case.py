@@ -3,6 +3,7 @@ Disciplinary Case Model - HR Schema.
 
 The main entity for tracking employee policy violations and disciplinary proceedings.
 """
+
 import enum
 import uuid
 from datetime import date, datetime

@@ -85,7 +85,9 @@ def _clean_name(value: str | None) -> str:
     return "" if cleaned.lower() in {"none", "null"} else cleaned
 
 
-def _derive_display_name(first_name: str | None, last_name: str | None, display_name: str | None) -> str | None:
+def _derive_display_name(
+    first_name: str | None, last_name: str | None, display_name: str | None
+) -> str | None:
     display = _clean_name(display_name)
     if display:
         return display
@@ -136,7 +138,9 @@ async def update_profile_preferences(
     preferred_contact_method = _get_form_str(form, "preferred_contact_method") or None
     if preferred_contact_method not in {"email", "phone", "sms", "push", None}:
         preferred_contact_method = None
-    marketing_opt_in = _parse_bool(_get_form_str(form, "marketing_opt_in") or None, False)
+    marketing_opt_in = _parse_bool(
+        _get_form_str(form, "marketing_opt_in") or None, False
+    )
 
     payload = PersonUpdate(
         timezone=timezone,

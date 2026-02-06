@@ -3,6 +3,7 @@ Salary Structure Model - Payroll Schema.
 
 Defines pay structure templates with earnings and deductions.
 """
+
 import enum
 import uuid
 from datetime import datetime

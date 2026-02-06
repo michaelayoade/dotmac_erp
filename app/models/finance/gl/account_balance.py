@@ -2,13 +2,25 @@
 Account Balance Model - GL Schema.
 Derived from posted_ledger_line for query efficiency.
 """
+
 import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, UniqueConstraint, func, text
+from sqlalchemy import (
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -44,7 +56,9 @@ class AccountBalance(Base):
             name="uq_account_balance",
         ),
         Index("idx_balance_account", "account_id", "fiscal_period_id"),
-        Index("idx_balance_lookup", "organization_id", "fiscal_period_id", "balance_type"),
+        Index(
+            "idx_balance_lookup", "organization_id", "fiscal_period_id", "balance_type"
+        ),
         {"schema": "gl"},
     )
 
@@ -91,16 +105,32 @@ class AccountBalance(Base):
         UUID(as_uuid=True),
         nullable=True,
     )
-    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
-    segment_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    segment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
 
     # Balances
-    opening_debit: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
-    opening_credit: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
-    period_debit: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
-    period_credit: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
-    closing_debit: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
-    closing_credit: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    opening_debit: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
+    opening_credit: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
+    period_debit: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
+    period_credit: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
+    closing_debit: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
+    closing_credit: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Net balance (for reporting)
     net_balance: Mapped[Decimal] = mapped_column(
@@ -109,7 +139,9 @@ class AccountBalance(Base):
         default=0,
         comment="Debit - Credit (positive = debit balance)",
     )
-    ytd_net_balance: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    ytd_net_balance: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Metadata
     last_updated_at: Mapped[datetime] = mapped_column(

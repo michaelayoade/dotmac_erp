@@ -3,6 +3,7 @@ Document Template Model.
 
 Customizable templates for documents (invoices, quotes, etc.) and emails.
 """
+
 import enum
 import uuid
 from datetime import datetime
@@ -92,7 +93,12 @@ class DocumentTemplate(Base):
 
     __tablename__ = "document_template"
     __table_args__ = (
-        UniqueConstraint("organization_id", "template_type", "template_name", name="uq_document_template"),
+        UniqueConstraint(
+            "organization_id",
+            "template_type",
+            "template_name",
+            name="uq_document_template",
+        ),
         Index("idx_document_template_org", "organization_id"),
         Index("idx_document_template_type", "template_type"),
         Index("idx_document_template_default", "is_default"),

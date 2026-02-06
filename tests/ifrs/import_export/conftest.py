@@ -11,16 +11,15 @@ import io
 import tempfile
 import uuid
 from dataclasses import dataclass, field
-from datetime import date
-from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
 from unittest.mock import MagicMock
 
 import pytest
 
 
 # ============ UUID Fixtures ============
+
 
 @pytest.fixture
 def organization_id():
@@ -36,6 +35,7 @@ def user_id():
 
 # ============ Mock Database Session ============
 
+
 @pytest.fixture
 def mock_db():
     """Create a mock database session."""
@@ -46,6 +46,7 @@ def mock_db():
 
 
 # ============ Import Config Fixture ============
+
 
 @pytest.fixture
 def import_config(organization_id, user_id):
@@ -65,6 +66,7 @@ def import_config(organization_id, user_id):
 
 
 # ============ CSV File Helpers ============
+
 
 class CSVFileHelper:
     """Helper class for creating temporary CSV files for testing."""
@@ -101,7 +103,9 @@ class CSVFileHelper:
         return output.getvalue()
 
     @staticmethod
-    def create_dict_rows(headers: List[str], rows: List[List[str]]) -> List[Dict[str, str]]:
+    def create_dict_rows(
+        headers: List[str], rows: List[List[str]]
+    ) -> List[Dict[str, str]]:
         """Convert headers and rows to list of dictionaries."""
         return [dict(zip(headers, row)) for row in rows]
 
@@ -113,6 +117,7 @@ def csv_helper():
 
 
 # ============ Sample Account CSV Data ============
+
 
 @pytest.fixture
 def sample_account_headers():
@@ -132,7 +137,14 @@ def sample_account_rows():
     """Sample account data rows."""
     return [
         ["Cash at Bank", "1000", "Bank", "Main checking account", "USD", "Yes"],
-        ["Accounts Receivable", "1200", "Accounts Receivable", "Trade receivables", "USD", "Yes"],
+        [
+            "Accounts Receivable",
+            "1200",
+            "Accounts Receivable",
+            "Trade receivables",
+            "USD",
+            "Yes",
+        ],
         ["Revenue", "4000", "Income", "Sales revenue", "USD", "Yes"],
         ["Office Supplies", "5100", "Expense", "Office supplies expense", "USD", "Yes"],
     ]
@@ -145,6 +157,7 @@ def sample_account_csv(csv_helper, sample_account_headers, sample_account_rows):
 
 
 # ============ Sample Contact CSV Data ============
+
 
 @pytest.fixture
 def sample_customer_headers():
@@ -163,8 +176,22 @@ def sample_customer_headers():
 def sample_customer_rows():
     """Sample customer data rows."""
     return [
-        ["John Smith", "Smith Industries", "john@smith.com", "+1-555-0100", "123 Main St", "USD"],
-        ["ABC Corporation", "ABC Corp", "contact@abc.com", "+1-555-0200", "456 Oak Ave", "USD"],
+        [
+            "John Smith",
+            "Smith Industries",
+            "john@smith.com",
+            "+1-555-0100",
+            "123 Main St",
+            "USD",
+        ],
+        [
+            "ABC Corporation",
+            "ABC Corp",
+            "contact@abc.com",
+            "+1-555-0200",
+            "456 Oak Ave",
+            "USD",
+        ],
         ["Jane Doe", "", "jane@example.com", "+1-555-0300", "789 Pine Rd", "EUR"],
     ]
 
@@ -193,8 +220,24 @@ def sample_supplier_headers():
 def sample_supplier_rows():
     """Sample supplier data rows."""
     return [
-        ["Office Depot", "Office Depot Inc", "orders@officedepot.com", "+1-555-1000", "100 Supplier Way", "USD", "30"],
-        ["Tech Solutions", "Tech Solutions LLC", "sales@techsol.com", "+1-555-2000", "200 Tech Park", "USD", "45"],
+        [
+            "Office Depot",
+            "Office Depot Inc",
+            "orders@officedepot.com",
+            "+1-555-1000",
+            "100 Supplier Way",
+            "USD",
+            "30",
+        ],
+        [
+            "Tech Solutions",
+            "Tech Solutions LLC",
+            "sales@techsol.com",
+            "+1-555-2000",
+            "200 Tech Park",
+            "USD",
+            "45",
+        ],
     ]
 
 
@@ -205,6 +248,7 @@ def sample_supplier_csv(csv_helper, sample_supplier_headers, sample_supplier_row
 
 
 # ============ QuickBooks Format CSV Data ============
+
 
 @pytest.fixture
 def quickbooks_account_headers():
@@ -224,18 +268,30 @@ def quickbooks_account_rows():
     """QuickBooks format account data."""
     return [
         ["Checking", "1000", "Bank", "Asset", "5000.00", "true"],
-        ["Accounts Receivable", "1200", "Accounts Receivable", "Asset", "10000.00", "true"],
+        [
+            "Accounts Receivable",
+            "1200",
+            "Accounts Receivable",
+            "Asset",
+            "10000.00",
+            "true",
+        ],
         ["Sales", "4000", "Income", "Revenue", "0.00", "true"],
     ]
 
 
 @pytest.fixture
-def quickbooks_account_csv(csv_helper, quickbooks_account_headers, quickbooks_account_rows):
+def quickbooks_account_csv(
+    csv_helper, quickbooks_account_headers, quickbooks_account_rows
+):
     """Create a QuickBooks format account CSV."""
-    return csv_helper.create_csv_file(quickbooks_account_headers, quickbooks_account_rows)
+    return csv_helper.create_csv_file(
+        quickbooks_account_headers, quickbooks_account_rows
+    )
 
 
 # ============ Xero Format CSV Data ============
+
 
 @pytest.fixture
 def xero_account_headers():
@@ -266,6 +322,7 @@ def xero_account_csv(csv_helper, xero_account_headers, xero_account_rows):
 
 
 # ============ Invalid CSV Data ============
+
 
 @pytest.fixture
 def invalid_csv_missing_required(csv_helper):
@@ -298,11 +355,15 @@ def empty_csv(csv_helper):
 
 # ============ Mock Entity Classes ============
 
+
 @dataclass
 class MockAccount:
     """Mock Account entity for testing."""
+
     account_id: uuid.UUID = field(default_factory=uuid.uuid4)
-    organization_id: uuid.UUID = field(default_factory=lambda: uuid.UUID("00000000-0000-0000-0000-000000000001"))
+    organization_id: uuid.UUID = field(
+        default_factory=lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
+    )
     account_code: str = "1000"
     account_name: str = "Test Account"
     account_type: str = "bank"
@@ -315,8 +376,11 @@ class MockAccount:
 @dataclass
 class MockCustomer:
     """Mock Customer entity for testing."""
+
     customer_id: uuid.UUID = field(default_factory=uuid.uuid4)
-    organization_id: uuid.UUID = field(default_factory=lambda: uuid.UUID("00000000-0000-0000-0000-000000000001"))
+    organization_id: uuid.UUID = field(
+        default_factory=lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
+    )
     customer_code: str = "CUST001"
     legal_name: str = "Test Customer"
     trading_name: str = ""
@@ -329,8 +393,11 @@ class MockCustomer:
 @dataclass
 class MockSupplier:
     """Mock Supplier entity for testing."""
+
     supplier_id: uuid.UUID = field(default_factory=uuid.uuid4)
-    organization_id: uuid.UUID = field(default_factory=lambda: uuid.UUID("00000000-0000-0000-0000-000000000001"))
+    organization_id: uuid.UUID = field(
+        default_factory=lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
+    )
     supplier_code: str = "SUPP001"
     legal_name: str = "Test Supplier"
     trading_name: str = ""
@@ -342,6 +409,7 @@ class MockSupplier:
 
 
 # ============ Concrete Test Importer ============
+
 
 class ConcreteTestImporter:
     """
@@ -370,7 +438,9 @@ class ConcreteTestImporter:
                     FieldMapping("Account Code", "account_code", required=True),
                     FieldMapping("Account Type", "account_type", required=False),
                     FieldMapping("Description", "description", required=False),
-                    FieldMapping("Currency", "currency_code", required=False, default="USD"),
+                    FieldMapping(
+                        "Currency", "currency_code", required=False, default="USD"
+                    ),
                 ]
 
             def get_unique_key(inner_self, row):

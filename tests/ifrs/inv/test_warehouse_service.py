@@ -3,7 +3,7 @@ Tests for WarehouseService.
 """
 
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -209,9 +209,7 @@ class TestListWarehouses:
     def test_list_all_warehouses(self, service, mock_db, org_id):
         """Test listing all warehouses."""
         warehouses = [MockWarehouse(organization_id=org_id) for _ in range(3)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            warehouses
-        )
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = warehouses
 
         result = service.list(mock_db, str(org_id))
 
@@ -220,9 +218,7 @@ class TestListWarehouses:
     def test_list_with_active_filter(self, service, mock_db, org_id):
         """Test listing warehouses with active filter."""
         warehouses = [MockWarehouse(organization_id=org_id, is_active=True)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            warehouses
-        )
+        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = warehouses
 
         result = service.list(mock_db, str(org_id), is_active=True)
 
@@ -231,9 +227,7 @@ class TestListWarehouses:
     def test_list_with_receiving_filter(self, service, mock_db, org_id):
         """Test listing warehouses with receiving filter."""
         warehouses = [MockWarehouse(organization_id=org_id, is_receiving=True)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            warehouses
-        )
+        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = warehouses
 
         result = service.list(mock_db, str(org_id), is_receiving=True)
 
@@ -246,13 +240,8 @@ class TestListLocations:
     def test_list_locations_success(self, service, mock_db):
         """Test listing locations in a warehouse."""
         warehouse_id = uuid4()
-        locations = [
-            MockWarehouseLocation(warehouse_id=warehouse_id)
-            for _ in range(2)
-        ]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            locations
-        )
+        locations = [MockWarehouseLocation(warehouse_id=warehouse_id) for _ in range(2)]
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = locations
 
         result = service.list_locations(mock_db, str(warehouse_id))
 
@@ -332,7 +321,9 @@ class TestDeactivateWarehouse:
             total_value=Decimal("1000.00"),
             currency_code="USD",
         )
-        with patch.object(WarehouseService, "get_warehouse_inventory", return_value=[balance]):
+        with patch.object(
+            WarehouseService, "get_warehouse_inventory", return_value=[balance]
+        ):
             with pytest.raises(HTTPException) as exc:
                 service.deactivate_warehouse(mock_db, org_id, warehouse.warehouse_id)
 

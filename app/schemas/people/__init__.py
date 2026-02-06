@@ -10,6 +10,7 @@ Schema naming convention:
 - {Entity}Read: Fields returned from API (includes id, timestamps)
 - {Entity}Brief: Minimal fields for list views / dropdowns
 """
+
 # HR Core Schemas
 from .hr import (
     # Department

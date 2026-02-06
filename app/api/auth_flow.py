@@ -25,7 +25,6 @@ from app.schemas.auth_flow import (
     RefreshRequest,
     ResetPasswordRequest,
     ResetPasswordResponse,
-    SessionInfoResponse,
     SessionListResponse,
     SessionRevokeResponse,
     TokenResponse,
@@ -124,9 +123,7 @@ def mfa_setup(
 ):
     if str(payload.person_id) != auth["person_id"]:
         raise HTTPException(status_code=403, detail="Forbidden")
-    return auth_flow_service.auth_flow.mfa_setup(
-        db, auth["person_id"], payload.label
-    )
+    return auth_flow_service.auth_flow.mfa_setup(db, auth["person_id"], payload.label)
 
 
 @router.post(
@@ -158,7 +155,9 @@ def mfa_confirm(
         404: {"model": ErrorResponse},
     },
 )
-def mfa_verify(payload: MfaVerifyRequest, request: Request, db: Session = Depends(get_db)):
+def mfa_verify(
+    payload: MfaVerifyRequest, request: Request, db: Session = Depends(get_db)
+):
     return auth_flow_service.auth_flow.mfa_verify_response(
         db, payload.mfa_token, payload.code, request
     )
@@ -350,7 +349,9 @@ def forgot_password(
     Request a password reset email.
     Always returns success to prevent email enumeration.
     """
-    return auth_flow_api_service.forgot_password(payload, db, app_url=_resolve_app_url(request))
+    return auth_flow_api_service.forgot_password(
+        payload, db, app_url=_resolve_app_url(request)
+    )
 
 
 def _resolve_app_url(request: Request) -> str:

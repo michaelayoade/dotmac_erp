@@ -3,6 +3,7 @@ DotMac CRM Sync Admin web routes.
 
 Provides UI for managing CRM sync integration.
 """
+
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request

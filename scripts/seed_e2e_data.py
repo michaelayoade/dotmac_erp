@@ -31,11 +31,19 @@ from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 from app.models.finance.ar.customer import Customer, CustomerType, RiskCategory
 from app.models.finance.ar.payment_terms import PaymentTerms
 from app.models.finance.ap.supplier import Supplier, SupplierType
-from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus, BankAccountType
+from app.models.finance.banking.bank_account import (
+    BankAccount,
+    BankAccountStatus,
+    BankAccountType,
+)
 from app.models.inventory.item import Item, ItemType, CostingMethod
 from app.models.inventory.item_category import ItemCategory
 from app.models.finance.tax.tax_jurisdiction import TaxJurisdiction
-from app.models.finance.tax.tax_period import TaxPeriod, TaxPeriodFrequency, TaxPeriodStatus
+from app.models.finance.tax.tax_period import (
+    TaxPeriod,
+    TaxPeriodFrequency,
+    TaxPeriodStatus,
+)
 from app.services.finance.gl.fiscal_year import FiscalYearInput, fiscal_year_service
 from app.services.finance.tax.seed import NigeriaSeedSummary, seed_nigeria_tax_data
 
@@ -102,9 +110,7 @@ def resolve_orgs(db, args: argparse.Namespace) -> list[Organization]:
         if not username:
             continue
         credential = (
-            db.query(UserCredential)
-            .filter(UserCredential.username == username)
-            .first()
+            db.query(UserCredential).filter(UserCredential.username == username).first()
         )
         if credential:
             person = db.get(Person, credential.person_id)
@@ -126,8 +132,7 @@ def ensure_organization(db, org_id: UUID, summary: SeedSummary) -> Organization:
         return org
 
     existing_codes = {
-        row.organization_code
-        for row in db.query(Organization.organization_code).all()
+        row.organization_code for row in db.query(Organization.organization_code).all()
     }
     org_code = _unique_code(existing_codes, "E2E")
 
@@ -148,7 +153,9 @@ def ensure_organization(db, org_id: UUID, summary: SeedSummary) -> Organization:
     return org
 
 
-def ensure_categories(db, org_id: UUID, summary: SeedSummary) -> dict[IFRSCategory, AccountCategory]:
+def ensure_categories(
+    db, org_id: UUID, summary: SeedSummary
+) -> dict[IFRSCategory, AccountCategory]:
     defaults = [
         (IFRSCategory.ASSETS, "AST", "Assets"),
         (IFRSCategory.LIABILITIES, "LIA", "Liabilities"),
@@ -343,7 +350,9 @@ def ensure_accounts(
     return accounts
 
 
-def ensure_fiscal_year(db, org_id: UUID, retained_earnings_id: UUID, summary: SeedSummary) -> None:
+def ensure_fiscal_year(
+    db, org_id: UUID, retained_earnings_id: UUID, summary: SeedSummary
+) -> None:
     today = date.today()
     year_code = str(today.year)
     existing = (
@@ -664,7 +673,9 @@ def seed_for_org(db, org: Organization) -> tuple[SeedSummary, NigeriaSeedSummary
     categories = ensure_categories(db, org.organization_id, summary)
     accounts = ensure_accounts(db, org.organization_id, categories, summary)
 
-    ensure_fiscal_year(db, org.organization_id, accounts["retained_earnings"].account_id, summary)
+    ensure_fiscal_year(
+        db, org.organization_id, accounts["retained_earnings"].account_id, summary
+    )
     ensure_payment_terms(db, org.organization_id, summary)
 
     ensure_customer(

@@ -11,17 +11,15 @@ Handles:
 import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
-from uuid import UUID
 import uuid
 
 from celery import shared_task
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import select
 
 from app.db import SessionLocal
 from app.models.expense import (
     ExpenseClaim,
     ExpenseClaimStatus,
-    ExpensePeriodUsage,
     LimitPeriodType,
 )
 from app.models.finance.core_org.organization import Organization
@@ -58,7 +56,9 @@ def refresh_period_usage_cache(organization_id: Optional[str] = None) -> dict:
         # Get organizations to process
         org_query = select(Organization).where(Organization.is_active == True)
         if organization_id:
-            org_query = org_query.where(Organization.organization_id == uuid.UUID(organization_id))
+            org_query = org_query.where(
+                Organization.organization_id == uuid.UUID(organization_id)
+            )
 
         organizations = db.scalars(org_query).all()
 
@@ -98,10 +98,12 @@ def refresh_period_usage_cache(organization_id: Optional[str] = None) -> dict:
                             employee.employee_id,
                             e,
                         )
-                        results["errors"].append({
-                            "employee_id": str(employee.employee_id),
-                            "error": str(e),
-                        })
+                        results["errors"].append(
+                            {
+                                "employee_id": str(employee.employee_id),
+                                "error": str(e),
+                            }
+                        )
 
                 db.commit()
                 results["organizations_processed"] += 1
@@ -113,10 +115,12 @@ def refresh_period_usage_cache(organization_id: Optional[str] = None) -> dict:
                     e,
                 )
                 db.rollback()
-                results["errors"].append({
-                    "organization_id": str(org.organization_id),
-                    "error": str(e),
-                })
+                results["errors"].append(
+                    {
+                        "organization_id": str(org.organization_id),
+                        "error": str(e),
+                    }
+                )
 
     logger.info(
         "Period usage cache refresh complete: %d orgs, %d employees",
@@ -165,10 +169,12 @@ def process_expense_approval_reminders() -> dict:
         pending_claims = db.scalars(
             select(ExpenseClaim)
             .where(
-                ExpenseClaim.status.in_([
-                    ExpenseClaimStatus.SUBMITTED,
-                    ExpenseClaimStatus.PENDING_APPROVAL,
-                ]),
+                ExpenseClaim.status.in_(
+                    [
+                        ExpenseClaimStatus.SUBMITTED,
+                        ExpenseClaimStatus.PENDING_APPROVAL,
+                    ]
+                ),
             )
             .order_by(ExpenseClaim.claim_date)
         ).all()
@@ -222,17 +228,19 @@ def process_expense_approval_reminders() -> dict:
                     claim.claim_id,
                     e,
                 )
-                results["errors"].append({
-                    "claim_id": str(claim.claim_id),
-                    "error": str(e),
-                })
+                results["errors"].append(
+                    {
+                        "claim_id": str(claim.claim_id),
+                        "error": str(e),
+                    }
+                )
 
         db.commit()
 
     total_sent = (
-        results["first_reminders_sent"] +
-        results["second_reminders_sent"] +
-        results["escalation_warnings_sent"]
+        results["first_reminders_sent"]
+        + results["second_reminders_sent"]
+        + results["escalation_warnings_sent"]
     )
     logger.info("Approval reminders complete: %d sent", total_sent)
 
@@ -295,11 +303,13 @@ def post_approved_expense(
             # Optionally create supplier invoice
             invoice_id = None
             if create_supplier_invoice:
-                invoice_result = ExpensePostingAdapter.create_supplier_invoice_from_expense(
-                    db,
-                    org_id,
-                    c_id,
-                    u_id,
+                invoice_result = (
+                    ExpensePostingAdapter.create_supplier_invoice_from_expense(
+                        db,
+                        org_id,
+                        c_id,
+                        u_id,
+                    )
                 )
                 if invoice_result.success:
                     invoice_id = str(invoice_result.supplier_invoice_id)
@@ -313,8 +323,12 @@ def post_approved_expense(
 
             return {
                 "success": True,
-                "journal_entry_id": str(result.journal_entry_id) if result.journal_entry_id else None,
-                "posting_batch_id": str(result.posting_batch_id) if result.posting_batch_id else None,
+                "journal_entry_id": str(result.journal_entry_id)
+                if result.journal_entry_id
+                else None,
+                "posting_batch_id": str(result.posting_batch_id)
+                if result.posting_batch_id
+                else None,
                 "supplier_invoice_id": invoice_id,
             }
 
@@ -374,8 +388,12 @@ def post_cash_advance_disbursement(
 
             return {
                 "success": True,
-                "journal_entry_id": str(result.journal_entry_id) if result.journal_entry_id else None,
-                "posting_batch_id": str(result.posting_batch_id) if result.posting_batch_id else None,
+                "journal_entry_id": str(result.journal_entry_id)
+                if result.journal_entry_id
+                else None,
+                "posting_batch_id": str(result.posting_batch_id)
+                if result.posting_batch_id
+                else None,
             }
 
         except Exception as e:
@@ -442,7 +460,9 @@ def settle_cash_advance_with_claim(
 
             return {
                 "success": True,
-                "journal_entry_id": str(result.journal_entry_id) if result.journal_entry_id else None,
+                "journal_entry_id": str(result.journal_entry_id)
+                if result.journal_entry_id
+                else None,
                 "message": result.message,
             }
 
@@ -517,10 +537,12 @@ def calculate_expense_analytics(
             approved_claims = db.scalars(
                 select(ExpenseClaim).where(
                     ExpenseClaim.organization_id == org_id,
-                    ExpenseClaim.status.in_([
-                        ExpenseClaimStatus.APPROVED,
-                        ExpenseClaimStatus.PAID,
-                    ]),
+                    ExpenseClaim.status.in_(
+                        [
+                            ExpenseClaimStatus.APPROVED,
+                            ExpenseClaimStatus.PAID,
+                        ]
+                    ),
                     ExpenseClaim.claim_date >= start_date,
                     ExpenseClaim.approved_on.isnot(None),
                 )
@@ -627,9 +649,15 @@ def poll_stuck_expense_transfers() -> dict:
 
         for org_id, intents in by_org.items():
             # Get Paystack config for this org
-            secret_key = resolve_value(db, SettingDomain.payments, "paystack_secret_key")
-            public_key = resolve_value(db, SettingDomain.payments, "paystack_public_key")
-            webhook_secret = resolve_value(db, SettingDomain.payments, "paystack_webhook_secret")
+            secret_key = resolve_value(
+                db, SettingDomain.payments, "paystack_secret_key"
+            )
+            public_key = resolve_value(
+                db, SettingDomain.payments, "paystack_public_key"
+            )
+            webhook_secret = resolve_value(
+                db, SettingDomain.payments, "paystack_webhook_secret"
+            )
             if not secret_key or not public_key:
                 logger.warning(f"No Paystack keys for org {org_id}")
                 continue
@@ -661,10 +689,12 @@ def poll_stuck_expense_transfers() -> dict:
                         intent.intent_id,
                         e,
                     )
-                    results["errors"].append({
-                        "intent_id": str(intent.intent_id),
-                        "error": str(e),
-                    })
+                    results["errors"].append(
+                        {
+                            "intent_id": str(intent.intent_id),
+                            "error": str(e),
+                        }
+                    )
 
             db.commit()
 

@@ -3,6 +3,7 @@ Resource Allocation Model - PM Schema.
 
 Tracks team member assignment and utilization on projects.
 """
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -76,14 +77,10 @@ class ResourceAllocation(Base, AuditMixin):
     )
 
     # Role on this project
-    role_on_project: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True
-    )
+    role_on_project: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Allocation percentage (0-100)
-    allocation_percent: Mapped[Decimal] = mapped_column(
-        Numeric(5, 2), nullable=False
-    )
+    allocation_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
 
     # Date range
     start_date: Mapped[date] = mapped_column(Date, nullable=False)

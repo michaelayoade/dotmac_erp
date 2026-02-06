@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.domain_settings import SettingDomain
+from app.models.email_profile import EmailModule, EmailProfile, ModuleEmailRouting
 from app.models.finance.core_config import ResetFrequency, SequenceType
 from app.models.finance.core_org import Organization
 from app.schemas.settings import DomainSettingUpdate
@@ -24,6 +25,32 @@ from app.services.settings_spec import (
 )
 
 logger = logging.getLogger(__name__)
+
+EMAIL_MODULE_SETTINGS = [
+    {"key": "support", "label": "Support", "module": EmailModule.SUPPORT},
+    {
+        "key": "people_payroll",
+        "label": "People & Payroll",
+        "module": EmailModule.PEOPLE_PAYROLL,
+    },
+    {"key": "finance", "label": "Finance", "module": EmailModule.FINANCE},
+    {
+        "key": "inventory_fleet",
+        "label": "Inventory & Fleet",
+        "module": EmailModule.INVENTORY_FLEET,
+    },
+    {"key": "procurement", "label": "Procurement", "module": EmailModule.PROCUREMENT},
+    {"key": "expense", "label": "Expense", "module": EmailModule.EXPENSE},
+    {"key": "admin", "label": "Admin", "module": EmailModule.ADMIN},
+]
+
+
+def _coerce_bool(value: Any | None) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 # Friendly labels for numbering sequence types
@@ -329,7 +356,43 @@ class SettingsWebService:
                 "is_secret": spec.is_secret,
             }
 
-        return {"settings": settings, "specs": specs}
+        module_settings: list[dict[str, Any]] = []
+        for module_def in EMAIL_MODULE_SETTINGS:
+            routing = db.scalar(
+                select(ModuleEmailRouting).where(
+                    ModuleEmailRouting.organization_id == organization_id,
+                    ModuleEmailRouting.module == module_def["module"],
+                )
+            )
+            profile = None
+            if routing and routing.email_profile_id:
+                profile = db.get(EmailProfile, routing.email_profile_id)
+
+            module_settings.append(
+                {
+                    "key": module_def["key"],
+                    "label": module_def["label"],
+                    "module": module_def["module"].value,
+                    "use_default": routing.use_default if routing else True,
+                    "smtp_host": profile.smtp_host if profile else "",
+                    "smtp_port": profile.smtp_port if profile else 587,
+                    "smtp_use_tls": profile.use_tls if profile else True,
+                    "smtp_use_ssl": profile.use_ssl if profile else False,
+                    "smtp_username": profile.smtp_username if profile else "",
+                    "smtp_password_set": bool(profile.smtp_password)
+                    if profile
+                    else False,
+                    "smtp_from_email": profile.from_email if profile else "",
+                    "smtp_from_name": profile.from_name if profile else "",
+                    "email_reply_to": profile.reply_to if profile else "",
+                }
+            )
+
+        return {
+            "settings": settings,
+            "specs": specs,
+            "module_settings": module_settings,
+        }
 
     def update_email_settings(
         self, db, organization_id: uuid.UUID, data: dict[str, Any]
@@ -410,6 +473,137 @@ class SettingsWebService:
 
         for key, payload in pending_updates:
             service.upsert_by_key(db, key, payload)
+
+        # Module-specific SMTP profiles
+        from app.services.email import validate_smtp_config
+
+        for module_def in EMAIL_MODULE_SETTINGS:
+            prefix = f"module_{module_def['key']}_"
+            routing = db.scalar(
+                select(ModuleEmailRouting).where(
+                    ModuleEmailRouting.organization_id == organization_id,
+                    ModuleEmailRouting.module == module_def["module"],
+                )
+            )
+
+            raw_use_default = data.get(f"{prefix}use_default", "false")
+            use_default = _coerce_bool(raw_use_default)
+
+            if use_default:
+                if routing:
+                    routing.use_default = True
+                else:
+                    routing = ModuleEmailRouting(
+                        organization_id=organization_id,
+                        module=module_def["module"],
+                        use_default=True,
+                    )
+                    db.add(routing)
+                continue
+
+            smtp_host = str(data.get(f"{prefix}smtp_host", "")).strip()
+            if not smtp_host:
+                return (
+                    False,
+                    f"{module_def['label']}: SMTP host is required when Use default is off.",
+                )
+
+            smtp_from_email = str(data.get(f"{prefix}smtp_from_email", "")).strip()
+            if not smtp_from_email:
+                return (
+                    False,
+                    f"{module_def['label']}: From email is required when Use default is off.",
+                )
+
+            smtp_port_raw = data.get(f"{prefix}smtp_port", 587)
+            try:
+                smtp_port = int(str(smtp_port_raw).strip() or "587")
+            except (TypeError, ValueError):
+                return (
+                    False,
+                    f"{module_def['label']}: SMTP port must be a valid integer.",
+                )
+
+            smtp_use_tls = _coerce_bool(data.get(f"{prefix}smtp_use_tls"))
+            smtp_use_ssl = _coerce_bool(data.get(f"{prefix}smtp_use_ssl"))
+            smtp_username = str(data.get(f"{prefix}smtp_username", "")).strip() or None
+            smtp_password = str(data.get(f"{prefix}smtp_password", "")).strip() or None
+            smtp_from_name = (
+                str(data.get(f"{prefix}smtp_from_name", "")).strip() or "Dotmac ERP"
+            )
+            email_reply_to = (
+                str(data.get(f"{prefix}email_reply_to", "")).strip() or None
+            )
+
+            profile = None
+            if routing and routing.email_profile_id:
+                profile = db.get(EmailProfile, routing.email_profile_id)
+
+            if profile is None:
+                profile = EmailProfile(
+                    name=f"{module_def['label']} SMTP",
+                    organization_id=organization_id,
+                    smtp_host=smtp_host,
+                    smtp_port=smtp_port,
+                    smtp_username=smtp_username,
+                    smtp_password=smtp_password,
+                    use_tls=smtp_use_tls,
+                    use_ssl=smtp_use_ssl,
+                    from_email=smtp_from_email,
+                    from_name=smtp_from_name,
+                    reply_to=email_reply_to,
+                    is_default=False,
+                    is_active=True,
+                )
+                db.add(profile)
+                db.flush()
+            else:
+                profile.smtp_host = smtp_host
+                profile.smtp_port = smtp_port
+                profile.smtp_username = smtp_username
+                if smtp_password:
+                    profile.smtp_password = smtp_password
+                profile.use_tls = smtp_use_tls
+                profile.use_ssl = smtp_use_ssl
+                profile.from_email = smtp_from_email
+                profile.from_name = smtp_from_name
+                profile.reply_to = email_reply_to
+                profile.is_active = True
+
+            # Validate module SMTP settings
+            if smtp_username and not (smtp_password or profile.smtp_password):
+                return (
+                    False,
+                    f"{module_def['label']}: SMTP password is required when username is set.",
+                )
+
+            ok, error = validate_smtp_config(
+                {
+                    "host": smtp_host,
+                    "port": smtp_port,
+                    "username": smtp_username,
+                    "password": profile.smtp_password,
+                    "use_tls": smtp_use_tls,
+                    "use_ssl": smtp_use_ssl,
+                    "from_email": smtp_from_email,
+                    "from_name": smtp_from_name,
+                    "reply_to": email_reply_to,
+                }
+            )
+            if not ok:
+                return False, f"{module_def['label']}: {error}"
+
+            if routing:
+                routing.email_profile_id = profile.profile_id
+                routing.use_default = False
+            else:
+                routing = ModuleEmailRouting(
+                    organization_id=organization_id,
+                    module=module_def["module"],
+                    email_profile_id=profile.profile_id,
+                    use_default=False,
+                )
+                db.add(routing)
 
         db.commit()
         return True, None

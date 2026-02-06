@@ -44,7 +44,9 @@ class TestAccountsAPI:
         mock_account = MockAccount(organization_id=org_id)
         category_id = uuid.uuid4()
 
-        with patch("app.api.finance.gl.chart_of_accounts_service.create_account") as mock_create:
+        with patch(
+            "app.api.finance.gl.chart_of_accounts_service.create_account"
+        ) as mock_create:
             mock_create.return_value = mock_account
             payload = AccountCreate(
                 account_code="1000",
@@ -123,7 +125,9 @@ class TestAccountsAPI:
             account_name="Updated Cash",
         )
 
-        with patch("app.api.finance.gl.chart_of_accounts_service.update_account") as mock_update:
+        with patch(
+            "app.api.finance.gl.chart_of_accounts_service.update_account"
+        ) as mock_update:
             mock_update.return_value = updated_account
 
             payload = AccountUpdate(account_name="Updated Cash")
@@ -146,7 +150,9 @@ class TestAccountsAPI:
             is_active=False,
         )
 
-        with patch("app.api.finance.gl.chart_of_accounts_service.deactivate_account") as mock_deactivate:
+        with patch(
+            "app.api.finance.gl.chart_of_accounts_service.deactivate_account"
+        ) as mock_deactivate:
             mock_deactivate.return_value = deactivated
 
             result = gl_api.deactivate_account(
@@ -166,7 +172,9 @@ class TestFiscalPeriodsAPI:
         """Test creating a fiscal period."""
         mock_period = MockFiscalPeriod(organization_id=org_id)
 
-        with patch("app.api.finance.gl.fiscal_period_service.create_period") as mock_create:
+        with patch(
+            "app.api.finance.gl.fiscal_period_service.create_period"
+        ) as mock_create:
             mock_create.return_value = mock_period
 
             payload = FiscalPeriodCreate(
@@ -202,7 +210,9 @@ class TestFiscalPeriodsAPI:
 
     def test_list_fiscal_periods(self, mock_db, mock_auth_dict, org_id):
         """Test listing fiscal periods."""
-        mock_periods = [MockFiscalPeriod(organization_id=org_id, period_number=i) for i in range(12)]
+        mock_periods = [
+            MockFiscalPeriod(organization_id=org_id, period_number=i) for i in range(12)
+        ]
 
         with patch("app.api.finance.gl.fiscal_period_service.list") as mock_list:
             mock_list.return_value = mock_periods
@@ -267,7 +277,9 @@ class TestFiscalPeriodsAPI:
             status="CLOSED",
         )
 
-        with patch("app.api.finance.gl.fiscal_period_service.close_period") as mock_close:
+        with patch(
+            "app.api.finance.gl.fiscal_period_service.close_period"
+        ) as mock_close:
             mock_close.return_value = closed_period
 
             result = gl_api.close_fiscal_period(
@@ -440,8 +452,14 @@ class TestAccountBalancesAPI:
             currency_code="USD",
         )
 
-        with patch("app.services.finance.gl.balance_service.get_balance") as mock_get_balance, \
-             patch("app.api.finance.gl.chart_of_accounts_service.get") as mock_get_account:
+        with (
+            patch(
+                "app.services.finance.gl.balance_service.get_balance"
+            ) as mock_get_balance,
+            patch(
+                "app.api.finance.gl.chart_of_accounts_service.get"
+            ) as mock_get_account,
+        ):
             mock_get_balance.return_value = mock_balance
             mock_get_account.return_value = mock_account
 
@@ -484,7 +502,9 @@ class TestAccountBalancesAPI:
             is_balanced=True,
         )
 
-        with patch("app.services.finance.gl.balance_service.get_trial_balance") as mock_get:
+        with patch(
+            "app.services.finance.gl.balance_service.get_trial_balance"
+        ) as mock_get:
             mock_get.return_value = mock_trial_balance
 
             result = gl_api.get_trial_balance(

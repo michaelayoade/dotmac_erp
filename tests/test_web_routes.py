@@ -92,10 +92,14 @@ def web_client(db_session):
     mock_ar_invoice_service.list.return_value = ([], 0)
 
     try:
-        with patch('app.web.finance.dashboard.dashboard_web_service', mock_dashboard_service), \
-             patch('app.web.finance.ap.ap_web_service', mock_supplier_service), \
-             patch('app.web.finance.ar.ar_web_service', mock_customer_service):
-
+        with (
+            patch(
+                "app.web.finance.dashboard.dashboard_web_service",
+                mock_dashboard_service,
+            ),
+            patch("app.web.finance.ap.ap_web_service", mock_supplier_service),
+            patch("app.web.finance.ar.ar_web_service", mock_customer_service),
+        ):
             with TestClient(app, raise_server_exceptions=False) as client:
                 yield client
     finally:
@@ -112,7 +116,9 @@ def assert_route_exists(response, allow_template_error=True):
     """
     if allow_template_error:
         # 200 = success, 500 = route works but template missing
-        assert response.status_code in [200, 500], f"Route returned {response.status_code}"
+        assert response.status_code in [200, 500], (
+            f"Route returned {response.status_code}"
+        )
     else:
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
 
@@ -120,6 +126,7 @@ def assert_route_exists(response, allow_template_error=True):
 # =============================================================================
 # Dashboard Tests
 # =============================================================================
+
 
 class TestDashboardRoutes:
     """Tests for IFRS Dashboard routes."""
@@ -146,6 +153,7 @@ class TestDashboardRoutes:
 # GL (General Ledger) Routes Tests
 # =============================================================================
 
+
 class TestGLRoutes:
     """Tests for General Ledger web routes.
 
@@ -170,7 +178,9 @@ class TestGLRoutes:
 
     def test_account_edit_route_exists(self, web_client):
         """Test that account edit route exists."""
-        response = web_client.get("/gl/accounts/00000000-0000-0000-0000-000000000001/edit")
+        response = web_client.get(
+            "/gl/accounts/00000000-0000-0000-0000-000000000001/edit"
+        )
         assert_route_exists(response)
 
     def test_journals_list_route_exists(self, web_client):
@@ -198,6 +208,7 @@ class TestGLRoutes:
 # AP (Accounts Payable) Routes Tests
 # =============================================================================
 
+
 class TestAPRoutes:
     """Tests for Accounts Payable web routes."""
 
@@ -218,7 +229,9 @@ class TestAPRoutes:
 
     def test_supplier_edit_form_route_exists(self, web_client):
         """Test that supplier edit form route exists."""
-        response = web_client.get("/ap/suppliers/00000000-0000-0000-0000-000000000001/edit")
+        response = web_client.get(
+            "/ap/suppliers/00000000-0000-0000-0000-000000000001/edit"
+        )
         assert_route_exists(response)
 
     def test_invoices_list_route_exists(self, web_client):
@@ -261,6 +274,7 @@ class TestAPRoutes:
 # AR (Accounts Receivable) Routes Tests
 # =============================================================================
 
+
 class TestARRoutes:
     """Tests for Accounts Receivable web routes."""
 
@@ -281,7 +295,9 @@ class TestARRoutes:
 
     def test_customer_edit_form_route_exists(self, web_client):
         """Test that customer edit form route exists."""
-        response = web_client.get("/ar/customers/00000000-0000-0000-0000-000000000001/edit")
+        response = web_client.get(
+            "/ar/customers/00000000-0000-0000-0000-000000000001/edit"
+        )
         assert_route_exists(response)
 
     def test_invoices_list_route_exists(self, web_client):
@@ -323,6 +339,7 @@ class TestARRoutes:
 # =============================================================================
 # HTMX Specific Tests
 # =============================================================================
+
 
 class TestHTMXResponses:
     """Tests for HTMX-specific behavior."""
@@ -368,6 +385,7 @@ class TestHTMXResponses:
 # Query Parameter Tests
 # =============================================================================
 
+
 class TestQueryParameters:
     """Tests for query parameter handling."""
 
@@ -388,12 +406,16 @@ class TestQueryParameters:
 
     def test_invoices_date_range(self, web_client):
         """Test AP invoices date range filter."""
-        response = web_client.get("/ap/invoices?start_date=2024-01-01&end_date=2024-12-31")
+        response = web_client.get(
+            "/ap/invoices?start_date=2024-01-01&end_date=2024-12-31"
+        )
         assert_route_exists(response)
 
     def test_journals_date_range(self, web_client):
         """Test GL journals date range filter."""
-        response = web_client.get("/gl/journals?start_date=2024-01-01&end_date=2024-12-31")
+        response = web_client.get(
+            "/gl/journals?start_date=2024-01-01&end_date=2024-12-31"
+        )
         assert_route_exists(response)
 
     def test_aging_report_date(self, web_client):
@@ -405,6 +427,7 @@ class TestQueryParameters:
 # =============================================================================
 # Form Submission Tests (POST Routes)
 # =============================================================================
+
 
 class TestFormSubmissions:
     """Tests for form submissions - verify POST routes exist."""
@@ -419,9 +442,7 @@ class TestFormSubmissions:
             "payment_terms_days": "30",
         }
         response = web_client.post(
-            "/ap/suppliers/new",
-            data=form_data,
-            follow_redirects=False
+            "/ap/suppliers/new", data=form_data, follow_redirects=False
         )
         # Should redirect on success, return form on error, or 500 for missing template
         assert response.status_code in [200, 303, 400, 422, 500]
@@ -436,9 +457,7 @@ class TestFormSubmissions:
             "payment_terms_days": "30",
         }
         response = web_client.post(
-            "/ar/customers/new",
-            data=form_data,
-            follow_redirects=False
+            "/ar/customers/new", data=form_data, follow_redirects=False
         )
         # Should redirect on success, return form on error, or 500 for missing template
         assert response.status_code in [200, 303, 400, 422, 500]
@@ -450,12 +469,12 @@ class TestFormSubmissions:
             "invoice_date": "2024-01-15",
             "due_date": "2024-02-15",
             "currency_code": "USD",
-            "lines": []
+            "lines": [],
         }
         response = web_client.post(
             "/ap/invoices/new",
             json=json_data,
-            headers={"Content-Type": "application/json"}
+            headers={"Content-Type": "application/json"},
         )
         # Should process or return error
         assert response.status_code in [200, 303, 400, 422, 500]
@@ -464,6 +483,7 @@ class TestFormSubmissions:
 # =============================================================================
 # Routes That Should Return 404
 # =============================================================================
+
 
 class TestNonExistentRoutes:
     """Tests for routes that should not exist."""

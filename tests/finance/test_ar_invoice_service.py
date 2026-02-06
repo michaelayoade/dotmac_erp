@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -10,8 +10,15 @@ import pytest
 from fastapi import HTTPException
 
 from app.models.finance.ar.invoice import InvoiceStatus, InvoiceType
-from app.services.finance.ar.invoice import ARInvoiceInput, ARInvoiceLineInput, ARInvoiceService
-from app.services.finance.tax.tax_calculation import LineCalculationResult, LineTaxResult
+from app.services.finance.ar.invoice import (
+    ARInvoiceInput,
+    ARInvoiceLineInput,
+    ARInvoiceService,
+)
+from app.services.finance.tax.tax_calculation import (
+    LineCalculationResult,
+    LineTaxResult,
+)
 
 
 def _make_customer(org_id, active=True):
@@ -42,7 +49,11 @@ def test_create_invoice_customer_missing():
                 invoice_date=date.today(),
                 due_date=date.today(),
                 currency_code="NGN",
-                lines=[ARInvoiceLineInput(description="A", quantity=Decimal("1"), unit_price=Decimal("10"))],
+                lines=[
+                    ARInvoiceLineInput(
+                        description="A", quantity=Decimal("1"), unit_price=Decimal("10")
+                    )
+                ],
             ),
             created_by_user_id=uuid4(),
         )
@@ -66,7 +77,11 @@ def test_create_invoice_inactive_customer():
                 invoice_date=date.today(),
                 due_date=date.today(),
                 currency_code="NGN",
-                lines=[ARInvoiceLineInput(description="A", quantity=Decimal("1"), unit_price=Decimal("10"))],
+                lines=[
+                    ARInvoiceLineInput(
+                        description="A", quantity=Decimal("1"), unit_price=Decimal("10")
+                    )
+                ],
             ),
             created_by_user_id=uuid4(),
         )
@@ -130,9 +145,18 @@ def test_create_credit_note_applies_negative_amounts():
     db.add.side_effect = lambda obj: added.append(obj)
 
     with (
-        patch("app.services.finance.ar.invoice._batch_validate_org_refs", return_value=None),
-        patch("app.services.finance.ar.invoice.SequenceService.get_next_number", return_value="INV-1"),
-        patch("app.services.finance.ar.invoice.TaxCalculationService.calculate_line_taxes", return_value=tax_result),
+        patch(
+            "app.services.finance.ar.invoice._batch_validate_org_refs",
+            return_value=None,
+        ),
+        patch(
+            "app.services.finance.ar.invoice.SequenceService.get_next_number",
+            return_value="INV-1",
+        ),
+        patch(
+            "app.services.finance.ar.invoice.TaxCalculationService.calculate_line_taxes",
+            return_value=tax_result,
+        ),
     ):
         invoice = svc.create_invoice(
             db,
@@ -181,7 +205,11 @@ def test_update_invoice_requires_draft():
                 invoice_date=date.today(),
                 due_date=date.today(),
                 currency_code="NGN",
-                lines=[ARInvoiceLineInput(description="A", quantity=Decimal("1"), unit_price=Decimal("10"))],
+                lines=[
+                    ARInvoiceLineInput(
+                        description="A", quantity=Decimal("1"), unit_price=Decimal("10")
+                    )
+                ],
             ),
             updated_by_user_id=uuid4(),
         )
@@ -200,13 +228,17 @@ def test_submit_approve_and_segregation():
     )
     db.get.return_value = invoice
 
-    submitted = ARInvoiceService.submit_invoice(db, org_id, uuid4(), submitted_by_user_id=uuid4())
+    submitted = ARInvoiceService.submit_invoice(
+        db, org_id, uuid4(), submitted_by_user_id=uuid4()
+    )
     assert submitted.status == InvoiceStatus.SUBMITTED
 
     invoice.status = InvoiceStatus.SUBMITTED
     invoice.submitted_by_user_id = uuid4()
     with pytest.raises(HTTPException):
-        ARInvoiceService.approve_invoice(db, org_id, uuid4(), approved_by_user_id=invoice.submitted_by_user_id)
+        ARInvoiceService.approve_invoice(
+            db, org_id, uuid4(), approved_by_user_id=invoice.submitted_by_user_id
+        )
 
 
 def test_post_invoice_and_void_cancel_and_record_payment():
@@ -229,21 +261,33 @@ def test_post_invoice_and_void_cancel_and_record_payment():
     )
     db.get.return_value = invoice
 
-    with patch("app.services.finance.ar.ar_posting_adapter.ARPostingAdapter.post_invoice") as post_invoice:
-        post_invoice.return_value = SimpleNamespace(success=True, journal_entry_id=uuid4(), posting_batch_id=uuid4())
-        posted = ARInvoiceService.post_invoice(db, org_id, uuid4(), posted_by_user_id=uuid4())
+    with patch(
+        "app.services.finance.ar.ar_posting_adapter.ARPostingAdapter.post_invoice"
+    ) as post_invoice:
+        post_invoice.return_value = SimpleNamespace(
+            success=True, journal_entry_id=uuid4(), posting_batch_id=uuid4()
+        )
+        posted = ARInvoiceService.post_invoice(
+            db, org_id, uuid4(), posted_by_user_id=uuid4()
+        )
         assert posted.status == InvoiceStatus.POSTED
 
     invoice.status = InvoiceStatus.DRAFT
-    voided = ARInvoiceService.void_invoice(db, org_id, uuid4(), voided_by_user_id=uuid4(), reason="bad")
+    voided = ARInvoiceService.void_invoice(
+        db, org_id, uuid4(), voided_by_user_id=uuid4(), reason="bad"
+    )
     assert voided.status == InvoiceStatus.VOID
 
     invoice.status = InvoiceStatus.SUBMITTED
-    cancelled = ARInvoiceService.cancel_invoice(db, org_id, uuid4(), cancelled_by_user_id=uuid4())
+    cancelled = ARInvoiceService.cancel_invoice(
+        db, org_id, uuid4(), cancelled_by_user_id=uuid4()
+    )
     assert cancelled.status == InvoiceStatus.DRAFT
 
     invoice.status = InvoiceStatus.POSTED
-    paid = ARInvoiceService.record_payment(db, org_id, uuid4(), payment_amount=Decimal("30.00"))
+    paid = ARInvoiceService.record_payment(
+        db, org_id, uuid4(), payment_amount=Decimal("30.00")
+    )
     assert paid.status == InvoiceStatus.PARTIALLY_PAID
 
 

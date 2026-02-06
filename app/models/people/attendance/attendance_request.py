@@ -3,6 +3,7 @@ Attendance Request Model - Attendance Schema.
 
 Tracks attendance correction/regularization requests.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -21,6 +22,7 @@ if TYPE_CHECKING:
 
 class AttendanceRequestStatus(str, enum.Enum):
     """Attendance request workflow status."""
+
     DRAFT = "DRAFT"
     PENDING = "PENDING"
     APPROVED = "APPROVED"
@@ -37,7 +39,9 @@ class AttendanceRequest(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin)
         Index("idx_attendance_request_org", "organization_id"),
         Index("idx_attendance_request_employee", "employee_id", "from_date"),
         Index("idx_attendance_request_status", "organization_id", "status"),
-        Index("idx_attendance_request_dates", "organization_id", "from_date", "to_date"),
+        Index(
+            "idx_attendance_request_dates", "organization_id", "from_date", "to_date"
+        ),
         {"schema": "attendance"},
     )
 

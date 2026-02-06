@@ -258,7 +258,9 @@ class TestCreateBOM:
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called()
 
-    def test_clears_other_defaults_when_setting_default(self, mock_db, org_id, mock_finished_item):
+    def test_clears_other_defaults_when_setting_default(
+        self, mock_db, org_id, mock_finished_item
+    ):
         """Should clear other default BOMs for same item when setting as default."""
         mock_db.query.return_value.filter.return_value.first.return_value = None
         mock_db.get.return_value = mock_finished_item
@@ -302,7 +304,9 @@ class TestCreateBOM:
 class TestAddComponent:
     """Tests for add_component method."""
 
-    def test_raises_error_when_bom_not_found(self, mock_db, org_id, bom_id, component_item_id):
+    def test_raises_error_when_bom_not_found(
+        self, mock_db, org_id, bom_id, component_item_id
+    ):
         """Should raise HTTPException when BOM not found."""
         mock_db.get.return_value = None
 
@@ -318,9 +322,13 @@ class TestAddComponent:
         assert exc.value.status_code == 404
         assert "BOM not found" in str(exc.value.detail)
 
-    def test_raises_error_when_component_not_found(self, mock_db, org_id, mock_bom, component_item_id):
+    def test_raises_error_when_component_not_found(
+        self, mock_db, org_id, mock_bom, component_item_id
+    ):
         """Should raise HTTPException when component item not found."""
-        mock_db.get.side_effect = lambda model, id: mock_bom if id == mock_bom.bom_id else None
+        mock_db.get.side_effect = (
+            lambda model, id: mock_bom if id == mock_bom.bom_id else None
+        )
 
         input = BOMComponentInput(
             component_item_id=component_item_id,
@@ -334,7 +342,9 @@ class TestAddComponent:
         assert exc.value.status_code == 404
         assert "Component item not found" in str(exc.value.detail)
 
-    def test_raises_error_on_circular_reference(self, mock_db, org_id, mock_bom, mock_finished_item):
+    def test_raises_error_on_circular_reference(
+        self, mock_db, org_id, mock_bom, mock_finished_item
+    ):
         """Should raise HTTPException when adding output item as component."""
         mock_db.get.side_effect = lambda model, id: (
             mock_bom if id == mock_bom.bom_id else mock_finished_item
@@ -353,7 +363,9 @@ class TestAddComponent:
         assert exc.value.status_code == 400
         assert "own component" in str(exc.value.detail).lower()
 
-    def test_adds_component_successfully(self, mock_db, org_id, mock_bom, mock_component_item):
+    def test_adds_component_successfully(
+        self, mock_db, org_id, mock_bom, mock_component_item
+    ):
         """Should add component when inputs are valid."""
         mock_db.get.side_effect = lambda model, id: (
             mock_bom if id == mock_bom.bom_id else mock_component_item
@@ -372,7 +384,9 @@ class TestAddComponent:
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called()
 
-    def test_adds_component_with_warehouse(self, mock_db, org_id, mock_bom, mock_component_item, warehouse_id):
+    def test_adds_component_with_warehouse(
+        self, mock_db, org_id, mock_bom, mock_component_item, warehouse_id
+    ):
         """Should add component with specific warehouse."""
         mock_db.get.side_effect = lambda model, id: (
             mock_bom if id == mock_bom.bom_id else mock_component_item
@@ -396,7 +410,9 @@ class TestAddComponent:
 class TestProcessAssembly:
     """Tests for process_assembly method."""
 
-    def test_raises_error_when_bom_not_found(self, mock_db, org_id, user_id, bom_id, warehouse_id, fiscal_period_id):
+    def test_raises_error_when_bom_not_found(
+        self, mock_db, org_id, user_id, bom_id, warehouse_id, fiscal_period_id
+    ):
         """Should raise HTTPException when BOM not found."""
         mock_db.get.return_value = None
 
@@ -413,7 +429,9 @@ class TestProcessAssembly:
 
         assert exc.value.status_code == 404
 
-    def test_raises_error_when_bom_inactive(self, mock_db, org_id, user_id, mock_bom, warehouse_id, fiscal_period_id):
+    def test_raises_error_when_bom_inactive(
+        self, mock_db, org_id, user_id, mock_bom, warehouse_id, fiscal_period_id
+    ):
         """Should raise HTTPException when BOM is not active."""
         mock_bom.is_active = False
         mock_db.get.return_value = mock_bom
@@ -432,7 +450,9 @@ class TestProcessAssembly:
         assert exc.value.status_code == 400
         assert "not active" in str(exc.value.detail).lower()
 
-    def test_raises_error_when_no_components(self, mock_db, org_id, user_id, mock_bom, warehouse_id, fiscal_period_id):
+    def test_raises_error_when_no_components(
+        self, mock_db, org_id, user_id, mock_bom, warehouse_id, fiscal_period_id
+    ):
         """Should raise HTTPException when BOM has no components."""
         mock_db.get.return_value = mock_bom
         mock_db.query.return_value.filter.return_value.all.return_value = []
@@ -452,7 +472,14 @@ class TestProcessAssembly:
         assert "no components" in str(exc.value.detail).lower()
 
     def test_raises_error_when_insufficient_components(
-        self, mock_db, org_id, user_id, mock_bom, mock_component_item, warehouse_id, fiscal_period_id
+        self,
+        mock_db,
+        org_id,
+        user_id,
+        mock_bom,
+        mock_component_item,
+        warehouse_id,
+        fiscal_period_id,
     ):
         """Should raise HTTPException when insufficient component inventory."""
         component = MockBOMComponent(
@@ -473,7 +500,9 @@ class TestProcessAssembly:
             transaction_date=datetime.now(timezone.utc),
         )
 
-        with patch('app.services.inventory.balance.InventoryBalanceService.get_available') as mock_get_available:
+        with patch(
+            "app.services.inventory.balance.InventoryBalanceService.get_available"
+        ) as mock_get_available:
             mock_get_available.return_value = Decimal("100")  # Only 100 available
 
             with pytest.raises(HTTPException) as exc:
@@ -483,7 +512,15 @@ class TestProcessAssembly:
             assert "Insufficient" in str(exc.value.detail)
 
     def test_creates_assembly_transactions(
-        self, mock_db, org_id, user_id, mock_bom, mock_finished_item, mock_component_item, warehouse_id, fiscal_period_id
+        self,
+        mock_db,
+        org_id,
+        user_id,
+        mock_bom,
+        mock_finished_item,
+        mock_component_item,
+        warehouse_id,
+        fiscal_period_id,
     ):
         """Should create issue and receipt transactions for assembly."""
         component = MockBOMComponent(
@@ -493,8 +530,10 @@ class TestProcessAssembly:
             uom="EACH",
         )
         mock_db.get.side_effect = lambda model, id: (
-            mock_bom if id == mock_bom.bom_id
-            else mock_finished_item if id == mock_bom.item_id
+            mock_bom
+            if id == mock_bom.bom_id
+            else mock_finished_item
+            if id == mock_bom.item_id
             else mock_component_item
         )
         mock_db.query.return_value.filter.return_value.all.return_value = [component]
@@ -507,11 +546,17 @@ class TestProcessAssembly:
             transaction_date=datetime.now(timezone.utc),
         )
 
-        with patch('app.services.inventory.balance.InventoryBalanceService.get_available') as mock_get_available:
+        with patch(
+            "app.services.inventory.balance.InventoryBalanceService.get_available"
+        ) as mock_get_available:
             mock_get_available.return_value = Decimal("100")
 
-            with patch('app.services.inventory.transaction.InventoryTransactionService.create_issue') as mock_issue:
-                with patch('app.services.inventory.transaction.InventoryTransactionService.create_receipt') as mock_receipt:
+            with patch(
+                "app.services.inventory.transaction.InventoryTransactionService.create_issue"
+            ) as mock_issue:
+                with patch(
+                    "app.services.inventory.transaction.InventoryTransactionService.create_receipt"
+                ) as mock_receipt:
                     mock_issue_txn = MagicMock()
                     mock_issue_txn.transaction_id = uuid.uuid4()
                     mock_receipt_txn = MagicMock()
@@ -519,7 +564,9 @@ class TestProcessAssembly:
                     mock_issue.return_value = mock_issue_txn
                     mock_receipt.return_value = mock_receipt_txn
 
-                    result = BOMService.process_assembly(mock_db, org_id, input, user_id)
+                    result = BOMService.process_assembly(
+                        mock_db, org_id, input, user_id
+                    )
 
                     assert isinstance(result, AssemblyResult)
                     assert result.output_quantity == Decimal("10")
@@ -527,7 +574,15 @@ class TestProcessAssembly:
                     mock_receipt.assert_called_once()  # Finished good receipt
 
     def test_calculates_cost_correctly(
-        self, mock_db, org_id, user_id, mock_bom, mock_finished_item, mock_component_item, warehouse_id, fiscal_period_id
+        self,
+        mock_db,
+        org_id,
+        user_id,
+        mock_bom,
+        mock_finished_item,
+        mock_component_item,
+        warehouse_id,
+        fiscal_period_id,
     ):
         """Should calculate assembly cost from component costs."""
         component = MockBOMComponent(
@@ -538,8 +593,10 @@ class TestProcessAssembly:
         )
         mock_component_item.average_cost = Decimal("15.00")
         mock_db.get.side_effect = lambda model, id: (
-            mock_bom if id == mock_bom.bom_id
-            else mock_finished_item if id == mock_bom.item_id
+            mock_bom
+            if id == mock_bom.bom_id
+            else mock_finished_item
+            if id == mock_bom.item_id
             else mock_component_item
         )
         mock_db.query.return_value.filter.return_value.all.return_value = [component]
@@ -552,22 +609,38 @@ class TestProcessAssembly:
             transaction_date=datetime.now(timezone.utc),
         )
 
-        with patch('app.services.inventory.balance.InventoryBalanceService.get_available') as mock_get_available:
+        with patch(
+            "app.services.inventory.balance.InventoryBalanceService.get_available"
+        ) as mock_get_available:
             mock_get_available.return_value = Decimal("100")
 
-            with patch('app.services.inventory.transaction.InventoryTransactionService.create_issue') as mock_issue:
-                with patch('app.services.inventory.transaction.InventoryTransactionService.create_receipt') as mock_receipt:
+            with patch(
+                "app.services.inventory.transaction.InventoryTransactionService.create_issue"
+            ) as mock_issue:
+                with patch(
+                    "app.services.inventory.transaction.InventoryTransactionService.create_receipt"
+                ) as mock_receipt:
                     mock_issue.return_value = MagicMock(transaction_id=uuid.uuid4())
                     mock_receipt.return_value = MagicMock(transaction_id=uuid.uuid4())
 
-                    result = BOMService.process_assembly(mock_db, org_id, input, user_id)
+                    result = BOMService.process_assembly(
+                        mock_db, org_id, input, user_id
+                    )
 
                     # 2 components * 5 units * $15 = $150 total, $30 per unit
                     assert result.total_component_cost == Decimal("150.000000")
                     assert result.unit_cost == Decimal("30.000000")
 
     def test_applies_scrap_factor(
-        self, mock_db, org_id, user_id, mock_bom, mock_finished_item, mock_component_item, warehouse_id, fiscal_period_id
+        self,
+        mock_db,
+        org_id,
+        user_id,
+        mock_bom,
+        mock_finished_item,
+        mock_component_item,
+        warehouse_id,
+        fiscal_period_id,
     ):
         """Should apply scrap percentage to component consumption."""
         component = MockBOMComponent(
@@ -578,8 +651,10 @@ class TestProcessAssembly:
             uom="EACH",
         )
         mock_db.get.side_effect = lambda model, id: (
-            mock_bom if id == mock_bom.bom_id
-            else mock_finished_item if id == mock_bom.item_id
+            mock_bom
+            if id == mock_bom.bom_id
+            else mock_finished_item
+            if id == mock_bom.item_id
             else mock_component_item
         )
         mock_db.query.return_value.filter.return_value.all.return_value = [component]
@@ -592,11 +667,17 @@ class TestProcessAssembly:
             transaction_date=datetime.now(timezone.utc),
         )
 
-        with patch('app.services.inventory.balance.InventoryBalanceService.get_available') as mock_get_available:
+        with patch(
+            "app.services.inventory.balance.InventoryBalanceService.get_available"
+        ) as mock_get_available:
             mock_get_available.return_value = Decimal("100")
 
-            with patch('app.services.inventory.transaction.InventoryTransactionService.create_issue') as mock_issue:
-                with patch('app.services.inventory.transaction.InventoryTransactionService.create_receipt') as mock_receipt:
+            with patch(
+                "app.services.inventory.transaction.InventoryTransactionService.create_issue"
+            ) as mock_issue:
+                with patch(
+                    "app.services.inventory.transaction.InventoryTransactionService.create_receipt"
+                ) as mock_receipt:
                     mock_issue.return_value = MagicMock(transaction_id=uuid.uuid4())
                     mock_receipt.return_value = MagicMock(transaction_id=uuid.uuid4())
 
@@ -604,7 +685,7 @@ class TestProcessAssembly:
 
                     # 10 * 1.10 = 11 components should be consumed
                     issue_call = mock_issue.call_args
-                    assert issue_call[1]['input'].quantity == Decimal("11.000000")
+                    assert issue_call[1]["input"].quantity == Decimal("11.000000")
 
 
 # ============ Tests for process_disassembly ============
@@ -613,7 +694,9 @@ class TestProcessAssembly:
 class TestProcessDisassembly:
     """Tests for process_disassembly method."""
 
-    def test_raises_error_when_bom_not_found(self, mock_db, org_id, user_id, bom_id, warehouse_id, fiscal_period_id):
+    def test_raises_error_when_bom_not_found(
+        self, mock_db, org_id, user_id, bom_id, warehouse_id, fiscal_period_id
+    ):
         """Should raise HTTPException when BOM not found."""
         mock_db.get.return_value = None
 
@@ -644,7 +727,9 @@ class TestProcessDisassembly:
             transaction_date=datetime.now(timezone.utc),
         )
 
-        with patch('app.services.inventory.balance.InventoryBalanceService.get_available') as mock_get_available:
+        with patch(
+            "app.services.inventory.balance.InventoryBalanceService.get_available"
+        ) as mock_get_available:
             mock_get_available.return_value = Decimal("10")  # Only 10 available
 
             with pytest.raises(HTTPException) as exc:
@@ -654,7 +739,15 @@ class TestProcessDisassembly:
             assert "Insufficient" in str(exc.value.detail)
 
     def test_creates_disassembly_transactions(
-        self, mock_db, org_id, user_id, mock_bom, mock_finished_item, mock_component_item, warehouse_id, fiscal_period_id
+        self,
+        mock_db,
+        org_id,
+        user_id,
+        mock_bom,
+        mock_finished_item,
+        mock_component_item,
+        warehouse_id,
+        fiscal_period_id,
     ):
         """Should create issue and receipt transactions for disassembly."""
         component = MockBOMComponent(
@@ -665,8 +758,10 @@ class TestProcessDisassembly:
         )
         mock_finished_item.average_cost = Decimal("30.00")
         mock_db.get.side_effect = lambda model, id: (
-            mock_bom if id == mock_bom.bom_id
-            else mock_finished_item if id == mock_bom.item_id
+            mock_bom
+            if id == mock_bom.bom_id
+            else mock_finished_item
+            if id == mock_bom.item_id
             else mock_component_item
         )
         mock_db.query.return_value.filter.return_value.all.return_value = [component]
@@ -679,15 +774,23 @@ class TestProcessDisassembly:
             transaction_date=datetime.now(timezone.utc),
         )
 
-        with patch('app.services.inventory.balance.InventoryBalanceService.get_available') as mock_get_available:
+        with patch(
+            "app.services.inventory.balance.InventoryBalanceService.get_available"
+        ) as mock_get_available:
             mock_get_available.return_value = Decimal("100")
 
-            with patch('app.services.inventory.transaction.InventoryTransactionService.create_issue') as mock_issue:
-                with patch('app.services.inventory.transaction.InventoryTransactionService.create_receipt') as mock_receipt:
+            with patch(
+                "app.services.inventory.transaction.InventoryTransactionService.create_issue"
+            ) as mock_issue:
+                with patch(
+                    "app.services.inventory.transaction.InventoryTransactionService.create_receipt"
+                ) as mock_receipt:
                     mock_issue.return_value = MagicMock(transaction_id=uuid.uuid4())
                     mock_receipt.return_value = MagicMock(transaction_id=uuid.uuid4())
 
-                    result = BOMService.process_disassembly(mock_db, org_id, input, user_id)
+                    result = BOMService.process_disassembly(
+                        mock_db, org_id, input, user_id
+                    )
 
                     assert isinstance(result, AssemblyResult)
                     mock_issue.assert_called_once()  # Finished good issue
@@ -803,7 +906,8 @@ class TestListComponents:
         comp1 = MockBOMComponent(bom_id=bom_id, line_number=1)
         comp2 = MockBOMComponent(bom_id=bom_id, line_number=2)
         mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
-            comp1, comp2
+            comp1,
+            comp2,
         ]
 
         result = BOMService.list_components(mock_db, str(bom_id))

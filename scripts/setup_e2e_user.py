@@ -56,7 +56,7 @@ def assign_admin_role(db, person_id):
     )
 
     if existing_assignment:
-        print(f"  Admin role already assigned")
+        print("  Admin role already assigned")
         return
 
     # Assign admin role to person
@@ -67,7 +67,7 @@ def assign_admin_role(db, person_id):
     )
     db.add(person_role)
     db.commit()
-    print(f"  Assigned admin role to user")
+    print("  Assigned admin role to user")
 
 
 def setup_e2e_user():
@@ -79,9 +79,7 @@ def setup_e2e_user():
     try:
         # Check if user already exists
         existing_cred = (
-            db.query(UserCredential)
-            .filter(UserCredential.username == username)
-            .first()
+            db.query(UserCredential).filter(UserCredential.username == username).first()
         )
 
         if existing_cred:
@@ -97,11 +95,7 @@ def setup_e2e_user():
 
         # Check if person with this email exists
         email = f"{username}@e2e-test.local"
-        existing_person = (
-            db.query(Person)
-            .filter(Person.email == email)
-            .first()
-        )
+        existing_person = db.query(Person).filter(Person.email == email).first()
 
         if existing_person:
             person = existing_person
@@ -134,7 +128,7 @@ def setup_e2e_user():
         db.add(credential)
         db.commit()
 
-        print(f"Created E2E test user successfully!")
+        print("Created E2E test user successfully!")
         print(f"  Username: {username}")
         print(f"  Password: {password}")
         print(f"  Person ID: {person.id}")
@@ -160,14 +154,17 @@ def check_organization_exists():
         # Check if we need to create the organization
         # This depends on your Organization model location
         from sqlalchemy import text
+
         result = db.execute(
             text("SELECT 1 FROM core_org.organization WHERE organization_id = :org_id"),
-            {"org_id": str(DEFAULT_ORG_ID)}
+            {"org_id": str(DEFAULT_ORG_ID)},
         ).fetchone()
 
         if not result:
             print(f"Warning: Default organization {DEFAULT_ORG_ID} does not exist.")
-            print("Please run database migrations first: poetry run alembic upgrade head")
+            print(
+                "Please run database migrations first: poetry run alembic upgrade head"
+            )
             return False
         return True
     except Exception as e:

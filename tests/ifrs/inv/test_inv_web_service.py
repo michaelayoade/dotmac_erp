@@ -7,8 +7,6 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-import pytest
-
 
 class TestInvWebServiceHelpers:
     """Tests for inventory web service helper functions."""

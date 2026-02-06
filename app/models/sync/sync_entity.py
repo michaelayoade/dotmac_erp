@@ -3,6 +3,7 @@ Sync Entity Model - Track individual entity sync status.
 
 Maps external system records (ERPNext) to DotMac ERP entities.
 """
+
 import enum
 import uuid
 from datetime import datetime
@@ -28,6 +29,7 @@ from app.db import Base
 
 class SyncStatus(str, enum.Enum):
     """Status of entity sync."""
+
     PENDING = "PENDING"
     SYNCED = "SYNCED"
     FAILED = "FAILED"

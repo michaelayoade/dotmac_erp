@@ -11,20 +11,12 @@ from datetime import date, datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import HTTPException
-from fastapi.testclient import TestClient
 
 from app.models.people.discipline import (
     CaseStatus,
     ViolationType,
     SeverityLevel,
     ActionType,
-)
-from app.schemas.people.discipline import (
-    DisciplinaryCaseCreate,
-    DisciplinaryCaseRead,
-    IssueQueryRequest,
-    CaseListFilter,
 )
 
 

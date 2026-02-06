@@ -1,6 +1,7 @@
 """
 Asset assignment model for tracking issued assets to employees.
 """
+
 from __future__ import annotations
 
 import enum
@@ -8,7 +9,7 @@ import uuid
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import Date, Enum, ForeignKey, Index, String, Text, func, text
+from sqlalchemy import Date, Enum, ForeignKey, Index, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 

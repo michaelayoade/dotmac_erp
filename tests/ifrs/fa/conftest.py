@@ -13,7 +13,9 @@ import pytest
 
 # ============ Import Actual Enums ============
 from app.models.fixed_assets.asset import AssetStatus as MockAssetStatus
-from app.models.fixed_assets.asset_category import DepreciationMethod as MockDepreciationMethod
+from app.models.fixed_assets.asset_category import (
+    DepreciationMethod as MockDepreciationMethod,
+)
 
 
 # ============ Mock Models ============
@@ -44,7 +46,7 @@ class MockAssetCategory:
         is_active: bool = True,
         created_at: datetime = None,
         updated_at: Optional[datetime] = None,
-        **kwargs
+        **kwargs,
     ):
         self.category_id = category_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -56,10 +58,18 @@ class MockAssetCategory:
         self.useful_life_months = useful_life_months
         self.residual_value_percent = residual_value_percent
         self.asset_account_id = asset_account_id or uuid.uuid4()
-        self.accumulated_depreciation_account_id = accumulated_depreciation_account_id or uuid.uuid4()
-        self.depreciation_expense_account_id = depreciation_expense_account_id or uuid.uuid4()
-        self.gain_loss_disposal_account_id = gain_loss_disposal_account_id or uuid.uuid4()
-        self.revaluation_surplus_account_id = revaluation_surplus_account_id or uuid.uuid4()
+        self.accumulated_depreciation_account_id = (
+            accumulated_depreciation_account_id or uuid.uuid4()
+        )
+        self.depreciation_expense_account_id = (
+            depreciation_expense_account_id or uuid.uuid4()
+        )
+        self.gain_loss_disposal_account_id = (
+            gain_loss_disposal_account_id or uuid.uuid4()
+        )
+        self.revaluation_surplus_account_id = (
+            revaluation_surplus_account_id or uuid.uuid4()
+        )
         self.impairment_loss_account_id = impairment_loss_account_id
         self.capitalization_threshold = capitalization_threshold
         self.revaluation_model_allowed = revaluation_model_allowed
@@ -119,7 +129,7 @@ class MockAsset:
         created_by_user_id: uuid.UUID = None,
         created_at: datetime = None,
         updated_at: Optional[datetime] = None,
-        **kwargs
+        **kwargs,
     ):
         self.asset_id = asset_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -145,7 +155,9 @@ class MockAsset:
         self.residual_value = residual_value
         self.depreciation_start_date = depreciation_start_date
         self.accumulated_depreciation = accumulated_depreciation
-        self.net_book_value = net_book_value or (acquisition_cost - accumulated_depreciation)
+        self.net_book_value = net_book_value or (
+            acquisition_cost - accumulated_depreciation
+        )
         self.revalued_amount = revalued_amount
         self.impairment_loss = impairment_loss
         self.status = status
@@ -186,7 +198,7 @@ class MockDepreciationRun:
         posted_journal_id: Optional[uuid.UUID] = None,
         created_by_user_id: uuid.UUID = None,
         created_at: datetime = None,
-        **kwargs
+        **kwargs,
     ):
         self.run_id = run_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -219,7 +231,7 @@ class MockDepreciationSchedule:
         depreciation_method: str = MockDepreciationMethod.STRAIGHT_LINE.value,
         expense_account_id: uuid.UUID = None,
         accumulated_depreciation_account_id: uuid.UUID = None,
-        **kwargs
+        **kwargs,
     ):
         self.schedule_id = schedule_id or uuid.uuid4()
         self.run_id = run_id or uuid.uuid4()
@@ -230,7 +242,9 @@ class MockDepreciationSchedule:
         self.closing_nbv = closing_nbv
         self.depreciation_method = depreciation_method
         self.expense_account_id = expense_account_id or uuid.uuid4()
-        self.accumulated_depreciation_account_id = accumulated_depreciation_account_id or uuid.uuid4()
+        self.accumulated_depreciation_account_id = (
+            accumulated_depreciation_account_id or uuid.uuid4()
+        )
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -256,7 +270,7 @@ class MockAssetDisposal:
         posted_journal_id: Optional[uuid.UUID] = None,
         created_by_user_id: uuid.UUID = None,
         created_at: datetime = None,
-        **kwargs
+        **kwargs,
     ):
         self.disposal_id = disposal_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -300,7 +314,7 @@ class MockAssetRevaluation:
         posted_journal_id: Optional[uuid.UUID] = None,
         created_by_user_id: uuid.UUID = None,
         created_at: datetime = None,
-        **kwargs
+        **kwargs,
     ):
         self.revaluation_id = revaluation_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()

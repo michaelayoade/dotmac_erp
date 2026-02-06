@@ -6,6 +6,7 @@ Handles:
 - Batch notification processing for payroll runs
 - Auto-generating draft payroll before month end
 """
+
 from __future__ import annotations
 
 import logging
@@ -116,6 +117,7 @@ def send_payslip_email(slip_id: str, org_id: str) -> dict[str, Any]:
         try:
             from app.models.people.payroll.salary_slip import SalarySlip
             from app.services.people.payroll.payslip_pdf import PayslipPDFService
+            from app.models.email_profile import EmailModule
             from app.services.email import send_email
 
             slip_uuid = uuid.UUID(slip_id)
@@ -135,7 +137,9 @@ def send_payslip_email(slip_id: str, org_id: str) -> dict[str, Any]:
             # Get employee's work email
             email_address = employee.work_email
             if not email_address:
-                result["error"] = f"No email address for employee {employee.employee_id}"
+                result["error"] = (
+                    f"No email address for employee {employee.employee_id}"
+                )
                 logger.warning(result["error"])
                 return result
 
@@ -144,7 +148,10 @@ def send_payslip_email(slip_id: str, org_id: str) -> dict[str, Any]:
             # Get organization name from employee's organization
             org_name: str | None = None
             if employee.organization:
-                org_name = employee.organization.trading_name or employee.organization.legal_name
+                org_name = (
+                    employee.organization.trading_name
+                    or employee.organization.legal_name
+                )
 
             pdf_bytes: bytes | None = None
             pdf_error: str | None = None
@@ -172,7 +179,7 @@ def send_payslip_email(slip_id: str, org_id: str) -> dict[str, Any]:
             pdf_notice_text = ""
             if pdf_error:
                 pdf_notice_html = (
-                    "<p style=\"color:#b45309;\">"
+                    '<p style="color:#b45309;">'
                     "We couldn’t attach the PDF due to a system error. "
                     "Please contact HR if you need a copy."
                     "</p>"
@@ -196,7 +203,7 @@ def send_payslip_email(slip_id: str, org_id: str) -> dict[str, Any]:
                     </tr>
                     <tr>
                         <td style="padding: 8px 16px 8px 0; color: #64748b;">Pay Period:</td>
-                        <td style="padding: 8px 0;">{slip.start_date.strftime('%d %b')} - {slip.end_date.strftime('%d %b %Y')}</td>
+                        <td style="padding: 8px 0;">{slip.start_date.strftime("%d %b")} - {slip.end_date.strftime("%d %b %Y")}</td>
                     </tr>
                     <tr>
                         <td style="padding: 8px 16px 8px 0; color: #64748b;">Gross Pay:</td>
@@ -229,7 +236,7 @@ Dear {first_name},
 Your payslip for {period_str} is now available.
 
 Payslip Number: {slip.slip_number}
-Pay Period: {slip.start_date.strftime('%d %b')} - {slip.end_date.strftime('%d %b %Y')}
+Pay Period: {slip.start_date.strftime("%d %b")} - {slip.end_date.strftime("%d %b %Y")}
 Gross Pay: {slip.currency_code} {slip.gross_pay:,.2f}
 Deductions: ({slip.currency_code} {slip.total_deduction:,.2f})
 Net Pay: {slip.currency_code} {slip.net_pay:,.2f}
@@ -244,7 +251,9 @@ For any queries regarding your payslip, please contact HR.
             # Send email with PDF attachment
             attachments: list[tuple[str, bytes, str]] = []
             if pdf_bytes:
-                pdf_filename = f"Payslip_{slip.slip_number}_{period_str.replace(' ', '_')}.pdf"
+                pdf_filename = (
+                    f"Payslip_{slip.slip_number}_{period_str.replace(' ', '_')}.pdf"
+                )
                 attachments = [(pdf_filename, pdf_bytes, "application/pdf")]
 
             success = send_email(
@@ -254,6 +263,8 @@ For any queries regarding your payslip, please contact HR.
                 body_html=body_html,
                 body_text=body_text,
                 attachments=attachments,
+                module=EmailModule.PEOPLE_PAYROLL,
+                organization_id=slip.organization_id,
             )
 
             if success:
@@ -353,9 +364,7 @@ def process_payroll_entry_notifications(entry_id: str, org_id: str) -> dict[str,
 
         except Exception as e:
             errors_list.append(str(e))
-            logger.exception(
-                "Error processing payroll entry notifications: %s", e
-            )
+            logger.exception("Error processing payroll entry notifications: %s", e)
 
     logger.info(
         "Payroll entry %s notifications: %d processed, %d skipped, %d errors",
@@ -383,7 +392,6 @@ def auto_generate_draft_payroll() -> dict[str, Any]:
     Returns:
         Dict with processing statistics per organization
     """
-    from uuid import UUID
 
     from sqlalchemy import select, func
 
@@ -393,8 +401,6 @@ def auto_generate_draft_payroll() -> dict[str, Any]:
     from app.models.domain_settings import SettingDomain
     from app.services.people.payroll.payroll_service import PayrollService
     from app.services.people.payroll.data_completeness import PayrollReadinessService
-    from app.services.notification import NotificationService
-    from app.models.notification import EntityType, NotificationType, NotificationChannel
 
     today = date.today()
     month_end = _last_day_of_month(today)
@@ -454,21 +460,26 @@ def auto_generate_draft_payroll() -> dict[str, Any]:
                 period_end = month_end
 
                 # Check if payroll already exists for this period
-                existing_count = db.scalar(
-                    select(func.count(PayrollEntry.entry_id)).where(
-                        PayrollEntry.organization_id == org.organization_id,
-                        PayrollEntry.start_date == period_start,
-                        PayrollEntry.end_date == period_end,
-                        PayrollEntry.status != PayrollEntryStatus.CANCELLED,
+                existing_count = (
+                    db.scalar(
+                        select(func.count(PayrollEntry.entry_id)).where(
+                            PayrollEntry.organization_id == org.organization_id,
+                            PayrollEntry.start_date == period_start,
+                            PayrollEntry.end_date == period_end,
+                            PayrollEntry.status != PayrollEntryStatus.CANCELLED,
+                        )
                     )
-                ) or 0
+                    or 0
+                )
 
                 if existing_count > 0:
-                    results["skipped"].append({
-                        "org_id": str(org.organization_id),
-                        "org_name": org.legal_name,
-                        "reason": "Payroll already exists for period",
-                    })
+                    results["skipped"].append(
+                        {
+                            "org_id": str(org.organization_id),
+                            "org_name": org.legal_name,
+                            "reason": "Payroll already exists for period",
+                        }
+                    )
                     continue
 
                 # Run data completeness check
@@ -512,15 +523,17 @@ def auto_generate_draft_payroll() -> dict[str, Any]:
                     generation_result=generation_result,
                 )
 
-                results["payrolls_generated"].append({
-                    "org_id": str(org.organization_id),
-                    "org_name": org.legal_name,
-                    "entry_id": str(entry.entry_id),
-                    "entry_number": entry.entry_number,
-                    "employee_count": generation_result.created,
-                    "flagged_for_review": len(generation_result.flagged_for_review),
-                    "incomplete_employees": readiness_report.needs_review_count,
-                })
+                results["payrolls_generated"].append(
+                    {
+                        "org_id": str(org.organization_id),
+                        "org_name": org.legal_name,
+                        "entry_id": str(entry.entry_id),
+                        "entry_number": entry.entry_number,
+                        "employee_count": generation_result.created,
+                        "flagged_for_review": len(generation_result.flagged_for_review),
+                        "incomplete_employees": readiness_report.needs_review_count,
+                    }
+                )
 
                 logger.info(
                     "Generated draft payroll %s for %s: %d employees, %d flagged",
@@ -536,11 +549,13 @@ def auto_generate_draft_payroll() -> dict[str, Any]:
                     org.organization_id,
                     e,
                 )
-                results["errors"].append({
-                    "org_id": str(org.organization_id),
-                    "org_name": getattr(org, "legal_name", "Unknown"),
-                    "error": str(e),
-                })
+                results["errors"].append(
+                    {
+                        "org_id": str(org.organization_id),
+                        "org_name": getattr(org, "legal_name", "Unknown"),
+                        "error": str(e),
+                    }
+                )
                 db.rollback()
 
     logger.info(
@@ -564,8 +579,13 @@ def _notify_draft_ready(
     """Send in-app and email notifications for draft payroll."""
     from app.services.notification import NotificationService
     from app.services.rbac import get_users_with_permission
-    from app.models.notification import EntityType, NotificationType, NotificationChannel
+    from app.models.notification import (
+        EntityType,
+        NotificationType,
+        NotificationChannel,
+    )
     from app.models.domain_settings import SettingDomain
+    from app.models.email_profile import EmailModule
     from app.services.email import send_email
 
     notification_service = NotificationService()
@@ -639,7 +659,7 @@ def _notify_draft_ready(
                     </tr>
                     <tr>
                         <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>Period</strong></td>
-                        <td style="padding: 10px; border: 1px solid #e2e8f0;">{entry.start_date.strftime('%d %b')} - {entry.end_date.strftime('%d %b %Y')}</td>
+                        <td style="padding: 10px; border: 1px solid #e2e8f0;">{entry.start_date.strftime("%d %b")} - {entry.end_date.strftime("%d %b %Y")}</td>
                     </tr>
                     <tr style="background-color: #f1f5f9;">
                         <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>Employees</strong></td>
@@ -647,7 +667,7 @@ def _notify_draft_ready(
                     </tr>
                     <tr>
                         <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>Flagged for Review</strong></td>
-                        <td style="padding: 10px; border: 1px solid #e2e8f0; color: {'#dc2626' if generation_result.flagged_for_review else '#16a34a'};">{len(generation_result.flagged_for_review)}</td>
+                        <td style="padding: 10px; border: 1px solid #e2e8f0; color: {"#dc2626" if generation_result.flagged_for_review else "#16a34a"};">{len(generation_result.flagged_for_review)}</td>
                     </tr>
                 </table>
 
@@ -676,7 +696,7 @@ Draft Payroll Ready
 A draft payroll for {period_name} has been automatically generated and is ready for review.
 
 Payroll Number: {entry.entry_number}
-Period: {entry.start_date.strftime('%d %b')} - {entry.end_date.strftime('%d %b %Y')}
+Period: {entry.start_date.strftime("%d %b")} - {entry.end_date.strftime("%d %b %Y")}
 Employees: {generation_result.created}
 Flagged for Review: {len(generation_result.flagged_for_review)}
 
@@ -694,6 +714,8 @@ This is an automated message from {org_name}.
                         subject=f"Draft Payroll Ready: {entry.entry_number} - {period_name}",
                         body_html=body_html,
                         body_text=body_text,
+                        module=EmailModule.PEOPLE_PAYROLL,
+                        organization_id=org.organization_id,
                     )
 
     except Exception as e:

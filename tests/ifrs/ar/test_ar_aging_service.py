@@ -18,8 +18,8 @@ from app.services.finance.ar.ar_aging import (
     ARAgingService,
     CustomerAgingSummary,
     OrganizationARAgingSummary,
-    AgingBucket,
 )
+from app.services.finance.common.aging_helper import AgingBucket
 
 
 # -----------------------------------------------------------------------------
@@ -66,6 +66,7 @@ def mock_customer(organization_id, customer_id):
 @pytest.fixture
 def mock_invoice(organization_id, customer_id):
     """Create a mock invoice factory."""
+
     def _create_invoice(
         due_date: date,
         balance_due: Decimal = Decimal("1000"),
@@ -120,7 +121,9 @@ class TestCalculateCustomerAging:
         mock_db.get.return_value = mock_customer
 
         today = date.today()
-        invoice = mock_invoice(due_date=today - timedelta(days=15), balance_due=Decimal("5000"))
+        invoice = mock_invoice(
+            due_date=today - timedelta(days=15), balance_due=Decimal("5000")
+        )
         mock_db.query.return_value.filter.return_value.all.return_value = [invoice]
 
         result = ARAgingService.calculate_customer_aging(
@@ -143,7 +146,9 @@ class TestCalculateCustomerAging:
         mock_db.get.return_value = mock_customer
 
         today = date.today()
-        invoice = mock_invoice(due_date=today - timedelta(days=45), balance_due=Decimal("3000"))
+        invoice = mock_invoice(
+            due_date=today - timedelta(days=45), balance_due=Decimal("3000")
+        )
         mock_db.query.return_value.filter.return_value.all.return_value = [invoice]
 
         result = ARAgingService.calculate_customer_aging(
@@ -165,7 +170,9 @@ class TestCalculateCustomerAging:
         mock_db.get.return_value = mock_customer
 
         today = date.today()
-        invoice = mock_invoice(due_date=today - timedelta(days=75), balance_due=Decimal("2000"))
+        invoice = mock_invoice(
+            due_date=today - timedelta(days=75), balance_due=Decimal("2000")
+        )
         mock_db.query.return_value.filter.return_value.all.return_value = [invoice]
 
         result = ARAgingService.calculate_customer_aging(
@@ -187,7 +194,9 @@ class TestCalculateCustomerAging:
         mock_db.get.return_value = mock_customer
 
         today = date.today()
-        invoice = mock_invoice(due_date=today - timedelta(days=120), balance_due=Decimal("8000"))
+        invoice = mock_invoice(
+            due_date=today - timedelta(days=120), balance_due=Decimal("8000")
+        )
         mock_db.query.return_value.filter.return_value.all.return_value = [invoice]
 
         result = ARAgingService.calculate_customer_aging(
@@ -210,10 +219,18 @@ class TestCalculateCustomerAging:
 
         today = date.today()
         invoices = [
-            mock_invoice(due_date=today - timedelta(days=10), balance_due=Decimal("1000")),
-            mock_invoice(due_date=today - timedelta(days=40), balance_due=Decimal("2000")),
-            mock_invoice(due_date=today - timedelta(days=70), balance_due=Decimal("3000")),
-            mock_invoice(due_date=today - timedelta(days=100), balance_due=Decimal("4000")),
+            mock_invoice(
+                due_date=today - timedelta(days=10), balance_due=Decimal("1000")
+            ),
+            mock_invoice(
+                due_date=today - timedelta(days=40), balance_due=Decimal("2000")
+            ),
+            mock_invoice(
+                due_date=today - timedelta(days=70), balance_due=Decimal("3000")
+            ),
+            mock_invoice(
+                due_date=today - timedelta(days=100), balance_due=Decimal("4000")
+            ),
         ]
         mock_db.query.return_value.filter.return_value.all.return_value = invoices
 
@@ -324,13 +341,20 @@ class TestCalculateOrganizationAging:
         customer2_id = uuid.uuid4()
 
         # Create invoices for different customers
-        invoice1 = mock_invoice(due_date=today - timedelta(days=10), balance_due=Decimal("5000"))
+        invoice1 = mock_invoice(
+            due_date=today - timedelta(days=10), balance_due=Decimal("5000")
+        )
         invoice1.customer_id = customer1_id
 
-        invoice2 = mock_invoice(due_date=today - timedelta(days=50), balance_due=Decimal("3000"))
+        invoice2 = mock_invoice(
+            due_date=today - timedelta(days=50), balance_due=Decimal("3000")
+        )
         invoice2.customer_id = customer2_id
 
-        mock_db.query.return_value.filter.return_value.all.return_value = [invoice1, invoice2]
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            invoice1,
+            invoice2,
+        ]
 
         result = ARAgingService.calculate_organization_aging(
             db=mock_db,
@@ -353,10 +377,18 @@ class TestCalculateOrganizationAging:
 
         today = date.today()
         invoices = [
-            mock_invoice(due_date=today - timedelta(days=20), balance_due=Decimal("1000")),
-            mock_invoice(due_date=today - timedelta(days=45), balance_due=Decimal("2000")),
-            mock_invoice(due_date=today - timedelta(days=80), balance_due=Decimal("3000")),
-            mock_invoice(due_date=today - timedelta(days=120), balance_due=Decimal("4000")),
+            mock_invoice(
+                due_date=today - timedelta(days=20), balance_due=Decimal("1000")
+            ),
+            mock_invoice(
+                due_date=today - timedelta(days=45), balance_due=Decimal("2000")
+            ),
+            mock_invoice(
+                due_date=today - timedelta(days=80), balance_due=Decimal("3000")
+            ),
+            mock_invoice(
+                due_date=today - timedelta(days=120), balance_due=Decimal("4000")
+            ),
         ]
         mock_db.query.return_value.filter.return_value.all.return_value = invoices
 
@@ -423,11 +455,15 @@ class TestGetAgingByCustomer:
         today = date.today()
 
         # Customer 1: $1000 total
-        invoice1 = mock_invoice(due_date=today - timedelta(days=10), balance_due=Decimal("1000"))
+        invoice1 = mock_invoice(
+            due_date=today - timedelta(days=10), balance_due=Decimal("1000")
+        )
         invoice1.customer_id = customer1_id
 
         # Customer 2: $5000 total
-        invoice2 = mock_invoice(due_date=today - timedelta(days=10), balance_due=Decimal("5000"))
+        invoice2 = mock_invoice(
+            due_date=today - timedelta(days=10), balance_due=Decimal("5000")
+        )
         invoice2.customer_id = customer2_id
 
         def mock_get(model, id):
@@ -450,7 +486,10 @@ class TestGetAgingByCustomer:
             mock_result = MagicMock()
             call_count[0] += 1
             if call_count[0] == 1:
-                mock_result.distinct.return_value.all.return_value = [(customer1_id,), (customer2_id,)]
+                mock_result.distinct.return_value.all.return_value = [
+                    (customer1_id,),
+                    (customer2_id,),
+                ]
             else:
                 # Return empty for individual customer queries
                 mock_result.all.return_value = []
@@ -516,10 +555,18 @@ class TestCreateAgingSnapshot:
         mock_db.get.return_value = mock_customer
 
         invoices = [
-            mock_invoice(due_date=today - timedelta(days=10), balance_due=Decimal("1000")),
-            mock_invoice(due_date=today - timedelta(days=45), balance_due=Decimal("2000")),
-            mock_invoice(due_date=today - timedelta(days=75), balance_due=Decimal("3000")),
-            mock_invoice(due_date=today - timedelta(days=100), balance_due=Decimal("4000")),
+            mock_invoice(
+                due_date=today - timedelta(days=10), balance_due=Decimal("1000")
+            ),
+            mock_invoice(
+                due_date=today - timedelta(days=45), balance_due=Decimal("2000")
+            ),
+            mock_invoice(
+                due_date=today - timedelta(days=75), balance_due=Decimal("3000")
+            ),
+            mock_invoice(
+                due_date=today - timedelta(days=100), balance_due=Decimal("4000")
+            ),
         ]
         mock_db.query.return_value.filter.return_value.all.return_value = invoices
 
@@ -559,7 +606,9 @@ class TestGetOverdueInvoices:
     ):
         """Test getting overdue invoices."""
         today = date.today()
-        overdue_invoice = mock_invoice(due_date=today - timedelta(days=10), balance_due=Decimal("5000"))
+        overdue_invoice = mock_invoice(
+            due_date=today - timedelta(days=10), balance_due=Decimal("5000")
+        )
         mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
             overdue_invoice
         ]
@@ -579,9 +628,13 @@ class TestGetOverdueInvoices:
         today = date.today()
 
         # 5 days overdue
-        invoice1 = mock_invoice(due_date=today - timedelta(days=5), balance_due=Decimal("1000"))
+        invoice1 = mock_invoice(
+            due_date=today - timedelta(days=5), balance_due=Decimal("1000")
+        )
         # 30 days overdue
-        invoice2 = mock_invoice(due_date=today - timedelta(days=30), balance_due=Decimal("2000"))
+        invoice2 = mock_invoice(
+            due_date=today - timedelta(days=30), balance_due=Decimal("2000")
+        )
 
         mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
             invoice1,
@@ -604,7 +657,9 @@ class TestGetOverdueInvoices:
     ):
         """Test filtering overdue invoices by customer."""
         today = date.today()
-        invoice = mock_invoice(due_date=today - timedelta(days=10), balance_due=Decimal("5000"))
+        invoice = mock_invoice(
+            due_date=today - timedelta(days=10), balance_due=Decimal("5000")
+        )
         mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.all.return_value = [
             invoice
         ]
@@ -651,7 +706,9 @@ class TestGetHighRiskCustomers:
 
         # Customer with amounts in 61-90 bucket
         invoices = [
-            mock_invoice(due_date=today - timedelta(days=75), balance_due=Decimal("5000")),
+            mock_invoice(
+                due_date=today - timedelta(days=75), balance_due=Decimal("5000")
+            ),
         ]
         mock_db.query.return_value.filter.return_value.all.return_value = invoices
 
@@ -676,7 +733,9 @@ class TestGetHighRiskCustomers:
         mock_db.get.return_value = mock_customer
 
         invoices = [
-            mock_invoice(due_date=today - timedelta(days=100), balance_due=Decimal("8000")),
+            mock_invoice(
+                due_date=today - timedelta(days=100), balance_due=Decimal("8000")
+            ),
         ]
         mock_db.query.return_value.filter.return_value.all.return_value = invoices
 
@@ -701,7 +760,9 @@ class TestGetHighRiskCustomers:
         mock_db.get.return_value = mock_customer
 
         invoices = [
-            mock_invoice(due_date=today - timedelta(days=100), balance_due=Decimal("500")),
+            mock_invoice(
+                due_date=today - timedelta(days=100), balance_due=Decimal("500")
+            ),
         ]
         mock_db.query.return_value.filter.return_value.all.return_value = invoices
 
@@ -794,7 +855,9 @@ class TestList:
         )
 
         mock_db.query.return_value.order_by.return_value.limit.assert_called_with(25)
-        mock_db.query.return_value.order_by.return_value.limit.return_value.offset.assert_called_with(50)
+        mock_db.query.return_value.order_by.return_value.limit.return_value.offset.assert_called_with(
+            50
+        )
 
 
 # -----------------------------------------------------------------------------
@@ -803,7 +866,7 @@ class TestList:
 
 
 class TestAgingBucketDataclass:
-    """Tests for AgingBucket dataclass."""
+    """Tests for AgingBucket dataclass (frozen, from aging_helper)."""
 
     def test_aging_bucket_creation(self):
         """Test creating an AgingBucket."""
@@ -811,15 +874,11 @@ class TestAgingBucketDataclass:
             bucket_name="Current",
             min_days=0,
             max_days=30,
-            amount=Decimal("5000"),
-            invoice_count=3,
         )
 
         assert bucket.bucket_name == "Current"
         assert bucket.min_days == 0
         assert bucket.max_days == 30
-        assert bucket.amount == Decimal("5000")
-        assert bucket.invoice_count == 3
 
     def test_aging_bucket_over_90_no_max(self):
         """Test AgingBucket for over 90 days (no max)."""
@@ -831,16 +890,16 @@ class TestAgingBucketDataclass:
 
         assert bucket.max_days is None
 
-    def test_aging_bucket_defaults(self):
-        """Test AgingBucket default values."""
+    def test_aging_bucket_is_frozen(self):
+        """Test AgingBucket is immutable."""
         bucket = AgingBucket(
             bucket_name="Test",
             min_days=0,
             max_days=30,
         )
 
-        assert bucket.amount == Decimal("0")
-        assert bucket.invoice_count == 0
+        with pytest.raises(AttributeError):
+            bucket.bucket_name = "Changed"
 
 
 # -----------------------------------------------------------------------------

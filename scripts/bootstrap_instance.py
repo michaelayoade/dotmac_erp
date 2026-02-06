@@ -31,13 +31,13 @@ Usage:
     # Remote VPS mode (generates a tarball you can scp to another server)
     python scripts/bootstrap_instance.py ... --package
 """
+
 from __future__ import annotations
 
 import argparse
 import os
 import secrets
 import shutil
-import subprocess
 import sys
 import textwrap
 import uuid
@@ -45,9 +45,9 @@ import uuid
 # ---------------------------------------------------------------------------
 # Defaults & Constants
 # ---------------------------------------------------------------------------
-BASE_APP_PORT = 8010      # First instance starts here
-BASE_DB_PORT = 5440       # First instance DB port
-BASE_REDIS_PORT = 6390    # First instance Redis port
+BASE_APP_PORT = 8010  # First instance starts here
+BASE_DB_PORT = 5440  # First instance DB port
+BASE_REDIS_PORT = 6390  # First instance Redis port
 BASE_OPENBAO_PORT = 8210  # First instance OpenBao port
 INSTANCES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "instances")
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -64,10 +64,12 @@ def generate_fernet_key() -> str:
     """Generate a Fernet key for TOTP encryption."""
     try:
         from cryptography.fernet import Fernet
+
         return Fernet.generate_key().decode()
     except ImportError:
         # Fallback: base64-encoded 32 bytes (valid Fernet key format)
         import base64
+
         return base64.urlsafe_b64encode(secrets.token_bytes(32)).decode()
 
 
@@ -112,14 +114,20 @@ def prompt_if_missing(args: argparse.Namespace) -> argparse.Namespace:
         args.sector_type = input("Sector type [PRIVATE]: ").strip().upper() or "PRIVATE"
     if not args.framework:
         print(f"Accounting framework options: {', '.join(FRAMEWORK_CHOICES)}")
-        args.framework = input("Accounting framework [IFRS]: ").strip().upper() or "IFRS"
+        args.framework = (
+            input("Accounting framework [IFRS]: ").strip().upper() or "IFRS"
+        )
     if not args.currency:
-        args.currency = input("Functional currency code [NGN]: ").strip().upper() or "NGN"
+        args.currency = (
+            input("Functional currency code [NGN]: ").strip().upper() or "NGN"
+        )
     if not args.admin_email:
         args.admin_email = input("Admin email: ").strip()
     if not args.admin_username:
         default_user = args.admin_email.split("@")[0] if args.admin_email else "admin"
-        args.admin_username = input(f"Admin username [{default_user}]: ").strip() or default_user
+        args.admin_username = (
+            input(f"Admin username [{default_user}]: ").strip() or default_user
+        )
     if not args.admin_password:
         args.admin_password = input("Admin password: ").strip()
 
@@ -137,6 +145,7 @@ def prompt_if_missing(args: argparse.Namespace) -> argparse.Namespace:
 # ---------------------------------------------------------------------------
 # File generators
 # ---------------------------------------------------------------------------
+
 
 def generate_env(
     org_id: str,
@@ -669,6 +678,7 @@ def generate_readme(org_code: str, org_name: str, app_port: int) -> str:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Provision a new single-tenant DotMac ERP instance.",
@@ -676,8 +686,12 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--org-code", help="Short org code (e.g. ACME)")
     p.add_argument("--org-name", help="Legal organization name")
-    p.add_argument("--sector-type", choices=SECTOR_CHOICES, help="PRIVATE, PUBLIC, or NGO")
-    p.add_argument("--framework", choices=FRAMEWORK_CHOICES, help="IFRS, IPSAS, or BOTH")
+    p.add_argument(
+        "--sector-type", choices=SECTOR_CHOICES, help="PRIVATE, PUBLIC, or NGO"
+    )
+    p.add_argument(
+        "--framework", choices=FRAMEWORK_CHOICES, help="IFRS, IPSAS, or BOTH"
+    )
     p.add_argument("--currency", help="Functional currency code (e.g. USD, NGN)")
     p.add_argument("--admin-email", help="Admin user email")
     p.add_argument("--admin-username", help="Admin login username")
@@ -688,7 +702,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--bao-port", type=int, help="Host port for OpenBao")
     p.add_argument("--app-url", help="Public URL (e.g. https://acme.erp.example.com)")
     p.add_argument("--output-dir", help="Where to create the instance directory")
-    p.add_argument("--package", action="store_true", help="Create a .tar.gz for remote deployment")
+    p.add_argument(
+        "--package", action="store_true", help="Create a .tar.gz for remote deployment"
+    )
     return p.parse_args()
 
 
@@ -725,7 +741,9 @@ def main() -> None:
     print(f"\nProvisioning instance: {org_code}")
     print(f"  Directory: {output_dir}")
     print(f"  Org ID:    {org_id}")
-    print(f"  Ports:     app={app_port}, db={db_port}, redis={redis_port}, openbao={bao_port}")
+    print(
+        f"  Ports:     app={app_port}, db={db_port}, redis={redis_port}, openbao={bao_port}"
+    )
     print()
 
     # .env
@@ -782,7 +800,9 @@ def main() -> None:
         )
         print(f"\n  Packaged: {archive_path}")
         print(f"  Deploy:   scp {archive_path} user@remote:/opt/dotmac/")
-        print(f"            ssh user@remote 'cd /opt/dotmac && tar xzf {archive_name}.tar.gz && cd {slug} && ./setup.sh'")
+        print(
+            f"            ssh user@remote 'cd /opt/dotmac && tar xzf {archive_name}.tar.gz && cd {slug} && ./setup.sh'"
+        )
 
     print(f"""
 === Instance provisioned ===

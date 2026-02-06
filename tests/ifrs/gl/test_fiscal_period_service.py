@@ -2,8 +2,7 @@
 Tests for FiscalPeriodService.
 """
 
-from datetime import date, datetime, timezone
-from unittest.mock import MagicMock, patch
+from datetime import date
 from uuid import uuid4
 
 import pytest
@@ -15,7 +14,6 @@ from app.services.finance.gl.fiscal_period import (
 from app.models.finance.gl.fiscal_period import PeriodStatus
 from tests.ifrs.gl.conftest import (
     MockFiscalPeriod,
-    MockPeriodStatus,
 )
 
 
@@ -50,7 +48,9 @@ class TestCreatePeriod:
         mock_db.commit.assert_called_once()
         mock_db.refresh.assert_called_once()
 
-    def test_create_period_duplicate_fails(self, service, mock_db, org_id, sample_period_input):
+    def test_create_period_duplicate_fails(
+        self, service, mock_db, org_id, sample_period_input
+    ):
         """Test that duplicate period number fails."""
         from fastapi import HTTPException
 
@@ -161,7 +161,9 @@ class TestSoftClosePeriod:
         )
         mock_db.get.return_value = period
 
-        result = service.soft_close_period(mock_db, org_id, period.fiscal_period_id, user_id)
+        result = service.soft_close_period(
+            mock_db, org_id, period.fiscal_period_id, user_id
+        )
 
         mock_db.commit.assert_called_once()
         assert result.status == PeriodStatus.SOFT_CLOSED
@@ -174,7 +176,9 @@ class TestSoftClosePeriod:
         )
         mock_db.get.return_value = period
 
-        result = service.soft_close_period(mock_db, org_id, period.fiscal_period_id, user_id)
+        result = service.soft_close_period(
+            mock_db, org_id, period.fiscal_period_id, user_id
+        )
 
         assert result.status == PeriodStatus.SOFT_CLOSED
 
@@ -216,7 +220,9 @@ class TestHardClosePeriod:
         )
         mock_db.get.return_value = period
 
-        result = service.hard_close_period(mock_db, org_id, period.fiscal_period_id, user_id)
+        result = service.hard_close_period(
+            mock_db, org_id, period.fiscal_period_id, user_id
+        )
 
         mock_db.commit.assert_called_once()
         assert result.status == PeriodStatus.HARD_CLOSED
@@ -271,7 +277,9 @@ class TestReopenPeriod:
         mock_db.get.return_value = period
 
         with pytest.raises(HTTPException) as exc:
-            service.reopen_period(mock_db, org_id, period.fiscal_period_id, user_id, uuid4())
+            service.reopen_period(
+                mock_db, org_id, period.fiscal_period_id, user_id, uuid4()
+            )
 
         assert exc.value.status_code == 400
         assert "hard-closed" in exc.value.detail
@@ -307,9 +315,7 @@ class TestListPeriods:
     def test_list_all_periods(self, service, mock_db, org_id):
         """Test listing all periods."""
         periods = [MockFiscalPeriod(organization_id=org_id) for _ in range(12)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            periods
-        )
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = periods
 
         result = service.list(mock_db, organization_id=str(org_id))
 
@@ -319,21 +325,21 @@ class TestListPeriods:
         """Test listing periods by fiscal year."""
         year_id = uuid4()
         periods = [MockFiscalPeriod(organization_id=org_id, fiscal_year_id=year_id)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            periods
-        )
+        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = periods
 
-        result = service.list(mock_db, organization_id=str(org_id), fiscal_year_id=str(year_id))
+        result = service.list(
+            mock_db, organization_id=str(org_id), fiscal_year_id=str(year_id)
+        )
 
         assert len(result) == 1
 
     def test_list_by_status(self, service, mock_db, org_id):
         """Test listing periods by status."""
         periods = [MockFiscalPeriod(organization_id=org_id, status=PeriodStatus.OPEN)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            periods
-        )
+        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = periods
 
-        result = service.list(mock_db, organization_id=str(org_id), status=PeriodStatus.OPEN)
+        result = service.list(
+            mock_db, organization_id=str(org_id), status=PeriodStatus.OPEN
+        )
 
         assert len(result) == 1

@@ -3,6 +3,7 @@ Project Template Model - PM Schema.
 
 Defines reusable task templates that can be applied to new projects.
 """
+
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional

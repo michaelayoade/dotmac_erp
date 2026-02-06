@@ -2,9 +2,6 @@
 Tests for ChartOfAccountsService.
 """
 
-from datetime import datetime
-from decimal import Decimal
-from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -43,7 +40,9 @@ def sample_account_input():
 class TestCreateAccount:
     """Tests for create_account method."""
 
-    def test_create_account_success(self, service, mock_db, org_id, sample_account_input):
+    def test_create_account_success(
+        self, service, mock_db, org_id, sample_account_input
+    ):
         """Test successful account creation."""
         # No existing account
         mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -54,7 +53,9 @@ class TestCreateAccount:
         mock_db.commit.assert_called_once()
         mock_db.refresh.assert_called_once()
 
-    def test_create_account_duplicate_fails(self, service, mock_db, org_id, sample_account_input):
+    def test_create_account_duplicate_fails(
+        self, service, mock_db, org_id, sample_account_input
+    ):
         """Test that duplicate account code fails."""
         from fastapi import HTTPException
 
@@ -223,9 +224,7 @@ class TestListAccounts:
     def test_list_all_accounts(self, service, mock_db, org_id):
         """Test listing all accounts."""
         accounts = [MockAccount(organization_id=org_id) for _ in range(5)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            accounts
-        )
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = accounts
 
         result = service.list(mock_db, organization_id=str(org_id))
 
@@ -235,20 +234,18 @@ class TestListAccounts:
         """Test listing accounts with category filter."""
         category_id = uuid4()
         accounts = [MockAccount(organization_id=org_id, category_id=category_id)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            accounts
-        )
+        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = accounts
 
-        result = service.list(mock_db, organization_id=str(org_id), category_id=str(category_id))
+        result = service.list(
+            mock_db, organization_id=str(org_id), category_id=str(category_id)
+        )
 
         assert len(result) == 1
 
     def test_list_with_active_filter(self, service, mock_db, org_id):
         """Test listing active accounts only."""
         accounts = [MockAccount(organization_id=org_id, is_active=True)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            accounts
-        )
+        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = accounts
 
         result = service.list(mock_db, organization_id=str(org_id), is_active=True)
 
@@ -257,9 +254,7 @@ class TestListAccounts:
     def test_list_with_search(self, service, mock_db, org_id):
         """Test listing accounts with search term."""
         accounts = [MockAccount(organization_id=org_id, account_name="Cash")]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            accounts
-        )
+        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = accounts
 
         result = service.list(mock_db, organization_id=str(org_id), search="Cash")
 
@@ -268,9 +263,7 @@ class TestListAccounts:
     def test_list_with_pagination(self, service, mock_db, org_id):
         """Test listing accounts with pagination."""
         accounts = [MockAccount(organization_id=org_id)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            accounts
-        )
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = accounts
 
         result = service.list(mock_db, organization_id=str(org_id), limit=10, offset=5)
 

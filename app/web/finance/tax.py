@@ -26,7 +26,9 @@ def list_jurisdictions(
     db: Session = Depends(get_db),
 ):
     """Tax jurisdictions list page."""
-    return tax_web_service.list_jurisdictions_response(request, auth, country_code, page, db)
+    return tax_web_service.list_jurisdictions_response(
+        request, auth, country_code, page, db
+    )
 
 
 @router.get("/codes", response_class=HTMLResponse)
@@ -97,7 +99,9 @@ async def update_tax_code(
     db: Session = Depends(get_db),
 ):
     """Update an existing tax code."""
-    return await tax_web_service.update_tax_code_response(request, auth, tax_code_id, db)
+    return await tax_web_service.update_tax_code_response(
+        request, auth, tax_code_id, db
+    )
 
 
 @router.post("/codes/{tax_code_id}/toggle", response_class=HTMLResponse)
@@ -155,7 +159,9 @@ def list_tax_returns(
     db: Session = Depends(get_db),
 ):
     """Tax returns list page."""
-    return tax_web_service.list_tax_returns_response(request, auth, period_id, status, page, db)
+    return tax_web_service.list_tax_returns_response(
+        request, auth, period_id, status, page, db
+    )
 
 
 @router.get("/returns/new", response_class=HTMLResponse)
@@ -242,7 +248,9 @@ def view_tax_transaction(
     db: Session = Depends(get_db),
 ):
     """Tax transaction detail page."""
-    return tax_web_service.view_tax_transaction_response(request, auth, transaction_id, db)
+    return tax_web_service.view_tax_transaction_response(
+        request, auth, transaction_id, db
+    )
 
 
 @router.get("/returns/{return_id}/transactions", response_class=HTMLResponse)
@@ -254,7 +262,9 @@ def return_transactions(
     db: Session = Depends(get_db),
 ):
     """View transactions included in a tax return."""
-    return tax_web_service.return_transactions_response(request, auth, return_id, page, db)
+    return tax_web_service.return_transactions_response(
+        request, auth, return_id, page, db
+    )
 
 
 @router.post("/returns/{return_id}/recalculate", response_class=HTMLResponse)

@@ -5,9 +5,8 @@ Tests consolidation run lifecycle, elimination entries, and consolidated balance
 """
 
 import uuid
-from datetime import datetime, timezone
 from decimal import Decimal
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -192,7 +191,9 @@ class TestCreateRun:
         mock_db.commit.assert_called_once()
         mock_db.refresh.assert_called_once()
 
-    def test_create_run_increments_run_number(self, mock_db, group_id, run_input, user_id):
+    def test_create_run_increments_run_number(
+        self, mock_db, group_id, run_input, user_id
+    ):
         """Test that run number increments for same period."""
         # Mock existing run with number 3
         mock_db.query.return_value.filter.return_value.scalar.return_value = 3
@@ -209,7 +210,9 @@ class TestCreateRun:
         added_run = mock_db.add.call_args[0][0]
         assert added_run.run_number == 4
 
-    def test_create_run_counts_entities_correctly(self, mock_db, group_id, run_input, user_id):
+    def test_create_run_counts_entities_correctly(
+        self, mock_db, group_id, run_input, user_id
+    ):
         """Test that entity counts are calculated correctly."""
         mock_db.query.return_value.filter.return_value.scalar.return_value = None
 
@@ -309,7 +312,9 @@ class TestStartRun:
 class TestCreateEliminationEntry:
     """Tests for ConsolidationService.create_elimination_entry."""
 
-    def test_create_elimination_entry_success(self, mock_db, group_id, mock_consolidation_run):
+    def test_create_elimination_entry_success(
+        self, mock_db, group_id, mock_consolidation_run
+    ):
         """Test creating an elimination entry successfully."""
         mock_consolidation_run.status = ConsolidationStatus.IN_PROGRESS
         mock_db.get.return_value = mock_consolidation_run
@@ -338,7 +343,9 @@ class TestCreateEliminationEntry:
         assert mock_consolidation_run.elimination_entries_count == 1
         assert mock_consolidation_run.total_eliminations_amount == Decimal("100000")
 
-    def test_create_elimination_entry_with_nci(self, mock_db, group_id, mock_consolidation_run):
+    def test_create_elimination_entry_with_nci(
+        self, mock_db, group_id, mock_consolidation_run
+    ):
         """Test creating elimination entry with NCI amounts."""
         mock_consolidation_run.status = ConsolidationStatus.IN_PROGRESS
         mock_consolidation_run.elimination_entries_count = 0
@@ -370,7 +377,9 @@ class TestCreateEliminationEntry:
         # Verify NCI was tracked
         assert mock_consolidation_run.total_nci == Decimal("200000")
 
-    def test_create_elimination_entry_unbalanced(self, mock_db, group_id, mock_consolidation_run):
+    def test_create_elimination_entry_unbalanced(
+        self, mock_db, group_id, mock_consolidation_run
+    ):
         """Test that unbalanced eliminations are rejected."""
         mock_consolidation_run.status = ConsolidationStatus.IN_PROGRESS
         mock_db.get.return_value = mock_consolidation_run
@@ -396,7 +405,9 @@ class TestCreateEliminationEntry:
         assert exc_info.value.status_code == 400
         assert "balance" in exc_info.value.detail.lower()
 
-    def test_create_elimination_entry_wrong_status(self, mock_db, group_id, mock_consolidation_run):
+    def test_create_elimination_entry_wrong_status(
+        self, mock_db, group_id, mock_consolidation_run
+    ):
         """Test creating elimination when run is not in progress."""
         mock_consolidation_run.status = ConsolidationStatus.DRAFT
         mock_db.get.return_value = mock_consolidation_run
@@ -432,7 +443,12 @@ class TestGenerateIntercompanyEliminations:
     """Tests for ConsolidationService.generate_intercompany_eliminations."""
 
     def test_generate_ic_eliminations_success(
-        self, mock_db, group_id, mock_consolidation_run, mock_legal_entity, mock_intercompany_balance
+        self,
+        mock_db,
+        group_id,
+        mock_consolidation_run,
+        mock_legal_entity,
+        mock_intercompany_balance,
     ):
         """Test generating intercompany eliminations."""
         mock_consolidation_run.status = ConsolidationStatus.IN_PROGRESS
@@ -459,7 +475,9 @@ class TestGenerateIntercompanyEliminations:
             [entity1, entity2],  # entities
             [mock_intercompany_balance],  # balances
         ]
-        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal("0")
+        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal(
+            "0"
+        )
 
         result = ConsolidationService.generate_intercompany_eliminations(
             db=mock_db,
@@ -485,7 +503,9 @@ class TestGenerateIntercompanyEliminations:
             [entity1],  # entities
             [],  # no matched balances
         ]
-        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal("0")
+        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal(
+            "0"
+        )
 
         result = ConsolidationService.generate_intercompany_eliminations(
             db=mock_db,
@@ -506,7 +526,12 @@ class TestGenerateInvestmentEliminations:
     """Tests for ConsolidationService.generate_investment_eliminations."""
 
     def test_generate_investment_eliminations_success(
-        self, mock_db, group_id, mock_consolidation_run, mock_legal_entity, mock_ownership_interest
+        self,
+        mock_db,
+        group_id,
+        mock_consolidation_run,
+        mock_legal_entity,
+        mock_ownership_interest,
     ):
         """Test generating investment eliminations."""
         mock_consolidation_run.status = ConsolidationStatus.IN_PROGRESS
@@ -524,8 +549,12 @@ class TestGenerateInvestmentEliminations:
 
         # Setup queries
         mock_db.get.return_value = mock_consolidation_run
-        mock_db.query.return_value.filter.return_value.all.return_value = [mock_legal_entity]
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_ownership_interest
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            mock_legal_entity
+        ]
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            mock_ownership_interest
+        )
 
         result = ConsolidationService.generate_investment_eliminations(
             db=mock_db,
@@ -547,8 +576,12 @@ class TestGenerateInvestmentEliminations:
         mock_legal_entity.consolidation_method = ConsolidationMethod.FULL
 
         mock_db.get.return_value = mock_consolidation_run
-        mock_db.query.return_value.filter.return_value.all.return_value = [mock_legal_entity]
-        mock_db.query.return_value.filter.return_value.first.return_value = None  # No ownership
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            mock_legal_entity
+        ]
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            None  # No ownership
+        )
 
         result = ConsolidationService.generate_investment_eliminations(
             db=mock_db,
@@ -623,7 +656,9 @@ class TestCompleteRun:
 class TestApproveRun:
     """Tests for ConsolidationService.approve_run."""
 
-    def test_approve_run_success(self, mock_db, group_id, mock_consolidation_run, other_user_id):
+    def test_approve_run_success(
+        self, mock_db, group_id, mock_consolidation_run, other_user_id
+    ):
         """Test approving a consolidation run successfully."""
         mock_consolidation_run.status = ConsolidationStatus.COMPLETED
         mock_db.get.return_value = mock_consolidation_run
@@ -654,7 +689,9 @@ class TestApproveRun:
 
         assert exc_info.value.status_code == 404
 
-    def test_approve_run_wrong_status(self, mock_db, group_id, mock_consolidation_run, other_user_id):
+    def test_approve_run_wrong_status(
+        self, mock_db, group_id, mock_consolidation_run, other_user_id
+    ):
         """Test approving a run that's not completed."""
         mock_consolidation_run.status = ConsolidationStatus.IN_PROGRESS
         mock_db.get.return_value = mock_consolidation_run
@@ -670,7 +707,9 @@ class TestApproveRun:
         assert exc_info.value.status_code == 400
         assert "completed" in exc_info.value.detail.lower()
 
-    def test_approve_run_sod_violation(self, mock_db, group_id, mock_consolidation_run, user_id):
+    def test_approve_run_sod_violation(
+        self, mock_db, group_id, mock_consolidation_run, user_id
+    ):
         """Test SoD: creator cannot approve."""
         mock_consolidation_run.status = ConsolidationStatus.COMPLETED
         mock_consolidation_run.created_by_user_id = user_id

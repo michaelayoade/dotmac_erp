@@ -44,9 +44,15 @@ def test_get_payroll_ytd_report_aggregates_totals_and_names():
     ]
 
     deduction_rows = [
-        SimpleNamespace(employee_id="emp-1", component_code="PAYE", total_amount=Decimal("50.00")),
-        SimpleNamespace(employee_id="emp-1", component_code="PENSION", total_amount=Decimal("30.00")),
-        SimpleNamespace(employee_id="emp-2", component_code="NHF", total_amount=Decimal("20.00")),
+        SimpleNamespace(
+            employee_id="emp-1", component_code="PAYE", total_amount=Decimal("50.00")
+        ),
+        SimpleNamespace(
+            employee_id="emp-1", component_code="PENSION", total_amount=Decimal("30.00")
+        ),
+        SimpleNamespace(
+            employee_id="emp-2", component_code="NHF", total_amount=Decimal("20.00")
+        ),
     ]
 
     db = MagicMock()

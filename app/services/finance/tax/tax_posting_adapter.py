@@ -14,7 +14,6 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.journal_entry import JournalType
@@ -27,21 +26,15 @@ from app.services.common import coerce_uuid
 from app.services.finance.gl.journal import (
     JournalInput,
     JournalLineInput,
-    JournalService,
 )
-from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
+from app.services.finance.posting.base import BasePostingAdapter, PostingResult
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class TAXPostingResult:
+class TAXPostingResult(PostingResult):
     """Result of a tax posting operation."""
-
-    success: bool
-    journal_entry_id: Optional[UUID] = None
-    posting_batch_id: Optional[UUID] = None
-    message: str = ""
 
 
 class TAXPostingAdapter:
@@ -180,60 +173,50 @@ class TAXPostingAdapter:
             source_document_id=txn_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-
-        except HTTPException as e:
-            return TAXPostingResult(
-                success=False, message=f"Journal creation failed: {e.detail}"
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Journal creation failed",
+        )
+        if error:
+            return TAXPostingResult(success=False, message=error.message)
 
         # Post to ledger
         if not idempotency_key:
-            idempotency_key = f"{org_id}:TAX:TXN:{txn_id}:post:v1"
+            idempotency_key = BasePostingAdapter.make_idempotency_key(
+                org_id, "TAX:TXN", txn_id, action="post"
+            )
 
-        posting_request = PostingRequest(
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db,
             organization_id=org_id,
             journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="TAX",
+            correlation_id=None,
             posted_by_user_id=user_id,
+            success_message="Tax transaction posted successfully",
         )
-
-        try:
-            posting_result = LedgerPostingService.post_journal_entry(
-                db, posting_request
-            )
-
-            if not posting_result.success:
-                return TAXPostingResult(
-                    success=False,
-                    journal_entry_id=journal.journal_entry_id,
-                    message=f"Ledger posting failed: {posting_result.message}",
-                )
-
-            # Update transaction with journal reference
-            transaction.journal_entry_id = journal.journal_entry_id
-            db.commit()
-
-            return TAXPostingResult(
-                success=True,
-                journal_entry_id=journal.journal_entry_id,
-                posting_batch_id=posting_result.posting_batch_id,
-                message="Tax transaction posted successfully",
-            )
-
-        except Exception as e:
+        if not posting_result.success:
             return TAXPostingResult(
                 success=False,
                 journal_entry_id=journal.journal_entry_id,
-                message=f"Posting error: {str(e)}",
+                message=posting_result.message,
             )
+
+        # Update transaction with journal reference
+        transaction.journal_entry_id = journal.journal_entry_id
+        db.commit()
+
+        return TAXPostingResult(
+            success=True,
+            journal_entry_id=journal.journal_entry_id,
+            posting_batch_id=posting_result.posting_batch_id,
+            message=posting_result.message,
+        )
 
     @staticmethod
     def post_current_tax_provision(
@@ -345,56 +328,46 @@ class TAXPostingAdapter:
             source_document_id=period_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-
-        except HTTPException as e:
-            return TAXPostingResult(
-                success=False, message=f"Journal creation failed: {e.detail}"
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Journal creation failed",
+        )
+        if error:
+            return TAXPostingResult(success=False, message=error.message)
 
         # Post to ledger
         if not idempotency_key:
-            idempotency_key = f"{org_id}:TAX:CTAX:{jur_id}:{period_id}:v1"
+            idempotency_key = BasePostingAdapter.make_idempotency_key(
+                org_id, f"TAX:CTAX:{jur_id}", period_id, action="post"
+            )
 
-        posting_request = PostingRequest(
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db,
             organization_id=org_id,
             journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="TAX",
+            correlation_id=None,
             posted_by_user_id=user_id,
+            success_message="Current tax provision posted successfully",
         )
-
-        try:
-            posting_result = LedgerPostingService.post_journal_entry(
-                db, posting_request
-            )
-
-            if not posting_result.success:
-                return TAXPostingResult(
-                    success=False,
-                    journal_entry_id=journal.journal_entry_id,
-                    message=f"Ledger posting failed: {posting_result.message}",
-                )
-
-            return TAXPostingResult(
-                success=True,
-                journal_entry_id=journal.journal_entry_id,
-                posting_batch_id=posting_result.posting_batch_id,
-                message="Current tax provision posted successfully",
-            )
-
-        except Exception as e:
+        if not posting_result.success:
             return TAXPostingResult(
                 success=False,
                 journal_entry_id=journal.journal_entry_id,
-                message=f"Posting error: {str(e)}",
+                message=posting_result.message,
             )
+
+        return TAXPostingResult(
+            success=True,
+            journal_entry_id=journal.journal_entry_id,
+            posting_batch_id=posting_result.posting_batch_id,
+            message=posting_result.message,
+        )
 
     @staticmethod
     def post_deferred_tax_movement(
@@ -582,60 +555,50 @@ class TAXPostingAdapter:
             source_document_id=mov_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-
-        except HTTPException as e:
-            return TAXPostingResult(
-                success=False, message=f"Journal creation failed: {e.detail}"
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Journal creation failed",
+        )
+        if error:
+            return TAXPostingResult(success=False, message=error.message)
 
         # Post to ledger
         if not idempotency_key:
-            idempotency_key = f"{org_id}:TAX:DT:{mov_id}:post:v1"
+            idempotency_key = BasePostingAdapter.make_idempotency_key(
+                org_id, "TAX:DT", mov_id, action="post"
+            )
 
-        posting_request = PostingRequest(
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db,
             organization_id=org_id,
             journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="TAX",
+            correlation_id=None,
             posted_by_user_id=user_id,
+            success_message="Deferred tax movement posted successfully",
         )
-
-        try:
-            posting_result = LedgerPostingService.post_journal_entry(
-                db, posting_request
-            )
-
-            if not posting_result.success:
-                return TAXPostingResult(
-                    success=False,
-                    journal_entry_id=journal.journal_entry_id,
-                    message=f"Ledger posting failed: {posting_result.message}",
-                )
-
-            # Update movement with journal reference
-            movement.journal_entry_id = journal.journal_entry_id
-            db.commit()
-
-            return TAXPostingResult(
-                success=True,
-                journal_entry_id=journal.journal_entry_id,
-                posting_batch_id=posting_result.posting_batch_id,
-                message="Deferred tax movement posted successfully",
-            )
-
-        except Exception as e:
+        if not posting_result.success:
             return TAXPostingResult(
                 success=False,
                 journal_entry_id=journal.journal_entry_id,
-                message=f"Posting error: {str(e)}",
+                message=posting_result.message,
             )
+
+        # Update movement with journal reference
+        movement.journal_entry_id = journal.journal_entry_id
+        db.commit()
+
+        return TAXPostingResult(
+            success=True,
+            journal_entry_id=journal.journal_entry_id,
+            posting_batch_id=posting_result.posting_batch_id,
+            message=posting_result.message,
+        )
 
 
 # Module-level singleton instance

@@ -3,13 +3,27 @@ Price List Models - Inventory Schema.
 
 Manages pricing tiers, customer-specific pricing, and quantity breaks.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Index, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -30,7 +44,9 @@ class PriceList(Base):
 
     __tablename__ = "price_list"
     __table_args__ = (
-        UniqueConstraint("organization_id", "price_list_code", name="uq_price_list_code"),
+        UniqueConstraint(
+            "organization_id", "price_list_code", name="uq_price_list_code"
+        ),
         Index("idx_price_list_type", "price_list_type"),
         {"schema": "inv"},
     )
@@ -73,7 +89,9 @@ class PriceList(Base):
         nullable=True,
     )
     # Markup/markdown percentage from base price list
-    markup_percent: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4), nullable=True)
+    markup_percent: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 4), nullable=True
+    )
 
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -133,11 +151,17 @@ class PriceListItem(Base):
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
 
     # Quantity breaks (min quantity for this price)
-    min_quantity: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=Decimal("1"))
+    min_quantity: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=Decimal("1")
+    )
 
     # Discount options
-    discount_percent: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4), nullable=True)
-    discount_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6), nullable=True)
+    discount_percent: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 4), nullable=True
+    )
+    discount_amount: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 6), nullable=True
+    )
 
     # Override effective dates at item level
     effective_from: Mapped[Optional[date]] = mapped_column(Date, nullable=True)

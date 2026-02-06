@@ -26,6 +26,7 @@
     Edit
 </a>
 <form method="post" action="/inventory/counts/{{ count.count_id }}/start" class="inline">
+
     <button type="submit" class="btn btn-primary">
         <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
@@ -36,6 +37,7 @@
 </form>
 {% elif count.status.value == 'IN_PROGRESS' %}
 <form method="post" action="/inventory/counts/{{ count.count_id }}/complete" class="inline">
+
     <button type="submit" class="btn btn-primary">
         <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -45,6 +47,7 @@
 </form>
 {% elif count.status.value == 'COMPLETED' %}
 <form method="post" action="/inventory/counts/{{ count.count_id }}/post" class="inline">
+
     <button type="submit" class="btn btn-primary">
         <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -140,6 +143,7 @@
                         <td class="text-right font-mono">
                             {% if count.status.value == 'IN_PROGRESS' and line.counted_quantity is none %}
                             <form method="post" action="/inventory/counts/{{ count.count_id }}/lines/{{ line.line_id }}/record" class="flex items-center gap-2">
+                            
                                 <input type="number" name="counted_quantity" step="0.01"
                                        class="form-input w-24 text-right" placeholder="0.00">
                                 <button type="submit" class="btn btn-sm btn-primary">Save</button>

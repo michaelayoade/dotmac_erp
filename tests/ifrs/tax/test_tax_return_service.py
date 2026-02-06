@@ -19,6 +19,7 @@ from app.services.finance.tax.tax_return import (
 
 class MockTaxReturnStatus:
     """Mock status enum."""
+
     DRAFT = "draft"
     PREPARED = "prepared"
     REVIEWED = "reviewed"
@@ -28,6 +29,7 @@ class MockTaxReturnStatus:
 
 class MockTaxReturnType:
     """Mock return type enum."""
+
     VAT = "vat"
     GST = "gst"
     SALES_TAX = "sales_tax"
@@ -105,8 +107,14 @@ class TestTaxReturnServicePrepareReturn:
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
         mock_query.group_by.return_value = mock_query
-        mock_query.first.side_effect = [mock_period, None]  # Period found, no existing return
-        mock_query.scalar.side_effect = [Decimal("10000"), Decimal("3000")]  # Output, input tax
+        mock_query.first.side_effect = [
+            mock_period,
+            None,
+        ]  # Period found, no existing return
+        mock_query.scalar.side_effect = [
+            Decimal("10000"),
+            Decimal("3000"),
+        ]  # Output, input tax
         mock_query.all.return_value = []  # Box values
         mock_db.query.return_value = mock_query
 
@@ -174,9 +182,7 @@ class TestTaxReturnServicePrepareReturn:
         from app.models.finance.tax.tax_period import TaxPeriodStatus
 
         org_id = uuid4()
-        mock_period = MockTaxPeriod(
-            organization_id=org_id, status=TaxPeriodStatus.OPEN
-        )
+        mock_period = MockTaxPeriod(organization_id=org_id, status=TaxPeriodStatus.OPEN)
         existing_return = MockTaxReturn(status=TaxReturnStatus.PREPARED)
 
         mock_query = MagicMock()
@@ -221,9 +227,7 @@ class TestTaxReturnServiceReviewReturn:
         mock_query.first.return_value = mock_return
         mock_db.query.return_value = mock_query
 
-        result = TaxReturnService.review_return(
-            mock_db, org_id, return_id, reviewer_id
-        )
+        result = TaxReturnService.review_return(mock_db, org_id, return_id, reviewer_id)
 
         assert mock_return.status == TaxReturnStatus.REVIEWED
         assert mock_return.reviewed_by_user_id == reviewer_id

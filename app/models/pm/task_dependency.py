@@ -3,6 +3,7 @@ Task Dependency Model - PM Schema.
 
 Represents dependencies between tasks for scheduling and Gantt charts.
 """
+
 import enum
 import uuid
 from datetime import datetime
@@ -54,7 +55,9 @@ class TaskDependency(Base):
     __tablename__ = "task_dependency"
     __table_args__ = (
         UniqueConstraint("task_id", "depends_on_task_id", name="uq_task_dependency"),
-        CheckConstraint("task_id != depends_on_task_id", name="chk_task_dependency_self"),
+        CheckConstraint(
+            "task_id != depends_on_task_id", name="chk_task_dependency_self"
+        ),
         {"schema": "pm"},
     )
 

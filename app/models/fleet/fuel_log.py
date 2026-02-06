@@ -3,6 +3,7 @@ Fuel Log Entry Model - Fleet Schema.
 
 Tracks fuel purchases and consumption.
 """
+
 import uuid
 from datetime import date
 from decimal import Decimal

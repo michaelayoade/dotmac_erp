@@ -1,12 +1,23 @@
 """
 Asset Component Model - FA Schema.
 """
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Date,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -48,7 +59,9 @@ class AssetComponent(Base):
     depreciation_method: Mapped[str] = mapped_column(String(30), nullable=False)
     useful_life_months: Mapped[int] = mapped_column(Numeric(10, 0), nullable=False)
     remaining_life_months: Mapped[int] = mapped_column(Numeric(10, 0), nullable=False)
-    residual_value: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    residual_value: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Current values
     accumulated_depreciation: Mapped[Decimal] = mapped_column(

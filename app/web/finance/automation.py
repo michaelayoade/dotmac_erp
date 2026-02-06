@@ -12,7 +12,6 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.models.finance.automation import RecurringStatus
 from app.services.finance.automation.custom_fields import custom_fields_service
 from app.services.finance.automation.recurring import recurring_service
 from app.services.finance.automation.web import automation_web_service
@@ -560,6 +559,7 @@ async def update_workflow(
     db: Session = Depends(get_db),
 ):
     """Handle workflow rule update form submission."""
+
     def _parse_json_field(value: Any, default: Optional[dict]) -> Optional[dict]:
         if value in (None, "", {}):
             return default

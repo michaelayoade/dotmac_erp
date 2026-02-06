@@ -1,6 +1,7 @@
 """
 Exchange Rate Model - Core FX.
 """
+
 import enum
 import uuid
 from datetime import date, datetime

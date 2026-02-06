@@ -3,6 +3,7 @@ Corporate Card Model - Expense Schema.
 
 Company credit/debit cards assigned to employees.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -33,11 +34,12 @@ if TYPE_CHECKING:
 
 class CardTransactionStatus(str, enum.Enum):
     """Corporate card transaction status."""
+
     PENDING = "PENDING"
-    MATCHED = "MATCHED"           # Matched to expense claim
+    MATCHED = "MATCHED"  # Matched to expense claim
     APPROVED = "APPROVED"
     DISPUTED = "DISPUTED"
-    PERSONAL = "PERSONAL"         # Personal expense to be reimbursed
+    PERSONAL = "PERSONAL"  # Personal expense to be reimbursed
     CANCELLED = "CANCELLED"
 
 

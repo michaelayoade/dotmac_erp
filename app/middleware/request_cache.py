@@ -24,7 +24,9 @@ class RequestCacheMiddleware(BaseHTTPMiddleware):
         app.add_middleware(RequestCacheMiddleware)
     """
 
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         """Process request and ensure cache cleanup."""
         try:
             response = await call_next(request)

@@ -5,13 +5,10 @@ Tests for AssetRevaluationService.
 import uuid
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from tests.ifrs.fa.conftest import (
-    MockAsset,
-    MockAssetCategory,
     MockAssetRevaluation,
     MockAssetStatus,
 )
@@ -20,9 +17,14 @@ from tests.ifrs.fa.conftest import (
 class TestAssetRevaluationService:
     """Tests for AssetRevaluationService."""
 
-    def test_create_revaluation_upward(self, mock_db, org_id, mock_asset, mock_category, user_id):
+    def test_create_revaluation_upward(
+        self, mock_db, org_id, mock_asset, mock_category, user_id
+    ):
         """Test creating an upward revaluation (surplus)."""
-        from app.services.fixed_assets.revaluation import AssetRevaluationService, RevaluationInput
+        from app.services.fixed_assets.revaluation import (
+            AssetRevaluationService,
+            RevaluationInput,
+        )
 
         mock_asset.status = MockAssetStatus.ACTIVE
         mock_asset.net_book_value = Decimal("5000")
@@ -45,14 +47,21 @@ class TestAssetRevaluationService:
             valuer_name="Valuation Co.",
         )
 
-        result = AssetRevaluationService.create_revaluation(mock_db, org_id, input_data, user_id)
+        result = AssetRevaluationService.create_revaluation(
+            mock_db, org_id, input_data, user_id
+        )
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
 
-    def test_create_revaluation_downward(self, mock_db, org_id, mock_asset, mock_category, user_id):
+    def test_create_revaluation_downward(
+        self, mock_db, org_id, mock_asset, mock_category, user_id
+    ):
         """Test creating a downward revaluation (deficit)."""
-        from app.services.fixed_assets.revaluation import AssetRevaluationService, RevaluationInput
+        from app.services.fixed_assets.revaluation import (
+            AssetRevaluationService,
+            RevaluationInput,
+        )
 
         mock_asset.status = MockAssetStatus.ACTIVE
         mock_asset.net_book_value = Decimal("5000")
@@ -72,13 +81,18 @@ class TestAssetRevaluationService:
             valuation_method="Market Approach",
         )
 
-        result = AssetRevaluationService.create_revaluation(mock_db, org_id, input_data, user_id)
+        result = AssetRevaluationService.create_revaluation(
+            mock_db, org_id, input_data, user_id
+        )
 
         mock_db.add.assert_called_once()
 
     def test_create_revaluation_asset_not_found(self, mock_db, org_id, user_id):
         """Test revaluation creation fails when asset not found."""
-        from app.services.fixed_assets.revaluation import AssetRevaluationService, RevaluationInput
+        from app.services.fixed_assets.revaluation import (
+            AssetRevaluationService,
+            RevaluationInput,
+        )
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -92,13 +106,20 @@ class TestAssetRevaluationService:
         )
 
         with pytest.raises(HTTPException) as exc_info:
-            AssetRevaluationService.create_revaluation(mock_db, org_id, input_data, user_id)
+            AssetRevaluationService.create_revaluation(
+                mock_db, org_id, input_data, user_id
+            )
 
         assert exc_info.value.status_code == 404
 
-    def test_create_revaluation_asset_not_active(self, mock_db, org_id, mock_asset, user_id):
+    def test_create_revaluation_asset_not_active(
+        self, mock_db, org_id, mock_asset, user_id
+    ):
         """Test revaluation fails for non-active asset."""
-        from app.services.fixed_assets.revaluation import AssetRevaluationService, RevaluationInput
+        from app.services.fixed_assets.revaluation import (
+            AssetRevaluationService,
+            RevaluationInput,
+        )
         from fastapi import HTTPException
 
         mock_asset.status = MockAssetStatus.DRAFT  # Not active
@@ -115,13 +136,20 @@ class TestAssetRevaluationService:
         )
 
         with pytest.raises(HTTPException) as exc_info:
-            AssetRevaluationService.create_revaluation(mock_db, org_id, input_data, user_id)
+            AssetRevaluationService.create_revaluation(
+                mock_db, org_id, input_data, user_id
+            )
 
         assert exc_info.value.status_code == 400
 
-    def test_create_revaluation_not_allowed(self, mock_db, org_id, mock_asset, mock_category, user_id):
+    def test_create_revaluation_not_allowed(
+        self, mock_db, org_id, mock_asset, mock_category, user_id
+    ):
         """Test revaluation fails when not allowed for category."""
-        from app.services.fixed_assets.revaluation import AssetRevaluationService, RevaluationInput
+        from app.services.fixed_assets.revaluation import (
+            AssetRevaluationService,
+            RevaluationInput,
+        )
         from fastapi import HTTPException
 
         mock_asset.status = MockAssetStatus.ACTIVE
@@ -140,14 +168,21 @@ class TestAssetRevaluationService:
         )
 
         with pytest.raises(HTTPException) as exc_info:
-            AssetRevaluationService.create_revaluation(mock_db, org_id, input_data, user_id)
+            AssetRevaluationService.create_revaluation(
+                mock_db, org_id, input_data, user_id
+            )
 
         assert exc_info.value.status_code == 400
         assert "not allowed" in exc_info.value.detail
 
-    def test_create_revaluation_category_not_found(self, mock_db, org_id, mock_asset, user_id):
+    def test_create_revaluation_category_not_found(
+        self, mock_db, org_id, mock_asset, user_id
+    ):
         """Test revaluation fails when category not found."""
-        from app.services.fixed_assets.revaluation import AssetRevaluationService, RevaluationInput
+        from app.services.fixed_assets.revaluation import (
+            AssetRevaluationService,
+            RevaluationInput,
+        )
         from fastapi import HTTPException
 
         mock_asset.status = MockAssetStatus.ACTIVE
@@ -165,14 +200,21 @@ class TestAssetRevaluationService:
         )
 
         with pytest.raises(HTTPException) as exc_info:
-            AssetRevaluationService.create_revaluation(mock_db, org_id, input_data, user_id)
+            AssetRevaluationService.create_revaluation(
+                mock_db, org_id, input_data, user_id
+            )
 
         assert exc_info.value.status_code == 404
         assert "category" in exc_info.value.detail.lower()
 
-    def test_revaluation_with_prior_surplus(self, mock_db, org_id, mock_asset, mock_category, user_id):
+    def test_revaluation_with_prior_surplus(
+        self, mock_db, org_id, mock_asset, mock_category, user_id
+    ):
         """Test revaluation when asset has prior revaluation surplus."""
-        from app.services.fixed_assets.revaluation import AssetRevaluationService, RevaluationInput
+        from app.services.fixed_assets.revaluation import (
+            AssetRevaluationService,
+            RevaluationInput,
+        )
 
         mock_asset.status = MockAssetStatus.ACTIVE
         mock_asset.net_book_value = Decimal("6000")  # After prior revaluation
@@ -190,7 +232,9 @@ class TestAssetRevaluationService:
         prior_reval.deficit_to_pl = Decimal("0")
 
         mock_db.get.side_effect = [mock_asset, mock_category]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [prior_reval]
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+            prior_reval
+        ]
 
         input_data = RevaluationInput(
             asset_id=mock_asset.asset_id,
@@ -200,13 +244,20 @@ class TestAssetRevaluationService:
             valuation_method="Market Approach",
         )
 
-        result = AssetRevaluationService.create_revaluation(mock_db, org_id, input_data, user_id)
+        result = AssetRevaluationService.create_revaluation(
+            mock_db, org_id, input_data, user_id
+        )
 
         mock_db.add.assert_called_once()
 
-    def test_revaluation_reverses_prior_deficit(self, mock_db, org_id, mock_asset, mock_category, user_id):
+    def test_revaluation_reverses_prior_deficit(
+        self, mock_db, org_id, mock_asset, mock_category, user_id
+    ):
         """Test upward revaluation reverses prior P&L deficit."""
-        from app.services.fixed_assets.revaluation import AssetRevaluationService, RevaluationInput
+        from app.services.fixed_assets.revaluation import (
+            AssetRevaluationService,
+            RevaluationInput,
+        )
 
         mock_asset.status = MockAssetStatus.ACTIVE
         mock_asset.net_book_value = Decimal("4000")  # After prior impairment
@@ -224,7 +275,9 @@ class TestAssetRevaluationService:
         prior_reval.deficit_to_pl = Decimal("1000")
 
         mock_db.get.side_effect = [mock_asset, mock_category]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [prior_reval]
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+            prior_reval
+        ]
 
         input_data = RevaluationInput(
             asset_id=mock_asset.asset_id,
@@ -234,11 +287,15 @@ class TestAssetRevaluationService:
             valuation_method="Market Approach",
         )
 
-        result = AssetRevaluationService.create_revaluation(mock_db, org_id, input_data, user_id)
+        result = AssetRevaluationService.create_revaluation(
+            mock_db, org_id, input_data, user_id
+        )
 
         mock_db.add.assert_called_once()
 
-    def test_approve_revaluation_success(self, mock_db, org_id, mock_asset, mock_category, user_id):
+    def test_approve_revaluation_success(
+        self, mock_db, org_id, mock_asset, mock_category, user_id
+    ):
         """Test successful revaluation approval."""
         from app.services.fixed_assets.revaluation import AssetRevaluationService
 
@@ -272,11 +329,15 @@ class TestAssetRevaluationService:
         mock_db.get.return_value = None
 
         with pytest.raises(HTTPException) as exc_info:
-            AssetRevaluationService.approve_revaluation(mock_db, org_id, uuid.uuid4(), user_id)
+            AssetRevaluationService.approve_revaluation(
+                mock_db, org_id, uuid.uuid4(), user_id
+            )
 
         assert exc_info.value.status_code == 404
 
-    def test_approve_revaluation_sod_violation(self, mock_db, org_id, mock_asset, user_id):
+    def test_approve_revaluation_sod_violation(
+        self, mock_db, org_id, mock_asset, user_id
+    ):
         """Test creator cannot approve own revaluation (SoD)."""
         from app.services.fixed_assets.revaluation import AssetRevaluationService
         from fastapi import HTTPException
@@ -292,7 +353,9 @@ class TestAssetRevaluationService:
         mock_db.get.side_effect = [revaluation, mock_asset]
 
         with pytest.raises(HTTPException) as exc_info:
-            AssetRevaluationService.approve_revaluation(mock_db, org_id, revaluation.revaluation_id, user_id)
+            AssetRevaluationService.approve_revaluation(
+                mock_db, org_id, revaluation.revaluation_id, user_id
+            )
 
         assert exc_info.value.status_code == 400
         assert "Segregation of duties" in exc_info.value.detail

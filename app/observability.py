@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 # Context variables for request tracking - accessible anywhere in the request lifecycle
 request_id_var: ContextVar[str] = ContextVar("request_id", default="")
 actor_id_var: ContextVar[str] = ContextVar("actor_id", default="")
+ip_address_var: ContextVar[str] = ContextVar("ip_address", default="")
+user_agent_var: ContextVar[str] = ContextVar("user_agent", default="")
 
 
 def get_request_id() -> str:
@@ -81,10 +83,14 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
         # Set context variable for request ID - accessible anywhere in the request
         request_id_var.set(request_id)
 
+        # Set IP address and user agent for audit logging
+        ip_address_var.set(request.client.host if request.client else "")
+        user_agent_var.set(request.headers.get("user-agent", ""))
+
         token = _extract_bearer_token(request)
-        actor_id = getattr(request.state, "actor_id", None) or _extract_actor_id_from_jwt(
-            token
-        )
+        actor_id = getattr(
+            request.state, "actor_id", None
+        ) or _extract_actor_id_from_jwt(token)
         if actor_id:
             actor_id_var.set(actor_id)
 

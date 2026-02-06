@@ -1,13 +1,24 @@
 """
 Consolidation Run Model - Consolidation Schema.
 """
+
 import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Numeric, String, UniqueConstraint, func, text
+from sqlalchemy import (
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -70,7 +81,9 @@ class ConsolidationRun(Base):
     associates_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # Run statistics
-    elimination_entries_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    elimination_entries_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
+    )
     total_eliminations_amount: Mapped[Decimal] = mapped_column(
         Numeric(20, 6),
         nullable=False,
@@ -90,7 +103,9 @@ class ConsolidationRun(Base):
     )
 
     # NCI
-    total_nci: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    total_nci: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Execution tracking
     started_at: Mapped[Optional[datetime]] = mapped_column(

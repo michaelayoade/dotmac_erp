@@ -143,6 +143,12 @@ _ENTITY_REGISTRY: Dict[str, Tuple[str, str, str]] = {
         "VehicleIncident",
         "incident_id",
     ),
+    # Inventory
+    "MATERIAL_REQUEST": (
+        "app.models.inventory.material_request",
+        "MaterialRequest",
+        "request_id",
+    ),
     # Payroll
     "PAYROLL_RUN": (
         "app.models.people.payroll.payroll_entry",

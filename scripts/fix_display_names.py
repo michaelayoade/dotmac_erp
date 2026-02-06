@@ -20,7 +20,9 @@ def _derive_display_name(person: Person) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Backfill missing display_name values.")
+    parser = argparse.ArgumentParser(
+        description="Backfill missing display_name values."
+    )
     parser.add_argument(
         "--apply",
         action="store_true",

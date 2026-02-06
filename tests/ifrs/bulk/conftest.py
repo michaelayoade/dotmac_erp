@@ -5,7 +5,6 @@ Provides mock objects for testing supplier, customer, and account bulk services.
 """
 
 import uuid
-from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from unittest.mock import MagicMock
@@ -15,8 +14,10 @@ import pytest
 
 # ============ Mock Enums ============
 
+
 class MockSupplierType(Enum):
     """Mock supplier type enum."""
+
     vendor = "vendor"
     contractor = "contractor"
     service_provider = "service_provider"
@@ -24,6 +25,7 @@ class MockSupplierType(Enum):
 
 class MockCustomerType(Enum):
     """Mock customer type enum."""
+
     individual = "individual"
     company = "company"
     government = "government"
@@ -31,6 +33,7 @@ class MockCustomerType(Enum):
 
 class MockRiskCategory(Enum):
     """Mock risk category enum."""
+
     low = "low"
     medium = "medium"
     high = "high"
@@ -38,12 +41,14 @@ class MockRiskCategory(Enum):
 
 class MockAccountType(Enum):
     """Mock account type enum."""
+
     posting = "posting"
     control = "control"
 
 
 class MockAccountCategory(Enum):
     """Mock account category enum."""
+
     assets = "assets"
     liabilities = "liabilities"
     equity = "equity"
@@ -52,6 +57,7 @@ class MockAccountCategory(Enum):
 
 
 # ============ UUID Fixtures ============
+
 
 @pytest.fixture
 def organization_id():
@@ -66,6 +72,7 @@ def user_id():
 
 
 # ============ Mock Database Session ============
+
 
 @pytest.fixture
 def mock_db():
@@ -89,6 +96,7 @@ def mock_db():
 
 # ============ Mock Supplier Entity ============
 
+
 class MockSupplier:
     """Mock Supplier entity for testing."""
 
@@ -109,7 +117,9 @@ class MockSupplier:
         primary_contact: dict | None = None,
     ):
         self.supplier_id = supplier_id or uuid.uuid4()
-        self.organization_id = organization_id or uuid.UUID("00000000-0000-0000-0000-000000000001")
+        self.organization_id = organization_id or uuid.UUID(
+            "00000000-0000-0000-0000-000000000001"
+        )
         self.supplier_code = supplier_code
         self.legal_name = legal_name
         self.trading_name = trading_name
@@ -151,6 +161,7 @@ def mock_supplier_with_invoices(mock_supplier):
 
 # ============ Mock Customer Entity ============
 
+
 class MockCustomer:
     """Mock Customer entity for testing."""
 
@@ -174,7 +185,9 @@ class MockCustomer:
         primary_contact: dict | None = None,
     ):
         self.customer_id = customer_id or uuid.uuid4()
-        self.organization_id = organization_id or uuid.UUID("00000000-0000-0000-0000-000000000001")
+        self.organization_id = organization_id or uuid.UUID(
+            "00000000-0000-0000-0000-000000000001"
+        )
         self.customer_code = customer_code
         self.legal_name = legal_name
         self.trading_name = trading_name
@@ -216,6 +229,7 @@ def mock_customer(organization_id):
 
 # ============ Mock Account Entity ============
 
+
 class MockAccount:
     """Mock Account entity for testing."""
 
@@ -233,7 +247,9 @@ class MockAccount:
         description: str | None = None,
     ):
         self.account_id = account_id or uuid.uuid4()
-        self.organization_id = organization_id or uuid.UUID("00000000-0000-0000-0000-000000000001")
+        self.organization_id = organization_id or uuid.UUID(
+            "00000000-0000-0000-0000-000000000001"
+        )
         self.account_code = account_code
         self.account_name = account_name
         self.account_type = account_type

@@ -14,7 +14,6 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.journal_entry import JournalType
@@ -25,21 +24,15 @@ from app.services.common import coerce_uuid
 from app.services.finance.gl.journal import (
     JournalInput,
     JournalLineInput,
-    JournalService,
 )
-from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
+from app.services.finance.posting.base import BasePostingAdapter, PostingResult
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class LeasePostingResult:
+class LeasePostingResult(PostingResult):
     """Result of a lease posting operation."""
-
-    success: bool
-    journal_entry_id: Optional[UUID] = None
-    posting_batch_id: Optional[UUID] = None
-    message: str = ""
 
 
 class LeasePostingAdapter:
@@ -186,56 +179,46 @@ class LeasePostingAdapter:
             source_document_id=ls_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-
-        except HTTPException as e:
-            return LeasePostingResult(
-                success=False, message=f"Journal creation failed: {e.detail}"
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Journal creation failed",
+        )
+        if error:
+            return LeasePostingResult(success=False, message=error.message)
 
         # Post to ledger
         if not idempotency_key:
-            idempotency_key = f"{org_id}:LEASE:INIT:{ls_id}:post:v1"
+            idempotency_key = BasePostingAdapter.make_idempotency_key(
+                org_id, "LEASE:INIT", ls_id, action="post"
+            )
 
-        posting_request = PostingRequest(
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db,
             organization_id=org_id,
             journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="LEASE",
+            correlation_id=None,
             posted_by_user_id=user_id,
+            success_message="Initial recognition posted successfully",
         )
-
-        try:
-            posting_result = LedgerPostingService.post_journal_entry(
-                db, posting_request
-            )
-
-            if not posting_result.success:
-                return LeasePostingResult(
-                    success=False,
-                    journal_entry_id=journal.journal_entry_id,
-                    message=f"Ledger posting failed: {posting_result.message}",
-                )
-
-            return LeasePostingResult(
-                success=True,
-                journal_entry_id=journal.journal_entry_id,
-                posting_batch_id=posting_result.posting_batch_id,
-                message="Initial recognition posted successfully",
-            )
-
-        except Exception as e:
+        if not posting_result.success:
             return LeasePostingResult(
                 success=False,
                 journal_entry_id=journal.journal_entry_id,
-                message=f"Posting error: {str(e)}",
+                message=posting_result.message,
             )
+
+        return LeasePostingResult(
+            success=True,
+            journal_entry_id=journal.journal_entry_id,
+            posting_batch_id=posting_result.posting_batch_id,
+            message=posting_result.message,
+        )
 
     @staticmethod
     def post_interest_accrual(
@@ -333,63 +316,54 @@ class LeasePostingAdapter:
             source_document_id=ls_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-
-        except HTTPException as e:
-            return LeasePostingResult(
-                success=False, message=f"Journal creation failed: {e.detail}"
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Journal creation failed",
+        )
+        if error:
+            return LeasePostingResult(success=False, message=error.message)
 
         # Post to ledger
         if not idempotency_key:
-            idempotency_key = (
-                f"{org_id}:LEASE:INT:{ls_id}:{accrual_date.isoformat()}:v1"
+            idempotency_key = BasePostingAdapter.make_idempotency_key(
+                org_id,
+                f"LEASE:INT:{ls_id}",
+                ls_id,
+                action=accrual_date.isoformat(),
             )
 
-        posting_request = PostingRequest(
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db,
             organization_id=org_id,
             journal_entry_id=journal.journal_entry_id,
             posting_date=accrual_date,
             idempotency_key=idempotency_key,
             source_module="LEASE",
+            correlation_id=None,
             posted_by_user_id=user_id,
+            success_message="Interest accrual posted successfully",
         )
-
-        try:
-            posting_result = LedgerPostingService.post_journal_entry(
-                db, posting_request
-            )
-
-            if not posting_result.success:
-                return LeasePostingResult(
-                    success=False,
-                    journal_entry_id=journal.journal_entry_id,
-                    message=f"Ledger posting failed: {posting_result.message}",
-                )
-
-            # Update liability balance
-            liability.current_liability_balance += interest_amount
-            db.commit()
-            db.refresh(liability)
-
-            return LeasePostingResult(
-                success=True,
-                journal_entry_id=journal.journal_entry_id,
-                posting_batch_id=posting_result.posting_batch_id,
-                message="Interest accrual posted successfully",
-            )
-
-        except Exception as e:
+        if not posting_result.success:
             return LeasePostingResult(
                 success=False,
                 journal_entry_id=journal.journal_entry_id,
-                message=f"Posting error: {str(e)}",
+                message=posting_result.message,
             )
+
+        # Update liability balance
+        liability.current_liability_balance += interest_amount
+        db.commit()
+        db.refresh(liability)
+
+        return LeasePostingResult(
+            success=True,
+            journal_entry_id=journal.journal_entry_id,
+            posting_batch_id=posting_result.posting_batch_id,
+            message=posting_result.message,
+        )
 
     @staticmethod
     def post_lease_payment(
@@ -490,65 +464,56 @@ class LeasePostingAdapter:
             source_document_id=ls_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-
-        except HTTPException as e:
-            return LeasePostingResult(
-                success=False, message=f"Journal creation failed: {e.detail}"
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Journal creation failed",
+        )
+        if error:
+            return LeasePostingResult(success=False, message=error.message)
 
         # Post to ledger
         if not idempotency_key:
-            idempotency_key = (
-                f"{org_id}:LEASE:PAY:{ls_id}:{payment_date.isoformat()}:v1"
+            idempotency_key = BasePostingAdapter.make_idempotency_key(
+                org_id,
+                f"LEASE:PAY:{ls_id}",
+                ls_id,
+                action=payment_date.isoformat(),
             )
 
-        posting_request = PostingRequest(
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db,
             organization_id=org_id,
             journal_entry_id=journal.journal_entry_id,
             posting_date=payment_date,
             idempotency_key=idempotency_key,
             source_module="LEASE",
+            correlation_id=None,
             posted_by_user_id=user_id,
+            success_message="Lease payment posted successfully",
         )
-
-        try:
-            posting_result = LedgerPostingService.post_journal_entry(
-                db, posting_request
-            )
-
-            if not posting_result.success:
-                return LeasePostingResult(
-                    success=False,
-                    journal_entry_id=journal.journal_entry_id,
-                    message=f"Ledger posting failed: {posting_result.message}",
-                )
-
-            # Update liability balance
-            liability.current_liability_balance -= payment_amount
-            if liability.current_liability_balance < 0:
-                liability.current_liability_balance = Decimal("0")
-            db.commit()
-            db.refresh(liability)
-
-            return LeasePostingResult(
-                success=True,
-                journal_entry_id=journal.journal_entry_id,
-                posting_batch_id=posting_result.posting_batch_id,
-                message="Lease payment posted successfully",
-            )
-
-        except Exception as e:
+        if not posting_result.success:
             return LeasePostingResult(
                 success=False,
                 journal_entry_id=journal.journal_entry_id,
-                message=f"Posting error: {str(e)}",
+                message=posting_result.message,
             )
+
+        # Update liability balance
+        liability.current_liability_balance -= payment_amount
+        if liability.current_liability_balance < 0:
+            liability.current_liability_balance = Decimal("0")
+        db.commit()
+        db.refresh(liability)
+
+        return LeasePostingResult(
+            success=True,
+            journal_entry_id=journal.journal_entry_id,
+            posting_batch_id=posting_result.posting_batch_id,
+            message=posting_result.message,
+        )
 
     @staticmethod
     def post_rou_depreciation(
@@ -644,68 +609,59 @@ class LeasePostingAdapter:
             source_document_id=ls_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-
-        except HTTPException as e:
-            return LeasePostingResult(
-                success=False, message=f"Journal creation failed: {e.detail}"
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Journal creation failed",
+        )
+        if error:
+            return LeasePostingResult(success=False, message=error.message)
 
         # Post to ledger
         if not idempotency_key:
-            idempotency_key = (
-                f"{org_id}:LEASE:DEP:{ls_id}:{depreciation_date.isoformat()}:v1"
+            idempotency_key = BasePostingAdapter.make_idempotency_key(
+                org_id,
+                f"LEASE:DEP:{ls_id}",
+                ls_id,
+                action=depreciation_date.isoformat(),
             )
 
-        posting_request = PostingRequest(
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db,
             organization_id=org_id,
             journal_entry_id=journal.journal_entry_id,
             posting_date=depreciation_date,
             idempotency_key=idempotency_key,
             source_module="LEASE",
+            correlation_id=None,
             posted_by_user_id=user_id,
+            success_message="ROU depreciation posted successfully",
         )
-
-        try:
-            posting_result = LedgerPostingService.post_journal_entry(
-                db, posting_request
-            )
-
-            if not posting_result.success:
-                return LeasePostingResult(
-                    success=False,
-                    journal_entry_id=journal.journal_entry_id,
-                    message=f"Ledger posting failed: {posting_result.message}",
-                )
-
-            # Update asset carrying amount
-            asset.accumulated_depreciation += depreciation_amount
-            asset.carrying_amount = (
-                asset.initial_rou_asset_value - asset.accumulated_depreciation
-            )
-            if asset.carrying_amount < 0:
-                asset.carrying_amount = Decimal("0")
-            db.commit()
-            db.refresh(asset)
-
-            return LeasePostingResult(
-                success=True,
-                journal_entry_id=journal.journal_entry_id,
-                posting_batch_id=posting_result.posting_batch_id,
-                message="ROU depreciation posted successfully",
-            )
-
-        except Exception as e:
+        if not posting_result.success:
             return LeasePostingResult(
                 success=False,
                 journal_entry_id=journal.journal_entry_id,
-                message=f"Posting error: {str(e)}",
+                message=posting_result.message,
             )
+
+        # Update asset carrying amount
+        asset.accumulated_depreciation += depreciation_amount
+        asset.carrying_amount = (
+            asset.initial_rou_asset_value - asset.accumulated_depreciation
+        )
+        if asset.carrying_amount < 0:
+            asset.carrying_amount = Decimal("0")
+        db.commit()
+        db.refresh(asset)
+
+        return LeasePostingResult(
+            success=True,
+            journal_entry_id=journal.journal_entry_id,
+            posting_batch_id=posting_result.posting_batch_id,
+            message=posting_result.message,
+        )
 
     @staticmethod
     def post_lease_termination(
@@ -853,61 +809,51 @@ class LeasePostingAdapter:
             source_document_id=ls_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-
-        except HTTPException as e:
-            return LeasePostingResult(
-                success=False, message=f"Journal creation failed: {e.detail}"
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Journal creation failed",
+        )
+        if error:
+            return LeasePostingResult(success=False, message=error.message)
 
         # Post to ledger
         if not idempotency_key:
-            idempotency_key = f"{org_id}:LEASE:TERM:{ls_id}:post:v1"
+            idempotency_key = BasePostingAdapter.make_idempotency_key(
+                org_id, "LEASE:TERM", ls_id, action="post"
+            )
 
-        posting_request = PostingRequest(
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db,
             organization_id=org_id,
             journal_entry_id=journal.journal_entry_id,
             posting_date=termination_date,
             idempotency_key=idempotency_key,
             source_module="LEASE",
+            correlation_id=None,
             posted_by_user_id=user_id,
+            success_message="Lease termination posted successfully",
         )
-
-        try:
-            posting_result = LedgerPostingService.post_journal_entry(
-                db, posting_request
-            )
-
-            if not posting_result.success:
-                return LeasePostingResult(
-                    success=False,
-                    journal_entry_id=journal.journal_entry_id,
-                    message=f"Ledger posting failed: {posting_result.message}",
-                )
-
-            # Zero out liability and asset balances
-            liability.current_liability_balance = Decimal("0")
-            asset.carrying_amount = Decimal("0")
-            db.commit()
-
-            return LeasePostingResult(
-                success=True,
-                journal_entry_id=journal.journal_entry_id,
-                posting_batch_id=posting_result.posting_batch_id,
-                message="Lease termination posted successfully",
-            )
-
-        except Exception as e:
+        if not posting_result.success:
             return LeasePostingResult(
                 success=False,
                 journal_entry_id=journal.journal_entry_id,
-                message=f"Posting error: {str(e)}",
+                message=posting_result.message,
             )
+
+        # Zero out liability and asset balances
+        liability.current_liability_balance = Decimal("0")
+        asset.carrying_amount = Decimal("0")
+        db.commit()
+
+        return LeasePostingResult(
+            success=True,
+            journal_entry_id=journal.journal_entry_id,
+            posting_batch_id=posting_result.posting_batch_id,
+            message=posting_result.message,
+        )
 
 
 # Module-level singleton instance

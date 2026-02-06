@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -37,9 +37,11 @@ def _make_reconciliation(status=ReconciliationStatus.draft):
     )
 
     def _calc():
-        recon.reconciliation_difference = (
-            recon.statement_closing_balance
-            - (recon.gl_closing_balance + recon.outstanding_deposits - recon.outstanding_payments + recon.total_adjustments)
+        recon.reconciliation_difference = recon.statement_closing_balance - (
+            recon.gl_closing_balance
+            + recon.outstanding_deposits
+            - recon.outstanding_payments
+            + recon.total_adjustments
         )
         return recon.reconciliation_difference
 
@@ -101,7 +103,9 @@ def test_create_reconciliation_success_with_prior():
     db.get.return_value = bank_account
     db.execute.return_value.scalar_one_or_none.return_value = None
 
-    prior = SimpleNamespace(outstanding_deposits=Decimal("25.00"), outstanding_payments=Decimal("10.00"))
+    prior = SimpleNamespace(
+        outstanding_deposits=Decimal("25.00"), outstanding_payments=Decimal("10.00")
+    )
 
     svc._get_gl_balance = MagicMock(return_value=Decimal("100.00"))
     svc._get_prior_reconciliation = MagicMock(return_value=prior)
@@ -112,7 +116,9 @@ def test_create_reconciliation_success_with_prior():
         self.outstanding_payments = self.outstanding_payments or Decimal("0")
         return Decimal("0")
 
-    with patch.object(BankReconciliation, "calculate_difference", _safe_calc, create=True):
+    with patch.object(
+        BankReconciliation, "calculate_difference", _safe_calc, create=True
+    ):
         recon = svc.create_reconciliation(
             db,
             uuid4(),
@@ -186,7 +192,9 @@ def test_add_match_invalid_status():
         svc.add_match(
             db,
             recon.reconciliation_id,
-            ReconciliationMatchInput(statement_line_id=uuid4(), journal_line_id=uuid4()),
+            ReconciliationMatchInput(
+                statement_line_id=uuid4(), journal_line_id=uuid4()
+            ),
         )
     assert excinfo.value.status_code == 400
 
@@ -327,7 +335,9 @@ def test_calculate_match_score():
 def test_get_gl_balance_and_prior_reconciliation():
     svc = BankReconciliationService()
     db = MagicMock()
-    db.execute.return_value.one.return_value = SimpleNamespace(debits=Decimal("100.00"), credits=Decimal("40.00"))
+    db.execute.return_value.one.return_value = SimpleNamespace(
+        debits=Decimal("100.00"), credits=Decimal("40.00")
+    )
     assert svc._get_gl_balance(db, uuid4(), date(2024, 1, 1)) == Decimal("60.00")
 
     db.execute.return_value.scalar_one_or_none.return_value = "prior"
@@ -370,10 +380,30 @@ def test_get_reconciliation_report():
     recon.outstanding_deposits = Decimal("10.00")
     recon.outstanding_payments = Decimal("5.00")
     recon.lines = [
-        SimpleNamespace(is_cleared=True, is_adjustment=False, is_outstanding=False, statement_amount=Decimal("25.00")),
-        SimpleNamespace(is_cleared=False, is_adjustment=True, is_outstanding=False, statement_amount=Decimal("5.00")),
-        SimpleNamespace(is_cleared=False, is_adjustment=False, is_outstanding=True, outstanding_type="deposit"),
-        SimpleNamespace(is_cleared=False, is_adjustment=False, is_outstanding=True, outstanding_type="payment"),
+        SimpleNamespace(
+            is_cleared=True,
+            is_adjustment=False,
+            is_outstanding=False,
+            statement_amount=Decimal("25.00"),
+        ),
+        SimpleNamespace(
+            is_cleared=False,
+            is_adjustment=True,
+            is_outstanding=False,
+            statement_amount=Decimal("5.00"),
+        ),
+        SimpleNamespace(
+            is_cleared=False,
+            is_adjustment=False,
+            is_outstanding=True,
+            outstanding_type="deposit",
+        ),
+        SimpleNamespace(
+            is_cleared=False,
+            is_adjustment=False,
+            is_outstanding=True,
+            outstanding_type="payment",
+        ),
     ]
     db.get.return_value = recon
 

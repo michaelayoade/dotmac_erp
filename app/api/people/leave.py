@@ -3,10 +3,10 @@ Leave Management API Router.
 
 Thin API wrapper for Leave Management endpoints. All business logic is in services.
 """
+
 from datetime import date
 import csv
 import io
-from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
@@ -32,7 +32,6 @@ from app.schemas.people.leave import (
     LeaveAllocationUpdate,
     LeaveAllocationRead,
     LeaveAllocationListResponse,
-    LeaveBalanceSummary,
     BulkLeaveAllocationCreate,
     BulkLeaveAllocationResult,
     # Leave Application
@@ -104,7 +103,9 @@ def list_leave_types(
     )
 
 
-@router.post("/types", response_model=LeaveTypeRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/types", response_model=LeaveTypeRead, status_code=status.HTTP_201_CREATED
+)
 def create_leave_type(
     payload: LeaveTypeCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -145,7 +146,9 @@ def get_leave_type(
 ):
     """Get a leave type by ID."""
     svc = LeaveService(db)
-    return LeaveTypeRead.model_validate(svc.get_leave_type(organization_id, leave_type_id))
+    return LeaveTypeRead.model_validate(
+        svc.get_leave_type(organization_id, leave_type_id)
+    )
 
 
 @router.patch("/types/{leave_type_id}", response_model=LeaveTypeRead)
@@ -206,7 +209,11 @@ def list_holiday_lists(
     }
 
 
-@router.post("/holiday-lists", response_model=HolidayListRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/holiday-lists",
+    response_model=HolidayListRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_holiday_list(
     payload: HolidayListCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -248,7 +255,9 @@ def get_holiday_list(
 ):
     """Get a holiday list by ID."""
     svc = LeaveService(db)
-    return HolidayListRead.model_validate(svc.get_holiday_list(organization_id, holiday_list_id))
+    return HolidayListRead.model_validate(
+        svc.get_holiday_list(organization_id, holiday_list_id)
+    )
 
 
 @router.patch("/holiday-lists/{holiday_list_id}", response_model=HolidayListRead)
@@ -261,12 +270,16 @@ def update_holiday_list(
     """Update a holiday list."""
     svc = LeaveService(db)
     update_data = payload.model_dump(exclude_unset=True)
-    holiday_list = svc.update_holiday_list(organization_id, holiday_list_id, **update_data)
+    holiday_list = svc.update_holiday_list(
+        organization_id, holiday_list_id, **update_data
+    )
     db.commit()
     return HolidayListRead.model_validate(holiday_list)
 
 
-@router.delete("/holiday-lists/{holiday_list_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/holiday-lists/{holiday_list_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 def delete_holiday_list(
     holiday_list_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
@@ -411,7 +424,11 @@ def export_allocations(
     return csv_response(rows, "leave_allocations.csv")
 
 
-@router.post("/allocations", response_model=LeaveAllocationRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/allocations",
+    response_model=LeaveAllocationRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_allocation(
     payload: LeaveAllocationCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -463,7 +480,9 @@ def get_allocation(
 ):
     """Get a leave allocation by ID."""
     svc = LeaveService(db)
-    return LeaveAllocationRead.model_validate(svc.get_allocation(organization_id, allocation_id))
+    return LeaveAllocationRead.model_validate(
+        svc.get_allocation(organization_id, allocation_id)
+    )
 
 
 @router.patch("/allocations/{allocation_id}", response_model=LeaveAllocationRead)
@@ -570,7 +589,11 @@ def list_applications(
     )
 
 
-@router.post("/applications", response_model=LeaveApplicationRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/applications",
+    response_model=LeaveApplicationRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_application(
     payload: LeaveApplicationCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -653,7 +676,9 @@ def get_application(
 ):
     """Get a leave application by ID."""
     svc = LeaveService(db)
-    return LeaveApplicationRead.model_validate(svc.get_application(organization_id, application_id))
+    return LeaveApplicationRead.model_validate(
+        svc.get_application(organization_id, application_id)
+    )
 
 
 @router.patch("/applications/{application_id}", response_model=LeaveApplicationRead)
@@ -688,7 +713,9 @@ def delete_application(
 # =============================================================================
 
 
-@router.post("/applications/{application_id}/approve", response_model=LeaveApplicationRead)
+@router.post(
+    "/applications/{application_id}/approve", response_model=LeaveApplicationRead
+)
 def approve_application(
     application_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
@@ -708,7 +735,9 @@ def approve_application(
     return LeaveApplicationRead.model_validate(application)
 
 
-@router.post("/applications/{application_id}/reject", response_model=LeaveApplicationRead)
+@router.post(
+    "/applications/{application_id}/reject", response_model=LeaveApplicationRead
+)
 def reject_application(
     application_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
@@ -728,7 +757,9 @@ def reject_application(
     return LeaveApplicationRead.model_validate(application)
 
 
-@router.post("/applications/{application_id}/cancel", response_model=LeaveApplicationRead)
+@router.post(
+    "/applications/{application_id}/cancel", response_model=LeaveApplicationRead
+)
 def cancel_application(
     application_id: UUID,
     organization_id: UUID = Depends(require_organization_id),

@@ -64,18 +64,22 @@ def list_job_descriptions(
     ).items
 
     context = base_context(request, auth, "Job Descriptions", "job-descriptions", db=db)
-    context.update({
-        "job_descriptions": result.items,
-        "pagination": result,
-        "statuses": list(JobDescriptionStatus),
-        "departments": departments,
-        "selected_status": status,
-        "selected_department_id": department_id,
-        "search": search,
-        "success": success,
-        "error": error,
-    })
-    return templates.TemplateResponse(request, "people/hr/job_descriptions.html", context)
+    context.update(
+        {
+            "job_descriptions": result.items,
+            "pagination": result,
+            "statuses": list(JobDescriptionStatus),
+            "departments": departments,
+            "selected_status": status,
+            "selected_department_id": department_id,
+            "search": search,
+            "success": success,
+            "error": error,
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/hr/job_descriptions.html", context
+    )
 
 
 @router.get("/job-descriptions/new", response_class=HTMLResponse)
@@ -97,14 +101,20 @@ def new_job_description_form(
         PaginationParams(limit=200),
     ).items
 
-    context = base_context(request, auth, "New Job Description", "job-descriptions", db=db)
-    context.update({
-        "designations": designations,
-        "departments": departments,
-        "statuses": list(JobDescriptionStatus),
-        "form_data": {},
-    })
-    return templates.TemplateResponse(request, "people/hr/job_description_form.html", context)
+    context = base_context(
+        request, auth, "New Job Description", "job-descriptions", db=db
+    )
+    context.update(
+        {
+            "designations": designations,
+            "departments": departments,
+            "statuses": list(JobDescriptionStatus),
+            "form_data": {},
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/hr/job_description_form.html", context
+    )
 
 
 @router.post("/job-descriptions/new", response_class=HTMLResponse)
@@ -160,7 +170,10 @@ def create_job_description(
             status=JobDescriptionStatus(status),
         )
         db.commit()
-        return RedirectResponse(url="/people/hr/job-descriptions?success=Job+description+created", status_code=303)
+        return RedirectResponse(
+            url="/people/hr/job-descriptions?success=Job+description+created",
+            status_code=303,
+        )
     except Exception as e:
         db.rollback()
         designations = org_svc.list_designations(
@@ -172,35 +185,41 @@ def create_job_description(
             PaginationParams(limit=200),
         ).items
 
-        context = base_context(request, auth, "New Job Description", "job-descriptions", db=db)
-        context.update({
-            "designations": designations,
-            "departments": departments,
-            "statuses": list(JobDescriptionStatus),
-            "form_data": {
-                "jd_code": jd_code,
-                "job_title": job_title,
-                "designation_id": designation_id,
-                "department_id": department_id,
-                "summary": summary,
-                "purpose": purpose,
-                "key_responsibilities": key_responsibilities,
-                "education_requirements": education_requirements,
-                "experience_requirements": experience_requirements,
-                "min_years_experience": min_years_experience,
-                "max_years_experience": max_years_experience,
-                "technical_skills": technical_skills,
-                "certifications_required": certifications_required,
-                "certifications_preferred": certifications_preferred,
-                "work_location": work_location,
-                "travel_requirements": travel_requirements,
-                "reports_to": reports_to,
-                "direct_reports": direct_reports,
-                "status": status,
-            },
-            "error": str(e),
-        })
-        return templates.TemplateResponse(request, "people/hr/job_description_form.html", context)
+        context = base_context(
+            request, auth, "New Job Description", "job-descriptions", db=db
+        )
+        context.update(
+            {
+                "designations": designations,
+                "departments": departments,
+                "statuses": list(JobDescriptionStatus),
+                "form_data": {
+                    "jd_code": jd_code,
+                    "job_title": job_title,
+                    "designation_id": designation_id,
+                    "department_id": department_id,
+                    "summary": summary,
+                    "purpose": purpose,
+                    "key_responsibilities": key_responsibilities,
+                    "education_requirements": education_requirements,
+                    "experience_requirements": experience_requirements,
+                    "min_years_experience": min_years_experience,
+                    "max_years_experience": max_years_experience,
+                    "technical_skills": technical_skills,
+                    "certifications_required": certifications_required,
+                    "certifications_preferred": certifications_preferred,
+                    "work_location": work_location,
+                    "travel_requirements": travel_requirements,
+                    "reports_to": reports_to,
+                    "direct_reports": direct_reports,
+                    "status": status,
+                },
+                "error": str(e),
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/hr/job_description_form.html", context
+        )
 
 
 @router.get("/job-descriptions/{jd_id}", response_class=HTMLResponse)
@@ -218,18 +237,25 @@ def view_job_description(
 
     jd = jd_svc.get_job_description(coerce_uuid(jd_id), load_competencies=True)
     if not jd:
-        return RedirectResponse(url="/people/hr/job-descriptions?error=Job+description+not+found", status_code=303)
+        return RedirectResponse(
+            url="/people/hr/job-descriptions?error=Job+description+not+found",
+            status_code=303,
+        )
 
     # Get available competencies for adding
     all_competencies = comp_svc.list_competencies(is_active=True).items
 
     context = base_context(request, auth, jd.job_title, "job-descriptions", db=db)
-    context.update({
-        "jd": jd,
-        "all_competencies": all_competencies,
-        "success": success,
-    })
-    return templates.TemplateResponse(request, "people/hr/job_description_detail.html", context)
+    context.update(
+        {
+            "jd": jd,
+            "all_competencies": all_competencies,
+            "success": success,
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/hr/job_description_detail.html", context
+    )
 
 
 @router.get("/job-descriptions/{jd_id}/edit", response_class=HTMLResponse)
@@ -246,7 +272,10 @@ def edit_job_description_form(
 
     jd = jd_svc.get_job_description(coerce_uuid(jd_id))
     if not jd:
-        return RedirectResponse(url="/people/hr/job-descriptions?error=Job+description+not+found", status_code=303)
+        return RedirectResponse(
+            url="/people/hr/job-descriptions?error=Job+description+not+found",
+            status_code=303,
+        )
 
     designations = org_svc.list_designations(
         DesignationFilters(is_active=True),
@@ -257,15 +286,21 @@ def edit_job_description_form(
         PaginationParams(limit=200),
     ).items
 
-    context = base_context(request, auth, f"Edit {jd.job_title}", "job-descriptions", db=db)
-    context.update({
-        "jd": jd,
-        "designations": designations,
-        "departments": departments,
-        "statuses": list(JobDescriptionStatus),
-        "form_data": {},
-    })
-    return templates.TemplateResponse(request, "people/hr/job_description_form.html", context)
+    context = base_context(
+        request, auth, f"Edit {jd.job_title}", "job-descriptions", db=db
+    )
+    context.update(
+        {
+            "jd": jd,
+            "designations": designations,
+            "departments": departments,
+            "statuses": list(JobDescriptionStatus),
+            "form_data": {},
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/hr/job_description_form.html", context
+    )
 
 
 @router.post("/job-descriptions/{jd_id}/edit", response_class=HTMLResponse)
@@ -325,7 +360,10 @@ def update_job_description(
             },
         )
         db.commit()
-        return RedirectResponse(url=f"/people/hr/job-descriptions/{jd_id}?success=Job+description+updated", status_code=303)
+        return RedirectResponse(
+            url=f"/people/hr/job-descriptions/{jd_id}?success=Job+description+updated",
+            status_code=303,
+        )
     except Exception as e:
         db.rollback()
         jd = jd_svc.get_job_description(coerce_uuid(jd_id))
@@ -338,19 +376,25 @@ def update_job_description(
             PaginationParams(limit=200),
         ).items
 
-        context = base_context(request, auth, f"Edit Job Description", "job-descriptions", db=db)
-        context.update({
-            "jd": jd,
-            "designations": designations,
-            "departments": departments,
-            "statuses": list(JobDescriptionStatus),
-            "form_data": {
-                "jd_code": jd_code,
-                "job_title": job_title,
-            },
-            "error": str(e),
-        })
-        return templates.TemplateResponse(request, "people/hr/job_description_form.html", context)
+        context = base_context(
+            request, auth, "Edit Job Description", "job-descriptions", db=db
+        )
+        context.update(
+            {
+                "jd": jd,
+                "designations": designations,
+                "departments": departments,
+                "statuses": list(JobDescriptionStatus),
+                "form_data": {
+                    "jd_code": jd_code,
+                    "job_title": job_title,
+                },
+                "error": str(e),
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/hr/job_description_form.html", context
+        )
 
 
 @router.post("/job-descriptions/{jd_id}/activate", response_class=HTMLResponse)
@@ -367,10 +411,15 @@ def activate_job_description(
     try:
         jd_svc.activate_job_description(coerce_uuid(jd_id))
         db.commit()
-        return RedirectResponse(url=f"/people/hr/job-descriptions/{jd_id}?success=Job+description+activated", status_code=303)
+        return RedirectResponse(
+            url=f"/people/hr/job-descriptions/{jd_id}?success=Job+description+activated",
+            status_code=303,
+        )
     except Exception as e:
         db.rollback()
-        return RedirectResponse(url=f"/people/hr/job-descriptions/{jd_id}?error={str(e)}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/hr/job-descriptions/{jd_id}?error={str(e)}", status_code=303
+        )
 
 
 @router.post("/job-descriptions/{jd_id}/archive", response_class=HTMLResponse)
@@ -387,10 +436,15 @@ def archive_job_description(
     try:
         jd_svc.archive_job_description(coerce_uuid(jd_id))
         db.commit()
-        return RedirectResponse(url=f"/people/hr/job-descriptions/{jd_id}?success=Job+description+archived", status_code=303)
+        return RedirectResponse(
+            url=f"/people/hr/job-descriptions/{jd_id}?success=Job+description+archived",
+            status_code=303,
+        )
     except Exception as e:
         db.rollback()
-        return RedirectResponse(url=f"/people/hr/job-descriptions/{jd_id}?error={str(e)}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/hr/job-descriptions/{jd_id}?error={str(e)}", status_code=303
+        )
 
 
 @router.post("/job-descriptions/{jd_id}/competencies", response_class=HTMLResponse)
@@ -417,13 +471,21 @@ def add_competency_to_jd(
             notes=notes or None,
         )
         db.commit()
-        return RedirectResponse(url=f"/people/hr/job-descriptions/{jd_id}?success=Competency+added", status_code=303)
+        return RedirectResponse(
+            url=f"/people/hr/job-descriptions/{jd_id}?success=Competency+added",
+            status_code=303,
+        )
     except Exception as e:
         db.rollback()
-        return RedirectResponse(url=f"/people/hr/job-descriptions/{jd_id}?error={str(e)}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/hr/job-descriptions/{jd_id}?error={str(e)}", status_code=303
+        )
 
 
-@router.post("/job-descriptions/{jd_id}/competencies/{competency_id}/delete", response_class=HTMLResponse)
+@router.post(
+    "/job-descriptions/{jd_id}/competencies/{competency_id}/delete",
+    response_class=HTMLResponse,
+)
 def remove_competency_from_jd(
     request: Request,
     jd_id: str,
@@ -438,7 +500,12 @@ def remove_competency_from_jd(
     try:
         jd_svc.remove_competency(coerce_uuid(jd_id), coerce_uuid(competency_id))
         db.commit()
-        return RedirectResponse(url=f"/people/hr/job-descriptions/{jd_id}?success=Competency+removed", status_code=303)
+        return RedirectResponse(
+            url=f"/people/hr/job-descriptions/{jd_id}?success=Competency+removed",
+            status_code=303,
+        )
     except Exception as e:
         db.rollback()
-        return RedirectResponse(url=f"/people/hr/job-descriptions/{jd_id}?error={str(e)}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/hr/job-descriptions/{jd_id}?error={str(e)}", status_code=303
+        )

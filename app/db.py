@@ -1,5 +1,4 @@
 from contextlib import contextmanager
-from functools import lru_cache
 from typing import Generator
 
 from sqlalchemy import create_engine
@@ -20,7 +19,9 @@ def _get_connect_args() -> dict:
     # Add statement timeout if configured (prevents runaway queries)
     if settings.db_statement_timeout_ms > 0:
         # For psycopg (both 2 and 3), use options parameter
-        connect_args["options"] = f"-c statement_timeout={settings.db_statement_timeout_ms}"
+        connect_args["options"] = (
+            f"-c statement_timeout={settings.db_statement_timeout_ms}"
+        )
 
     return connect_args
 
@@ -43,7 +44,9 @@ def _get_async_connect_args() -> dict:
 
     if settings.db_statement_timeout_ms > 0:
         # psycopg uses options for statement timeout
-        connect_args["options"] = f"-c statement_timeout={settings.db_statement_timeout_ms}"
+        connect_args["options"] = (
+            f"-c statement_timeout={settings.db_statement_timeout_ms}"
+        )
 
     return connect_args
 
@@ -53,9 +56,7 @@ def get_async_engine():
     # Convert postgresql:// to postgresql+psycopg:// for async psycopg
     async_url = settings.database_url.replace(
         "postgresql://", "postgresql+psycopg://"
-    ).replace(
-        "postgresql+asyncpg://", "postgresql+psycopg://"
-    )
+    ).replace("postgresql+asyncpg://", "postgresql+psycopg://")
     return create_async_engine(
         async_url,
         pool_pre_ping=True,
@@ -102,7 +103,9 @@ def get_auth_engine():
     # Build connect_args for SSL and timeouts
     connect_args: dict = {}
     if settings.db_statement_timeout_ms > 0:
-        connect_args["options"] = f"-c statement_timeout={settings.db_statement_timeout_ms}"
+        connect_args["options"] = (
+            f"-c statement_timeout={settings.db_statement_timeout_ms}"
+        )
 
     # Require SSL when connecting to remote auth database
     if settings.auth_database_url and "postgresql" in settings.auth_database_url:

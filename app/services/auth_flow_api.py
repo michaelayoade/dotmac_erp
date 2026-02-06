@@ -271,6 +271,7 @@ class AuthFlowApiService:
                 reset_token=result["token"],
                 person_name=result["person_name"],
                 app_url=app_url,
+                organization_id=result.get("organization_id"),
             )
 
         return ForgotPasswordResponse()

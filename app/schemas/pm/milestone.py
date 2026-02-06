@@ -3,6 +3,7 @@ Milestone Pydantic Schemas.
 
 Schemas for PM Milestone API endpoints.
 """
+
 from datetime import date, datetime
 from typing import List, Optional
 from uuid import UUID

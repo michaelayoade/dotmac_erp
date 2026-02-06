@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy.orm import Session
 
+from app.models.email_profile import EmailModule
 from app.models.expense import (
     ExpenseClaim,
     ExpenseLimitRule,
@@ -221,7 +222,13 @@ This is an automated notification from the expense management system.
 
         try:
             return send_email(
-                self.db, approver.work_email, subject, body_html, body_text
+                self.db,
+                approver.work_email,
+                subject,
+                body_html,
+                body_text,
+                module=EmailModule.EXPENSE,
+                organization_id=claim.organization_id,
             )
         except Exception as e:
             logger.error(f"Failed to send approval notification: {e}")
@@ -330,7 +337,15 @@ View claim at: {claim_url}
             to_email = _employee_work_email(employee)
             if not to_email:
                 return False
-            return send_email(self.db, to_email, subject, body_html, body_text)
+            return send_email(
+                self.db,
+                to_email,
+                subject,
+                body_html,
+                body_text,
+                module=EmailModule.EXPENSE,
+                organization_id=claim.organization_id,
+            )
         except Exception as e:
             logger.error(f"Failed to send approval notification: {e}")
             return False
@@ -435,7 +450,15 @@ View claim at: {claim_url}
             to_email = _employee_work_email(employee)
             if not to_email:
                 return False
-            return send_email(self.db, to_email, subject, body_html, body_text)
+            return send_email(
+                self.db,
+                to_email,
+                subject,
+                body_html,
+                body_text,
+                module=EmailModule.EXPENSE,
+                organization_id=claim.organization_id,
+            )
         except Exception as e:
             logger.error(f"Failed to send rejection notification: {e}")
             return False
@@ -546,7 +569,15 @@ View claim at: {claim_url}
             to_email = _employee_work_email(employee)
             if not to_email:
                 return False
-            return send_email(self.db, to_email, subject, body_html, body_text)
+            return send_email(
+                self.db,
+                to_email,
+                subject,
+                body_html,
+                body_text,
+                module=EmailModule.EXPENSE,
+                organization_id=claim.organization_id,
+            )
         except Exception as e:
             logger.error(f"Failed to send limit notification: {e}")
             return False
@@ -658,7 +689,13 @@ Review now at: {claim_url}
 
         try:
             return send_email(
-                self.db, approver.work_email, subject, body_html, body_text
+                self.db,
+                approver.work_email,
+                subject,
+                body_html,
+                body_text,
+                module=EmailModule.EXPENSE,
+                organization_id=claim.organization_id,
             )
         except Exception as e:
             logger.error(f"Failed to send reminder notification: {e}")
@@ -759,7 +796,15 @@ View details at: {claim_url}
             to_email = _employee_work_email(employee)
             if not to_email:
                 return False
-            return send_email(self.db, to_email, subject, body_html, body_text)
+            return send_email(
+                self.db,
+                to_email,
+                subject,
+                body_html,
+                body_text,
+                module=EmailModule.EXPENSE,
+                organization_id=claim.organization_id,
+            )
         except Exception as e:
             logger.error(f"Failed to send payment notification: {e}")
             return False

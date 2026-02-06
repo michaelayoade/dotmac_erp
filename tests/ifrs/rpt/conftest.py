@@ -12,8 +12,10 @@ import pytest
 
 # ============ Mock Enums ============
 
+
 class MockReportType:
     """Mock ReportType enum."""
+
     BALANCE_SHEET = "BALANCE_SHEET"
     INCOME_STATEMENT = "INCOME_STATEMENT"
     CASH_FLOW = "CASH_FLOW"
@@ -22,6 +24,7 @@ class MockReportType:
 
 class MockReportStatus:
     """Mock ReportStatus enum."""
+
     QUEUED = "QUEUED"
     GENERATING = "GENERATING"
     COMPLETED = "COMPLETED"
@@ -31,6 +34,7 @@ class MockReportStatus:
 
 class MockScheduleFrequency:
     """Mock ScheduleFrequency enum."""
+
     DAILY = "DAILY"
     WEEKLY = "WEEKLY"
     MONTHLY = "MONTHLY"
@@ -41,6 +45,7 @@ class MockScheduleFrequency:
 
 
 # ============ Mock Models ============
+
 
 class MockReportDefinition:
     """Mock ReportDefinition model."""
@@ -71,7 +76,7 @@ class MockReportDefinition:
         created_by_user_id: uuid.UUID = None,
         created_at: datetime = None,
         updated_at: Optional[datetime] = None,
-        **kwargs
+        **kwargs,
     ):
         self.report_def_id = report_def_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -124,7 +129,7 @@ class MockReportInstance:
         generation_time_ms: Optional[int] = None,
         generated_at: Optional[datetime] = None,
         generated_by_user_id: uuid.UUID = None,
-        **kwargs
+        **kwargs,
     ):
         self.instance_id = instance_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -174,7 +179,7 @@ class MockReportSchedule:
         last_run_at: Optional[datetime] = None,
         created_by_user_id: uuid.UUID = None,
         created_at: datetime = None,
-        **kwargs
+        **kwargs,
     ):
         self.schedule_id = schedule_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -202,6 +207,7 @@ class MockReportSchedule:
 
 
 # ============ Fixtures ============
+
 
 @pytest.fixture
 def mock_db():

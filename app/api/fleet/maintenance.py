@@ -3,6 +3,7 @@ Maintenance API Endpoints.
 
 REST API for vehicle maintenance management.
 """
+
 from datetime import date
 from typing import Optional
 from uuid import UUID

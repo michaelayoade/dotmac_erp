@@ -3,6 +3,7 @@ Case Response Model - HR Schema.
 
 Stores employee responses to disciplinary queries.
 """
+
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional

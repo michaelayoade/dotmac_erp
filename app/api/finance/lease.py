@@ -31,7 +31,10 @@ from app.services.finance.lease import (
 router = APIRouter(
     prefix="/lease",
     tags=["leases"],
-    dependencies=[Depends(require_tenant_auth), Depends(require_feature(FEATURE_LEASES))],
+    dependencies=[
+        Depends(require_tenant_auth),
+        Depends(require_feature(FEATURE_LEASES)),
+    ],
 )
 
 
@@ -46,6 +49,7 @@ def get_db():
 # =============================================================================
 # Schemas
 # =============================================================================
+
 
 class LeaseContractCreate(BaseModel):
     """Create lease contract request."""
@@ -168,7 +172,10 @@ class LeaseModificationCreate(BaseModel):
 # Lease Contracts
 # =============================================================================
 
-@router.post("/contracts", response_model=LeaseContractRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/contracts", response_model=LeaseContractRead, status_code=status.HTTP_201_CREATED
+)
 def create_lease_contract(
     payload: LeaseContractCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -328,6 +335,7 @@ def terminate_lease(
 # Lease Calculations
 # =============================================================================
 
+
 @router.post("/contracts/{lease_id}/calculate", response_model=LeaseCalculationRead)
 def calculate_lease(
     lease_id: UUID,
@@ -374,7 +382,9 @@ def get_lease_schedule(
 ):
     """Get lease amortization schedule."""
     contract = lease_contract_service.get(db, str(lease_id))
-    schedule = lease_calculation_service.generate_amortization_schedule(db=db, lease_id=lease_id)
+    schedule = lease_calculation_service.generate_amortization_schedule(
+        db=db, lease_id=lease_id
+    )
     lines = [
         LeaseScheduleLineRead(
             period_number=entry.period,
@@ -404,6 +414,7 @@ def get_lease_schedule(
 # =============================================================================
 # Lease Postings
 # =============================================================================
+
 
 @router.post("/contracts/{lease_id}/post-initial", response_model=PostingResultSchema)
 def post_initial_recognition(
@@ -486,7 +497,9 @@ def post_lease_payment(
     )
 
 
-@router.post("/contracts/{lease_id}/post-depreciation", response_model=PostingResultSchema)
+@router.post(
+    "/contracts/{lease_id}/post-depreciation", response_model=PostingResultSchema
+)
 def post_rou_depreciation(
     lease_id: UUID,
     depreciation_date: date = Query(...),
@@ -517,8 +530,10 @@ def post_rou_depreciation(
 # Lease Modifications
 # =============================================================================
 
+
 class ModificationResultRead(BaseModel):
     """Modification result response."""
+
     success: bool
     modification_id: Optional[UUID] = None
     liability_adjustment: Decimal = Decimal("0")
@@ -555,7 +570,9 @@ def modify_lease(
     )
     return ModificationResultRead(
         success=result.success,
-        modification_id=result.modification.modification_id if result.modification else None,
+        modification_id=result.modification.modification_id
+        if result.modification
+        else None,
         liability_adjustment=result.liability_adjustment,
         rou_asset_adjustment=result.rou_asset_adjustment,
         gain_loss=result.gain_loss,
@@ -576,6 +593,7 @@ from app.models.finance.lease.lease_modification import ModificationType
 
 class FullModificationCreate(BaseModel):
     """Full lease modification input."""
+
     fiscal_period_id: UUID
     modification_date: date
     effective_date: date
@@ -589,6 +607,7 @@ class FullModificationCreate(BaseModel):
 
 class LeaseModificationRead(BaseModel):
     """Lease modification response."""
+
     model_config = ConfigDict(from_attributes=True)
     modification_id: UUID
     lease_id: UUID
@@ -628,7 +647,9 @@ def process_lease_modification(
     )
     return ModificationResultRead(
         success=result.success,
-        modification_id=result.modification.modification_id if result.modification else None,
+        modification_id=result.modification.modification_id
+        if result.modification
+        else None,
         liability_adjustment=result.liability_adjustment,
         rou_asset_adjustment=result.rou_asset_adjustment,
         gain_loss=result.gain_loss,
@@ -659,10 +680,14 @@ def list_lease_modifications(
         limit=limit,
         offset=offset,
     )
-    return ListResponse(items=modifications, count=len(modifications), limit=limit, offset=offset)
+    return ListResponse(
+        items=modifications, count=len(modifications), limit=limit, offset=offset
+    )
 
 
-@router.post("/modifications/{modification_id}/approve", response_model=LeaseModificationRead)
+@router.post(
+    "/modifications/{modification_id}/approve", response_model=LeaseModificationRead
+)
 def approve_lease_modification(
     modification_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
@@ -689,6 +714,7 @@ from app.services.finance.lease import (
 
 class VariablePaymentCreate(BaseModel):
     """Variable payment input."""
+
     schedule_id: UUID
     variable_amount: Decimal
     description: Optional[str] = None
@@ -696,6 +722,7 @@ class VariablePaymentCreate(BaseModel):
 
 class IndexAdjustmentCreate(BaseModel):
     """Index adjustment input."""
+
     lease_id: UUID
     adjustment_date: date
     fiscal_period_id: UUID
@@ -706,6 +733,7 @@ class IndexAdjustmentCreate(BaseModel):
 
 class PaymentScheduleRead(BaseModel):
     """Payment schedule response."""
+
     model_config = ConfigDict(from_attributes=True)
     schedule_id: UUID
     lease_id: UUID
@@ -720,6 +748,7 @@ class PaymentScheduleRead(BaseModel):
 
 class IndexAdjustmentResultRead(BaseModel):
     """Index adjustment result."""
+
     success: bool
     payments_adjusted: int = 0
     liability_adjustment: Decimal = Decimal("0")
@@ -740,7 +769,9 @@ def record_variable_payment(
         variable_amount=payload.variable_amount,
         description=payload.description,
     )
-    return lease_variable_payment_service.record_variable_payment(db, organization_id, input_data)
+    return lease_variable_payment_service.record_variable_payment(
+        db, organization_id, input_data
+    )
 
 
 @router.post("/index-adjustments", response_model=IndexAdjustmentResultRead)
@@ -780,7 +811,9 @@ def get_overdue_lease_payments(
     db: Session = Depends(get_db),
 ):
     """Get overdue lease payments."""
-    overdue = lease_variable_payment_service.get_overdue_payments(db, organization_id, as_of_date)
+    overdue = lease_variable_payment_service.get_overdue_payments(
+        db, organization_id, as_of_date
+    )
     return ListResponse(items=overdue, count=len(overdue), limit=len(overdue), offset=0)
 
 
@@ -792,8 +825,12 @@ def get_payment_schedules(
     db: Session = Depends(get_db),
 ):
     """Get scheduled payments for a lease."""
-    schedules = lease_variable_payment_service.get_scheduled_payments(db, lease_id, include_paid)
-    return ListResponse(items=schedules, count=len(schedules), limit=len(schedules), offset=0)
+    schedules = lease_variable_payment_service.get_scheduled_payments(
+        db, lease_id, include_paid
+    )
+    return ListResponse(
+        items=schedules, count=len(schedules), limit=len(schedules), offset=0
+    )
 
 
 @router.post("/schedules/{schedule_id}/mark-paid", response_model=PaymentScheduleRead)

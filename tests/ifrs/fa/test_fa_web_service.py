@@ -7,8 +7,6 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-import pytest
-
 
 class TestFAWebServiceHelpers:
     """Tests for FA web service helper functions."""
@@ -165,7 +163,6 @@ class TestFAWebServiceListAssets:
     def test_list_assets_context_success(self):
         """Test successful assets list context."""
         from app.services.fixed_assets.web import FixedAssetWebService
-        from app.models.fixed_assets.asset import AssetStatus
 
         mock_db = MagicMock()
         org_id = uuid.uuid4()

@@ -3,6 +3,7 @@ Milestone API Endpoints.
 
 REST API for milestone management.
 """
+
 from typing import List, Optional
 from uuid import UUID
 
@@ -184,7 +185,9 @@ def update_milestone(
     """Update a milestone."""
     svc = MilestoneService(db, organization_id)
     try:
-        milestone = svc.update_milestone(milestone_id, data.model_dump(exclude_unset=True))
+        milestone = svc.update_milestone(
+            milestone_id, data.model_dump(exclude_unset=True)
+        )
         db.commit()
         db.refresh(milestone)
         return MilestoneRead.model_validate(milestone)
@@ -226,7 +229,9 @@ def achieve_milestone(
         milestone = svc.achieve_milestone(milestone_id, actual_date)
         db.commit()
         if milestone.actual_date is None:
-            raise HTTPException(status_code=500, detail="Milestone actual date was not set")
+            raise HTTPException(
+                status_code=500, detail="Milestone actual date was not set"
+            )
         return MilestoneAchieveResponse(
             milestone_id=milestone.milestone_id,
             status=milestone.status,

@@ -1,6 +1,7 @@
 """
 Asset Impairment Model - FA Schema.
 """
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -78,9 +79,15 @@ class AssetImpairment(Base):
     )
 
     # Value in use assumptions
-    discount_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4), nullable=True)
-    growth_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4), nullable=True)
-    projection_period_years: Mapped[Optional[int]] = mapped_column(Numeric(5, 0), nullable=True)
+    discount_rate: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 4), nullable=True
+    )
+    growth_rate: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 4), nullable=True
+    )
+    projection_period_years: Mapped[Optional[int]] = mapped_column(
+        Numeric(5, 0), nullable=True
+    )
     assumptions_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Reversal tracking

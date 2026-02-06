@@ -1,0 +1,9 @@
+{# Organization branding CSS/fonts injection #}
+{% if org_branding and org_branding.fonts_url %}
+<link href="{{ org_branding.fonts_url }}" rel="stylesheet">
+{% endif %}
+{% if org_branding and org_branding.css %}
+<style id="org-branding">
+{{ org_branding.css | safe }}
+</style>
+{% endif %}

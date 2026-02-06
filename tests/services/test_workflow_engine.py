@@ -515,9 +515,13 @@ class TestActionTriggerRule:
         mock_db = MagicMock()
         mock_db.get.return_value = target_rule
 
-        with patch.object(workflow_service, "_check_entity_rate_limit", return_value=False), \
-            patch.object(workflow_service, "_is_throttled", return_value=False), \
-            patch.object(workflow_service, "execute_action") as mock_execute:
+        with (
+            patch.object(
+                workflow_service, "_check_entity_rate_limit", return_value=False
+            ),
+            patch.object(workflow_service, "_is_throttled", return_value=False),
+            patch.object(workflow_service, "execute_action") as mock_execute,
+        ):
             mock_execute.return_value = MagicMock(
                 status=ExecutionStatus.SUCCESS,
                 execution_id=uuid.uuid4(),
@@ -574,10 +578,21 @@ class TestScheduledRules:
 
         mock_db.scalars.return_value.all.return_value = [rule]
 
-        with patch.object(evaluator, "_is_due", return_value=True), \
-            patch.object(evaluator, "_find_matching_entities", return_value=[uuid.uuid4(), uuid.uuid4()]), \
-            patch("app.services.finance.automation.workflow.workflow_service._is_throttled", return_value=False), \
-            patch("app.services.finance.automation.workflow.workflow_service.execute_action") as mock_execute:
+        with (
+            patch.object(evaluator, "_is_due", return_value=True),
+            patch.object(
+                evaluator,
+                "_find_matching_entities",
+                return_value=[uuid.uuid4(), uuid.uuid4()],
+            ),
+            patch(
+                "app.services.finance.automation.workflow.workflow_service._is_throttled",
+                return_value=False,
+            ),
+            patch(
+                "app.services.finance.automation.workflow.workflow_service.execute_action"
+            ) as mock_execute,
+        ):
             result = evaluator.evaluate_due_rules(mock_db)
 
         assert result["rules_checked"] == 1

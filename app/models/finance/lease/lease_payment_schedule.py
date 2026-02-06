@@ -1,13 +1,24 @@
 """
 Lease Payment Schedule Model - Lease Schema.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, func, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -59,14 +70,22 @@ class LeasePaymentSchedule(Base):
     total_payment: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     principal_portion: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     interest_portion: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    variable_payment: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    variable_payment: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Balance after payment
-    opening_liability_balance: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    closing_liability_balance: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    opening_liability_balance: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
+    closing_liability_balance: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
 
     # Index adjustment
-    is_index_adjusted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_index_adjusted: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     index_adjustment_amount: Mapped[Decimal] = mapped_column(
         Numeric(20, 6),
         nullable=False,

@@ -90,7 +90,7 @@
                                 {{ payee.payee_name }}
                             </a>
                             {% if payee.notes %}
-                            <p class="text-xs text-slate-500 dark:text-slate-400 truncate max-w-xs">{{ payee.notes }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 truncate max-w-xs">{{ payee.notes | sanitize_html }}</p>
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">

@@ -53,6 +53,7 @@ def get_db():
 # Schemas
 # =============================================================================
 
+
 class LegalEntityCreate(BaseModel):
     """Create legal entity request."""
 
@@ -334,7 +335,10 @@ class ConsolidationSummaryRead(BaseModel):
 # Legal Entities
 # =============================================================================
 
-@router.post("/entities", response_model=LegalEntityRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/entities", response_model=LegalEntityRead, status_code=status.HTTP_201_CREATED
+)
 def create_legal_entity(
     payload: LegalEntityCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -426,7 +430,9 @@ def get_group_structure(
     )
 
 
-@router.post("/entities/{entity_id}/update-consolidation-method", response_model=LegalEntityRead)
+@router.post(
+    "/entities/{entity_id}/update-consolidation-method", response_model=LegalEntityRead
+)
 def update_consolidation_method(
     entity_id: UUID,
     consolidation_method: ConsolidationMethod = Query(...),
@@ -443,7 +449,9 @@ def update_consolidation_method(
     )
 
 
-@router.post("/entities/{entity_id}/record-goodwill-impairment", response_model=LegalEntityRead)
+@router.post(
+    "/entities/{entity_id}/record-goodwill-impairment", response_model=LegalEntityRead
+)
 def record_goodwill_impairment(
     entity_id: UUID,
     impairment_amount: Decimal = Query(...),
@@ -464,7 +472,10 @@ def record_goodwill_impairment(
 # Ownership Interests
 # =============================================================================
 
-@router.post("/ownership", response_model=OwnershipRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/ownership", response_model=OwnershipRead, status_code=status.HTTP_201_CREATED
+)
 def create_ownership(
     payload: OwnershipCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -558,7 +569,12 @@ def get_nci_summary(
 # Intercompany Balances
 # =============================================================================
 
-@router.post("/intercompany", response_model=IntercompanyBalanceRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/intercompany",
+    response_model=IntercompanyBalanceRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_intercompany_balance(
     payload: IntercompanyBalanceCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -646,7 +662,10 @@ def perform_intercompany_matching(
 # Consolidation Runs
 # =============================================================================
 
-@router.post("/runs", response_model=ConsolidationRunRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/runs", response_model=ConsolidationRunRead, status_code=status.HTTP_201_CREATED
+)
 def create_consolidation_run(
     payload: ConsolidationRunCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -754,7 +773,12 @@ def get_consolidation_summary(
 # Elimination Entries
 # =============================================================================
 
-@router.post("/runs/{run_id}/eliminations", response_model=EliminationEntryRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/runs/{run_id}/eliminations",
+    response_model=EliminationEntryRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_elimination_entry(
     run_id: UUID,
     payload: EliminationEntryCreate,
@@ -788,7 +812,9 @@ def create_elimination_entry(
     )
 
 
-@router.get("/runs/{run_id}/eliminations", response_model=ListResponse[EliminationEntryRead])
+@router.get(
+    "/runs/{run_id}/eliminations", response_model=ListResponse[EliminationEntryRead]
+)
 def list_elimination_entries(
     run_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
@@ -812,7 +838,10 @@ def list_elimination_entries(
     )
 
 
-@router.post("/runs/{run_id}/generate-intercompany-eliminations", response_model=list[EliminationEntryRead])
+@router.post(
+    "/runs/{run_id}/generate-intercompany-eliminations",
+    response_model=list[EliminationEntryRead],
+)
 def generate_intercompany_eliminations(
     run_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
@@ -832,6 +861,7 @@ def generate_intercompany_eliminations(
 # =============================================================================
 # Consolidation Postings
 # =============================================================================
+
 
 @router.post("/eliminations/{elimination_id}/post", response_model=PostingResultSchema)
 def post_elimination_entry(
@@ -882,7 +912,9 @@ def post_all_eliminations(
     )
     successes = sum(1 for r in results if r.success)
     total = len(results)
-    message = "Posted eliminations" if successes == total else "Some eliminations failed"
+    message = (
+        "Posted eliminations" if successes == total else "Some eliminations failed"
+    )
     return {
         "success": successes == total and total > 0,
         "entries_posted": successes,

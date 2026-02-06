@@ -12,7 +12,6 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException, Request, Cookie
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -474,6 +473,7 @@ def base_context(
     organization = None
     if db and auth.organization_id:
         from app.models.finance.core_org.organization import Organization
+
         organization = db.get(Organization, auth.organization_id)
 
     # Get org-specific branding if db session available

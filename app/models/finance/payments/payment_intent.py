@@ -3,13 +3,14 @@ Payment Intent Model - Payments Schema.
 
 Tracks Paystack payment initialization and completion.
 """
+
 import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Optional
 
-from sqlalchemy import DateTime, Enum, Numeric, String, Text, func, text
+from sqlalchemy import DateTime, Enum, Numeric, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 

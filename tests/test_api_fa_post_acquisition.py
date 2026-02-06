@@ -56,7 +56,9 @@ def test_post_asset_acquisition_creates_journal_lines(monkeypatch):
     db = MagicMock()
     db.get.side_effect = lambda model, _id: asset if model is Asset else category
 
-    monkeypatch.setattr(org_context_service, "get_functional_currency", lambda *_: "USD")
+    monkeypatch.setattr(
+        org_context_service, "get_functional_currency", lambda *_: "USD"
+    )
 
     captured = {}
 
@@ -69,8 +71,12 @@ def test_post_asset_acquisition_creates_journal_lines(monkeypatch):
         return _DummyJournal(uuid.uuid4())
 
     monkeypatch.setattr(JournalService, "create_journal", staticmethod(_create_journal))
-    monkeypatch.setattr(JournalService, "submit_journal", staticmethod(lambda *args, **kwargs: None))
-    monkeypatch.setattr(JournalService, "approve_journal", staticmethod(lambda *args, **kwargs: None))
+    monkeypatch.setattr(
+        JournalService, "submit_journal", staticmethod(lambda *args, **kwargs: None)
+    )
+    monkeypatch.setattr(
+        JournalService, "approve_journal", staticmethod(lambda *args, **kwargs: None)
+    )
 
     def _post_journal_entry_success(db, request):
         return PostingResult(success=True, batch_id=uuid.uuid4(), posted_lines=2)

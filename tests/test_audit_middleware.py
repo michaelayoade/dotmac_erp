@@ -1,6 +1,5 @@
 """Tests for audit middleware - read-triggers, skip-paths, and exception logging."""
 
-import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -202,6 +201,7 @@ class TestAuditSettingsLoading:
     def test_load_audit_settings_returns_expected_keys(self, db_session):
         """Test that load_audit_settings returns all expected keys."""
         import app.main as main_module
+
         main_module._AUDIT_SETTINGS_CACHE = None
         main_module._AUDIT_SETTINGS_CACHE_AT = None
 
@@ -259,7 +259,9 @@ class TestAuditMiddlewareReadTriggers:
         request.url.path = "/api/v1/users"
         request.method = "GET"
         request.headers = MagicMock()
-        request.headers.get.side_effect = lambda h, default="": "true" if h == "x-audit-read" else default
+        request.headers.get.side_effect = (
+            lambda h, default="": "true" if h == "x-audit-read" else default
+        )
         request.query_params = {}
 
         response = Response(status_code=200)

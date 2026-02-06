@@ -17,7 +17,11 @@ from app.models.expense.expense_claim_action import (
     ExpenseClaimActionStatus,
 )
 from app.models.expense.cash_advance import CashAdvance, CashAdvanceStatus
-from app.models.expense.corporate_card import CorporateCard, CardTransaction, CardTransactionStatus
+from app.models.expense.corporate_card import (
+    CorporateCard,
+    CardTransaction,
+    CardTransactionStatus,
+)
 from app.models.expense.limit_rule import (
     ExpenseLimitRule,
     ExpenseApproverLimit,

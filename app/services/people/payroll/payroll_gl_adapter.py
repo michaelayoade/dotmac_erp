@@ -28,9 +28,8 @@ from app.services.common import coerce_uuid
 from app.services.finance.gl.journal import (
     JournalInput,
     JournalLineInput,
-    JournalService,
 )
-from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
+from app.services.finance.posting.base import BasePostingAdapter, PostingResult
 
 logger = logging.getLogger(__name__)
 
@@ -49,13 +48,8 @@ def _safe_coerce_uuid(value) -> Optional[UUID]:
 
 
 @dataclass
-class PayrollPostingResult:
+class PayrollPostingResult(PostingResult):
     """Result of a payroll posting operation."""
-
-    success: bool
-    journal_entry_id: Optional[UUID] = None
-    posting_batch_id: Optional[UUID] = None
-    message: str = ""
 
 
 class PayrollGLAdapter:
@@ -250,68 +244,52 @@ class PayrollGLAdapter:
             source_document_id=s_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-
-            # Submit and approve automatically for payroll posting
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-
-            # Auto-approve (in production, use designated system account for SoD)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-
-        except HTTPException as e:
-            return PayrollPostingResult(
-                success=False, message=f"Journal creation failed: {e.detail}"
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Journal creation failed",
+        )
+        if error:
+            return PayrollPostingResult(success=False, message=error.message)
 
         # Post to ledger
         if not idempotency_key:
             idempotency_key = f"{org_id}:PAYROLL:{s_id}:post:v1"
 
-        posting_request = PostingRequest(
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db,
             organization_id=org_id,
             journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="PAYROLL",
+            correlation_id=None,
             posted_by_user_id=user_id,
+            success_message="Salary slip posted successfully",
         )
-
-        try:
-            posting_result = LedgerPostingService.post_journal_entry(
-                db, posting_request
-            )
-
-            if not posting_result.success:
-                return PayrollPostingResult(
-                    success=False,
-                    journal_entry_id=journal.journal_entry_id,
-                    message=f"Ledger posting failed: {posting_result.message}",
-                )
-
-            # Update salary slip with journal reference
-            slip.journal_entry_id = journal.journal_entry_id
-            slip.status = SalarySlipStatus.POSTED
-            slip.posted_at = datetime.now(timezone.utc)
-            slip.posted_by_id = user_id
-
-            db.commit()
-
-            return PayrollPostingResult(
-                success=True,
-                journal_entry_id=journal.journal_entry_id,
-                posting_batch_id=posting_result.posting_batch_id,
-                message="Salary slip posted successfully",
-            )
-
-        except Exception as e:
+        if not posting_result.success:
             return PayrollPostingResult(
                 success=False,
                 journal_entry_id=journal.journal_entry_id,
-                message=f"Posting error: {str(e)}",
+                message=posting_result.message,
             )
+
+        # Update salary slip with journal reference
+        slip.journal_entry_id = journal.journal_entry_id
+        slip.status = SalarySlipStatus.POSTED
+        slip.posted_at = datetime.now(timezone.utc)
+        slip.posted_by_id = user_id
+
+        db.commit()
+
+        return PayrollPostingResult(
+            success=True,
+            journal_entry_id=journal.journal_entry_id,
+            posting_batch_id=posting_result.posting_batch_id,
+            message=posting_result.message,
+        )
 
     @staticmethod
     def reverse_salary_slip_posting(
@@ -541,45 +519,40 @@ class PayrollGLAdapter:
             source_document_id=_safe_coerce_uuid(getattr(slip, "slip_id", None)),
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Journal creation failed",
+        )
+        if error:
+            return PayrollPostingResult(success=False, message=error.message)
 
-            # Post to ledger
-            posting_request = PostingRequest(
-                organization_id=org_id,
-                journal_entry_id=journal.journal_entry_id,
-                posting_date=posting_date,
-                idempotency_key=f"{org_id}:PAYROLL:{slip.slip_id}:post:v1",
-                source_module="PAYROLL",
-                posted_by_user_id=user_id,
-            )
-
-            posting_result = LedgerPostingService.post_journal_entry(
-                db, posting_request
-            )
-
-            if not posting_result.success:
-                return PayrollPostingResult(
-                    success=False,
-                    journal_entry_id=journal.journal_entry_id,
-                    message=f"Ledger posting failed: {posting_result.message}",
-                )
-
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db,
+            organization_id=org_id,
+            journal_entry_id=journal.journal_entry_id,
+            posting_date=posting_date,
+            idempotency_key=f"{org_id}:PAYROLL:{slip.slip_id}:post:v1",
+            source_module="PAYROLL",
+            correlation_id=None,
+            posted_by_user_id=user_id,
+            success_message="Slip journal created and posted",
+        )
+        if not posting_result.success:
             return PayrollPostingResult(
-                success=True,
+                success=False,
                 journal_entry_id=journal.journal_entry_id,
-                posting_batch_id=posting_result.posting_batch_id,
-                message="Slip journal created and posted",
+                message=posting_result.message,
             )
 
-        except HTTPException as e:
-            return PayrollPostingResult(
-                success=False, message=f"Journal creation failed: {e.detail}"
-            )
+        return PayrollPostingResult(
+            success=True,
+            journal_entry_id=journal.journal_entry_id,
+            posting_batch_id=posting_result.posting_batch_id,
+            message=posting_result.message,
+        )
 
     @staticmethod
     def create_run_journal(
@@ -748,45 +721,40 @@ class PayrollGLAdapter:
             source_document_id=_safe_coerce_uuid(getattr(entry, "entry_id", None)),
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Journal creation failed",
+        )
+        if error:
+            return PayrollPostingResult(success=False, message=error.message)
 
-            # Post to ledger
-            posting_request = PostingRequest(
-                organization_id=org_id,
-                journal_entry_id=journal.journal_entry_id,
-                posting_date=posting_date,
-                idempotency_key=f"{org_id}:PAYROLL:RUN:{entry.entry_id}:post:v1",
-                source_module="PAYROLL",
-                posted_by_user_id=user_id,
-            )
-
-            posting_result = LedgerPostingService.post_journal_entry(
-                db, posting_request
-            )
-
-            if not posting_result.success:
-                return PayrollPostingResult(
-                    success=False,
-                    journal_entry_id=journal.journal_entry_id,
-                    message=f"Ledger posting failed: {posting_result.message}",
-                )
-
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db,
+            organization_id=org_id,
+            journal_entry_id=journal.journal_entry_id,
+            posting_date=posting_date,
+            idempotency_key=f"{org_id}:PAYROLL:RUN:{entry.entry_id}:post:v1",
+            source_module="PAYROLL",
+            correlation_id=None,
+            posted_by_user_id=user_id,
+            success_message="Run journal created and posted",
+        )
+        if not posting_result.success:
             return PayrollPostingResult(
-                success=True,
+                success=False,
                 journal_entry_id=journal.journal_entry_id,
-                posting_batch_id=posting_result.posting_batch_id,
-                message="Run journal created and posted",
+                message=posting_result.message,
             )
 
-        except HTTPException as e:
-            return PayrollPostingResult(
-                success=False, message=f"Journal creation failed: {e.detail}"
-            )
+        return PayrollPostingResult(
+            success=True,
+            journal_entry_id=journal.journal_entry_id,
+            posting_batch_id=posting_result.posting_batch_id,
+            message=posting_result.message,
+        )
 
     @staticmethod
     def post_payroll_entry(
@@ -984,37 +952,35 @@ class PayrollGLAdapter:
             source_document_id=e_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-        except HTTPException as e:
-            return PayrollPostingResult(
-                success=False,
-                message=f"Journal creation failed: {e.detail}",
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Journal creation failed",
+        )
+        if error:
+            return PayrollPostingResult(success=False, message=error.message)
 
         # 7. Post to ledger
         idempotency_key = f"{org_id}:PAYROLL_ENTRY:{e_id}:consolidated:v1"
-        posting_result = LedgerPostingService.post_journal_entry(
+        posting_result = BasePostingAdapter.post_to_ledger(
             db,
-            PostingRequest(
-                organization_id=org_id,
-                journal_entry_id=journal.journal_entry_id,
-                posting_date=posting_date,
-                idempotency_key=idempotency_key,
-                source_module="PAYROLL",
-                posted_by_user_id=user_id,
-            ),
+            organization_id=org_id,
+            journal_entry_id=journal.journal_entry_id,
+            posting_date=posting_date,
+            idempotency_key=idempotency_key,
+            source_module="PAYROLL",
+            correlation_id=None,
+            posted_by_user_id=user_id,
+            success_message="Payroll entry posted successfully",
         )
 
         if not posting_result.success:
             return PayrollPostingResult(
                 success=False,
                 journal_entry_id=journal.journal_entry_id,
-                message=f"Ledger posting failed: {posting_result.message}",
+                message=posting_result.message,
             )
 
         # 8. Update all slips to POSTED

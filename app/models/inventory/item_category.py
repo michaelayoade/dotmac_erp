@@ -1,11 +1,23 @@
 """
 Item Category Model - Inventory Schema.
 """
+
 import uuid
+from decimal import Decimal
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -65,6 +77,14 @@ class ItemCategory(Base):
     purchase_variance_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
+    )
+
+    # Reorder defaults (optional)
+    reorder_point: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 6), nullable=True
+    )
+    minimum_stock: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 6), nullable=True
     )
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

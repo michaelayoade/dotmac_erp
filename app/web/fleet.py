@@ -93,7 +93,9 @@ def vehicle_detail(
     context = base_context(request, auth, "Vehicle Details", "fleet", db=db)
     web_service = FleetWebService(db)
     try:
-        context.update(web_service.vehicle_detail_context(auth.organization_id, vehicle_id))
+        context.update(
+            web_service.vehicle_detail_context(auth.organization_id, vehicle_id)
+        )
         return templates.TemplateResponse(request, "fleet/vehicle_detail.html", context)
     except NotFoundError:
         return RedirectResponse(url="/fleet/vehicles?error=not_found", status_code=303)
@@ -110,7 +112,9 @@ def vehicle_edit(
     context = base_context(request, auth, "Edit Vehicle", "fleet", db=db)
     web_service = FleetWebService(db)
     try:
-        context.update(web_service.vehicle_form_context(auth.organization_id, vehicle_id))
+        context.update(
+            web_service.vehicle_form_context(auth.organization_id, vehicle_id)
+        )
         return templates.TemplateResponse(request, "fleet/vehicle_form.html", context)
     except NotFoundError:
         return RedirectResponse(url="/fleet/vehicles?error=not_found", status_code=303)
@@ -158,7 +162,11 @@ def maintenance_new(
     """New maintenance record form."""
     context = base_context(request, auth, "Schedule Maintenance", "fleet", db=db)
     web_service = FleetWebService(db)
-    context.update(web_service.maintenance_form_context(auth.organization_id, vehicle_id=vehicle_id))
+    context.update(
+        web_service.maintenance_form_context(
+            auth.organization_id, vehicle_id=vehicle_id
+        )
+    )
     return templates.TemplateResponse(request, "fleet/maintenance_form.html", context)
 
 
@@ -173,10 +181,16 @@ def maintenance_detail(
     context = base_context(request, auth, "Maintenance Details", "fleet", db=db)
     web_service = FleetWebService(db)
     try:
-        context.update(web_service.maintenance_detail_context(auth.organization_id, record_id))
-        return templates.TemplateResponse(request, "fleet/maintenance_detail.html", context)
+        context.update(
+            web_service.maintenance_detail_context(auth.organization_id, record_id)
+        )
+        return templates.TemplateResponse(
+            request, "fleet/maintenance_detail.html", context
+        )
     except NotFoundError:
-        return RedirectResponse(url="/fleet/maintenance?error=not_found", status_code=303)
+        return RedirectResponse(
+            url="/fleet/maintenance?error=not_found", status_code=303
+        )
 
 
 # =============================================================================
@@ -217,7 +231,9 @@ def fuel_new(
     """New fuel log entry form."""
     context = base_context(request, auth, "Record Fuel Purchase", "fleet", db=db)
     web_service = FleetWebService(db)
-    context.update(web_service.fuel_form_context(auth.organization_id, vehicle_id=vehicle_id))
+    context.update(
+        web_service.fuel_form_context(auth.organization_id, vehicle_id=vehicle_id)
+    )
     return templates.TemplateResponse(request, "fleet/fuel_form.html", context)
 
 
@@ -263,7 +279,9 @@ def incident_new(
     """New incident report form."""
     context = base_context(request, auth, "Report Incident", "fleet", db=db)
     web_service = FleetWebService(db)
-    context.update(web_service.incident_form_context(auth.organization_id, vehicle_id=vehicle_id))
+    context.update(
+        web_service.incident_form_context(auth.organization_id, vehicle_id=vehicle_id)
+    )
     return templates.TemplateResponse(request, "fleet/incident_form.html", context)
 
 
@@ -278,8 +296,12 @@ def incident_detail(
     context = base_context(request, auth, "Incident Details", "fleet", db=db)
     web_service = FleetWebService(db)
     try:
-        context.update(web_service.incident_detail_context(auth.organization_id, incident_id))
-        return templates.TemplateResponse(request, "fleet/incident_detail.html", context)
+        context.update(
+            web_service.incident_detail_context(auth.organization_id, incident_id)
+        )
+        return templates.TemplateResponse(
+            request, "fleet/incident_detail.html", context
+        )
     except NotFoundError:
         return RedirectResponse(url="/fleet/incidents?error=not_found", status_code=303)
 
@@ -338,10 +360,16 @@ def reservation_detail(
     context = base_context(request, auth, "Reservation Details", "fleet", db=db)
     web_service = FleetWebService(db)
     try:
-        context.update(web_service.reservation_detail_context(auth.organization_id, reservation_id))
-        return templates.TemplateResponse(request, "fleet/reservation_detail.html", context)
+        context.update(
+            web_service.reservation_detail_context(auth.organization_id, reservation_id)
+        )
+        return templates.TemplateResponse(
+            request, "fleet/reservation_detail.html", context
+        )
     except NotFoundError:
-        return RedirectResponse(url="/fleet/reservations?error=not_found", status_code=303)
+        return RedirectResponse(
+            url="/fleet/reservations?error=not_found", status_code=303
+        )
 
 
 # =============================================================================
@@ -388,7 +416,9 @@ def document_new(
     """New document form."""
     context = base_context(request, auth, "Add Document", "fleet", db=db)
     web_service = FleetWebService(db)
-    context.update(web_service.document_form_context(auth.organization_id, vehicle_id=vehicle_id))
+    context.update(
+        web_service.document_form_context(auth.organization_id, vehicle_id=vehicle_id)
+    )
     return templates.TemplateResponse(request, "fleet/document_form.html", context)
 
 
@@ -403,7 +433,11 @@ def document_detail(
     context = base_context(request, auth, "Document Details", "fleet", db=db)
     web_service = FleetWebService(db)
     try:
-        context.update(web_service.document_detail_context(auth.organization_id, document_id))
-        return templates.TemplateResponse(request, "fleet/document_detail.html", context)
+        context.update(
+            web_service.document_detail_context(auth.organization_id, document_id)
+        )
+        return templates.TemplateResponse(
+            request, "fleet/document_detail.html", context
+        )
     except NotFoundError:
         return RedirectResponse(url="/fleet/documents?error=not_found", status_code=303)

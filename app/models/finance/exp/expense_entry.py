@@ -3,13 +3,26 @@ Expense Entry Model.
 
 Quick expense entry for direct expense recording (petty cash, reimbursements, etc.).
 """
+
 import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Index, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -19,6 +32,7 @@ from app.db import Base
 
 class ExpenseStatus(str, enum.Enum):
     """Expense entry status."""
+
     DRAFT = "DRAFT"
     SUBMITTED = "SUBMITTED"
     APPROVED = "APPROVED"
@@ -29,6 +43,7 @@ class ExpenseStatus(str, enum.Enum):
 
 class PaymentMethod(str, enum.Enum):
     """Payment method for expense."""
+
     CASH = "CASH"
     PETTY_CASH = "PETTY_CASH"
     CORPORATE_CARD = "CORPORATE_CARD"
@@ -51,7 +66,9 @@ class ExpenseEntry(Base):
 
     __tablename__ = "expense_entry"
     __table_args__ = (
-        UniqueConstraint("organization_id", "expense_number", name="uq_expense_entry_number"),
+        UniqueConstraint(
+            "organization_id", "expense_number", name="uq_expense_entry_number"
+        ),
         Index("idx_expense_entry_org_date", "organization_id", "expense_date"),
         Index("idx_expense_entry_status", "organization_id", "status"),
         Index("idx_expense_entry_account", "expense_account_id"),
@@ -160,12 +177,24 @@ class ExpenseEntry(Base):
     )
 
     # Approval
-    submitted_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
-    submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    approved_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
-    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    posted_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
-    posted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    submitted_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    approved_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    approved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    posted_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    posted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Audit
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -174,7 +203,9 @@ class ExpenseEntry(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
     updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
         nullable=True,

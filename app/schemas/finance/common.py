@@ -4,7 +4,7 @@ Common IFRS Schemas.
 Shared Pydantic schemas for IFRS APIs.
 """
 
-from datetime import date, datetime
+from datetime import datetime
 from decimal import Decimal
 from typing import Generic, Optional, TypeVar
 from uuid import UUID

@@ -341,6 +341,7 @@ class OperationsInventoryWebService:
         request_id: str,
         auth: WebAuthContext,
         db: Session,
+        cancel_reason: str,
     ) -> RedirectResponse:
         """Cancel material request."""
         org_id = auth.organization_id
@@ -353,6 +354,7 @@ class OperationsInventoryWebService:
                 org_id,
                 user_id=user_id,
                 request_id=request_id,
+                cancel_reason=cancel_reason,
             )
             db.commit()
         except Exception as e:

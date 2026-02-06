@@ -3,6 +3,7 @@ Employee Model - HR Schema.
 
 The central entity linking Person to HR functionality.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -10,7 +11,6 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
-    Boolean,
     Date,
     Enum,
     ForeignKey,

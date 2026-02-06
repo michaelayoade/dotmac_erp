@@ -48,6 +48,10 @@ from app.tasks.payroll import (
     process_payroll_entry_notifications,
 )
 from app.tasks.email import send_email_async
+from app.tasks.automation import (
+    execute_workflow_action,
+    process_scheduled_workflow_rules,
+)
 
 __all__ = [
     # ERPNext sync tasks
@@ -88,6 +92,9 @@ __all__ = [
     "process_payroll_entry_notifications",
     # Email tasks
     "send_email_async",
+    # Automation tasks
+    "execute_workflow_action",
+    "process_scheduled_workflow_rules",
     # Finance tasks
     "sync_paystack_transactions",
 ]

@@ -84,7 +84,11 @@ def test_create_slip_journal_includes_employer_pension_expense():
         cost_center_id=None,
         journal_entry_id=None,
         earnings=[_make_earning("BASIC", "1000", exp_salary)],
-        deductions=[_make_deduction("PENSION_EMPLOYER", "100", liab_pension, exp_employer_pension)],
+        deductions=[
+            _make_deduction(
+                "PENSION_EMPLOYER", "100", liab_pension, exp_employer_pension
+            )
+        ],
     )
 
     def _get(model, obj_id):
@@ -96,12 +100,23 @@ def test_create_slip_journal_includes_employer_pension_expense():
 
     db.get.side_effect = _get
 
-    with patch("app.services.people.payroll.payroll_gl_adapter.JournalService.create_journal") as create_journal, \
-         patch("app.services.people.payroll.payroll_gl_adapter.JournalService.submit_journal"), \
-         patch("app.services.people.payroll.payroll_gl_adapter.JournalService.approve_journal"), \
-         patch("app.services.people.payroll.payroll_gl_adapter.LedgerPostingService.post_journal_entry") as post_entry:
-
-        post_entry.return_value = SimpleNamespace(success=True, posting_batch_id="batch")
+    with (
+        patch(
+            "app.services.people.payroll.payroll_gl_adapter.JournalService.create_journal"
+        ) as create_journal,
+        patch(
+            "app.services.people.payroll.payroll_gl_adapter.JournalService.submit_journal"
+        ),
+        patch(
+            "app.services.people.payroll.payroll_gl_adapter.JournalService.approve_journal"
+        ),
+        patch(
+            "app.services.people.payroll.payroll_gl_adapter.LedgerPostingService.post_journal_entry"
+        ) as post_entry,
+    ):
+        post_entry.return_value = SimpleNamespace(
+            success=True, posting_batch_id="batch"
+        )
         create_journal.return_value = SimpleNamespace(journal_entry_id="journal")
 
         result = PayrollGLAdapter.create_slip_journal(
@@ -116,8 +131,7 @@ def test_create_slip_journal_includes_employer_pension_expense():
     journal_input = create_journal.call_args[0][2]
     lines = journal_input.lines
     assert any(
-        line.account_id == exp_employer_pension
-        and line.debit_amount == Decimal("100")
+        line.account_id == exp_employer_pension and line.debit_amount == Decimal("100")
         for line in lines
     )
 
@@ -150,7 +164,9 @@ def test_create_run_journal_includes_employer_pension_expense():
             currency_code="NGN",
             exchange_rate=Decimal("1.0"),
             deductions=[
-                _make_deduction("PENSION_EMPLOYER", "100", liab_pension, exp_employer_pension),
+                _make_deduction(
+                    "PENSION_EMPLOYER", "100", liab_pension, exp_employer_pension
+                ),
             ],
         )
     ]
@@ -162,12 +178,23 @@ def test_create_run_journal_includes_employer_pension_expense():
 
     db.get.side_effect = _get
 
-    with patch("app.services.people.payroll.payroll_gl_adapter.JournalService.create_journal") as create_journal, \
-         patch("app.services.people.payroll.payroll_gl_adapter.JournalService.submit_journal"), \
-         patch("app.services.people.payroll.payroll_gl_adapter.JournalService.approve_journal"), \
-         patch("app.services.people.payroll.payroll_gl_adapter.LedgerPostingService.post_journal_entry") as post_entry:
-
-        post_entry.return_value = SimpleNamespace(success=True, posting_batch_id="batch")
+    with (
+        patch(
+            "app.services.people.payroll.payroll_gl_adapter.JournalService.create_journal"
+        ) as create_journal,
+        patch(
+            "app.services.people.payroll.payroll_gl_adapter.JournalService.submit_journal"
+        ),
+        patch(
+            "app.services.people.payroll.payroll_gl_adapter.JournalService.approve_journal"
+        ),
+        patch(
+            "app.services.people.payroll.payroll_gl_adapter.LedgerPostingService.post_journal_entry"
+        ) as post_entry,
+    ):
+        post_entry.return_value = SimpleNamespace(
+            success=True, posting_batch_id="batch"
+        )
         create_journal.return_value = SimpleNamespace(journal_entry_id="journal")
 
         result = PayrollGLAdapter.create_run_journal(
@@ -183,7 +210,6 @@ def test_create_run_journal_includes_employer_pension_expense():
     journal_input = create_journal.call_args[0][2]
     lines = journal_input.lines
     assert any(
-        line.account_id == exp_employer_pension
-        and line.debit_amount == Decimal("100")
+        line.account_id == exp_employer_pension and line.debit_amount == Decimal("100")
         for line in lines
     )

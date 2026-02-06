@@ -3,6 +3,7 @@ Payroll Models - People Module.
 
 Provides salary components, structures, slips, bulk processing, and NTA 2025 PAYE tax.
 """
+
 from app.models.people.payroll.salary_component import (
     SalaryComponent,
     SalaryComponentType,

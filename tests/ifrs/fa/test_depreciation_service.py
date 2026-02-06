@@ -5,14 +5,10 @@ Tests for DepreciationService.
 import uuid
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from tests.ifrs.fa.conftest import (
-    MockAsset,
-    MockAssetCategory,
-    MockAssetStatus,
     MockDepreciationMethod,
     MockDepreciationRun,
     MockDepreciationSchedule,
@@ -215,7 +211,9 @@ class TestDepreciationRunService:
         ]
         mock_db.query.return_value.filter.return_value.all.return_value = mock_schedules
 
-        result = DepreciationService.get_run_schedules(mock_db, org_id, mock_depreciation_run.run_id)
+        result = DepreciationService.get_run_schedules(
+            mock_db, org_id, mock_depreciation_run.run_id
+        )
 
         assert len(result) == 5
 
@@ -223,7 +221,9 @@ class TestDepreciationRunService:
 class TestAssetDepreciationCalculation:
     """Tests for per-asset depreciation calculation."""
 
-    def test_calculate_asset_depreciation_straight_line(self, mock_db, mock_asset, mock_category):
+    def test_calculate_asset_depreciation_straight_line(
+        self, mock_db, mock_asset, mock_category
+    ):
         """Test calculating depreciation for a single asset."""
         from app.services.fixed_assets.depreciation import DepreciationService
 
@@ -245,7 +245,9 @@ class TestAssetDepreciationCalculation:
         assert result.depreciation_amount == Decimal("200.00")
         assert result.asset_id == mock_asset.asset_id
 
-    def test_calculate_asset_depreciation_fully_depreciated(self, mock_db, mock_asset, mock_category):
+    def test_calculate_asset_depreciation_fully_depreciated(
+        self, mock_db, mock_asset, mock_category
+    ):
         """Test that fully depreciated assets return zero depreciation."""
         from app.services.fixed_assets.depreciation import DepreciationService
 
@@ -264,7 +266,9 @@ class TestAssetDepreciationCalculation:
 
         assert result.depreciation_amount == Decimal("0")
 
-    def test_calculate_asset_depreciation_with_residual(self, mock_db, mock_asset, mock_category):
+    def test_calculate_asset_depreciation_with_residual(
+        self, mock_db, mock_asset, mock_category
+    ):
         """Test depreciation stops at residual value."""
         from app.services.fixed_assets.depreciation import DepreciationService
 
@@ -284,7 +288,9 @@ class TestAssetDepreciationCalculation:
         # Should only depreciate up to residual value (200 remaining)
         assert result.depreciation_amount <= Decimal("200.00")
 
-    def test_calculate_asset_depreciation_declining_balance(self, mock_db, mock_asset, mock_category):
+    def test_calculate_asset_depreciation_declining_balance(
+        self, mock_db, mock_asset, mock_category
+    ):
         """Test declining balance depreciation calculation for asset."""
         from app.services.fixed_assets.depreciation import DepreciationService
 
@@ -304,7 +310,9 @@ class TestAssetDepreciationCalculation:
         # Result depends on declining balance rate
         assert result.depreciation_amount > Decimal("0")
 
-    def test_calculate_asset_depreciation_sum_of_years(self, mock_db, mock_asset, mock_category):
+    def test_calculate_asset_depreciation_sum_of_years(
+        self, mock_db, mock_asset, mock_category
+    ):
         """Test sum of years depreciation calculation for asset."""
         from app.services.fixed_assets.depreciation import DepreciationService
 

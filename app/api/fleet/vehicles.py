@@ -3,7 +3,8 @@ Vehicle API Endpoints.
 
 REST API for vehicle management.
 """
-from typing import List, Optional
+
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -13,7 +14,6 @@ from app.api.deps import require_organization_id
 from app.db import SessionLocal
 from app.models.fleet.enums import (
     AssignmentType,
-    DisposalMethod,
     OwnershipType,
     VehicleStatus,
     VehicleType,
@@ -29,7 +29,12 @@ from app.schemas.fleet.vehicle import (
     VehicleStatusChange,
     VehicleUpdate,
 )
-from app.services.common import ConflictError, NotFoundError, PaginationParams, ValidationError
+from app.services.common import (
+    ConflictError,
+    NotFoundError,
+    PaginationParams,
+    ValidationError,
+)
 from app.services.fleet.vehicle_service import VehicleService
 
 router = APIRouter(prefix="/vehicles", tags=["fleet-vehicles"])

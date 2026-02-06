@@ -27,7 +27,9 @@ def list_customers(
     db: Session = Depends(get_db),
 ):
     """Customers list page."""
-    return ar_web_service.list_customers_response(request, auth, db, search, status, page)
+    return ar_web_service.list_customers_response(
+        request, auth, db, search, status, page
+    )
 
 
 @router.get("/customers/new", response_class=HTMLResponse)
@@ -511,7 +513,9 @@ def edit_credit_note_form(
     db: Session = Depends(get_db),
 ):
     """Edit AR credit note form page."""
-    return ar_web_service.credit_note_edit_form_response(request, auth, db, credit_note_id)
+    return ar_web_service.credit_note_edit_form_response(
+        request, auth, db, credit_note_id
+    )
 
 
 @router.post("/credit-notes/{credit_note_id}/edit")
@@ -522,7 +526,9 @@ async def update_credit_note(
     db: Session = Depends(get_db),
 ):
     """Handle AR credit note update form submission."""
-    return await ar_web_service.update_credit_note_response(request, auth, db, credit_note_id)
+    return await ar_web_service.update_credit_note_response(
+        request, auth, db, credit_note_id
+    )
 
 
 @router.post("/credit-notes/{credit_note_id}/submit")
@@ -544,7 +550,9 @@ def approve_credit_note(
     db: Session = Depends(get_db),
 ):
     """Approve AR credit note."""
-    return ar_web_service.approve_credit_note_response(request, auth, db, credit_note_id)
+    return ar_web_service.approve_credit_note_response(
+        request, auth, db, credit_note_id
+    )
 
 
 @router.post("/credit-notes/{credit_note_id}/post")
@@ -589,7 +597,9 @@ def aging_report(
     db: Session = Depends(get_db),
 ):
     """AR aging report page."""
-    return ar_web_service.aging_report_response(request, auth, db, as_of_date, customer_id)
+    return ar_web_service.aging_report_response(
+        request, auth, db, as_of_date, customer_id
+    )
 
 
 @router.post("/invoices/{invoice_id}/attachments")

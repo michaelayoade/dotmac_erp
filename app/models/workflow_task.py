@@ -1,4 +1,5 @@
 """Unified workflow task model for cross-module task management."""
+
 from __future__ import annotations
 
 import enum
@@ -73,7 +74,9 @@ class WorkflowTask(Base):
         Enum(WorkflowTaskPriority, name="workflow_task_priority"),
         default=WorkflowTaskPriority.MEDIUM,
     )
-    due_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    due_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

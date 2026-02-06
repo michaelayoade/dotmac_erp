@@ -8,7 +8,7 @@ All business logic is delegated to the training_web_service.
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.people.training.web import training_web_service
@@ -68,7 +68,9 @@ def view_program(
     db: Session = Depends(get_db),
 ):
     """View training program detail."""
-    return training_web_service.program_detail_response(request, auth, db, program_id, success)
+    return training_web_service.program_detail_response(
+        request, auth, db, program_id, success
+    )
 
 
 @router.get("/programs/{program_id}/edit", response_class=HTMLResponse)
@@ -79,7 +81,9 @@ def edit_program_form(
     db: Session = Depends(get_db),
 ):
     """Edit training program form."""
-    return training_web_service.program_edit_form_response(request, auth, db, program_id)
+    return training_web_service.program_edit_form_response(
+        request, auth, db, program_id
+    )
 
 
 @router.post("/programs/{program_id}/edit", response_class=HTMLResponse)
@@ -90,7 +94,9 @@ async def update_program(
     db: Session = Depends(get_db),
 ):
     """Update a training program."""
-    return await training_web_service.update_program_response(request, auth, db, program_id)
+    return await training_web_service.update_program_response(
+        request, auth, db, program_id
+    )
 
 
 @router.post("/programs/{program_id}/activate", response_class=HTMLResponse)
@@ -166,7 +172,9 @@ def view_event(
     db: Session = Depends(get_db),
 ):
     """View training event detail."""
-    return training_web_service.event_detail_response(request, auth, db, event_id, success)
+    return training_web_service.event_detail_response(
+        request, auth, db, event_id, success
+    )
 
 
 @router.get("/events/{event_id}/edit", response_class=HTMLResponse)
@@ -245,7 +253,9 @@ def report_completion(
     db: Session = Depends(get_db),
 ):
     """Training completion rates report."""
-    return training_web_service.completion_report_response(request, auth, db, start_date, end_date)
+    return training_web_service.completion_report_response(
+        request, auth, db, start_date, end_date
+    )
 
 
 @router.get("/reports/by-department", response_class=HTMLResponse)
@@ -257,7 +267,9 @@ def report_by_department(
     db: Session = Depends(get_db),
 ):
     """Training participation by department report."""
-    return training_web_service.by_department_report_response(request, auth, db, start_date, end_date)
+    return training_web_service.by_department_report_response(
+        request, auth, db, start_date, end_date
+    )
 
 
 @router.get("/reports/cost-analysis", response_class=HTMLResponse)
@@ -269,7 +281,9 @@ def report_cost_analysis(
     db: Session = Depends(get_db),
 ):
     """Training cost analysis report."""
-    return training_web_service.cost_analysis_report_response(request, auth, db, start_date, end_date)
+    return training_web_service.cost_analysis_report_response(
+        request, auth, db, start_date, end_date
+    )
 
 
 @router.get("/reports/effectiveness", response_class=HTMLResponse)
@@ -281,4 +295,6 @@ def report_effectiveness(
     db: Session = Depends(get_db),
 ):
     """Training effectiveness/feedback report."""
-    return training_web_service.effectiveness_report_response(request, auth, db, start_date, end_date)
+    return training_web_service.effectiveness_report_response(
+        request, auth, db, start_date, end_date
+    )

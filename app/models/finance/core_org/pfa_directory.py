@@ -3,6 +3,7 @@ PFA Directory Model - Core Org.
 
 System-wide directory of Nigerian Pension Fund Administrators (PFAs).
 """
+
 from datetime import datetime
 from typing import Optional
 

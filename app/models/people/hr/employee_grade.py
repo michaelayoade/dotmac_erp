@@ -3,6 +3,7 @@ Employee Grade Model - HR Schema.
 
 Salary grades/bands for compensation management.
 """
+
 import uuid
 from datetime import datetime
 from decimal import Decimal

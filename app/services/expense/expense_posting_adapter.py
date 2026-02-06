@@ -14,7 +14,6 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from fastapi import HTTPException
 from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
@@ -43,22 +42,17 @@ from app.services.common import coerce_uuid
 from app.services.finance.gl.journal import (
     JournalInput,
     JournalLineInput,
-    JournalService,
 )
-from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
+from app.services.finance.posting.base import BasePostingAdapter, PostingResult
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class ExpensePostingResult:
+class ExpensePostingResult(PostingResult):
     """Result of an expense posting operation."""
 
-    success: bool
-    journal_entry_id: Optional[UUID] = None
     supplier_invoice_id: Optional[UUID] = None
-    posting_batch_id: Optional[UUID] = None
-    message: str = ""
 
 
 class ExpensePostingAdapter:
@@ -320,16 +314,14 @@ class ExpensePostingAdapter:
             correlation_id=correlation_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-
-            # Submit and approve automatically for expense posting
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-
-        except HTTPException as e:
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Journal creation failed",
+        )
+        if error:
             ExpensePostingAdapter._set_action_status(
                 db,
                 org_id,
@@ -337,9 +329,7 @@ class ExpensePostingAdapter:
                 ExpenseClaimActionType.POST_GL,
                 ExpenseClaimActionStatus.FAILED,
             )
-            return ExpensePostingResult(
-                success=False, message=f"Journal creation failed: {e.detail}"
-            )
+            return ExpensePostingResult(success=False, message=error.message)
 
         # Update claim with journal reference
         claim.journal_entry_id = journal.journal_entry_id
@@ -352,7 +342,8 @@ class ExpensePostingAdapter:
                     c_id, ExpenseClaimActionType.POST_GL
                 )
 
-            posting_request = PostingRequest(
+            posting_result = BasePostingAdapter.post_to_ledger(
+                db,
                 organization_id=org_id,
                 journal_entry_id=journal.journal_entry_id,
                 posting_date=posting_date,
@@ -360,30 +351,9 @@ class ExpensePostingAdapter:
                 source_module="EXPENSE",
                 correlation_id=correlation_id,
                 posted_by_user_id=user_id,
+                success_message="Expense claim posted successfully",
             )
-
-            try:
-                posting_result = LedgerPostingService.post_journal_entry(
-                    db, posting_request
-                )
-
-                if not posting_result.success:
-                    ExpensePostingAdapter._set_action_status(
-                        db,
-                        org_id,
-                        c_id,
-                        ExpenseClaimActionType.POST_GL,
-                        ExpenseClaimActionStatus.FAILED,
-                    )
-                    return ExpensePostingResult(
-                        success=False,
-                        journal_entry_id=journal.journal_entry_id,
-                        message=f"Ledger posting failed: {posting_result.message}",
-                    )
-
-                posting_batch_id = posting_result.batch_id
-
-            except Exception as e:
+            if not posting_result.success:
                 ExpensePostingAdapter._set_action_status(
                     db,
                     org_id,
@@ -394,8 +364,10 @@ class ExpensePostingAdapter:
                 return ExpensePostingResult(
                     success=False,
                     journal_entry_id=journal.journal_entry_id,
-                    message=f"Posting error: {str(e)}",
+                    message=posting_result.message,
                 )
+
+            posting_batch_id = posting_result.posting_batch_id
 
         db.flush()
 
@@ -700,16 +672,15 @@ class ExpensePostingAdapter:
             correlation_id=correlation_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-        except HTTPException as e:
-            return ExpensePostingResult(
-                success=False, message=f"Journal creation failed: {e.detail}"
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Journal creation failed",
+        )
+        if error:
+            return ExpensePostingResult(success=False, message=error.message)
 
         # Update advance with journal reference
         advance.journal_entry_id = journal.journal_entry_id
@@ -720,7 +691,8 @@ class ExpensePostingAdapter:
             if not idempotency_key:
                 idempotency_key = f"{org_id}:ADVANCE:{adv_id}:post:v1"
 
-            posting_request = PostingRequest(
+            posting_result = BasePostingAdapter.post_to_ledger(
+                db,
                 organization_id=org_id,
                 journal_entry_id=journal.journal_entry_id,
                 posting_date=posting_date,
@@ -728,25 +700,15 @@ class ExpensePostingAdapter:
                 source_module="EXPENSE",
                 correlation_id=correlation_id,
                 posted_by_user_id=user_id,
+                success_message="Cash advance posted successfully",
             )
-
-            try:
-                posting_result = LedgerPostingService.post_journal_entry(
-                    db, posting_request
-                )
-                if not posting_result.success:
-                    return ExpensePostingResult(
-                        success=False,
-                        journal_entry_id=journal.journal_entry_id,
-                        message=f"Ledger posting failed: {posting_result.message}",
-                    )
-                posting_batch_id = posting_result.batch_id
-            except Exception as e:
+            if not posting_result.success:
                 return ExpensePostingResult(
                     success=False,
                     journal_entry_id=journal.journal_entry_id,
-                    message=f"Posting error: {str(e)}",
+                    message=posting_result.message,
                 )
+            posting_batch_id = posting_result.posting_batch_id
 
         db.flush()
 
@@ -912,16 +874,15 @@ class ExpensePostingAdapter:
             correlation_id=correlation_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-        except HTTPException as e:
-            return ExpensePostingResult(
-                success=False, message=f"Journal creation failed: {e.detail}"
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Journal creation failed",
+        )
+        if error:
+            return ExpensePostingResult(success=False, message=error.message)
 
         # Update advance settlement amount
         advance.amount_settled += settle_amount
@@ -942,7 +903,8 @@ class ExpensePostingAdapter:
             if not idempotency_key:
                 idempotency_key = f"{org_id}:SETTLE:{adv_id}:{c_id}:v1"
 
-            posting_request = PostingRequest(
+            posting_result = BasePostingAdapter.post_to_ledger(
+                db,
                 organization_id=org_id,
                 journal_entry_id=journal.journal_entry_id,
                 posting_date=posting_date,
@@ -950,25 +912,15 @@ class ExpensePostingAdapter:
                 source_module="EXPENSE",
                 correlation_id=correlation_id,
                 posted_by_user_id=user_id,
+                success_message=f"Advance settlement posted: {settle_amount}",
             )
-
-            try:
-                posting_result = LedgerPostingService.post_journal_entry(
-                    db, posting_request
-                )
-                if not posting_result.success:
-                    return ExpensePostingResult(
-                        success=False,
-                        journal_entry_id=journal.journal_entry_id,
-                        message=f"Ledger posting failed: {posting_result.message}",
-                    )
-                posting_batch_id = posting_result.batch_id
-            except Exception as e:
+            if not posting_result.success:
                 return ExpensePostingResult(
                     success=False,
                     journal_entry_id=journal.journal_entry_id,
-                    message=f"Posting error: {str(e)}",
+                    message=posting_result.message,
                 )
+            posting_batch_id = posting_result.posting_batch_id
 
         db.flush()
 
@@ -1265,23 +1217,22 @@ class ExpensePostingAdapter:
             correlation_id=correlation_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-
-        except HTTPException as e:
-            return ExpensePostingResult(
-                success=False, message=f"Journal creation failed: {e.detail}"
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Journal creation failed",
+        )
+        if error:
+            return ExpensePostingResult(success=False, message=error.message)
 
         # Post to ledger
         if not idempotency_key:
             idempotency_key = f"{org_id}:EXP:REIMB:{c_id}:post:v1"
 
-        posting_request = PostingRequest(
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db,
             organization_id=org_id,
             journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
@@ -1289,36 +1240,24 @@ class ExpensePostingAdapter:
             source_module="EXPENSE",
             correlation_id=correlation_id,
             posted_by_user_id=user_id,
+            success_message="Expense reimbursement posted successfully",
         )
-
-        try:
-            posting_result = LedgerPostingService.post_journal_entry(
-                db, posting_request
-            )
-
-            if not posting_result.success:
-                return ExpensePostingResult(
-                    success=False,
-                    journal_entry_id=journal.journal_entry_id,
-                    message=f"Ledger posting failed: {posting_result.message}",
-                )
-
-            # Update claim with reimbursement journal reference
-            claim.reimbursement_journal_id = journal.journal_entry_id
-
-            return ExpensePostingResult(
-                success=True,
-                journal_entry_id=journal.journal_entry_id,
-                posting_batch_id=posting_result.batch_id,
-                message="Expense reimbursement posted successfully",
-            )
-
-        except Exception as e:
+        if not posting_result.success:
             return ExpensePostingResult(
                 success=False,
                 journal_entry_id=journal.journal_entry_id,
-                message=f"Posting error: {str(e)}",
+                message=posting_result.message,
             )
+
+        # Update claim with reimbursement journal reference
+        claim.reimbursement_journal_id = journal.journal_entry_id
+
+        return ExpensePostingResult(
+            success=True,
+            journal_entry_id=journal.journal_entry_id,
+            posting_batch_id=posting_result.posting_batch_id,
+            message=posting_result.message,
+        )
 
     @staticmethod
     def post_transfer_fee(
@@ -1416,23 +1355,22 @@ class ExpensePostingAdapter:
             correlation_id=correlation_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-
-        except HTTPException as e:
-            return ExpensePostingResult(
-                success=False, message=f"Fee journal creation failed: {e.detail}"
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Fee journal creation failed",
+        )
+        if error:
+            return ExpensePostingResult(success=False, message=error.message)
 
         # Post to ledger
         if not idempotency_key:
             idempotency_key = f"{org_id}:FEE:{reference}:post:v1"
 
-        posting_request = PostingRequest(
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db,
             organization_id=org_id,
             journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
@@ -1440,33 +1378,21 @@ class ExpensePostingAdapter:
             source_module="PAYMENTS",
             correlation_id=correlation_id,
             posted_by_user_id=user_id,
+            success_message="Transfer fee posted successfully",
         )
-
-        try:
-            posting_result = LedgerPostingService.post_journal_entry(
-                db, posting_request
-            )
-
-            if not posting_result.success:
-                return ExpensePostingResult(
-                    success=False,
-                    journal_entry_id=journal.journal_entry_id,
-                    message=f"Fee ledger posting failed: {posting_result.message}",
-                )
-
-            return ExpensePostingResult(
-                success=True,
-                journal_entry_id=journal.journal_entry_id,
-                posting_batch_id=posting_result.batch_id,
-                message="Transfer fee posted successfully",
-            )
-
-        except Exception as e:
+        if not posting_result.success:
             return ExpensePostingResult(
                 success=False,
                 journal_entry_id=journal.journal_entry_id,
-                message=f"Fee posting error: {str(e)}",
+                message=posting_result.message,
             )
+
+        return ExpensePostingResult(
+            success=True,
+            journal_entry_id=journal.journal_entry_id,
+            posting_batch_id=posting_result.posting_batch_id,
+            message=posting_result.message,
+        )
 
     @staticmethod
     def post_expense_reimbursement_reversal(
@@ -1595,22 +1521,21 @@ class ExpensePostingAdapter:
             correlation_id=correlation_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-
-        except HTTPException as e:
-            return ExpensePostingResult(
-                success=False, message=f"Reversal journal creation failed: {e.detail}"
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Reversal journal creation failed",
+        )
+        if error:
+            return ExpensePostingResult(success=False, message=error.message)
 
         # Post to ledger
         idempotency_key = f"{org_id}:EXP:REIMB:{c_id}:reversal:v1"
 
-        posting_request = PostingRequest(
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db,
             organization_id=org_id,
             journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
@@ -1618,33 +1543,21 @@ class ExpensePostingAdapter:
             source_module="EXPENSE",
             correlation_id=correlation_id,
             posted_by_user_id=user_id,
+            success_message="Reimbursement reversal posted successfully",
         )
-
-        try:
-            posting_result = LedgerPostingService.post_journal_entry(
-                db, posting_request
-            )
-
-            if not posting_result.success:
-                return ExpensePostingResult(
-                    success=False,
-                    journal_entry_id=journal.journal_entry_id,
-                    message=f"Reversal posting failed: {posting_result.message}",
-                )
-
-            return ExpensePostingResult(
-                success=True,
-                journal_entry_id=journal.journal_entry_id,
-                posting_batch_id=posting_result.batch_id,
-                message="Reimbursement reversal posted successfully",
-            )
-
-        except Exception as e:
+        if not posting_result.success:
             return ExpensePostingResult(
                 success=False,
                 journal_entry_id=journal.journal_entry_id,
-                message=f"Reversal posting error: {str(e)}",
+                message=posting_result.message,
             )
+
+        return ExpensePostingResult(
+            success=True,
+            journal_entry_id=journal.journal_entry_id,
+            posting_batch_id=posting_result.posting_batch_id,
+            message=posting_result.message,
+        )
 
     @staticmethod
     def post_transfer_fee_reversal(
@@ -1750,23 +1663,21 @@ class ExpensePostingAdapter:
             correlation_id=correlation_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-
-        except HTTPException as e:
-            return ExpensePostingResult(
-                success=False,
-                message=f"Fee reversal journal creation failed: {e.detail}",
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Fee reversal journal creation failed",
+        )
+        if error:
+            return ExpensePostingResult(success=False, message=error.message)
 
         # Post to ledger
         idempotency_key = f"{org_id}:FEE:{reference}:reversal:v1"
 
-        posting_request = PostingRequest(
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db,
             organization_id=org_id,
             journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
@@ -1774,33 +1685,21 @@ class ExpensePostingAdapter:
             source_module="PAYMENTS",
             correlation_id=correlation_id,
             posted_by_user_id=user_id,
+            success_message="Transfer fee reversal posted successfully",
         )
-
-        try:
-            posting_result = LedgerPostingService.post_journal_entry(
-                db, posting_request
-            )
-
-            if not posting_result.success:
-                return ExpensePostingResult(
-                    success=False,
-                    journal_entry_id=journal.journal_entry_id,
-                    message=f"Fee reversal posting failed: {posting_result.message}",
-                )
-
-            return ExpensePostingResult(
-                success=True,
-                journal_entry_id=journal.journal_entry_id,
-                posting_batch_id=posting_result.batch_id,
-                message="Transfer fee reversal posted successfully",
-            )
-
-        except Exception as e:
+        if not posting_result.success:
             return ExpensePostingResult(
                 success=False,
                 journal_entry_id=journal.journal_entry_id,
-                message=f"Fee reversal posting error: {str(e)}",
+                message=posting_result.message,
             )
+
+        return ExpensePostingResult(
+            success=True,
+            journal_entry_id=journal.journal_entry_id,
+            posting_batch_id=posting_result.posting_batch_id,
+            message=posting_result.message,
+        )
 
 
 # Module-level singleton instance

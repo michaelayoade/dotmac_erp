@@ -11,7 +11,6 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
-    Boolean,
     Date,
     DateTime,
     Enum,
@@ -60,7 +59,8 @@ class EmployeeLoan(Base):
     __tablename__ = "employee_loan"
     __table_args__ = (
         UniqueConstraint(
-            "organization_id", "loan_number",
+            "organization_id",
+            "loan_number",
             name="uq_employee_loan_number",
         ),
         Index("idx_employee_loan_employee", "employee_id"),

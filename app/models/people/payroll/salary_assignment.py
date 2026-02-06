@@ -3,6 +3,7 @@ Salary Structure Assignment Model - Payroll Schema.
 
 Links employees to their salary structures.
 """
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal

@@ -66,7 +66,10 @@ def get_db():
 # Customers
 # =============================================================================
 
-@router.post("/customers", response_model=CustomerRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/customers", response_model=CustomerRead, status_code=status.HTTP_201_CREATED
+)
 def create_customer(
     payload: CustomerCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -150,7 +153,10 @@ def update_customer(
 # AR Invoices
 # =============================================================================
 
-@router.post("/invoices", response_model=ARInvoiceRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/invoices", response_model=ARInvoiceRead, status_code=status.HTTP_201_CREATED
+)
 def create_ar_invoice(
     payload: ARInvoiceCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -267,7 +273,10 @@ def post_ar_invoice(
 # AR Receipts
 # =============================================================================
 
-@router.post("/receipts", response_model=ARReceiptRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/receipts", response_model=ARReceiptRead, status_code=status.HTTP_201_CREATED
+)
 def create_ar_receipt(
     payload: ARReceiptCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -384,6 +393,7 @@ def post_ar_receipt(
 # AR Aging
 # =============================================================================
 
+
 @router.get("/aging", response_model=ARAgingReportRead)
 def get_ar_aging(
     organization_id: UUID = Depends(require_organization_id),
@@ -454,7 +464,10 @@ def get_ar_aging(
 # Credit Memos
 # =============================================================================
 
-@router.post("/credit-notes", response_model=CreditNoteRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/credit-notes", response_model=CreditNoteRead, status_code=status.HTTP_201_CREATED
+)
 def create_credit_note(
     payload: CreditNoteCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -481,7 +494,9 @@ def create_credit_note(
         currency_code=settings.default_functional_currency_code,
         lines=lines,
         notes=payload.reason,
-        correlation_id=str(payload.original_invoice_id) if payload.original_invoice_id else None,
+        correlation_id=str(payload.original_invoice_id)
+        if payload.original_invoice_id
+        else None,
     )
     return ar_invoice_service.create_invoice(
         db=db,
@@ -507,6 +522,7 @@ from app.services.finance.ar import (
 
 class PerformanceObligationCreate(BaseModel):
     """Performance obligation input."""
+
     description: str
     standalone_price: Decimal
     recognition_method: str = "OVER_TIME"  # OVER_TIME or POINT_IN_TIME
@@ -524,6 +540,7 @@ class PerformanceObligationCreate(BaseModel):
 
 class ContractCreate(BaseModel):
     """Create IFRS 15 contract request."""
+
     customer_id: UUID
     contract_number: str = Field(max_length=50)
     contract_date: date
@@ -538,6 +555,7 @@ class ContractCreate(BaseModel):
 
 class ContractRead(BaseModel):
     """IFRS 15 contract response."""
+
     model_config = ConfigDict(from_attributes=True)
     contract_id: UUID
     organization_id: UUID
@@ -552,6 +570,7 @@ class ContractRead(BaseModel):
 
 class ProgressUpdateCreate(BaseModel):
     """Progress update input."""
+
     obligation_id: UUID
     update_date: date
     fiscal_period_id: UUID
@@ -562,6 +581,7 @@ class ProgressUpdateCreate(BaseModel):
 
 class RevenueEventRead(BaseModel):
     """Revenue recognition event response."""
+
     model_config = ConfigDict(from_attributes=True)
     event_id: UUID
     obligation_id: UUID
@@ -570,7 +590,9 @@ class RevenueEventRead(BaseModel):
     event_type: str
 
 
-@router.post("/contracts", response_model=ContractRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/contracts", response_model=ContractRead, status_code=status.HTTP_201_CREATED
+)
 def create_contract(
     payload: ContractCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -610,11 +632,17 @@ def create_contract(
         total_contract_value=payload.total_transaction_price,
         obligations=obligations,
     )
-    return contract_service.create_contract(db, organization_id, input_data, created_by_user_id)
+    return contract_service.create_contract(
+        db, organization_id, input_data, created_by_user_id
+    )
 
 
 @router.get("/contracts/{contract_id}", response_model=ContractRead)
-def get_contract(contract_id: UUID, auth: dict = Depends(require_tenant_permission("ar:contracts:read")), db: Session = Depends(get_db)):
+def get_contract(
+    contract_id: UUID,
+    auth: dict = Depends(require_tenant_permission("ar:contracts:read")),
+    db: Session = Depends(get_db),
+):
     """Get a contract by ID."""
     return contract_service.get(db, str(contract_id))
 
@@ -644,7 +672,9 @@ def list_contracts(
         limit=limit,
         offset=offset,
     )
-    return ListResponse(items=contracts, count=len(contracts), limit=limit, offset=offset)
+    return ListResponse(
+        items=contracts, count=len(contracts), limit=limit, offset=offset
+    )
 
 
 @router.post("/contracts/{contract_id}/activate", response_model=ContractRead)
@@ -656,7 +686,9 @@ def activate_contract(
     db: Session = Depends(get_db),
 ):
     """Activate an IFRS 15 contract."""
-    return contract_service.activate_contract(db, organization_id, contract_id, approved_by_user_id)
+    return contract_service.activate_contract(
+        db, organization_id, contract_id, approved_by_user_id
+    )
 
 
 @router.post("/contracts/{contract_id}/obligations", response_model=ContractRead)
@@ -685,7 +717,9 @@ def add_performance_obligation(
         contract_asset_account_id=payload.contract_asset_account_id,
         contract_liability_account_id=payload.contract_liability_account_id,
     )
-    contract_service.add_performance_obligation(db, organization_id, contract_id, input_data)
+    contract_service.add_performance_obligation(
+        db, organization_id, contract_id, input_data
+    )
     return contract_service.get(db, str(contract_id))
 
 
@@ -704,8 +738,12 @@ def update_contract_progress(
         progress_percentage=payload.percentage_complete or Decimal("0"),
         measurement_details={
             "measure_type": payload.measure_type,
-            "units_delivered": str(payload.units_delivered) if payload.units_delivered else None,
+            "units_delivered": str(payload.units_delivered)
+            if payload.units_delivered
+            else None,
             "fiscal_period_id": str(payload.fiscal_period_id),
         },
     )
-    return contract_service.update_progress(db, organization_id, input_data, posted_by_user_id)
+    return contract_service.update_progress(
+        db, organization_id, input_data, posted_by_user_id
+    )

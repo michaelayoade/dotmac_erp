@@ -38,7 +38,9 @@ def test_settings_api_auth_upsert_and_validation(db_session):
     )
     assert updated.value_type == SettingValueType.integer
     assert updated.value_text == "30"
-    fetched = settings_api_service.get_auth_setting(db_session, "jwt_access_ttl_minutes")
+    fetched = settings_api_service.get_auth_setting(
+        db_session, "jwt_access_ttl_minutes"
+    )
     assert fetched.id == updated.id
 
 

@@ -3,6 +3,7 @@ Project API Extensions for PM Module.
 
 Additional endpoints for project management features.
 """
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -95,7 +96,11 @@ def get_project_team(
 
     for alloc in allocations:
         emp = alloc.employee
-        emp_name = getattr(emp, "full_name", str(alloc.employee_id)[:8]) if emp else str(alloc.employee_id)[:8]
+        emp_name = (
+            getattr(emp, "full_name", str(alloc.employee_id)[:8])
+            if emp
+            else str(alloc.employee_id)[:8]
+        )
 
         team_members.append(
             TeamMemberSummary(

@@ -3,6 +3,7 @@ PM Comment Model.
 
 Represents comments and activity entries on projects and tasks.
 """
+
 import enum
 import uuid
 from datetime import datetime

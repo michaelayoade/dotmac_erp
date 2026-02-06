@@ -15,8 +15,6 @@ from tests.ifrs.ar.conftest import (
     MockCustomerPayment,
     MockPaymentAllocation,
     MockInvoiceStatus,
-    MockPaymentStatus,
-    MockPaymentMethod,
 )
 
 
@@ -90,16 +88,23 @@ class TestCreateCustomerPayment:
         )
 
         with patch("app.services.finance.ar.customer_payment.Customer"):
-            with patch("app.services.finance.ar.customer_payment.CustomerPayment") as MockPay:
+            with patch(
+                "app.services.finance.ar.customer_payment.CustomerPayment"
+            ) as MockPay:
                 mock_payment = MockCustomerPayment(
                     organization_id=org_id,
                     customer_id=customer.customer_id,
                 )
                 MockPay.return_value = mock_payment
 
-                with patch("app.services.finance.ar.customer_payment.PaymentAllocation"):
+                with patch(
+                    "app.services.finance.ar.customer_payment.PaymentAllocation"
+                ):
                     with patch("app.services.finance.ar.customer_payment.Invoice"):
-                        with patch("app.services.finance.ar.customer_payment.SequenceService.get_next_number", return_value="RCP-0001"):
+                        with patch(
+                            "app.services.finance.ar.customer_payment.SequenceService.get_next_number",
+                            return_value="RCP-0001",
+                        ):
                             result = CustomerPaymentService.create_payment(
                                 mock_db, org_id, payment_input, user_id
                             )
@@ -170,16 +175,28 @@ class TestPostPayment:
 
         mock_db.get.side_effect = mock_get
         # Mock query for allocations
-        mock_db.query.return_value.filter.return_value.all.return_value = payment.allocations
+        mock_db.query.return_value.filter.return_value.all.return_value = (
+            payment.allocations
+        )
 
         with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
             with patch("app.services.finance.ar.customer_payment.Customer"):
-                with patch("app.services.finance.ar.customer_payment.PaymentAllocation"):
+                with patch(
+                    "app.services.finance.ar.customer_payment.PaymentAllocation"
+                ):
                     # Patch at source modules since imports are local
-                    with patch("app.services.finance.gl.journal.JournalService") as mock_journal:
-                        with patch("app.services.finance.gl.ledger_posting.LedgerPostingService") as mock_posting:
-                            mock_journal.create_journal.return_value = MagicMock(journal_entry_id=uuid4())
-                            mock_posting.post_journal_entry.return_value = MagicMock(success=True)
+                    with patch(
+                        "app.services.finance.gl.journal.JournalService"
+                    ) as mock_journal:
+                        with patch(
+                            "app.services.finance.gl.ledger_posting.LedgerPostingService"
+                        ) as mock_posting:
+                            mock_journal.create_journal.return_value = MagicMock(
+                                journal_entry_id=uuid4()
+                            )
+                            mock_posting.post_journal_entry.return_value = MagicMock(
+                                success=True
+                            )
                             result = CustomerPaymentService.post_payment(
                                 mock_db, org_id, payment.payment_id, user_id
                             )
@@ -245,11 +262,15 @@ class TestMarkBouncedPayment:
             return None
 
         mock_db.get.side_effect = mock_get
-        mock_db.query.return_value.filter.return_value.all.return_value = payment.allocations
+        mock_db.query.return_value.filter.return_value.all.return_value = (
+            payment.allocations
+        )
 
         with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
             with patch("app.services.finance.ar.customer_payment.Invoice"):
-                with patch("app.services.finance.ar.customer_payment.PaymentAllocation"):
+                with patch(
+                    "app.services.finance.ar.customer_payment.PaymentAllocation"
+                ):
                     result = CustomerPaymentService.mark_bounced(
                         mock_db, org_id, payment.payment_id, "NSF"
                     )

@@ -20,16 +20,18 @@ from app.db import Base
 
 class BatchOperationType(str, enum.Enum):
     """Type of batch operation."""
-    SCRIPT = "script"           # Manual script run (e.g., seed_payroll_from_excel.py)
-    IMPORT = "import"           # Data import (CSV, Excel)
-    SYNC = "sync"               # External system sync (ERPNext)
-    MIGRATION = "migration"     # Data migration
-    BULK_UPDATE = "bulk_update" # Bulk update operation
-    CLEANUP = "cleanup"         # Data cleanup/deletion
+
+    SCRIPT = "script"  # Manual script run (e.g., seed_payroll_from_excel.py)
+    IMPORT = "import"  # Data import (CSV, Excel)
+    SYNC = "sync"  # External system sync (ERPNext)
+    MIGRATION = "migration"  # Data migration
+    BULK_UPDATE = "bulk_update"  # Bulk update operation
+    CLEANUP = "cleanup"  # Data cleanup/deletion
 
 
 class BatchOperationStatus(str, enum.Enum):
     """Status of batch operation."""
+
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -56,6 +58,7 @@ class BatchOperation(Base):
         # At end:
         batch.mark_completed(created=50, updated=10, skipped=5)
     """
+
     __tablename__ = "batch_operations"
 
     id: Mapped[uuid.UUID] = mapped_column(

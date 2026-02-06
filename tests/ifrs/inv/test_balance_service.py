@@ -5,14 +5,11 @@ Tests the single source of truth for inventory stock levels.
 """
 
 import uuid
-from datetime import date, datetime, timezone
 from decimal import Decimal
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.models.inventory.item import CostingMethod, ItemType
-from app.models.inventory.inventory_transaction import TransactionType
 from app.services.inventory.balance import (
     InventoryBalanceService,
     InventoryBalance,
@@ -23,7 +20,6 @@ from tests.ifrs.inv.conftest import (
     MockItem,
     MockWarehouse,
     MockInventoryLot,
-    MockInventoryTransaction,
 )
 
 
@@ -95,36 +91,52 @@ class TestGetOnHand:
         mock_scalar = MagicMock(return_value=None)
         mock_db.query.return_value.filter.return_value.scalar = mock_scalar
 
-        with patch.object(InventoryBalanceService, 'get_on_hand', return_value=Decimal("0")):
+        with patch.object(
+            InventoryBalanceService, "get_on_hand", return_value=Decimal("0")
+        ):
             result = InventoryBalanceService.get_on_hand(mock_db, org_id, item_id)
 
         assert result == Decimal("0")
 
     def test_returns_positive_for_receipts(self, mock_db, org_id, item_id):
         """Should return positive quantity from receipts."""
-        with patch.object(InventoryBalanceService, 'get_on_hand', return_value=Decimal("100")):
+        with patch.object(
+            InventoryBalanceService, "get_on_hand", return_value=Decimal("100")
+        ):
             result = InventoryBalanceService.get_on_hand(mock_db, org_id, item_id)
 
         assert result == Decimal("100")
 
-    def test_filters_by_warehouse_when_provided(self, mock_db, org_id, item_id, warehouse_id):
+    def test_filters_by_warehouse_when_provided(
+        self, mock_db, org_id, item_id, warehouse_id
+    ):
         """Should filter by warehouse when warehouse_id is provided."""
-        with patch.object(InventoryBalanceService, 'get_on_hand', return_value=Decimal("50")):
-            result = InventoryBalanceService.get_on_hand(mock_db, org_id, item_id, warehouse_id)
+        with patch.object(
+            InventoryBalanceService, "get_on_hand", return_value=Decimal("50")
+        ):
+            result = InventoryBalanceService.get_on_hand(
+                mock_db, org_id, item_id, warehouse_id
+            )
 
         assert result == Decimal("50")
 
     def test_handles_decimal_quantities(self, mock_db, org_id, item_id):
         """Should handle decimal quantities correctly."""
-        with patch.object(InventoryBalanceService, 'get_on_hand', return_value=Decimal("123.456789")):
+        with patch.object(
+            InventoryBalanceService, "get_on_hand", return_value=Decimal("123.456789")
+        ):
             result = InventoryBalanceService.get_on_hand(mock_db, org_id, item_id)
 
         assert result == Decimal("123.456789")
 
     def test_handles_string_uuid(self, mock_db, org_id, item_id):
         """Should handle string UUIDs via coerce_uuid."""
-        with patch.object(InventoryBalanceService, 'get_on_hand', return_value=Decimal("100")):
-            result = InventoryBalanceService.get_on_hand(mock_db, str(org_id), str(item_id))
+        with patch.object(
+            InventoryBalanceService, "get_on_hand", return_value=Decimal("100")
+        ):
+            result = InventoryBalanceService.get_on_hand(
+                mock_db, str(org_id), str(item_id)
+            )
 
         assert result == Decimal("100")
 
@@ -137,22 +149,30 @@ class TestGetReserved:
 
     def test_returns_zero_when_no_allocations(self, mock_db, org_id, item_id):
         """Should return 0 when no allocations exist."""
-        with patch.object(InventoryBalanceService, 'get_reserved', return_value=Decimal("0")):
+        with patch.object(
+            InventoryBalanceService, "get_reserved", return_value=Decimal("0")
+        ):
             result = InventoryBalanceService.get_reserved(mock_db, org_id, item_id)
 
         assert result == Decimal("0")
 
     def test_returns_sum_of_allocated_quantities(self, mock_db, org_id, item_id):
         """Should return sum of allocated quantities from lots."""
-        with patch.object(InventoryBalanceService, 'get_reserved', return_value=Decimal("30")):
+        with patch.object(
+            InventoryBalanceService, "get_reserved", return_value=Decimal("30")
+        ):
             result = InventoryBalanceService.get_reserved(mock_db, org_id, item_id)
 
         assert result == Decimal("30")
 
     def test_accepts_warehouse_filter(self, mock_db, org_id, item_id, warehouse_id):
         """Should accept warehouse_id parameter for reserved lookup."""
-        with patch.object(InventoryBalanceService, 'get_reserved', return_value=Decimal("20")):
-            result = InventoryBalanceService.get_reserved(mock_db, org_id, item_id, warehouse_id)
+        with patch.object(
+            InventoryBalanceService, "get_reserved", return_value=Decimal("20")
+        ):
+            result = InventoryBalanceService.get_reserved(
+                mock_db, org_id, item_id, warehouse_id
+            )
 
         assert result == Decimal("20")
 
@@ -165,25 +185,41 @@ class TestGetAvailable:
 
     def test_calculates_available_correctly(self, mock_db, org_id, item_id):
         """Should calculate on_hand - reserved."""
-        with patch.object(InventoryBalanceService, 'get_on_hand', return_value=Decimal("100")):
-            with patch.object(InventoryBalanceService, 'get_reserved', return_value=Decimal("30")):
+        with patch.object(
+            InventoryBalanceService, "get_on_hand", return_value=Decimal("100")
+        ):
+            with patch.object(
+                InventoryBalanceService, "get_reserved", return_value=Decimal("30")
+            ):
                 result = InventoryBalanceService.get_available(mock_db, org_id, item_id)
 
         assert result == Decimal("70")
 
     def test_returns_negative_if_over_allocated(self, mock_db, org_id, item_id):
         """Should return negative if reserved exceeds on-hand."""
-        with patch.object(InventoryBalanceService, 'get_on_hand', return_value=Decimal("50")):
-            with patch.object(InventoryBalanceService, 'get_reserved', return_value=Decimal("70")):
+        with patch.object(
+            InventoryBalanceService, "get_on_hand", return_value=Decimal("50")
+        ):
+            with patch.object(
+                InventoryBalanceService, "get_reserved", return_value=Decimal("70")
+            ):
                 result = InventoryBalanceService.get_available(mock_db, org_id, item_id)
 
         assert result == Decimal("-20")
 
-    def test_passes_warehouse_to_sub_methods(self, mock_db, org_id, item_id, warehouse_id):
+    def test_passes_warehouse_to_sub_methods(
+        self, mock_db, org_id, item_id, warehouse_id
+    ):
         """Should pass warehouse_id to get_on_hand and get_reserved."""
-        with patch.object(InventoryBalanceService, 'get_on_hand', return_value=Decimal("100")) as mock_on_hand:
-            with patch.object(InventoryBalanceService, 'get_reserved', return_value=Decimal("0")) as mock_reserved:
-                InventoryBalanceService.get_available(mock_db, org_id, item_id, warehouse_id)
+        with patch.object(
+            InventoryBalanceService, "get_on_hand", return_value=Decimal("100")
+        ) as mock_on_hand:
+            with patch.object(
+                InventoryBalanceService, "get_reserved", return_value=Decimal("0")
+            ) as mock_reserved:
+                InventoryBalanceService.get_available(
+                    mock_db, org_id, item_id, warehouse_id
+                )
 
         mock_on_hand.assert_called_once_with(mock_db, org_id, item_id, warehouse_id)
         mock_reserved.assert_called_once_with(mock_db, org_id, item_id, warehouse_id)
@@ -203,7 +239,9 @@ class TestGetItemBalance:
 
         assert result is None
 
-    def test_returns_none_if_item_different_org(self, mock_db, org_id, item_id, mock_item):
+    def test_returns_none_if_item_different_org(
+        self, mock_db, org_id, item_id, mock_item
+    ):
         """Should return None if item belongs to different org."""
         mock_item.organization_id = uuid.uuid4()  # Different org
         mock_db.get.return_value = mock_item
@@ -212,12 +250,20 @@ class TestGetItemBalance:
 
         assert result is None
 
-    def test_returns_balance_with_warehouse(self, mock_db, org_id, item_id, warehouse_id, mock_item, mock_warehouse):
+    def test_returns_balance_with_warehouse(
+        self, mock_db, org_id, item_id, warehouse_id, mock_item, mock_warehouse
+    ):
         """Should return balance with warehouse info when warehouse provided."""
-        mock_db.get.side_effect = lambda model, id: mock_item if id == item_id else mock_warehouse
+        mock_db.get.side_effect = (
+            lambda model, id: mock_item if id == item_id else mock_warehouse
+        )
 
-        with patch.object(InventoryBalanceService, 'get_on_hand', return_value=Decimal("100")):
-            with patch.object(InventoryBalanceService, 'get_reserved', return_value=Decimal("20")):
+        with patch.object(
+            InventoryBalanceService, "get_on_hand", return_value=Decimal("100")
+        ):
+            with patch.object(
+                InventoryBalanceService, "get_reserved", return_value=Decimal("20")
+            ):
                 result = InventoryBalanceService.get_item_balance(
                     mock_db, org_id, item_id, warehouse_id
                 )
@@ -232,13 +278,21 @@ class TestGetItemBalance:
         assert result.warehouse_id == mock_warehouse.warehouse_id
         assert result.warehouse_code == "WH-001"
 
-    def test_returns_balance_without_warehouse(self, mock_db, org_id, item_id, mock_item):
+    def test_returns_balance_without_warehouse(
+        self, mock_db, org_id, item_id, mock_item
+    ):
         """Should return balance without warehouse info when not provided."""
         mock_db.get.return_value = mock_item
 
-        with patch.object(InventoryBalanceService, 'get_on_hand', return_value=Decimal("50")):
-            with patch.object(InventoryBalanceService, 'get_reserved', return_value=Decimal("0")):
-                result = InventoryBalanceService.get_item_balance(mock_db, org_id, item_id)
+        with patch.object(
+            InventoryBalanceService, "get_on_hand", return_value=Decimal("50")
+        ):
+            with patch.object(
+                InventoryBalanceService, "get_reserved", return_value=Decimal("0")
+            ):
+                result = InventoryBalanceService.get_item_balance(
+                    mock_db, org_id, item_id
+                )
 
         assert result is not None
         assert result.warehouse_id is None
@@ -250,9 +304,15 @@ class TestGetItemBalance:
         mock_item.average_cost = Decimal("25.00")
         mock_db.get.return_value = mock_item
 
-        with patch.object(InventoryBalanceService, 'get_on_hand', return_value=Decimal("100")):
-            with patch.object(InventoryBalanceService, 'get_reserved', return_value=Decimal("0")):
-                result = InventoryBalanceService.get_item_balance(mock_db, org_id, item_id)
+        with patch.object(
+            InventoryBalanceService, "get_on_hand", return_value=Decimal("100")
+        ):
+            with patch.object(
+                InventoryBalanceService, "get_reserved", return_value=Decimal("0")
+            ):
+                result = InventoryBalanceService.get_item_balance(
+                    mock_db, org_id, item_id
+                )
 
         assert result.total_value == Decimal("2500.00")  # 100 * 25.00
 
@@ -261,9 +321,15 @@ class TestGetItemBalance:
         mock_item.average_cost = None
         mock_db.get.return_value = mock_item
 
-        with patch.object(InventoryBalanceService, 'get_on_hand', return_value=Decimal("100")):
-            with patch.object(InventoryBalanceService, 'get_reserved', return_value=Decimal("0")):
-                result = InventoryBalanceService.get_item_balance(mock_db, org_id, item_id)
+        with patch.object(
+            InventoryBalanceService, "get_on_hand", return_value=Decimal("100")
+        ):
+            with patch.object(
+                InventoryBalanceService, "get_reserved", return_value=Decimal("0")
+            ):
+                result = InventoryBalanceService.get_item_balance(
+                    mock_db, org_id, item_id
+                )
 
         assert result.average_cost == Decimal("0")
         assert result.total_value == Decimal("0")
@@ -279,11 +345,15 @@ class TestGetItemStockSummary:
         """Should return None if item doesn't exist."""
         mock_db.get.return_value = None
 
-        result = InventoryBalanceService.get_item_stock_summary(mock_db, org_id, item_id)
+        result = InventoryBalanceService.get_item_stock_summary(
+            mock_db, org_id, item_id
+        )
 
         assert result is None
 
-    def test_returns_summary_with_multiple_warehouses(self, mock_db, org_id, item_id, mock_item):
+    def test_returns_summary_with_multiple_warehouses(
+        self, mock_db, org_id, item_id, mock_item
+    ):
         """Should aggregate across multiple warehouses."""
         wh1_id = uuid.uuid4()
         wh2_id = uuid.uuid4()
@@ -319,9 +389,11 @@ class TestGetItemStockSummary:
             total_value=Decimal("1250"),
         )
 
-        with patch.object(InventoryBalanceService, 'get_item_balance') as mock_balance:
+        with patch.object(InventoryBalanceService, "get_item_balance") as mock_balance:
             mock_balance.side_effect = [balance1, balance2]
-            result = InventoryBalanceService.get_item_stock_summary(mock_db, org_id, item_id)
+            result = InventoryBalanceService.get_item_stock_summary(
+                mock_db, org_id, item_id
+            )
 
         assert result is not None
         assert isinstance(result, ItemStockSummary)
@@ -336,7 +408,9 @@ class TestGetItemStockSummary:
         mock_db.get.return_value = mock_item
         mock_db.query.return_value.filter.return_value.all.return_value = []
 
-        result = InventoryBalanceService.get_item_stock_summary(mock_db, org_id, item_id)
+        result = InventoryBalanceService.get_item_stock_summary(
+            mock_db, org_id, item_id
+        )
 
         # Total available is 0 (no warehouses), reorder_point is 100
         assert result.below_reorder is True
@@ -347,7 +421,9 @@ class TestGetItemStockSummary:
         mock_db.get.return_value = mock_item
         mock_db.query.return_value.filter.return_value.all.return_value = []
 
-        result = InventoryBalanceService.get_item_stock_summary(mock_db, org_id, item_id)
+        result = InventoryBalanceService.get_item_stock_summary(
+            mock_db, org_id, item_id
+        )
 
         assert result.below_minimum is True
 
@@ -371,8 +447,12 @@ class TestGetItemStockSummary:
             total_value=Decimal("2500"),
         )
 
-        with patch.object(InventoryBalanceService, 'get_item_balance', return_value=balance):
-            result = InventoryBalanceService.get_item_stock_summary(mock_db, org_id, item_id)
+        with patch.object(
+            InventoryBalanceService, "get_item_balance", return_value=balance
+        ):
+            result = InventoryBalanceService.get_item_stock_summary(
+                mock_db, org_id, item_id
+            )
 
         assert result.above_maximum is True
 
@@ -396,8 +476,12 @@ class TestGetLowStockItems:
         mock_item.reorder_point = Decimal("50")
         mock_db.query.return_value.filter.return_value.all.return_value = [mock_item]
 
-        with patch.object(InventoryBalanceService, 'get_on_hand', return_value=Decimal("50")):
-            with patch.object(InventoryBalanceService, 'get_reserved', return_value=Decimal("0")):
+        with patch.object(
+            InventoryBalanceService, "get_on_hand", return_value=Decimal("50")
+        ):
+            with patch.object(
+                InventoryBalanceService, "get_reserved", return_value=Decimal("0")
+            ):
                 result = InventoryBalanceService.get_low_stock_items(mock_db, org_id)
 
         assert len(result) == 1
@@ -408,8 +492,12 @@ class TestGetLowStockItems:
         mock_item.reorder_point = Decimal("50")
         mock_db.query.return_value.filter.return_value.all.return_value = [mock_item]
 
-        with patch.object(InventoryBalanceService, 'get_on_hand', return_value=Decimal("30")):
-            with patch.object(InventoryBalanceService, 'get_reserved', return_value=Decimal("0")):
+        with patch.object(
+            InventoryBalanceService, "get_on_hand", return_value=Decimal("30")
+        ):
+            with patch.object(
+                InventoryBalanceService, "get_reserved", return_value=Decimal("0")
+            ):
                 result = InventoryBalanceService.get_low_stock_items(mock_db, org_id)
 
         assert len(result) == 1
@@ -423,8 +511,12 @@ class TestGetLowStockItems:
         mock_db.query.return_value.filter.return_value.all.return_value = [mock_item]
 
         # Available = 20, which is below minimum (50) but above reorder (10)
-        with patch.object(InventoryBalanceService, 'get_on_hand', return_value=Decimal("20")):
-            with patch.object(InventoryBalanceService, 'get_reserved', return_value=Decimal("0")):
+        with patch.object(
+            InventoryBalanceService, "get_on_hand", return_value=Decimal("20")
+        ):
+            with patch.object(
+                InventoryBalanceService, "get_reserved", return_value=Decimal("0")
+            ):
                 result = InventoryBalanceService.get_low_stock_items(
                     mock_db, org_id, include_below_minimum=True
                 )
@@ -438,8 +530,12 @@ class TestGetLowStockItems:
         mock_item.maximum_stock = Decimal("200")
         mock_db.query.return_value.filter.return_value.all.return_value = [mock_item]
 
-        with patch.object(InventoryBalanceService, 'get_on_hand', return_value=Decimal("30")):
-            with patch.object(InventoryBalanceService, 'get_reserved', return_value=Decimal("0")):
+        with patch.object(
+            InventoryBalanceService, "get_on_hand", return_value=Decimal("30")
+        ):
+            with patch.object(
+                InventoryBalanceService, "get_reserved", return_value=Decimal("0")
+            ):
                 result = InventoryBalanceService.get_low_stock_items(mock_db, org_id)
 
         # max_stock - on_hand = 200 - 30 = 170, but max(reorder_qty=100, 170) = 170
@@ -453,8 +549,12 @@ class TestGetLowStockItems:
         mock_item.lead_time_days = 7
         mock_db.query.return_value.filter.return_value.all.return_value = [mock_item]
 
-        with patch.object(InventoryBalanceService, 'get_on_hand', return_value=Decimal("10")):
-            with patch.object(InventoryBalanceService, 'get_reserved', return_value=Decimal("0")):
+        with patch.object(
+            InventoryBalanceService, "get_on_hand", return_value=Decimal("10")
+        ):
+            with patch.object(
+                InventoryBalanceService, "get_reserved", return_value=Decimal("0")
+            ):
                 result = InventoryBalanceService.get_low_stock_items(mock_db, org_id)
 
         assert result[0].default_supplier_id == supplier_id
@@ -471,11 +571,15 @@ class TestGetWarehouseInventory:
         """Should return empty list when no items in warehouse."""
         mock_db.query.return_value.filter.return_value.all.return_value = []
 
-        result = InventoryBalanceService.get_warehouse_inventory(mock_db, org_id, warehouse_id)
+        result = InventoryBalanceService.get_warehouse_inventory(
+            mock_db, org_id, warehouse_id
+        )
 
         assert result == []
 
-    def test_returns_items_with_non_zero_balance(self, mock_db, org_id, warehouse_id, item_id):
+    def test_returns_items_with_non_zero_balance(
+        self, mock_db, org_id, warehouse_id, item_id
+    ):
         """Should return items with non-zero on_hand quantity."""
         mock_db.query.return_value.filter.return_value.all.return_value = [(item_id,)]
 
@@ -492,7 +596,9 @@ class TestGetWarehouseInventory:
             total_value=Decimal("2500"),
         )
 
-        with patch.object(InventoryBalanceService, 'get_item_balance', return_value=balance):
+        with patch.object(
+            InventoryBalanceService, "get_item_balance", return_value=balance
+        ):
             result = InventoryBalanceService.get_warehouse_inventory(
                 mock_db, org_id, warehouse_id
             )
@@ -500,7 +606,9 @@ class TestGetWarehouseInventory:
         assert len(result) == 1
         assert result[0].item_code == "ITEM-001"
 
-    def test_excludes_items_with_zero_balance(self, mock_db, org_id, warehouse_id, item_id):
+    def test_excludes_items_with_zero_balance(
+        self, mock_db, org_id, warehouse_id, item_id
+    ):
         """Should exclude items with zero on_hand quantity."""
         mock_db.query.return_value.filter.return_value.all.return_value = [(item_id,)]
 
@@ -517,7 +625,9 @@ class TestGetWarehouseInventory:
             total_value=Decimal("0"),
         )
 
-        with patch.object(InventoryBalanceService, 'get_item_balance', return_value=balance):
+        with patch.object(
+            InventoryBalanceService, "get_item_balance", return_value=balance
+        ):
             result = InventoryBalanceService.get_warehouse_inventory(
                 mock_db, org_id, warehouse_id
             )
@@ -531,9 +641,13 @@ class TestGetWarehouseInventory:
 class TestAllocateInventory:
     """Tests for allocate_inventory method."""
 
-    def test_returns_false_when_insufficient_available(self, mock_db, org_id, item_id, warehouse_id):
+    def test_returns_false_when_insufficient_available(
+        self, mock_db, org_id, item_id, warehouse_id
+    ):
         """Should return False when insufficient inventory available."""
-        with patch.object(InventoryBalanceService, 'get_available', return_value=Decimal("10")):
+        with patch.object(
+            InventoryBalanceService, "get_available", return_value=Decimal("10")
+        ):
             result = InventoryBalanceService.allocate_inventory(
                 mock_db,
                 org_id,
@@ -550,7 +664,9 @@ class TestAllocateInventory:
         """Should return False when item doesn't exist."""
         mock_db.get.return_value = None
 
-        with patch.object(InventoryBalanceService, 'get_available', return_value=Decimal("100")):
+        with patch.object(
+            InventoryBalanceService, "get_available", return_value=Decimal("100")
+        ):
             result = InventoryBalanceService.allocate_inventory(
                 mock_db,
                 org_id,
@@ -562,7 +678,9 @@ class TestAllocateInventory:
 
         assert result is False
 
-    def test_allocates_from_lot_when_lot_tracked(self, mock_db, org_id, item_id, mock_item):
+    def test_allocates_from_lot_when_lot_tracked(
+        self, mock_db, org_id, item_id, mock_item
+    ):
         """Should allocate from specific lot for lot-tracked items."""
         mock_item.track_lots = True
         lot_id = uuid.uuid4()
@@ -574,7 +692,9 @@ class TestAllocateInventory:
         )
         mock_db.get.side_effect = lambda model, id: mock_item if id == item_id else lot
 
-        with patch.object(InventoryBalanceService, 'get_available', return_value=Decimal("100")):
+        with patch.object(
+            InventoryBalanceService, "get_available", return_value=Decimal("100")
+        ):
             result = InventoryBalanceService.allocate_inventory(
                 mock_db,
                 org_id,
@@ -588,12 +708,16 @@ class TestAllocateInventory:
         assert result is True
         assert lot.quantity_allocated == Decimal("50")
 
-    def test_returns_false_when_lot_not_found(self, mock_db, org_id, item_id, mock_item):
+    def test_returns_false_when_lot_not_found(
+        self, mock_db, org_id, item_id, mock_item
+    ):
         """Should return False when specified lot doesn't exist."""
         mock_item.track_lots = True
         mock_db.get.side_effect = lambda model, id: mock_item if id == item_id else None
 
-        with patch.object(InventoryBalanceService, 'get_available', return_value=Decimal("100")):
+        with patch.object(
+            InventoryBalanceService, "get_available", return_value=Decimal("100")
+        ):
             result = InventoryBalanceService.allocate_inventory(
                 mock_db,
                 org_id,
@@ -606,7 +730,9 @@ class TestAllocateInventory:
 
         assert result is False
 
-    def test_returns_false_when_lot_insufficient(self, mock_db, org_id, item_id, mock_item):
+    def test_returns_false_when_lot_insufficient(
+        self, mock_db, org_id, item_id, mock_item
+    ):
         """Should return False when lot has insufficient quantity."""
         mock_item.track_lots = True
         lot_id = uuid.uuid4()
@@ -618,7 +744,9 @@ class TestAllocateInventory:
         )
         mock_db.get.side_effect = lambda model, id: mock_item if id == item_id else lot
 
-        with patch.object(InventoryBalanceService, 'get_available', return_value=Decimal("100")):
+        with patch.object(
+            InventoryBalanceService, "get_available", return_value=Decimal("100")
+        ):
             result = InventoryBalanceService.allocate_inventory(
                 mock_db,
                 org_id,
@@ -631,11 +759,15 @@ class TestAllocateInventory:
 
         assert result is False
 
-    def test_creates_general_lot_for_non_lot_tracked(self, mock_db, org_id, item_id, mock_item):
+    def test_creates_general_lot_for_non_lot_tracked(
+        self, mock_db, org_id, item_id, mock_item
+    ):
         """Should create __GENERAL__ lot for non-lot-tracked items."""
         mock_item.track_lots = False
         # Mock the allocate_inventory method to test behavior
-        with patch.object(InventoryBalanceService, 'allocate_inventory', return_value=True) as mock_alloc:
+        with patch.object(
+            InventoryBalanceService, "allocate_inventory", return_value=True
+        ) as mock_alloc:
             result = InventoryBalanceService.allocate_inventory(
                 mock_db,
                 org_id,
@@ -652,7 +784,9 @@ class TestAllocateInventory:
         """Should update existing __GENERAL__ lot allocation."""
         mock_item.track_lots = False
         # Mock to return True for successful allocation
-        with patch.object(InventoryBalanceService, 'allocate_inventory', return_value=True):
+        with patch.object(
+            InventoryBalanceService, "allocate_inventory", return_value=True
+        ):
             result = InventoryBalanceService.allocate_inventory(
                 mock_db,
                 org_id,
@@ -729,7 +863,9 @@ class TestDeallocateInventory:
     def test_deallocates_from_general_lot(self, mock_db, org_id, item_id):
         """Should deallocate from __GENERAL__ lot when no lot_id provided."""
         # Mock the deallocate method
-        with patch.object(InventoryBalanceService, 'deallocate_inventory', return_value=True):
+        with patch.object(
+            InventoryBalanceService, "deallocate_inventory", return_value=True
+        ):
             result = InventoryBalanceService.deallocate_inventory(
                 mock_db,
                 org_id,
@@ -762,7 +898,9 @@ class TestDeallocateInventory:
 
     def test_returns_true_when_no_general_lot(self, mock_db, org_id, item_id):
         """Should return True even when no __GENERAL__ lot exists."""
-        with patch.object(InventoryBalanceService, 'deallocate_inventory', return_value=True):
+        with patch.object(
+            InventoryBalanceService, "deallocate_inventory", return_value=True
+        ):
             result = InventoryBalanceService.deallocate_inventory(
                 mock_db,
                 org_id,

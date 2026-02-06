@@ -3,10 +3,10 @@ Invoice Line Tax Model - AR Schema.
 
 Allows multiple tax codes per invoice line for flexible tax handling.
 """
+
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, func, text
 from sqlalchemy.dialects.postgresql import UUID

@@ -20,7 +20,6 @@ from app.models.finance.automation.generated_document import (
 from app.models.finance.core_org.organization import Organization
 from app.services.automation.document_generator import (
     DocumentGeneratorService,
-    PDFGenerationError,
     TemplateNotFoundError,
 )
 

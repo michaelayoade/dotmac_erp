@@ -2,6 +2,7 @@
 Event Handler Checkpoint - Tracks handler processing for idempotency.
 Document 10: Event-Driven Architecture.
 """
+
 import enum
 import uuid
 from datetime import datetime

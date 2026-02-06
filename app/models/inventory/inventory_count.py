@@ -1,12 +1,25 @@
 """
 Inventory Count Model - Inventory Schema.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -63,7 +76,9 @@ class InventoryCount(Base):
         UUID(as_uuid=True),
         nullable=True,
     )
-    category_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    category_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
     is_full_count: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_cycle_count: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
@@ -119,5 +134,7 @@ class InventoryCount(Base):
 
     # Relationships
     warehouse: Mapped[Optional["Warehouse"]] = relationship(
-        "Warehouse", foreign_keys=[warehouse_id], lazy="noload",
+        "Warehouse",
+        foreign_keys=[warehouse_id],
+        lazy="noload",
     )

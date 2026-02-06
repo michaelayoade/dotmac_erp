@@ -10,12 +10,26 @@ from typing import Optional
 from datetime import date, timedelta
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import DataError, IntegrityError
 
-from app.services.common import coerce_uuid, ConflictError, NotFoundError, ValidationError, PaginationParams
+from app.services.common import (
+    coerce_uuid,
+    NotFoundError,
+    ValidationError,
+    PaginationParams,
+)
 from app.templates import templates
 from app.web.deps import (
     base_context,
@@ -52,7 +66,9 @@ def _format_project_error(exc: Exception) -> str:
         if "uq_project_code" in message:
             return "Project code already exists. Please choose a different code."
         if "foreign key" in message.lower():
-            return "Some selected references are invalid. Please reselect and try again."
+            return (
+                "Some selected references are invalid. Please reselect and try again."
+            )
         return "Project could not be saved due to a data conflict. Please try again."
     if isinstance(exc, DataError):
         return "Some fields have invalid values or are too long. Please review and try again."
@@ -143,9 +159,11 @@ def _get_projects(db: Session, org_id):
     from app.models.finance.core_org.project import Project
     from sqlalchemy import select
 
-    stmt = select(Project).where(
-        Project.organization_id == coerce_uuid(org_id)
-    ).order_by(Project.project_name)
+    stmt = (
+        select(Project)
+        .where(Project.organization_id == coerce_uuid(org_id))
+        .order_by(Project.project_name)
+    )
     return list(db.scalars(stmt).all())
 
 
@@ -154,9 +172,11 @@ def _get_project_templates(db: Session, org_id):
     from app.models.pm.project_template import ProjectTemplate
     from sqlalchemy import select
 
-    stmt = select(ProjectTemplate).where(
-        ProjectTemplate.organization_id == coerce_uuid(org_id)
-    ).order_by(ProjectTemplate.name)
+    stmt = (
+        select(ProjectTemplate)
+        .where(ProjectTemplate.organization_id == coerce_uuid(org_id))
+        .order_by(ProjectTemplate.name)
+    )
     return list(db.scalars(stmt).all())
 
 
@@ -180,14 +200,19 @@ def _resolve_project_template(db: Session, org_id, template_ref: str):
 
 def _template_tasks_payload(db: Session, template_id):
     """Build client-side payload for template task editor."""
-    from app.models.pm.project_template_task import ProjectTemplateTask, ProjectTemplateTaskDependency
+    from app.models.pm.project_template_task import (
+        ProjectTemplateTask,
+        ProjectTemplateTaskDependency,
+    )
     from sqlalchemy import select
 
     tasks = list(
         db.scalars(
             select(ProjectTemplateTask)
             .where(ProjectTemplateTask.template_id == template_id)
-            .order_by(ProjectTemplateTask.order_index, ProjectTemplateTask.template_task_id)
+            .order_by(
+                ProjectTemplateTask.order_index, ProjectTemplateTask.template_task_id
+            )
         ).all()
     )
     if not tasks:
@@ -205,7 +230,9 @@ def _template_tasks_payload(db: Session, template_id):
 
     deps_map = {}
     for dep in deps:
-        deps_map.setdefault(dep.template_task_id, []).append(dep.depends_on_template_task_id)
+        deps_map.setdefault(dep.template_task_id, []).append(
+            dep.depends_on_template_task_id
+        )
 
     payload = []
     for task in tasks:
@@ -214,7 +241,9 @@ def _template_tasks_payload(db: Session, template_id):
                 "client_id": str(task.template_task_id),
                 "task_name": task.task_name,
                 "description": task.description or "",
-                "depends_on": [str(tid) for tid in deps_map.get(task.template_task_id, [])],
+                "depends_on": [
+                    str(tid) for tid in deps_map.get(task.template_task_id, [])
+                ],
             }
         )
     return payload
@@ -238,7 +267,9 @@ def _apply_project_template(db: Session, org_id, project, template_id):
         db.scalars(
             select(ProjectTemplateTask)
             .where(ProjectTemplateTask.template_id == template_id)
-            .order_by(ProjectTemplateTask.order_index, ProjectTemplateTask.template_task_id)
+            .order_by(
+                ProjectTemplateTask.order_index, ProjectTemplateTask.template_task_id
+            )
         ).all()
     )
     if not template_tasks:
@@ -289,10 +320,17 @@ def _get_tickets(db: Session, org_id):
     from app.models.support.ticket import Ticket, TicketStatus
     from sqlalchemy import select
 
-    stmt = select(Ticket).where(
-        Ticket.organization_id == coerce_uuid(org_id),
-        Ticket.status.in_([TicketStatus.OPEN, TicketStatus.REPLIED, TicketStatus.ON_HOLD]),
-    ).order_by(Ticket.created_at.desc()).limit(100)
+    stmt = (
+        select(Ticket)
+        .where(
+            Ticket.organization_id == coerce_uuid(org_id),
+            Ticket.status.in_(
+                [TicketStatus.OPEN, TicketStatus.REPLIED, TicketStatus.ON_HOLD]
+            ),
+        )
+        .order_by(Ticket.created_at.desc())
+        .limit(100)
+    )
     return list(db.scalars(stmt).all())
 
 
@@ -302,12 +340,15 @@ def _get_employees(db: Session, org_id):
     from sqlalchemy.orm import joinedload
     from sqlalchemy import select
 
-    stmt = select(Employee).where(
-        Employee.organization_id == coerce_uuid(org_id)
-    ).options(
-        joinedload(Employee.person),
-        joinedload(Employee.manager).joinedload(Employee.person),
-    ).order_by(Employee.employee_code)
+    stmt = (
+        select(Employee)
+        .where(Employee.organization_id == coerce_uuid(org_id))
+        .options(
+            joinedload(Employee.person),
+            joinedload(Employee.manager).joinedload(Employee.person),
+        )
+        .order_by(Employee.employee_code)
+    )
     return list(db.scalars(stmt).all())
 
 
@@ -412,14 +453,12 @@ def list_projects(
     org_id = coerce_uuid(auth.organization_id)
 
     # Build query
-    stmt = select(Project).where(
-        Project.organization_id == org_id
-    )
+    stmt = select(Project).where(Project.organization_id == org_id)
 
     if search:
         stmt = stmt.where(
-            Project.project_name.ilike(f"%{search}%") |
-            Project.project_code.ilike(f"%{search}%")
+            Project.project_name.ilike(f"%{search}%")
+            | Project.project_code.ilike(f"%{search}%")
         )
     if status:
         try:
@@ -438,9 +477,11 @@ def list_projects(
     projects = list(db.scalars(stmt.offset(offset).limit(per_page)).all())
 
     # Stats counts (unfiltered, for the org)
-    base_stmt = select(Project.status, func.count()).where(
-        Project.organization_id == org_id
-    ).group_by(Project.status)
+    base_stmt = (
+        select(Project.status, func.count())
+        .where(Project.organization_id == org_id)
+        .group_by(Project.status)
+    )
     rows = db.execute(base_stmt).all()
     # Normalize keys: status may come back as enum or string
     status_counts: dict[str, int] = {}
@@ -487,7 +528,11 @@ def new_project_form(
     db: Session = Depends(get_db),
 ):
     """New project form page."""
-    from app.models.finance.core_org.project import ProjectStatus, ProjectType, ProjectPriority
+    from app.models.finance.core_org.project import (
+        ProjectStatus,
+        ProjectType,
+        ProjectPriority,
+    )
     from app.models.finance.ar.customer import Customer
     from sqlalchemy import select
 
@@ -531,7 +576,11 @@ def edit_project_form(
     db: Session = Depends(get_db),
 ):
     """Edit project form page."""
-    from app.models.finance.core_org.project import Project, ProjectStatus, ProjectType, ProjectPriority
+    from app.models.finance.core_org.project import (
+        ProjectStatus,
+        ProjectType,
+        ProjectPriority,
+    )
     from app.models.finance.ar.customer import Customer
     from sqlalchemy import select
 
@@ -641,7 +690,9 @@ async def create_project_template(
         list(form.keys()),
     )
 
-    template_name_value = _safe_form_text(form.get("template_name") or form.get("name")).strip()
+    template_name_value = _safe_form_text(
+        form.get("template_name") or form.get("name")
+    ).strip()
     project_type = _safe_form_text(form.get("project_type") or "INTERNAL").strip()
     tasks_json = _safe_form_text(form.get("tasks_json")) or "[]"
     if not template_name_value:
@@ -661,7 +712,9 @@ async def create_project_template(
     template = ProjectTemplate(
         organization_id=org_id,
         name=template_name_value,
-        project_type=ProjectType(project_type) if project_type else ProjectType.INTERNAL,
+        project_type=ProjectType(project_type)
+        if project_type
+        else ProjectType.INTERNAL,
     )
     db.add(template)
     db.flush()
@@ -707,7 +760,9 @@ async def create_project_template(
             )
 
     db.commit()
-    return RedirectResponse(url=f"/projects/templates/{template.template_id}", status_code=303)
+    return RedirectResponse(
+        url=f"/projects/templates/{template.template_id}", status_code=303
+    )
 
 
 @router.get("/templates/{template_id}", response_class=HTMLResponse)
@@ -735,7 +790,9 @@ def project_template_detail(
         db.scalars(
             select(ProjectTemplateTask)
             .where(ProjectTemplateTask.template_id == template.template_id)
-            .order_by(ProjectTemplateTask.order_index, ProjectTemplateTask.template_task_id)
+            .order_by(
+                ProjectTemplateTask.order_index, ProjectTemplateTask.template_task_id
+            )
         ).all()
     )
     dependencies = list(
@@ -800,7 +857,6 @@ async def update_project_template(
     import json
     from sqlalchemy import delete, select
     from app.models.finance.core_org.project import ProjectType
-    from app.models.pm.project_template import ProjectTemplate
     from app.models.pm.project_template_task import (
         ProjectTemplateTask,
         ProjectTemplateTaskDependency,
@@ -820,7 +876,9 @@ async def update_project_template(
     if form is None:
         form = await request.form()
 
-    template_name_value = _safe_form_text(form.get("template_name") or form.get("name")).strip()
+    template_name_value = _safe_form_text(
+        form.get("template_name") or form.get("name")
+    ).strip()
     project_type = _safe_form_text(form.get("project_type") or "INTERNAL").strip()
     tasks_json = _safe_form_text(form.get("tasks_json")) or "[]"
 
@@ -841,7 +899,9 @@ async def update_project_template(
         )
 
     template.name = template_name_value
-    template.project_type = ProjectType(project_type) if project_type else ProjectType.INTERNAL
+    template.project_type = (
+        ProjectType(project_type) if project_type else ProjectType.INTERNAL
+    )
 
     try:
         task_payload = json.loads(tasks_json or "[]")
@@ -850,8 +910,9 @@ async def update_project_template(
 
     existing_tasks = list(
         db.scalars(
-            select(ProjectTemplateTask)
-            .where(ProjectTemplateTask.template_id == template.template_id)
+            select(ProjectTemplateTask).where(
+                ProjectTemplateTask.template_id == template.template_id
+            )
         ).all()
     )
     if existing_tasks:
@@ -903,7 +964,9 @@ async def update_project_template(
             )
 
     db.commit()
-    return RedirectResponse(url=f"/projects/templates/{template.template_id}", status_code=303)
+    return RedirectResponse(
+        url=f"/projects/templates/{template.template_id}", status_code=303
+    )
 
 
 # ============================================================================
@@ -926,12 +989,16 @@ def global_task_list(
     org_id = coerce_uuid(auth.organization_id)
     services = _get_services(db, org_id)
 
-    tasks = services["task"].list_tasks(
-        project_id=coerce_uuid(project_id) if project_id else None,
-        status=TaskStatus(status) if status else None,
-        priority=TaskPriority(priority) if priority else None,
-        include_subtasks=True,
-    ).items
+    tasks = (
+        services["task"]
+        .list_tasks(
+            project_id=coerce_uuid(project_id) if project_id else None,
+            status=TaskStatus(status) if status else None,
+            priority=TaskPriority(priority) if priority else None,
+            include_subtasks=True,
+        )
+        .items
+    )
 
     context = {
         "request": request,
@@ -1050,6 +1117,7 @@ def create_global_task(
         status_code=303,
     )
 
+
 @router.get("/{project_id}", response_class=HTMLResponse)
 def project_dashboard(
     request: Request,
@@ -1058,8 +1126,6 @@ def project_dashboard(
     db: Session = Depends(get_db),
 ):
     """Project dashboard/detail page."""
-    from app.models.finance.core_org.project import Project
-    from sqlalchemy import select
     from app.services.pm.attachment import project_attachment_service
     from app.services.pm.comment import comment_service
 
@@ -1084,12 +1150,17 @@ def project_dashboard(
     if project.customer:
         contact = project.customer.primary_contact or {}
         customer_info = {
-            "customer_name": project.customer.trading_name or project.customer.legal_name,
+            "customer_name": project.customer.trading_name
+            or project.customer.legal_name,
             "customer_code": project.customer.customer_code,
             "email": contact.get("email"),
             "phone": contact.get("phone"),
-            "billing_address": (project.customer.billing_address or {}).get("address", ""),
-            "shipping_address": (project.customer.shipping_address or {}).get("address", ""),
+            "billing_address": (project.customer.billing_address or {}).get(
+                "address", ""
+            ),
+            "shipping_address": (project.customer.shipping_address or {}).get(
+                "address", ""
+            ),
         }
 
     comments = comment_service.list_comments(
@@ -1109,7 +1180,9 @@ def project_dashboard(
         db, org_id, "PROJECT", project.project_id
     )
     project_attachments = [
-        att for att in all_attachments if att.attachment_id not in comment_attachment_ids
+        att
+        for att in all_attachments
+        if att.attachment_id not in comment_attachment_ids
     ]
 
     context = {
@@ -1175,10 +1248,12 @@ async def add_project_comment(
             if error or not attachment:
                 attachment_errors.append(error or "Upload failed")
                 continue
-            db.add(PMCommentAttachment(
-                comment_id=comment.comment_id,
-                attachment_id=attachment.attachment_id,
-            ))
+            db.add(
+                PMCommentAttachment(
+                    comment_id=comment.comment_id,
+                    attachment_id=attachment.attachment_id,
+                )
+            )
 
         db.commit()
     except Exception:
@@ -1191,7 +1266,9 @@ async def add_project_comment(
     return RedirectResponse(url=base_url + "#comments", status_code=303)
 
 
-@router.post("/{project_id}/comments/{comment_id}/delete", response_class=RedirectResponse)
+@router.post(
+    "/{project_id}/comments/{comment_id}/delete", response_class=RedirectResponse
+)
 def delete_project_comment(
     request: Request,
     project_id: str,
@@ -1214,6 +1291,7 @@ def delete_project_comment(
         db.rollback()
 
     return RedirectResponse(url=_project_url(project) + "#comments", status_code=303)
+
 
 @router.post("", response_class=RedirectResponse)
 @router.post("/", response_class=RedirectResponse)
@@ -1238,7 +1316,12 @@ async def create_project(
 ):
     """Create a new project."""
     import logging
-    from app.models.finance.core_org.project import Project, ProjectStatus, ProjectType, ProjectPriority
+    from app.models.finance.core_org.project import (
+        Project,
+        ProjectStatus,
+        ProjectType,
+        ProjectPriority,
+    )
     from app.models.finance.core_config import SequenceType
     from app.services.finance.common.numbering import SyncNumberingService
     from app.models.finance.ar.customer import Customer
@@ -1256,13 +1339,19 @@ async def create_project(
         description = _safe_form_text(form_data.get("description") or description)
         status = _safe_form_text(form_data.get("status") or status)
         project_type = _safe_form_text(form_data.get("project_type") or project_type)
-        project_priority = _safe_form_text(form_data.get("project_priority") or project_priority)
-        project_template_id = _safe_form_text(form_data.get("project_template_id") or project_template_id)
+        project_priority = _safe_form_text(
+            form_data.get("project_priority") or project_priority
+        )
+        project_template_id = _safe_form_text(
+            form_data.get("project_template_id") or project_template_id
+        )
         customer_id = _safe_form_text(form_data.get("customer_id") or customer_id)
         start_date = _safe_form_text(form_data.get("start_date") or start_date)
         end_date = _safe_form_text(form_data.get("end_date") or end_date)
         budget_amount = _safe_form_text(form_data.get("budget_amount") or budget_amount)
-        percent_complete = _safe_form_text(form_data.get("percent_complete") or percent_complete)
+        percent_complete = _safe_form_text(
+            form_data.get("percent_complete") or percent_complete
+        )
 
     if not project_name or not project_name.strip():
         logging.getLogger(__name__).warning(
@@ -1414,7 +1503,9 @@ async def create_project(
 
     start_date_value = date.today()
     duration_days = _project_type_duration_days(project_type_enum)
-    end_date_value = start_date_value + timedelta(days=duration_days) if duration_days else None
+    end_date_value = (
+        start_date_value + timedelta(days=duration_days) if duration_days else None
+    )
 
     try:
         project = Project(
@@ -1424,8 +1515,12 @@ async def create_project(
             description=description.strip() if description else None,
             status=ProjectStatus(status),
             project_type=project_type_enum,
-            project_priority=ProjectPriority(project_priority) if project_priority else ProjectPriority.MEDIUM,
-            project_template_id=coerce_uuid(project_template_id) if project_template_id else None,
+            project_priority=ProjectPriority(project_priority)
+            if project_priority
+            else ProjectPriority.MEDIUM,
+            project_template_id=coerce_uuid(project_template_id)
+            if project_template_id
+            else None,
             customer_id=coerce_uuid(customer_id) if customer_id else None,
             start_date=start_date_value,
             end_date=end_date_value,
@@ -1523,8 +1618,11 @@ async def update_project(
     db: Session = Depends(get_db),
 ):
     """Update an existing project."""
-    from app.models.finance.core_org.project import Project, ProjectStatus, ProjectType, ProjectPriority
-    from sqlalchemy import select
+    from app.models.finance.core_org.project import (
+        ProjectStatus,
+        ProjectType,
+        ProjectPriority,
+    )
 
     org_id = coerce_uuid(auth.organization_id)
 
@@ -1537,12 +1635,16 @@ async def update_project(
         description = _safe_form_text(form_data.get("description") or description)
         status = _safe_form_text(form_data.get("status") or status)
         project_type = _safe_form_text(form_data.get("project_type") or project_type)
-        project_priority = _safe_form_text(form_data.get("project_priority") or project_priority)
+        project_priority = _safe_form_text(
+            form_data.get("project_priority") or project_priority
+        )
         customer_id = _safe_form_text(form_data.get("customer_id") or customer_id)
         start_date = _safe_form_text(form_data.get("start_date") or start_date)
         end_date = _safe_form_text(form_data.get("end_date") or end_date)
         budget_amount = _safe_form_text(form_data.get("budget_amount") or budget_amount)
-        percent_complete = _safe_form_text(form_data.get("percent_complete") or percent_complete)
+        percent_complete = _safe_form_text(
+            form_data.get("percent_complete") or percent_complete
+        )
     project = _resolve_project_ref(db, org_id, project_id)
 
     if not project:
@@ -1551,8 +1653,14 @@ async def update_project(
     project.project_name = project_name.strip()
     project.description = description.strip() if description else None
     project.status = ProjectStatus(status)
-    project.project_type = ProjectType(project_type) if project_type else ProjectType.INTERNAL
-    project.project_priority = ProjectPriority(project_priority) if project_priority else ProjectPriority.MEDIUM
+    project.project_type = (
+        ProjectType(project_type) if project_type else ProjectType.INTERNAL
+    )
+    project.project_priority = (
+        ProjectPriority(project_priority)
+        if project_priority
+        else ProjectPriority.MEDIUM
+    )
     project.customer_id = coerce_uuid(customer_id) if customer_id else None
     project.start_date = _safe_date(start_date)
     project.end_date = _safe_date(end_date)
@@ -1591,8 +1699,7 @@ def delete_project(
     db: Session = Depends(get_db),
 ):
     """Delete a project (soft delete by setting status to CANCELLED)."""
-    from app.models.finance.core_org.project import Project, ProjectStatus
-    from sqlalchemy import select
+    from app.models.finance.core_org.project import ProjectStatus
 
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
@@ -1620,9 +1727,7 @@ def project_tasks(
     db: Session = Depends(get_db),
 ):
     """Project tasks list page."""
-    from app.models.finance.core_org.project import Project
     from app.models.pm import TaskPriority, TaskStatus
-    from sqlalchemy import select
 
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
@@ -1681,7 +1786,9 @@ def project_tasks(
         "total": result.total,
         "page": page,
         "per_page": per_page,
-        "total_pages": (result.total + per_page - 1) // per_page if result.total > 0 else 1,
+        "total_pages": (result.total + per_page - 1) // per_page
+        if result.total > 0
+        else 1,
         "status_filter": status,
         "priority_filter": priority,
         "statuses": [s.value for s in TaskStatus],
@@ -1765,7 +1872,9 @@ def task_detail(
         db, org_id, "TASK", task_uuid
     )
     task_attachments = [
-        att for att in all_attachments if att.attachment_id not in comment_attachment_ids
+        att
+        for att in all_attachments
+        if att.attachment_id not in comment_attachment_ids
     ]
 
     context = {
@@ -1808,7 +1917,9 @@ async def add_task_comment(
         return RedirectResponse(url="/projects", status_code=303)
     task = _resolve_task_ref(db, org_id, project.project_id, task_id)
     if not task:
-        return RedirectResponse(url=f"/projects/{project.project_code}/tasks", status_code=303)
+        return RedirectResponse(
+            url=f"/projects/{project.project_code}/tasks", status_code=303
+        )
 
     upload_files = _normalize_uploads(files)
     attachment_errors = []
@@ -1838,23 +1949,30 @@ async def add_task_comment(
             if error or not attachment:
                 attachment_errors.append(error or "Upload failed")
                 continue
-            db.add(PMCommentAttachment(
-                comment_id=comment.comment_id,
-                attachment_id=attachment.attachment_id,
-            ))
+            db.add(
+                PMCommentAttachment(
+                    comment_id=comment.comment_id,
+                    attachment_id=attachment.attachment_id,
+                )
+            )
 
         db.commit()
     except Exception:
         db.rollback()
         attachment_errors.append("Comment upload failed")
 
-    base_url = f"/projects/{project.project_code}/tasks/{task.task_code or task.task_id}"
+    base_url = (
+        f"/projects/{project.project_code}/tasks/{task.task_code or task.task_id}"
+    )
     if attachment_errors:
         base_url += "?warning=Some+attachments+failed+to+upload"
     return RedirectResponse(url=base_url + "#comments", status_code=303)
 
 
-@router.post("/{project_id}/tasks/{task_id}/comments/{comment_id}/delete", response_class=RedirectResponse)
+@router.post(
+    "/{project_id}/tasks/{task_id}/comments/{comment_id}/delete",
+    response_class=RedirectResponse,
+)
 def delete_task_comment(
     request: Request,
     project_id: str,
@@ -1872,7 +1990,9 @@ def delete_task_comment(
         return RedirectResponse(url="/projects", status_code=303)
     task = _resolve_task_ref(db, org_id, project.project_id, task_id)
     if not task:
-        return RedirectResponse(url=f"/projects/{project.project_code}/tasks", status_code=303)
+        return RedirectResponse(
+            url=f"/projects/{project.project_code}/tasks", status_code=303
+        )
 
     try:
         comment_service.delete_comment(db, org_id, coerce_uuid(comment_id))
@@ -1880,7 +2000,9 @@ def delete_task_comment(
     except Exception:
         db.rollback()
 
-    base_url = f"/projects/{project.project_code}/tasks/{task.task_code or task.task_id}"
+    base_url = (
+        f"/projects/{project.project_code}/tasks/{task.task_code or task.task_id}"
+    )
     return RedirectResponse(url=base_url + "#comments", status_code=303)
 
 
@@ -1907,7 +2029,11 @@ def download_task_attachment(
     attachment = project_attachment_service.get_attachment(
         db, org_id, coerce_uuid(attachment_id)
     )
-    if not attachment or attachment.entity_type != "TASK" or attachment.entity_id != task.task_id:
+    if (
+        not attachment
+        or attachment.entity_type != "TASK"
+        or attachment.entity_id != task.task_id
+    ):
         raise HTTPException(status_code=404, detail="Attachment not found")
 
     file_path = project_attachment_service.get_file_path(
@@ -1923,7 +2049,9 @@ def download_task_attachment(
     )
 
 
-@router.post("/{project_id}/tasks/{task_id}/attachments", response_class=RedirectResponse)
+@router.post(
+    "/{project_id}/tasks/{task_id}/attachments", response_class=RedirectResponse
+)
 async def upload_task_attachment(
     request: Request,
     project_id: str,
@@ -1942,7 +2070,9 @@ async def upload_task_attachment(
         return RedirectResponse(url="/projects", status_code=303)
     task = _resolve_task_ref(db, org_id, project.project_id, task_id)
     if not task:
-        return RedirectResponse(url=f"/projects/{project.project_code}/tasks", status_code=303)
+        return RedirectResponse(
+            url=f"/projects/{project.project_code}/tasks", status_code=303
+        )
 
     upload_files = _normalize_uploads(files)
     for file in upload_files:
@@ -1958,11 +2088,16 @@ async def upload_task_attachment(
         )
     db.commit()
 
-    base_url = f"/projects/{project.project_code}/tasks/{task.task_code or task.task_id}"
+    base_url = (
+        f"/projects/{project.project_code}/tasks/{task.task_code or task.task_id}"
+    )
     return RedirectResponse(url=base_url + "#attachments", status_code=303)
 
 
-@router.post("/{project_id}/tasks/{task_id}/attachments/{attachment_id}/delete", response_class=RedirectResponse)
+@router.post(
+    "/{project_id}/tasks/{task_id}/attachments/{attachment_id}/delete",
+    response_class=RedirectResponse,
+)
 def delete_task_attachment(
     request: Request,
     project_id: str,
@@ -1980,13 +2115,19 @@ def delete_task_attachment(
         return RedirectResponse(url="/projects", status_code=303)
     task = _resolve_task_ref(db, org_id, project.project_id, task_id)
     if not task:
-        return RedirectResponse(url=f"/projects/{project.project_code}/tasks", status_code=303)
+        return RedirectResponse(
+            url=f"/projects/{project.project_code}/tasks", status_code=303
+        )
 
     project_attachment_service.delete_attachment(db, org_id, coerce_uuid(attachment_id))
     db.commit()
 
-    base_url = f"/projects/{project.project_code}/tasks/{task.task_code or task.task_id}"
+    base_url = (
+        f"/projects/{project.project_code}/tasks/{task.task_code or task.task_id}"
+    )
     return RedirectResponse(url=base_url + "#attachments", status_code=303)
+
+
 @router.get("/{project_id}/tasks/new", response_class=HTMLResponse)
 def new_task_form(
     request: Request,
@@ -1996,9 +2137,7 @@ def new_task_form(
     db: Session = Depends(get_db),
 ):
     """New task form page."""
-    from app.models.finance.core_org.project import Project
     from app.models.pm import TaskPriority, TaskStatus
-    from sqlalchemy import select
 
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
@@ -2011,10 +2150,14 @@ def new_task_form(
         )
 
     services = _get_services(db, org_id)
-    available_tasks = services["task"].list_tasks(
-        project_id=project.project_id,
-        params=PaginationParams(offset=0, limit=1000),
-    ).items
+    available_tasks = (
+        services["task"]
+        .list_tasks(
+            project_id=project.project_id,
+            params=PaginationParams(offset=0, limit=1000),
+        )
+        .items
+    )
 
     employees = _get_employees(db, org_id)
     tickets = _get_tickets(db, org_id)
@@ -2074,20 +2217,22 @@ def create_task(
             sequence_type=SequenceType.TASK,
         )
 
-    task = services["task"].create_task({
-        "project_id": project.project_id,
-        "task_code": task_code_value,
-        "task_name": task_name.strip(),
-        "description": description.strip() if description else None,
-        "status": TaskStatus(status),
-        "priority": TaskPriority(priority),
-        "parent_task_id": coerce_uuid(parent_task_id) if parent_task_id else None,
-        "assigned_to_id": coerce_uuid(assigned_to_id) if assigned_to_id else None,
-        "ticket_id": coerce_uuid(ticket_id) if ticket_id else None,
-        "start_date": _safe_date(start_date),
-        "due_date": _safe_date(due_date),
-        "estimated_hours": _safe_decimal(estimated_hours),
-    })
+    task = services["task"].create_task(
+        {
+            "project_id": project.project_id,
+            "task_code": task_code_value,
+            "task_name": task_name.strip(),
+            "description": description.strip() if description else None,
+            "status": TaskStatus(status),
+            "priority": TaskPriority(priority),
+            "parent_task_id": coerce_uuid(parent_task_id) if parent_task_id else None,
+            "assigned_to_id": coerce_uuid(assigned_to_id) if assigned_to_id else None,
+            "ticket_id": coerce_uuid(ticket_id) if ticket_id else None,
+            "start_date": _safe_date(start_date),
+            "due_date": _safe_date(due_date),
+            "estimated_hours": _safe_decimal(estimated_hours),
+        }
+    )
 
     upload_files = _normalize_uploads(files)
     if upload_files:
@@ -2154,10 +2299,13 @@ def edit_task_form(
         )
 
     available_tasks = [
-        t for t in services["task"].list_tasks(
+        t
+        for t in services["task"]
+        .list_tasks(
             project_id=project.project_id,
             params=PaginationParams(offset=0, limit=1000),
-        ).items
+        )
+        .items
         if t.task_id != task_uuid
     ]
 
@@ -2214,38 +2362,53 @@ def update_task(
     services = _get_services(db, org_id)
     task = _resolve_task_ref(db, org_id, project.project_id, task_id)
     if not task:
-        return RedirectResponse(url=f"/projects/{project.project_code}/tasks", status_code=303)
+        return RedirectResponse(
+            url=f"/projects/{project.project_code}/tasks", status_code=303
+        )
     task_uuid = task.task_id
     _ensure_task_code(db, org_id, task)
 
     form_data = getattr(request.state, "csrf_form", None)
     if form_data:
-        assigned_to_id = (form_data.get("assigned_to_id") or assigned_to_id or "").strip()
-        parent_task_id = (form_data.get("parent_task_id") or parent_task_id or "").strip()
+        assigned_to_id = (
+            form_data.get("assigned_to_id") or assigned_to_id or ""
+        ).strip()
+        parent_task_id = (
+            form_data.get("parent_task_id") or parent_task_id or ""
+        ).strip()
         ticket_id = (form_data.get("ticket_id") or ticket_id or "").strip()
         task_name = (form_data.get("task_name") or task_name or "").strip() or None
-        status = (form_data.get("status") or status or None)
-        priority = (form_data.get("priority") or priority or None)
+        status = form_data.get("status") or status or None
+        priority = form_data.get("priority") or priority or None
 
     task_name_value = task_name.strip() if task_name else task.task_name
     status_value = status or task.status.value
     priority_value = priority or task.priority.value
 
     try:
-        services["task"].update_task(task_uuid, {
-            "task_name": task_name_value,
-            "description": description.strip() if description else None,
-            "status": TaskStatus(status_value),
-            "priority": TaskPriority(priority_value),
-            "parent_task_id": coerce_uuid(parent_task_id) if parent_task_id else None,
-            "assigned_to_id": coerce_uuid(assigned_to_id) if assigned_to_id else None,
-            "ticket_id": coerce_uuid(ticket_id) if ticket_id else None,
-            "start_date": _safe_date(start_date),
-            "due_date": _safe_date(due_date),
-            "estimated_hours": _safe_decimal(estimated_hours),
-            "actual_hours": _safe_decimal(actual_hours, Decimal("0")),
-            "progress_percent": int(progress_percent) if progress_percent and progress_percent.isdigit() else 0,
-        })
+        services["task"].update_task(
+            task_uuid,
+            {
+                "task_name": task_name_value,
+                "description": description.strip() if description else None,
+                "status": TaskStatus(status_value),
+                "priority": TaskPriority(priority_value),
+                "parent_task_id": coerce_uuid(parent_task_id)
+                if parent_task_id
+                else None,
+                "assigned_to_id": coerce_uuid(assigned_to_id)
+                if assigned_to_id
+                else None,
+                "ticket_id": coerce_uuid(ticket_id) if ticket_id else None,
+                "start_date": _safe_date(start_date),
+                "due_date": _safe_date(due_date),
+                "estimated_hours": _safe_decimal(estimated_hours),
+                "actual_hours": _safe_decimal(actual_hours, Decimal("0")),
+                "progress_percent": int(progress_percent)
+                if progress_percent and progress_percent.isdigit()
+                else 0,
+            },
+        )
 
         upload_files = _normalize_uploads(files)
         if upload_files:
@@ -2322,7 +2485,9 @@ def start_task(
     services = _get_services(db, org_id)
     task = _resolve_task_ref(db, org_id, project.project_id, task_id)
     if not task:
-        return RedirectResponse(url=f"/projects/{project.project_code}/tasks", status_code=303)
+        return RedirectResponse(
+            url=f"/projects/{project.project_code}/tasks", status_code=303
+        )
 
     try:
         services["task"].update_task(task.task_id, {"status": TaskStatus.IN_PROGRESS})
@@ -2354,13 +2519,18 @@ def complete_task(
     services = _get_services(db, org_id)
     task = _resolve_task_ref(db, org_id, project.project_id, task_id)
     if not task:
-        return RedirectResponse(url=f"/projects/{project.project_code}/tasks", status_code=303)
+        return RedirectResponse(
+            url=f"/projects/{project.project_code}/tasks", status_code=303
+        )
 
     try:
-        services["task"].update_task(task.task_id, {
-            "status": TaskStatus.COMPLETED,
-            "progress_percent": 100,
-        })
+        services["task"].update_task(
+            task.task_id,
+            {
+                "status": TaskStatus.COMPLETED,
+                "progress_percent": 100,
+            },
+        )
         db.commit()
     except (NotFoundError, ValidationError):
         pass
@@ -2376,7 +2546,9 @@ def complete_task(
 # ============================================================================
 
 
-@router.post("/{project_id}/tasks/{task_id}/dependencies", response_class=RedirectResponse)
+@router.post(
+    "/{project_id}/tasks/{task_id}/dependencies", response_class=RedirectResponse
+)
 def add_task_dependency(
     request: Request,
     project_id: str,
@@ -2411,7 +2583,7 @@ def add_task_dependency(
             lag_days=lag_days,
         )
         db.commit()
-    except (NotFoundError, ValidationError) as e:
+    except (NotFoundError, ValidationError):
         # Redirect back with error (could flash message in future)
         pass
 
@@ -2421,7 +2593,10 @@ def add_task_dependency(
     )
 
 
-@router.post("/{project_id}/tasks/{task_id}/dependencies/{depends_on_id}/remove", response_class=RedirectResponse)
+@router.post(
+    "/{project_id}/tasks/{task_id}/dependencies/{depends_on_id}/remove",
+    response_class=RedirectResponse,
+)
 def remove_task_dependency(
     request: Request,
     project_id: str,
@@ -2558,8 +2733,6 @@ def project_gantt(
     db: Session = Depends(get_db),
 ):
     """Project Gantt chart page."""
-    from app.models.finance.core_org.project import Project
-    from sqlalchemy import select
 
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
@@ -2601,8 +2774,6 @@ def project_team(
     db: Session = Depends(get_db),
 ):
     """Project team management page."""
-    from app.models.finance.core_org.project import Project
-    from sqlalchemy import select
 
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
@@ -2658,16 +2829,18 @@ def create_resource_allocation(
             status_code=303,
         )
 
-    services["resource"].allocate_resource({
-        "project_id": project.project_id,
-        "employee_id": coerce_uuid(employee_id),
-        "role_on_project": role_on_project.strip() if role_on_project else None,
-        "allocation_percent": _safe_decimal(allocation_percent, Decimal("100")),
-        "start_date": parsed_start,
-        "end_date": _safe_date(end_date),
-        "cost_rate_per_hour": _safe_decimal(cost_rate_per_hour),
-        "billing_rate_per_hour": _safe_decimal(billing_rate_per_hour),
-    })
+    services["resource"].allocate_resource(
+        {
+            "project_id": project.project_id,
+            "employee_id": coerce_uuid(employee_id),
+            "role_on_project": role_on_project.strip() if role_on_project else None,
+            "allocation_percent": _safe_decimal(allocation_percent, Decimal("100")),
+            "start_date": parsed_start,
+            "end_date": _safe_date(end_date),
+            "cost_rate_per_hour": _safe_decimal(cost_rate_per_hour),
+            "billing_rate_per_hour": _safe_decimal(billing_rate_per_hour),
+        }
+    )
 
     db.commit()
 
@@ -2701,14 +2874,17 @@ def update_resource_allocation(
     services = _get_services(db, org_id)
 
     try:
-        services["resource"].update_allocation(allocation_uuid, {
-            "role_on_project": role_on_project.strip() if role_on_project else None,
-            "allocation_percent": _safe_decimal(allocation_percent, Decimal("100")),
-            "end_date": _safe_date(end_date),
-            "cost_rate_per_hour": _safe_decimal(cost_rate_per_hour),
-            "billing_rate_per_hour": _safe_decimal(billing_rate_per_hour),
-            "is_active": is_active == "on",
-        })
+        services["resource"].update_allocation(
+            allocation_uuid,
+            {
+                "role_on_project": role_on_project.strip() if role_on_project else None,
+                "allocation_percent": _safe_decimal(allocation_percent, Decimal("100")),
+                "end_date": _safe_date(end_date),
+                "cost_rate_per_hour": _safe_decimal(cost_rate_per_hour),
+                "billing_rate_per_hour": _safe_decimal(billing_rate_per_hour),
+                "is_active": is_active == "on",
+            },
+        )
         db.commit()
     except NotFoundError:
         pass
@@ -2749,7 +2925,9 @@ def end_resource_allocation(
     )
 
 
-@router.post("/{project_id}/team/{allocation_id}/delete", response_class=RedirectResponse)
+@router.post(
+    "/{project_id}/team/{allocation_id}/delete", response_class=RedirectResponse
+)
 def delete_resource_allocation(
     request: Request,
     project_id: str,
@@ -2792,9 +2970,6 @@ def resource_utilization_report(
 ):
     """Resource utilization report across all projects."""
     from datetime import timedelta
-    from app.models.people.hr.employee import Employee
-    from app.models.finance.core_org.project import Project
-    from sqlalchemy import select
 
     org_id = coerce_uuid(auth.organization_id)
     services = _get_services(db, org_id)
@@ -2832,15 +3007,17 @@ def resource_utilization_report(
                 emp.employee_id, period_start, period_end
             )
             if util["total_allocation_percent"] > 0 or util["hours_logged"] > 0:
-                utilization_data.append({
-                    "employee_id": emp.employee_id,
-                    "employee_name": emp.full_name,
-                    "hours_logged": util["hours_logged"],
-                    "expected_hours": util["expected_hours"],
-                    "utilization_percent": util["utilization_percent"],
-                    "total_allocation_percent": util["total_allocation_percent"],
-                    "allocations": util["project_allocations"],
-                })
+                utilization_data.append(
+                    {
+                        "employee_id": emp.employee_id,
+                        "employee_name": emp.full_name,
+                        "hours_logged": util["hours_logged"],
+                        "expected_hours": util["expected_hours"],
+                        "utilization_percent": util["utilization_percent"],
+                        "total_allocation_percent": util["total_allocation_percent"],
+                        "allocations": util["project_allocations"],
+                    }
+                )
                 total_utilization += util["utilization_percent"]
         except Exception:
             continue
@@ -2852,9 +3029,7 @@ def resource_utilization_report(
     over_allocated = [
         d for d in utilization_data if d["total_allocation_percent"] > 100
     ]
-    under_utilized = [
-        d for d in utilization_data if d["utilization_percent"] < 50
-    ]
+    under_utilized = [d for d in utilization_data if d["utilization_percent"] < 50]
 
     # Sort by utilization descending
     utilization_data.sort(key=lambda x: x["utilization_percent"], reverse=True)
@@ -2865,17 +3040,21 @@ def resource_utilization_report(
     for proj in projects:
         if proj.status and proj.status.value in ("ACTIVE", "IN_PROGRESS"):
             try:
-                proj_util = services["resource"].get_project_utilization(proj.project_id)
+                proj_util = services["resource"].get_project_utilization(
+                    proj.project_id
+                )
                 if proj_util["total_team_members"] > 0:
-                    project_utilization.append({
-                        "project_id": proj.project_id,
-                        "project_code": proj.project_code,
-                        "project_name": proj.project_name,
-                        "team_size": proj_util["total_team_members"],
-                        "avg_allocation": proj_util["average_allocation"],
-                        "total_hours": proj_util["total_hours_logged"],
-                        "billable_percent": proj_util["billable_percent"],
-                    })
+                    project_utilization.append(
+                        {
+                            "project_id": proj.project_id,
+                            "project_code": proj.project_code,
+                            "project_name": proj.project_name,
+                            "team_size": proj_util["total_team_members"],
+                            "avg_allocation": proj_util["average_allocation"],
+                            "total_hours": proj_util["total_hours_logged"],
+                            "billable_percent": proj_util["billable_percent"],
+                        }
+                    )
             except Exception:
                 continue
 
@@ -2908,8 +3087,6 @@ def project_milestones(
     db: Session = Depends(get_db),
 ):
     """Project milestones page."""
-    from app.models.finance.core_org.project import Project
-    from sqlalchemy import select
 
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
@@ -2958,14 +3135,16 @@ def create_milestone(
     # Generate milestone code
     milestone_code = f"MS-{str(uuid_mod.uuid4())[:8].upper()}"
 
-    services["milestone"].create_milestone({
-        "project_id": project.project_id,
-        "milestone_code": milestone_code,
-        "milestone_name": name.strip(),
-        "description": description.strip() if description else None,
-        "target_date": date.fromisoformat(target_date),
-        "linked_task_id": coerce_uuid(linked_task_id) if linked_task_id else None,
-    })
+    services["milestone"].create_milestone(
+        {
+            "project_id": project.project_id,
+            "milestone_code": milestone_code,
+            "milestone_name": name.strip(),
+            "description": description.strip() if description else None,
+            "target_date": date.fromisoformat(target_date),
+            "linked_task_id": coerce_uuid(linked_task_id) if linked_task_id else None,
+        }
+    )
 
     db.commit()
 
@@ -2989,7 +3168,6 @@ def update_milestone(
     db: Session = Depends(get_db),
 ):
     """Update a milestone."""
-    from app.models.pm import MilestoneStatus
 
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
@@ -3001,11 +3179,14 @@ def update_milestone(
     try:
         # Note: update_milestone doesn't accept status change - only the fields defined
         # If status changes needed, use achieve_milestone for ACHIEVED
-        services["milestone"].update_milestone(milestone_uuid, {
-            "milestone_name": name.strip(),
-            "description": description.strip() if description else None,
-            "target_date": date.fromisoformat(target_date),
-        })
+        services["milestone"].update_milestone(
+            milestone_uuid,
+            {
+                "milestone_name": name.strip(),
+                "description": description.strip() if description else None,
+                "target_date": date.fromisoformat(target_date),
+            },
+        )
         db.commit()
     except NotFoundError:
         pass
@@ -3016,7 +3197,9 @@ def update_milestone(
     )
 
 
-@router.post("/{project_id}/milestones/{milestone_id}/achieve", response_class=RedirectResponse)
+@router.post(
+    "/{project_id}/milestones/{milestone_id}/achieve", response_class=RedirectResponse
+)
 def achieve_milestone(
     request: Request,
     project_id: str,
@@ -3044,7 +3227,9 @@ def achieve_milestone(
     )
 
 
-@router.post("/{project_id}/milestones/{milestone_id}/delete", response_class=RedirectResponse)
+@router.post(
+    "/{project_id}/milestones/{milestone_id}/delete", response_class=RedirectResponse
+)
 def delete_milestone(
     request: Request,
     project_id: str,
@@ -3090,9 +3275,7 @@ def project_time_entries(
     db: Session = Depends(get_db),
 ):
     """Project time entries page."""
-    from app.models.finance.core_org.project import Project
     from app.models.pm import BillingStatus
-    from sqlalchemy import select
 
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
@@ -3147,10 +3330,14 @@ def project_time_entries(
     time_summary = services["time"].get_project_time_summary(project.project_id)
 
     # Get tasks for the dropdown in the time entry form
-    tasks = services["task"].list_tasks(
-        project_id=project.project_id,
-        params=PaginationParams(offset=0, limit=1000),
-    ).items
+    tasks = (
+        services["task"]
+        .list_tasks(
+            project_id=project.project_id,
+            params=PaginationParams(offset=0, limit=1000),
+        )
+        .items
+    )
 
     employees = _get_employees(db, org_id)
 
@@ -3162,7 +3349,9 @@ def project_time_entries(
         "total": result.total,
         "page": page,
         "per_page": per_page,
-        "total_pages": (result.total + per_page - 1) // per_page if result.total > 0 else 1,
+        "total_pages": (result.total + per_page - 1) // per_page
+        if result.total > 0
+        else 1,
         "time_summary": time_summary,
         "tasks": tasks,
         "employees": employees,
@@ -3197,10 +3386,14 @@ def new_time_entry_form(
     services = _get_services(db, org_id)
 
     # Get tasks for the dropdown
-    tasks = services["task"].list_tasks(
-        project_id=project.project_id,
-        params=PaginationParams(offset=0, limit=1000),
-    ).items
+    tasks = (
+        services["task"]
+        .list_tasks(
+            project_id=project.project_id,
+            params=PaginationParams(offset=0, limit=1000),
+        )
+        .items
+    )
 
     employees = _get_employees(db, org_id)
 
@@ -3246,15 +3439,17 @@ def create_time_entry(
             status_code=303,
         )
 
-    services["time"].log_time({
-        "project_id": project.project_id,
-        "task_id": coerce_uuid(task_id) if task_id else None,
-        "employee_id": coerce_uuid(employee_id),
-        "entry_date": parsed_date,
-        "hours": parsed_hours,
-        "description": description.strip() if description else None,
-        "is_billable": is_billable == "on",
-    })
+    services["time"].log_time(
+        {
+            "project_id": project.project_id,
+            "task_id": coerce_uuid(task_id) if task_id else None,
+            "employee_id": coerce_uuid(employee_id),
+            "entry_date": parsed_date,
+            "hours": parsed_hours,
+            "description": description.strip() if description else None,
+            "is_billable": is_billable == "on",
+        }
+    )
 
     db.commit()
 
@@ -3310,10 +3505,14 @@ def edit_time_entry_form(
 
     services = _get_services(db, org_id)
 
-    tasks = services["task"].list_tasks(
-        project_id=project.project_id,
-        params=PaginationParams(offset=0, limit=1000),
-    ).items
+    tasks = (
+        services["task"]
+        .list_tasks(
+            project_id=project.project_id,
+            params=PaginationParams(offset=0, limit=1000),
+        )
+        .items
+    )
 
     employees = _get_employees(db, org_id)
 
@@ -3360,13 +3559,16 @@ def update_time_entry(
         )
 
     try:
-        services["time"].update_entry(entry_uuid, {
-            "task_id": coerce_uuid(task_id) if task_id else None,
-            "entry_date": parsed_date,
-            "hours": parsed_hours,
-            "description": description.strip() if description else None,
-            "is_billable": is_billable == "on",
-        })
+        services["time"].update_entry(
+            entry_uuid,
+            {
+                "task_id": coerce_uuid(task_id) if task_id else None,
+                "entry_date": parsed_date,
+                "hours": parsed_hours,
+                "description": description.strip() if description else None,
+                "is_billable": is_billable == "on",
+            },
+        )
         db.commit()
     except NotFoundError:
         pass
@@ -3565,15 +3767,17 @@ def log_timesheet_entry(
     if not parsed_date or not parsed_hours:
         return RedirectResponse(url="/projects/timesheet", status_code=303)
 
-    services["time"].log_time({
-        "project_id": coerce_uuid(project_id),
-        "task_id": coerce_uuid(task_id) if task_id else None,
-        "employee_id": employee_id,
-        "entry_date": parsed_date,
-        "hours": parsed_hours,
-        "description": description.strip() if description else None,
-        "is_billable": False,
-    })
+    services["time"].log_time(
+        {
+            "project_id": coerce_uuid(project_id),
+            "task_id": coerce_uuid(task_id) if task_id else None,
+            "employee_id": employee_id,
+            "entry_date": parsed_date,
+            "hours": parsed_hours,
+            "description": description.strip() if description else None,
+            "is_billable": False,
+        }
+    )
     db.commit()
 
     return RedirectResponse(url="/projects/timesheet", status_code=303)
@@ -3592,8 +3796,6 @@ def project_expenses(
     db: Session = Depends(get_db),
 ):
     """Project expenses page (read-only view)."""
-    from app.models.finance.core_org.project import Project
-    from sqlalchemy import select
 
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
@@ -3653,7 +3855,9 @@ def project_attachments(
 
     context = {
         "request": request,
-        **base_context(request, auth, f"{project.project_name} - Attachments", "projects", db=db),
+        **base_context(
+            request, auth, f"{project.project_name} - Attachments", "projects", db=db
+        ),
         "project": project,
         "attachments": attachments,
     }
@@ -3675,7 +3879,9 @@ async def upload_project_attachment(
     project = _resolve_project_ref(db, org_id, project_id)
 
     if not project:
-        return RedirectResponse(url="/projects?error=Project+not+found", status_code=303)
+        return RedirectResponse(
+            url="/projects?error=Project+not+found", status_code=303
+        )
 
     form = await request.form()
     file = form.get("file")
@@ -3758,7 +3964,9 @@ def download_project_attachment(
     )
 
 
-@router.post("/{project_id}/attachments/{attachment_id}/delete", response_class=RedirectResponse)
+@router.post(
+    "/{project_id}/attachments/{attachment_id}/delete", response_class=RedirectResponse
+)
 def delete_project_attachment(
     request: Request,
     project_id: str,
@@ -3773,7 +3981,9 @@ def delete_project_attachment(
     project = _resolve_project_ref(db, org_id, project_id)
 
     if not project:
-        return RedirectResponse(url="/projects?error=Project+not+found", status_code=303)
+        return RedirectResponse(
+            url="/projects?error=Project+not+found", status_code=303
+        )
 
     success, error = project_attachment_service.delete_attachment(
         db, org_id, coerce_uuid(attachment_id)

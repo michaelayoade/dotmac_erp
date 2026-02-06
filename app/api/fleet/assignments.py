@@ -3,6 +3,7 @@ Assignment API Endpoints.
 
 REST API for vehicle assignment management.
 """
+
 from typing import Optional
 from uuid import UUID
 
@@ -19,7 +20,7 @@ from app.schemas.fleet.assignment import (
     AssignmentRead,
     AssignmentUpdate,
 )
-from app.services.common import ConflictError, NotFoundError, PaginationParams, ValidationError
+from app.services.common import NotFoundError, PaginationParams, ValidationError
 from app.services.fleet.assignment_service import AssignmentService
 
 router = APIRouter(prefix="/assignments", tags=["fleet-assignments"])

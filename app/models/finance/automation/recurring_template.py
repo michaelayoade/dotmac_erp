@@ -3,6 +3,7 @@ Recurring Template Model.
 
 Defines templates for recurring transactions (invoices, bills, expenses, journals).
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -30,6 +31,7 @@ from app.db import Base
 
 class RecurringEntityType(str, enum.Enum):
     """Type of entity to generate."""
+
     INVOICE = "INVOICE"
     BILL = "BILL"
     EXPENSE = "EXPENSE"
@@ -38,6 +40,7 @@ class RecurringEntityType(str, enum.Enum):
 
 class RecurringFrequency(str, enum.Enum):
     """Frequency of recurrence."""
+
     DAILY = "DAILY"
     WEEKLY = "WEEKLY"
     BIWEEKLY = "BIWEEKLY"
@@ -49,6 +52,7 @@ class RecurringFrequency(str, enum.Enum):
 
 class RecurringStatus(str, enum.Enum):
     """Status of recurring template."""
+
     ACTIVE = "ACTIVE"
     PAUSED = "PAUSED"
     COMPLETED = "COMPLETED"
@@ -66,7 +70,9 @@ class RecurringTemplate(Base):
 
     __tablename__ = "recurring_template"
     __table_args__ = (
-        UniqueConstraint("organization_id", "template_name", name="uq_recurring_template_name"),
+        UniqueConstraint(
+            "organization_id", "template_name", name="uq_recurring_template_name"
+        ),
         Index("idx_recurring_template_org", "organization_id"),
         Index("idx_recurring_template_next_run", "next_run_date", "status"),
         Index("idx_recurring_template_entity_type", "entity_type"),

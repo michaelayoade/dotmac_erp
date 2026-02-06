@@ -13,7 +13,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.api.deps import require_tenant_auth
 from app.services.auth_dependencies import require_tenant_permission
 from app.models.finance.banking.bank_account import BankAccountStatus, BankAccountType
 from app.models.finance.banking.bank_statement import BankStatementStatus
@@ -75,8 +74,7 @@ def _get_org_id(auth: dict) -> UUID:
     org_id = auth.get("organization_id")
     if not org_id:
         raise HTTPException(
-            status_code=403,
-            detail="User is not associated with an organization"
+            status_code=403, detail="User is not associated with an organization"
         )
     return UUID(org_id)
 
@@ -237,19 +235,39 @@ async def _update_bank_account(
         gl_account_id=payload.gl_account_id or existing.gl_account_id,
         currency_code=existing.currency_code,  # Cannot change
         account_type=payload.account_type or existing.account_type,
-        bank_code=payload.bank_code if payload.bank_code is not None else existing.bank_code,
-        branch_code=payload.branch_code if payload.branch_code is not None else existing.branch_code,
-        branch_name=payload.branch_name if payload.branch_name is not None else existing.branch_name,
+        bank_code=payload.bank_code
+        if payload.bank_code is not None
+        else existing.bank_code,
+        branch_code=payload.branch_code
+        if payload.branch_code is not None
+        else existing.branch_code,
+        branch_name=payload.branch_name
+        if payload.branch_name is not None
+        else existing.branch_name,
         iban=payload.iban if payload.iban is not None else existing.iban,
-        contact_name=payload.contact_name if payload.contact_name is not None else existing.contact_name,
-        contact_phone=payload.contact_phone if payload.contact_phone is not None else existing.contact_phone,
-        contact_email=payload.contact_email if payload.contact_email is not None else existing.contact_email,
+        contact_name=payload.contact_name
+        if payload.contact_name is not None
+        else existing.contact_name,
+        contact_phone=payload.contact_phone
+        if payload.contact_phone is not None
+        else existing.contact_phone,
+        contact_email=payload.contact_email
+        if payload.contact_email is not None
+        else existing.contact_email,
         notes=payload.notes if payload.notes is not None else existing.notes,
-        is_primary=payload.is_primary if payload.is_primary is not None else existing.is_primary,
-        allow_overdraft=payload.allow_overdraft if payload.allow_overdraft is not None else existing.allow_overdraft,
-        overdraft_limit=payload.overdraft_limit if payload.overdraft_limit is not None else existing.overdraft_limit,
+        is_primary=payload.is_primary
+        if payload.is_primary is not None
+        else existing.is_primary,
+        allow_overdraft=payload.allow_overdraft
+        if payload.allow_overdraft is not None
+        else existing.allow_overdraft,
+        overdraft_limit=payload.overdraft_limit
+        if payload.overdraft_limit is not None
+        else existing.overdraft_limit,
     )
-    result = bank_account_service.update(db, organization_id, bank_account_id, input_data, user_id)
+    result = bank_account_service.update(
+        db, organization_id, bank_account_id, input_data, user_id
+    )
     db.commit()
     return BankAccountRead.model_validate(result)
 
@@ -322,7 +340,11 @@ def get_bank_account_gl_balance(
     balance = bank_account_service.get_gl_balance(
         db, organization_id, bank_account_id, as_of_datetime
     )
-    return {"bank_account_id": bank_account_id, "as_of_date": as_of_date, "balance": balance}
+    return {
+        "bank_account_id": bank_account_id,
+        "as_of_date": as_of_date,
+        "balance": balance,
+    }
 
 
 # =============================================================================
@@ -491,7 +513,9 @@ def delete_bank_statement(
     db.commit()
 
 
-@router.get("/accounts/{bank_account_id}/statements/summary", response_model=StatementSummary)
+@router.get(
+    "/accounts/{bank_account_id}/statements/summary", response_model=StatementSummary
+)
 def get_statement_summary(
     bank_account_id: UUID,
     auth: dict = Depends(require_tenant_permission("banking:statements:read")),
@@ -550,7 +574,9 @@ def create_reconciliation(
     return result
 
 
-@router.get("/reconciliations/{reconciliation_id}", response_model=BankReconciliationRead)
+@router.get(
+    "/reconciliations/{reconciliation_id}", response_model=BankReconciliationRead
+)
 def get_reconciliation(
     reconciliation_id: UUID,
     auth: dict = Depends(require_tenant_permission("banking:reconciliation:read")),
@@ -619,7 +645,9 @@ def list_reconciliations(
         start_date=start_date,
         end_date=end_date,
     )
-    return ListResponse(items=reconciliations, count=total_count, limit=limit, offset=offset)
+    return ListResponse(
+        items=reconciliations, count=total_count, limit=limit, offset=offset
+    )
 
 
 @router.post(
@@ -845,7 +873,9 @@ def get_reconciliation_report(
     if not recon or recon.organization_id != organization_id:
         raise HTTPException(status_code=404, detail="Reconciliation not found")
 
-    report_data = bank_reconciliation_service.get_reconciliation_report(db, reconciliation_id)
+    report_data = bank_reconciliation_service.get_reconciliation_report(
+        db, reconciliation_id
+    )
 
     # Convert to schema format
     return ReconciliationReport(

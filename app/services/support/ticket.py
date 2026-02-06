@@ -16,8 +16,9 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.expense.expense_claim import ExpenseClaim
 from app.models.people.hr import Employee
 from app.models.support.ticket import Ticket, TicketPriority, TicketStatus
-from app.services.common import coerce_uuid
+from app.services.common import ValidationError, coerce_uuid
 from app.services.notification import notification_service
+from app.services.state_machine import StateMachine
 from app.services.support.comment import comment_service
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,7 @@ class TicketService:
         TicketStatus.RESOLVED: [TicketStatus.OPEN, TicketStatus.CLOSED],
         TicketStatus.CLOSED: [TicketStatus.OPEN],  # Can reopen
     }
+    _STATE_MACHINE = StateMachine(STATUS_TRANSITIONS)
 
     def list_tickets(
         self,
@@ -489,12 +491,10 @@ class TicketService:
             return None, f"Invalid status: {new_status}"
 
         # Validate transition
-        allowed = self.STATUS_TRANSITIONS.get(ticket.status, [])
-        if new_status_enum not in allowed:
-            return (
-                None,
-                f"Cannot transition from {ticket.status.value} to {new_status_enum.value}",
-            )
+        try:
+            self._STATE_MACHINE.validate(ticket.status, new_status_enum)
+        except ValidationError as exc:
+            return None, exc.message
 
         old_status = ticket.status
         ticket.status = new_status_enum

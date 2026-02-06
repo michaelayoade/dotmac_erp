@@ -104,7 +104,7 @@
                                 {{ rule.rule_name }}
                             </a>
                             {% if rule.description %}
-                            <p class="text-xs text-slate-500 dark:text-slate-400 truncate max-w-xs">{{ rule.description }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 truncate max-w-xs">{{ rule.description | sanitize_html }}</p>
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">

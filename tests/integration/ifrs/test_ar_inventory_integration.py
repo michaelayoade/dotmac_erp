@@ -8,14 +8,12 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
-import pytest
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.invoice_line import InvoiceLine
 from app.models.inventory.item import CostingMethod
 from app.services.finance.ar.ar_inventory_integration import (
     ARInventoryIntegration,
-    CostingResult,
 )
 
 

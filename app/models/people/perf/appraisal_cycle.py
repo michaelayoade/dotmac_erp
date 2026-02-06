@@ -3,6 +3,7 @@ Appraisal Cycle Model - Performance Schema.
 
 Defines organization-wide appraisal periods.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -31,10 +32,11 @@ if TYPE_CHECKING:
 
 class AppraisalCycleStatus(str, enum.Enum):
     """Appraisal cycle status."""
+
     DRAFT = "DRAFT"
-    ACTIVE = "ACTIVE"           # Goal setting / self-assessment phase
-    REVIEW = "REVIEW"           # Manager review phase
-    CALIBRATION = "CALIBRATION" # HR calibration phase
+    ACTIVE = "ACTIVE"  # Goal setting / self-assessment phase
+    REVIEW = "REVIEW"  # Manager review phase
+    CALIBRATION = "CALIBRATION"  # HR calibration phase
     COMPLETED = "COMPLETED"
     CANCELLED = "CANCELLED"
 
@@ -48,7 +50,9 @@ class AppraisalCycle(Base, AuditMixin, ERPNextSyncMixin):
 
     __tablename__ = "appraisal_cycle"
     __table_args__ = (
-        UniqueConstraint("organization_id", "cycle_code", name="uq_appraisal_cycle_code"),
+        UniqueConstraint(
+            "organization_id", "cycle_code", name="uq_appraisal_cycle_code"
+        ),
         Index("idx_appraisal_cycle_status", "organization_id", "status"),
         Index("idx_appraisal_cycle_dates", "organization_id", "start_date", "end_date"),
         {"schema": "perf"},

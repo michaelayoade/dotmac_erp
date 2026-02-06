@@ -3,6 +3,7 @@ Workflow Rule Model.
 
 Defines rules for automated workflow triggers and actions.
 """
+
 import enum
 import uuid
 from datetime import datetime
@@ -29,6 +30,7 @@ from app.db import Base
 
 class WorkflowEntityType(str, enum.Enum):
     """Entity types that can trigger workflows."""
+
     # Finance
     INVOICE = "INVOICE"
     BILL = "BILL"
@@ -60,10 +62,13 @@ class WorkflowEntityType(str, enum.Enum):
     FLEET_RESERVATION = "FLEET_RESERVATION"
     FLEET_MAINTENANCE = "FLEET_MAINTENANCE"
     FLEET_INCIDENT = "FLEET_INCIDENT"
+    # Inventory
+    MATERIAL_REQUEST = "MATERIAL_REQUEST"
 
 
 class TriggerEvent(str, enum.Enum):
     """Events that can trigger a workflow."""
+
     ON_CREATE = "ON_CREATE"
     ON_UPDATE = "ON_UPDATE"
     ON_DELETE = "ON_DELETE"
@@ -79,6 +84,7 @@ class TriggerEvent(str, enum.Enum):
 
 class ActionType(str, enum.Enum):
     """Types of actions that can be executed."""
+
     SEND_EMAIL = "SEND_EMAIL"
     SEND_NOTIFICATION = "SEND_NOTIFICATION"
     VALIDATE = "VALIDATE"

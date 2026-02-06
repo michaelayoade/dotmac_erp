@@ -48,6 +48,7 @@ from app.schemas.people.discipline import (
 from app.models.finance.audit.audit_log import AuditAction
 from app.services.audit_dispatcher import fire_audit_event
 from app.services.notification import notification_service
+from app.services.state_machine import StateMachine
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,7 @@ VALID_TRANSITIONS = {
     CaseStatus.CLOSED: [],
     CaseStatus.WITHDRAWN: [],
 }
+_STATE_MACHINE = StateMachine(VALID_TRANSITIONS)
 
 # Default appeal window in days after decision
 DEFAULT_APPEAL_WINDOW_DAYS = 14
@@ -318,11 +320,7 @@ class DisciplineService:
         self, current_status: CaseStatus, new_status: CaseStatus
     ) -> None:
         """Validate status transition is allowed."""
-        allowed = VALID_TRANSITIONS.get(current_status, [])
-        if new_status not in allowed:
-            raise ValidationError(
-                f"Cannot transition from {current_status.value} to {new_status.value}"
-            )
+        _STATE_MACHINE.validate(current_status, new_status)
 
     def _update_status(
         self,

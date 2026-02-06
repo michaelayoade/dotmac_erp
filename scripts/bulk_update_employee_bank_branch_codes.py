@@ -107,9 +107,13 @@ def _load_mapping(csv_path: str) -> Dict[str, str]:
 
 
 def _insert_mapping(conn, rows: Iterable[Tuple[str, str]]) -> None:
-    conn.execute(text("CREATE TEMP TABLE tmp_bank_codes (bank_name text, sort_code text)"))
     conn.execute(
-        text("INSERT INTO tmp_bank_codes (bank_name, sort_code) VALUES (:bank_name, :sort_code)"),
+        text("CREATE TEMP TABLE tmp_bank_codes (bank_name text, sort_code text)")
+    )
+    conn.execute(
+        text(
+            "INSERT INTO tmp_bank_codes (bank_name, sort_code) VALUES (:bank_name, :sort_code)"
+        ),
         [{"bank_name": name, "sort_code": code} for name, code in rows],
     )
 
@@ -178,9 +182,10 @@ def main() -> None:
             {"overwrite": args.overwrite},
         )
 
-        unmatched = conn.execute(
-            text(
-                """
+        unmatched = (
+            conn.execute(
+                text(
+                    """
                 SELECT DISTINCT e.bank_name
                 FROM hr.employee e
                 WHERE e.bank_branch_code IS NULL
@@ -192,8 +197,11 @@ def main() -> None:
                   )
                 ORDER BY e.bank_name
                 """
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         print(f"Updated {result.rowcount} employee record(s).")
         if unmatched:

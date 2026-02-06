@@ -14,9 +14,7 @@ class TestAuthSettingsAPI:
 
     def test_list_auth_settings_with_pagination(self, client, auth_headers):
         """Test listing auth settings with pagination."""
-        response = client.get(
-            "/settings/auth?limit=10&offset=0", headers=auth_headers
-        )
+        response = client.get("/settings/auth?limit=10&offset=0", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) <= 10
@@ -44,7 +42,9 @@ class TestAuthSettingsAPI:
         """Test creating an auth setting via upsert."""
         key = "jwt_access_ttl_minutes"
         payload = {"value_text": "45"}
-        response = client.put(f"/settings/auth/{key}", json=payload, headers=auth_headers)
+        response = client.put(
+            f"/settings/auth/{key}", json=payload, headers=auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["key"] == key
@@ -66,7 +66,9 @@ class TestAuthSettingsAPI:
         """Test creating an auth setting with JSON value."""
         key = "refresh_cookie_secure"
         payload = {"value_json": True}
-        response = client.put(f"/settings/auth/{key}", json=payload, headers=auth_headers)
+        response = client.put(
+            f"/settings/auth/{key}", json=payload, headers=auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["value_json"] is True
@@ -85,9 +87,7 @@ class TestAuditSettingsAPI:
 
     def test_list_audit_settings_with_pagination(self, client, auth_headers):
         """Test listing audit settings with pagination."""
-        response = client.get(
-            "/settings/audit?limit=10&offset=0", headers=auth_headers
-        )
+        response = client.get("/settings/audit?limit=10&offset=0", headers=auth_headers)
         assert response.status_code == 200
 
     def test_get_audit_setting(self, client, auth_headers, db_session):
@@ -106,7 +106,9 @@ class TestAuditSettingsAPI:
         """Test creating an audit setting via upsert."""
         key = "methods"
         payload = {"value_json": ["POST", "GET"]}
-        response = client.put(f"/settings/audit/{key}", json=payload, headers=auth_headers)
+        response = client.put(
+            f"/settings/audit/{key}", json=payload, headers=auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["key"] == key
@@ -268,9 +270,7 @@ class TestEmailSettingsAPI:
 
     def test_list_email_settings_with_pagination(self, client, auth_headers):
         """Test listing email settings with pagination."""
-        response = client.get(
-            "/settings/email?limit=10&offset=0", headers=auth_headers
-        )
+        response = client.get("/settings/email?limit=10&offset=0", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) <= 10
@@ -302,7 +302,9 @@ class TestEmailSettingsAPI:
         """Test creating an email setting via upsert."""
         key = "smtp_port"
         payload = {"value_text": "465"}
-        response = client.put(f"/settings/email/{key}", json=payload, headers=auth_headers)
+        response = client.put(
+            f"/settings/email/{key}", json=payload, headers=auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["key"] == key
@@ -312,7 +314,9 @@ class TestEmailSettingsAPI:
         """Test upserting a boolean email setting."""
         key = "smtp_use_tls"
         payload = {"value_json": False}
-        response = client.put(f"/settings/email/{key}", json=payload, headers=auth_headers)
+        response = client.put(
+            f"/settings/email/{key}", json=payload, headers=auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["key"] == key
@@ -351,21 +355,27 @@ class TestFeaturesSettingsAPI:
             json={"value_json": True},
             headers=auth_headers,
         )
-        response = client.get("/settings/features/enable_multi_currency", headers=auth_headers)
+        response = client.get(
+            "/settings/features/enable_multi_currency", headers=auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["key"] == "enable_multi_currency"
 
     def test_get_features_setting_not_found(self, client, auth_headers):
         """Test getting a non-existent features setting."""
-        response = client.get("/settings/features/nonexistent_key", headers=auth_headers)
+        response = client.get(
+            "/settings/features/nonexistent_key", headers=auth_headers
+        )
         assert response.status_code == 400
 
     def test_upsert_features_setting(self, client, auth_headers):
         """Test creating a features setting via upsert."""
         key = "enable_budgeting"
         payload = {"value_json": True}
-        response = client.put(f"/settings/features/{key}", json=payload, headers=auth_headers)
+        response = client.put(
+            f"/settings/features/{key}", json=payload, headers=auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["key"] == key
@@ -374,7 +384,9 @@ class TestFeaturesSettingsAPI:
         """Test disabling a feature flag."""
         key = "enable_inventory"
         payload = {"value_json": False}
-        response = client.put(f"/settings/features/{key}", json=payload, headers=auth_headers)
+        response = client.put(
+            f"/settings/features/{key}", json=payload, headers=auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["key"] == key
@@ -413,21 +425,27 @@ class TestAutomationSettingsAPI:
             json={"value_text": "MONTHLY"},
             headers=auth_headers,
         )
-        response = client.get("/settings/automation/recurring_default_frequency", headers=auth_headers)
+        response = client.get(
+            "/settings/automation/recurring_default_frequency", headers=auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["key"] == "recurring_default_frequency"
 
     def test_get_automation_setting_not_found(self, client, auth_headers):
         """Test getting a non-existent automation setting."""
-        response = client.get("/settings/automation/nonexistent_key", headers=auth_headers)
+        response = client.get(
+            "/settings/automation/nonexistent_key", headers=auth_headers
+        )
         assert response.status_code == 400
 
     def test_upsert_automation_setting_integer(self, client, auth_headers):
         """Test creating an integer automation setting via upsert."""
         key = "recurring_max_occurrences"
         payload = {"value_text": "500"}
-        response = client.put(f"/settings/automation/{key}", json=payload, headers=auth_headers)
+        response = client.put(
+            f"/settings/automation/{key}", json=payload, headers=auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["key"] == key
@@ -437,7 +455,9 @@ class TestAutomationSettingsAPI:
         """Test upserting an automation setting with allowed values."""
         key = "recurring_default_frequency"
         payload = {"value_text": "WEEKLY"}
-        response = client.put(f"/settings/automation/{key}", json=payload, headers=auth_headers)
+        response = client.put(
+            f"/settings/automation/{key}", json=payload, headers=auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["key"] == key
@@ -446,7 +466,9 @@ class TestAutomationSettingsAPI:
         """Test upserting an automation setting with invalid allowed value."""
         key = "recurring_default_frequency"
         payload = {"value_text": "INVALID"}
-        response = client.put(f"/settings/automation/{key}", json=payload, headers=auth_headers)
+        response = client.put(
+            f"/settings/automation/{key}", json=payload, headers=auth_headers
+        )
         assert response.status_code == 400
 
 
@@ -483,21 +505,27 @@ class TestReportingSettingsAPI:
             json={"value_text": "PDF"},
             headers=auth_headers,
         )
-        response = client.get("/settings/reporting/default_export_format", headers=auth_headers)
+        response = client.get(
+            "/settings/reporting/default_export_format", headers=auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["key"] == "default_export_format"
 
     def test_get_reporting_setting_not_found(self, client, auth_headers):
         """Test getting a non-existent reporting setting."""
-        response = client.get("/settings/reporting/nonexistent_key", headers=auth_headers)
+        response = client.get(
+            "/settings/reporting/nonexistent_key", headers=auth_headers
+        )
         assert response.status_code == 400
 
     def test_upsert_reporting_setting(self, client, auth_headers):
         """Test creating a reporting setting via upsert."""
         key = "report_page_size"
         payload = {"value_text": "LETTER"}
-        response = client.put(f"/settings/reporting/{key}", json=payload, headers=auth_headers)
+        response = client.put(
+            f"/settings/reporting/{key}", json=payload, headers=auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["key"] == key
@@ -506,7 +534,9 @@ class TestReportingSettingsAPI:
         """Test upserting a boolean reporting setting."""
         key = "include_logo_in_reports"
         payload = {"value_json": False}
-        response = client.put(f"/settings/reporting/{key}", json=payload, headers=auth_headers)
+        response = client.put(
+            f"/settings/reporting/{key}", json=payload, headers=auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["key"] == key
@@ -515,5 +545,7 @@ class TestReportingSettingsAPI:
         """Test upserting a reporting setting with invalid allowed value."""
         key = "report_orientation"
         payload = {"value_text": "DIAGONAL"}
-        response = client.put(f"/settings/reporting/{key}", json=payload, headers=auth_headers)
+        response = client.put(
+            f"/settings/reporting/{key}", json=payload, headers=auth_headers
+        )
         assert response.status_code == 400

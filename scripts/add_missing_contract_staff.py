@@ -22,7 +22,7 @@ from uuid import UUID
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-from sqlalchemy import select, text, func
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
@@ -51,7 +51,9 @@ DIVISION_MAP = {
 
 def get_org_id(db: Session) -> UUID:
     """Get the first organization ID."""
-    result = db.execute(text("SELECT organization_id FROM core_org.organization LIMIT 1"))
+    result = db.execute(
+        text("SELECT organization_id FROM core_org.organization LIMIT 1")
+    )
     row = result.fetchone()
     if not row:
         raise ValueError("No organization found.")
@@ -60,7 +62,11 @@ def get_org_id(db: Session) -> UUID:
 
 def get_admin_user_id(db: Session) -> UUID:
     """Get admin user ID."""
-    result = db.execute(text("SELECT person_id FROM public.user_credentials WHERE username = 'admin' LIMIT 1"))
+    result = db.execute(
+        text(
+            "SELECT person_id FROM public.user_credentials WHERE username = 'admin' LIMIT 1"
+        )
+    )
     row = result.fetchone()
     if row:
         return row[0]
@@ -73,12 +79,15 @@ def get_admin_user_id(db: Session) -> UUID:
 
 def get_next_employee_code(db: Session, org_id: UUID) -> int:
     """Get the next available employee code number."""
-    result = db.execute(text("""
+    result = db.execute(
+        text("""
         SELECT employee_code FROM hr.employee
         WHERE organization_id = :org_id
         AND employee_code ~ '^EMP[0-9]+$'
         ORDER BY employee_code DESC
-    """), {"org_id": org_id})
+    """),
+        {"org_id": org_id},
+    )
 
     max_code = 0
     for row in result:
@@ -92,12 +101,18 @@ def get_next_employee_code(db: Session, org_id: UUID) -> int:
     return max_code + 1
 
 
-def get_or_create_department(db: Session, org_id: UUID, name: str, user_id: UUID) -> Department:
+def get_or_create_department(
+    db: Session, org_id: UUID, name: str, user_id: UUID
+) -> Department:
     """Get or create a department."""
-    dept = db.query(Department).filter(
-        Department.organization_id == org_id,
-        Department.department_name == name,
-    ).first()
+    dept = (
+        db.query(Department)
+        .filter(
+            Department.organization_id == org_id,
+            Department.department_name == name,
+        )
+        .first()
+    )
 
     if not dept:
         dept = Department(
@@ -113,12 +128,18 @@ def get_or_create_department(db: Session, org_id: UUID, name: str, user_id: UUID
     return dept
 
 
-def get_or_create_employment_type(db: Session, org_id: UUID, type_name: str, user_id: UUID) -> EmploymentType:
+def get_or_create_employment_type(
+    db: Session, org_id: UUID, type_name: str, user_id: UUID
+) -> EmploymentType:
     """Get or create an employment type."""
-    emp_type = db.query(EmploymentType).filter(
-        EmploymentType.organization_id == org_id,
-        EmploymentType.type_name == type_name,
-    ).first()
+    emp_type = (
+        db.query(EmploymentType)
+        .filter(
+            EmploymentType.organization_id == org_id,
+            EmploymentType.type_name == type_name,
+        )
+        .first()
+    )
 
     if not emp_type:
         emp_type = EmploymentType(
@@ -135,13 +156,19 @@ def get_or_create_employment_type(db: Session, org_id: UUID, type_name: str, use
 
 def get_contract_structure(db: Session, org_id: UUID) -> SalaryStructure:
     """Get the contract staff salary structure."""
-    struct = db.query(SalaryStructure).filter(
-        SalaryStructure.organization_id == org_id,
-        SalaryStructure.structure_code == "CONTRACT-STAFF",
-    ).first()
+    struct = (
+        db.query(SalaryStructure)
+        .filter(
+            SalaryStructure.organization_id == org_id,
+            SalaryStructure.structure_code == "CONTRACT-STAFF",
+        )
+        .first()
+    )
 
     if not struct:
-        raise ValueError("Contract staff salary structure not found. Run seed_payroll_from_excel.py first.")
+        raise ValueError(
+            "Contract staff salary structure not found. Run seed_payroll_from_excel.py first."
+        )
 
     return struct
 
@@ -177,12 +204,14 @@ def parse_missing_staff(excel_path: Path) -> list[dict]:
         if pd.isna(net_pay):
             net_pay = 0
 
-        staff.append({
-            "name": name,
-            "division": division,
-            "role": role,
-            "net_pay": Decimal(str(net_pay)),
-        })
+        staff.append(
+            {
+                "name": name,
+                "division": division,
+                "role": role,
+                "net_pay": Decimal(str(net_pay)),
+            }
+        )
 
     print(f"  Found {len(staff)} staff without employee codes")
     return staff
@@ -211,6 +240,7 @@ def create_employee(
     if existing:
         # Append timestamp to make unique
         import time
+
         email = f"{employee_code.lower()}.{int(time.time())}@internal.dotmac.ng"
 
     # Create Person record
@@ -317,7 +347,9 @@ def main():
                     db, org_id, user_id, data, emp_type, employee_code, structure
                 )
                 created.append((data["name"], employee_code))
-                print(f"  + Created: {data['name']} -> {employee_code} (Salary: {data['net_pay']})")
+                print(
+                    f"  + Created: {data['name']} -> {employee_code} (Salary: {data['net_pay']})"
+                )
 
         if args.dry_run:
             print("\n[DRY RUN - No changes committed]")
@@ -337,6 +369,7 @@ def main():
         db.rollback()
         print(f"\nERROR: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
     finally:

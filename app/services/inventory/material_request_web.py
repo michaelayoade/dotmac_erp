@@ -574,6 +574,7 @@ class MaterialRequestWebService:
                 "ticket_subject": ticket_subject,
                 "requested_by_name": requested_by_name,
                 "remarks": request.remarks or "-",
+                "cancel_reason": request.cancel_reason or "",
                 "total_requested_qty": _format_currency(total_qty),
                 "total_ordered_qty": _format_currency(total_ordered),
                 "total_pending": _format_currency(total_qty - total_ordered),
@@ -945,8 +946,38 @@ class MaterialRequestWebService:
         if not request.items:
             raise ValueError("Cannot submit request without items")
 
+        old_status = request.status.value
         request.status = MaterialRequestStatus.SUBMITTED
         request.updated_by_id = user_id
+
+        # Fire workflow automation event
+        try:
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
+            fire_workflow_event(
+                db=db,
+                organization_id=organization_id,
+                entity_type="MATERIAL_REQUEST",
+                entity_id=request.request_id,
+                event="ON_STATUS_CHANGE",
+                old_values={"status": old_status},
+                new_values={
+                    "status": MaterialRequestStatus.SUBMITTED.value,
+                    "request_number": request.request_number,
+                    "request_type": request.request_type.value
+                    if request.request_type
+                    else None,
+                    "ticket_id": str(request.ticket_id) if request.ticket_id else None,
+                    "project_id": str(request.project_id)
+                    if request.project_id
+                    else None,
+                },
+                user_id=user_id,
+            )
+        except Exception:
+            pass  # Side effect — never breaks the main operation
 
         return request
 
@@ -956,6 +987,7 @@ class MaterialRequestWebService:
         organization_id: UUID,
         user_id: UUID,
         request_id: str,
+        cancel_reason: str,
     ) -> MaterialRequest:
         """Cancel a material request."""
         request = db.get(MaterialRequest, coerce_uuid(request_id))
@@ -968,7 +1000,12 @@ class MaterialRequestWebService:
         ]:
             raise ValueError("Only draft or submitted requests can be cancelled")
 
+        reason = (cancel_reason or "").strip()
+        if not reason:
+            raise ValueError("Cancellation reason is required")
+
         request.status = MaterialRequestStatus.CANCELLED
+        request.cancel_reason = reason
         request.updated_by_id = user_id
 
         return request

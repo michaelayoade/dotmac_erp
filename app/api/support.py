@@ -11,13 +11,16 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth, require_tenant_permission
+from app.api.deps import (
+    require_organization_id,
+    require_tenant_auth,
+    require_tenant_permission,
+)
 from app.db import SessionLocal
 from app.schemas.support import (
     TicketCreate,
     TicketUpdate,
     TicketRead,
-    TicketDetail,
     TicketListResponse,
     TicketSummary,
     TicketStats,
@@ -68,7 +71,8 @@ def list_tickets(
 ):
     """List tickets with filtering and pagination."""
     tickets, total = ticket_service.list_tickets(
-        db, organization_id,
+        db,
+        organization_id,
         status=status_filter,
         priority=priority,
         assigned_to_id=coerce_uuid(assigned_to_id) if assigned_to_id else None,
@@ -115,7 +119,9 @@ def search_tickets(
         status_list = [s.strip() for s in status_filter.split(",") if s.strip()]
 
     tickets = ticket_service.search_tickets(
-        db, organization_id, q,
+        db,
+        organization_id,
+        q,
         status_filter=status_list,
         limit=limit,
     )
@@ -171,7 +177,9 @@ def create_ticket(
     user_id = coerce_uuid(auth["person_id"])
 
     ticket = ticket_service.create_ticket(
-        db, org_id, user_id,
+        db,
+        org_id,
+        user_id,
         subject=data.subject,
         description=data.description,
         priority=data.priority,
@@ -201,7 +209,10 @@ def update_ticket(
     tid = coerce_uuid(ticket_id)
 
     ticket = ticket_service.update_ticket(
-        db, org_id, tid, user_id,
+        db,
+        org_id,
+        tid,
+        user_id,
         subject=data.subject,
         description=data.description,
         priority=data.priority,
@@ -241,7 +252,10 @@ def update_ticket_status(
     tid = coerce_uuid(ticket_id)
 
     ticket, error = ticket_service.update_status(
-        db, org_id, tid, user_id,
+        db,
+        org_id,
+        tid,
+        user_id,
         data.status,
         data.notes,
     )
@@ -271,7 +285,10 @@ def assign_ticket(
     tid = coerce_uuid(ticket_id)
 
     ticket = ticket_service.assign_ticket(
-        db, org_id, tid, user_id,
+        db,
+        org_id,
+        tid,
+        user_id,
         data.assigned_to_id,
     )
 
@@ -300,7 +317,10 @@ def resolve_ticket(
     tid = coerce_uuid(ticket_id)
 
     ticket, error = ticket_service.resolve_ticket(
-        db, org_id, tid, user_id,
+        db,
+        org_id,
+        tid,
+        user_id,
         data.resolution,
     )
 
@@ -349,7 +369,9 @@ def get_ticket_expenses(
                 "claim_number": e.claim_number,
                 "purpose": e.purpose,
                 "status": e.status.value if e.status else "DRAFT",
-                "total_claimed_amount": float(e.total_claimed_amount) if e.total_claimed_amount else 0,
+                "total_claimed_amount": float(e.total_claimed_amount)
+                if e.total_claimed_amount
+                else 0,
                 "currency_code": e.currency_code,
                 "claim_date": e.claim_date.isoformat() if e.claim_date else None,
             }

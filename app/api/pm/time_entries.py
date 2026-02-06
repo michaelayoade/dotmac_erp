@@ -3,6 +3,7 @@ Time Entry API Endpoints.
 
 REST API for time tracking.
 """
+
 from datetime import date
 from typing import Optional
 from uuid import UUID
@@ -61,7 +62,9 @@ def list_time_entries(
         try:
             billing_status_enum = BillingStatus(billing_status)
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid billing_status: {billing_status}")
+            raise HTTPException(
+                status_code=400, detail=f"Invalid billing_status: {billing_status}"
+            )
 
     svc = TimeEntryService(db, organization_id)
     result = svc.list_entries(
@@ -96,7 +99,9 @@ def list_time_entries(
                 updated_at=entry.updated_at,
                 project_name=proj.project_name if proj else None,
                 task_name=task.task_name if task else None,
-                employee_name=getattr(emp, "full_name", str(entry.employee_id)[:8]) if emp else None,
+                employee_name=getattr(emp, "full_name", str(entry.employee_id)[:8])
+                if emp
+                else None,
             )
         )
 

@@ -197,7 +197,7 @@
                 <div>
                     <label class="form-label">Effective From <span class="text-red-500">*</span></label>
                     <input type="date" name="effective_from"
-                           value="{{ rule.effective_from.isoformat() if rule and rule.effective_from else '' }}"
+                           value="{{ rule.effective_from if rule and rule.effective_from and rule.effective_from is string else (rule.effective_from.isoformat() if rule and rule.effective_from else '') }}"
                            class="form-input{% if errors.effective_from %} border-red-300{% endif %}"
                            {% if rule and rule.rule_id %}readonly{% endif %}>
                     {% if errors.effective_from %}
@@ -207,7 +207,7 @@
                 <div>
                     <label class="form-label">Effective To</label>
                     <input type="date" name="effective_to"
-                           value="{{ rule.effective_to.isoformat() if rule and rule.effective_to else '' }}"
+                           value="{{ rule.effective_to if rule and rule.effective_to and rule.effective_to is string else (rule.effective_to.isoformat() if rule and rule.effective_to else '') }}"
                            class="form-input{% if errors.effective_to %} border-red-300{% endif %}">
                     {% if errors.effective_to %}
                     <p class="mt-1 text-sm text-red-500">{{ errors.effective_to }}</p>

@@ -9,7 +9,6 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from app.services.inventory.inv_posting_adapter import (
     INVPostingAdapter,
@@ -56,7 +55,9 @@ class MockItemCategory:
         self.category_code = category_code
         self.inventory_account_id = inventory_account_id or uuid.uuid4()
         self.cogs_account_id = cogs_account_id or uuid.uuid4()
-        self.inventory_adjustment_account_id = inventory_adjustment_account_id or uuid.uuid4()
+        self.inventory_adjustment_account_id = (
+            inventory_adjustment_account_id or uuid.uuid4()
+        )
         self.purchase_variance_account_id = purchase_variance_account_id or uuid.uuid4()
 
 
@@ -163,7 +164,9 @@ class TestPostReceipt:
 
         mock_db.get.side_effect = mock_get
         mock_journal_service.create_journal.return_value = mock_journal
-        mock_ledger_posting.post_journal_entry.return_value = MockPostingResult(success=True)
+        mock_ledger_posting.post_journal_entry.return_value = MockPostingResult(
+            success=True
+        )
 
         result = INVPostingAdapter.post_receipt(
             db=mock_db,
@@ -178,7 +181,9 @@ class TestPostReceipt:
 
     @patch("app.services.inventory.posting.receipt.LedgerPostingService")
     @patch("app.services.inventory.posting.receipt.JournalService")
-    def test_post_receipt_with_ap_control_account(self, mock_journal_service, mock_ledger_posting):
+    def test_post_receipt_with_ap_control_account(
+        self, mock_journal_service, mock_ledger_posting
+    ):
         """Test receipt posting with AP control account specified."""
         mock_db = MagicMock()
         org_id = uuid.uuid4()
@@ -211,7 +216,9 @@ class TestPostReceipt:
 
         mock_db.get.side_effect = mock_get
         mock_journal_service.create_journal.return_value = mock_journal
-        mock_ledger_posting.post_journal_entry.return_value = MockPostingResult(success=True)
+        mock_ledger_posting.post_journal_entry.return_value = MockPostingResult(
+            success=True
+        )
 
         result = INVPostingAdapter.post_receipt(
             db=mock_db,
@@ -372,7 +379,9 @@ class TestPostReceipt:
 
     @patch("app.services.inventory.posting.receipt.LedgerPostingService")
     @patch("app.services.inventory.posting.receipt.JournalService")
-    def test_post_receipt_with_cost_variance(self, mock_journal_service, mock_ledger_posting):
+    def test_post_receipt_with_cost_variance(
+        self, mock_journal_service, mock_ledger_posting
+    ):
         """Test receipt posting with cost variance (standard costing)."""
         mock_db = MagicMock()
         org_id = uuid.uuid4()
@@ -409,7 +418,9 @@ class TestPostReceipt:
 
         mock_db.get.side_effect = mock_get
         mock_journal_service.create_journal.return_value = mock_journal
-        mock_ledger_posting.post_journal_entry.return_value = MockPostingResult(success=True)
+        mock_ledger_posting.post_journal_entry.return_value = MockPostingResult(
+            success=True
+        )
 
         result = INVPostingAdapter.post_receipt(
             db=mock_db,
@@ -423,7 +434,9 @@ class TestPostReceipt:
 
     @patch("app.services.inventory.posting.receipt.LedgerPostingService")
     @patch("app.services.inventory.posting.receipt.JournalService")
-    def test_post_receipt_ledger_posting_fails(self, mock_journal_service, mock_ledger_posting):
+    def test_post_receipt_ledger_posting_fails(
+        self, mock_journal_service, mock_ledger_posting
+    ):
         """Test receipt posting when ledger posting fails."""
         mock_db = MagicMock()
         org_id = uuid.uuid4()
@@ -456,8 +469,7 @@ class TestPostReceipt:
         mock_db.get.side_effect = mock_get
         mock_journal_service.create_journal.return_value = mock_journal
         mock_ledger_posting.post_journal_entry.return_value = MockPostingResult(
-            success=False,
-            message="Ledger error"
+            success=False, message="Ledger error"
         )
 
         result = INVPostingAdapter.post_receipt(
@@ -510,7 +522,9 @@ class TestPostIssue:
 
         mock_db.get.side_effect = mock_get
         mock_journal_service.create_journal.return_value = mock_journal
-        mock_ledger_posting.post_journal_entry.return_value = MockPostingResult(success=True)
+        mock_ledger_posting.post_journal_entry.return_value = MockPostingResult(
+            success=True
+        )
 
         result = INVPostingAdapter.post_issue(
             db=mock_db,
@@ -525,7 +539,9 @@ class TestPostIssue:
 
     @patch("app.services.inventory.posting.issue.LedgerPostingService")
     @patch("app.services.inventory.posting.issue.JournalService")
-    def test_post_issue_with_expense_account(self, mock_journal_service, mock_ledger_posting):
+    def test_post_issue_with_expense_account(
+        self, mock_journal_service, mock_ledger_posting
+    ):
         """Test issue posting with override expense account."""
         mock_db = MagicMock()
         org_id = uuid.uuid4()
@@ -558,7 +574,9 @@ class TestPostIssue:
 
         mock_db.get.side_effect = mock_get
         mock_journal_service.create_journal.return_value = mock_journal
-        mock_ledger_posting.post_journal_entry.return_value = MockPostingResult(success=True)
+        mock_ledger_posting.post_journal_entry.return_value = MockPostingResult(
+            success=True
+        )
 
         result = INVPostingAdapter.post_issue(
             db=mock_db,
@@ -651,7 +669,9 @@ class TestPostAdjustment:
 
     @patch("app.services.inventory.posting.adjustment.LedgerPostingService")
     @patch("app.services.inventory.posting.adjustment.JournalService")
-    def test_post_positive_adjustment_success(self, mock_journal_service, mock_ledger_posting):
+    def test_post_positive_adjustment_success(
+        self, mock_journal_service, mock_ledger_posting
+    ):
         """Test successful positive adjustment posting."""
         mock_db = MagicMock()
         org_id = uuid.uuid4()
@@ -685,7 +705,9 @@ class TestPostAdjustment:
 
         mock_db.get.side_effect = mock_get
         mock_journal_service.create_journal.return_value = mock_journal
-        mock_ledger_posting.post_journal_entry.return_value = MockPostingResult(success=True)
+        mock_ledger_posting.post_journal_entry.return_value = MockPostingResult(
+            success=True
+        )
 
         result = INVPostingAdapter.post_adjustment(
             db=mock_db,
@@ -699,7 +721,9 @@ class TestPostAdjustment:
 
     @patch("app.services.inventory.posting.adjustment.LedgerPostingService")
     @patch("app.services.inventory.posting.adjustment.JournalService")
-    def test_post_negative_adjustment_success(self, mock_journal_service, mock_ledger_posting):
+    def test_post_negative_adjustment_success(
+        self, mock_journal_service, mock_ledger_posting
+    ):
         """Test successful negative adjustment posting."""
         mock_db = MagicMock()
         org_id = uuid.uuid4()
@@ -733,7 +757,9 @@ class TestPostAdjustment:
 
         mock_db.get.side_effect = mock_get
         mock_journal_service.create_journal.return_value = mock_journal
-        mock_ledger_posting.post_journal_entry.return_value = MockPostingResult(success=True)
+        mock_ledger_posting.post_journal_entry.return_value = MockPostingResult(
+            success=True
+        )
 
         result = INVPostingAdapter.post_adjustment(
             db=mock_db,
@@ -828,7 +854,9 @@ class TestPostAdjustment:
 
         mock_db.get.side_effect = mock_get
         mock_journal_service.create_journal.return_value = mock_journal
-        mock_ledger_posting.post_journal_entry.return_value = MockPostingResult(success=True)
+        mock_ledger_posting.post_journal_entry.return_value = MockPostingResult(
+            success=True
+        )
 
         result = INVPostingAdapter.post_adjustment(
             db=mock_db,

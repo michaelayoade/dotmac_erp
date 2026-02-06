@@ -7,14 +7,13 @@ when payroll events are dispatched.
 
 import uuid
 from decimal import Decimal
-from datetime import date, datetime, timezone
-from unittest.mock import MagicMock, patch, call
+from datetime import date
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
 from app.models.people.payroll.payroll_entry import PayrollEntry, PayrollEntryStatus
-from app.models.people.hr.employee import Employee
 from app.services.people.payroll.events import (
     PayrollEventDispatcher,
     SlipPosted,
@@ -230,6 +229,7 @@ class TestSlipPostedHandler:
 
             MockNotificationService.return_value.notify_payslip_posted.assert_not_called()
 
+
 class TestSlipPaidHandler:
     """Tests for SlipPaid event handler."""
 
@@ -302,7 +302,9 @@ class TestSlipPaidHandler:
 
     def test_handler_ignores_org_mismatch(self, org_id, user_id):
         """Handler should ignore slips from a different org."""
-        slip = MockSalarySlip(organization_id=uuid.uuid4(), status=SalarySlipStatus.PAID)
+        slip = MockSalarySlip(
+            organization_id=uuid.uuid4(), status=SalarySlipStatus.PAID
+        )
         employee = MockEmployee(employee_id=slip.employee_id)
 
         mock_db = MagicMock()

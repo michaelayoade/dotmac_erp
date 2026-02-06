@@ -3,6 +3,7 @@ Incident API Endpoints.
 
 REST API for vehicle incident management.
 """
+
 from datetime import date
 from typing import Optional
 from uuid import UUID

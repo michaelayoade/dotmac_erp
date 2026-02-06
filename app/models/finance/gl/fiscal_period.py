@@ -2,12 +2,25 @@
 Fiscal Period Model - GL Schema.
 Document 08: Period management.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Index, Integer, String, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -59,8 +72,12 @@ class FiscalPeriod(Base):
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
 
     # Period type
-    is_adjustment_period: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    is_closing_period: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_adjustment_period: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    is_closing_period: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
 
     # Status management (Document 08)
     status: Mapped[PeriodStatus] = mapped_column(

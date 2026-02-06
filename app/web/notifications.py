@@ -46,16 +46,33 @@ def format_relative_time(dt: datetime) -> str:
         return dt.strftime("%b %d")
 
 
-def notification_type_to_display(entity_type: EntityType, notification_type: NotificationType) -> str:
+def notification_type_to_display(
+    entity_type: EntityType, notification_type: NotificationType
+) -> str:
     """Map notification types to display type for icon selection."""
     # Map to UI types: mention, invoice, payment, alert, info
-    if notification_type in (NotificationType.MENTION, NotificationType.COMMENT, NotificationType.REPLY):
+    if notification_type in (
+        NotificationType.MENTION,
+        NotificationType.COMMENT,
+        NotificationType.REPLY,
+    ):
         return "mention"
-    elif notification_type in (NotificationType.APPROVED, NotificationType.COMPLETED, NotificationType.RESOLVED):
+    elif notification_type in (
+        NotificationType.APPROVED,
+        NotificationType.COMPLETED,
+        NotificationType.RESOLVED,
+    ):
         return "payment"  # Use green icon for approvals/completions
-    elif notification_type in (NotificationType.REJECTED, NotificationType.OVERDUE, NotificationType.ALERT):
+    elif notification_type in (
+        NotificationType.REJECTED,
+        NotificationType.OVERDUE,
+        NotificationType.ALERT,
+    ):
         return "alert"
-    elif entity_type in (EntityType.EXPENSE,) and notification_type == NotificationType.SUBMITTED:
+    elif (
+        entity_type in (EntityType.EXPENSE,)
+        and notification_type == NotificationType.SUBMITTED
+    ):
         return "invoice"
     else:
         return "info"
@@ -65,7 +82,9 @@ def format_notification_for_template(notification) -> dict:
     """Convert Notification model to template-friendly dict."""
     return {
         "id": str(notification.notification_id),
-        "type": notification_type_to_display(notification.entity_type, notification.notification_type),
+        "type": notification_type_to_display(
+            notification.entity_type, notification.notification_type
+        ),
         "entity_type": notification.entity_type.value,
         "notification_type": notification.notification_type.value,
         "title": notification.title,
@@ -83,7 +102,9 @@ async def notifications_list(
     request: Request,
     auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db),
-    filter: Optional[str] = Query(None, description="Filter: all, unread, or entity type"),
+    filter: Optional[str] = Query(
+        None, description="Filter: all, unread, or entity type"
+    ),
     page: int = Query(1, ge=1),
 ):
     """Display notification center with all notifications."""
@@ -122,18 +143,22 @@ async def notifications_list(
     )
 
     # Format for template
-    formatted_notifications = [format_notification_for_template(n) for n in notifications]
+    formatted_notifications = [
+        format_notification_for_template(n) for n in notifications
+    ]
 
     # Get counts by entity type for filter pills
     entity_counts = {}
     for et in EntityType:
-        count = len(notification_service.list_notifications(
-            db,
-            recipient_id=auth.person_id,
-            organization_id=auth.organization_id,
-            entity_type=et,
-            limit=1000,
-        ))
+        count = len(
+            notification_service.list_notifications(
+                db,
+                recipient_id=auth.person_id,
+                organization_id=auth.organization_id,
+                entity_type=et,
+                limit=1000,
+            )
+        )
         if count > 0:
             entity_counts[et.value] = count
 
@@ -145,15 +170,17 @@ async def notifications_list(
         notifications=formatted_notifications[:5],  # For header dropdown
         db=db,
     )
-    context.update({
-        "notifications_list": formatted_notifications,
-        "unread_count": unread_count,
-        "current_filter": filter or "all",
-        "entity_counts": entity_counts,
-        "page": page,
-        "has_more": has_more,
-        "has_previous": page > 1,
-    })
+    context.update(
+        {
+            "notifications_list": formatted_notifications,
+            "unread_count": unread_count,
+            "current_filter": filter or "all",
+            "entity_counts": entity_counts,
+            "page": page,
+            "has_more": has_more,
+            "has_previous": page > 1,
+        }
+    )
 
     return templates.TemplateResponse(request, "notifications/list.html", context)
 
@@ -193,9 +220,7 @@ async def mark_all_notifications_read(
     if not auth.is_authenticated:
         return RedirectResponse(url="/login", status_code=302)
 
-    count = notification_service.mark_all_read(
-        db, auth.person_id, auth.organization_id
-    )
+    count = notification_service.mark_all_read(db, auth.person_id, auth.organization_id)
     db.commit()
 
     # Redirect back to notifications page
@@ -221,9 +246,7 @@ def get_notifications_for_context(
         limit=limit,
     )
 
-    unread_count = notification_service.get_unread_count(
-        db, person_id, organization_id
-    )
+    unread_count = notification_service.get_unread_count(db, person_id, organization_id)
 
     formatted = [format_notification_for_template(n) for n in notifications]
 

@@ -4,7 +4,7 @@ Tests for GLPostingAdapter.
 
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -65,7 +65,9 @@ class TestPostManualJournal:
             status=MockJournalStatus.POSTED,
         )
 
-        with patch("app.services.finance.gl.gl_posting_adapter.JournalService.post_journal") as mock_post:
+        with patch(
+            "app.services.finance.gl.gl_posting_adapter.JournalService.post_journal"
+        ) as mock_post:
             mock_post.return_value = journal
 
             result = adapter.post_manual_journal(
@@ -84,7 +86,9 @@ class TestPostManualJournal:
 
     def test_post_manual_journal_failure(self, adapter, mock_db, org_id, user_id):
         """Test manual journal posting failure."""
-        with patch("app.services.finance.gl.gl_posting_adapter.JournalService.post_journal") as mock_post:
+        with patch(
+            "app.services.finance.gl.gl_posting_adapter.JournalService.post_journal"
+        ) as mock_post:
             mock_post.side_effect = Exception("Period is closed")
 
             result = adapter.post_manual_journal(
@@ -113,7 +117,9 @@ class TestCreateAndPostJournal:
             status=MockJournalStatus.DRAFT,
         )
 
-        with patch("app.services.finance.gl.gl_posting_adapter.JournalService.create_journal") as mock_create:
+        with patch(
+            "app.services.finance.gl.gl_posting_adapter.JournalService.create_journal"
+        ) as mock_create:
             mock_create.return_value = journal
 
             result = adapter.create_and_post_journal(
@@ -151,10 +157,17 @@ class TestCreateAndPostJournal:
             status=MockJournalStatus.POSTED,
         )
 
-        with patch("app.services.finance.gl.gl_posting_adapter.JournalService.create_journal") as mock_create, \
-             patch("app.services.finance.gl.gl_posting_adapter.JournalService.submit_journal") as mock_submit, \
-             patch("app.services.finance.gl.gl_posting_adapter.JournalService.post_journal") as mock_post:
-
+        with (
+            patch(
+                "app.services.finance.gl.gl_posting_adapter.JournalService.create_journal"
+            ) as mock_create,
+            patch(
+                "app.services.finance.gl.gl_posting_adapter.JournalService.submit_journal"
+            ) as mock_submit,
+            patch(
+                "app.services.finance.gl.gl_posting_adapter.JournalService.post_journal"
+            ) as mock_post,
+        ):
             mock_create.return_value = draft_journal
             mock_submit.return_value = submitted_journal
             mock_post.return_value = posted_journal
@@ -177,7 +190,9 @@ class TestCreateAndPostJournal:
         self, adapter, mock_db, org_id, user_id, sample_journal_input
     ):
         """Test journal creation failure."""
-        with patch("app.services.finance.gl.gl_posting_adapter.JournalService.create_journal") as mock_create:
+        with patch(
+            "app.services.finance.gl.gl_posting_adapter.JournalService.create_journal"
+        ) as mock_create:
             mock_create.side_effect = Exception("Invalid account")
 
             result = adapter.create_and_post_journal(
@@ -196,9 +211,14 @@ class TestCreateAndPostJournal:
         """Test auto-post failure during submit."""
         journal = MockJournalEntry(organization_id=org_id)
 
-        with patch("app.services.finance.gl.gl_posting_adapter.JournalService.create_journal") as mock_create, \
-             patch("app.services.finance.gl.gl_posting_adapter.JournalService.submit_journal") as mock_submit:
-
+        with (
+            patch(
+                "app.services.finance.gl.gl_posting_adapter.JournalService.create_journal"
+            ) as mock_create,
+            patch(
+                "app.services.finance.gl.gl_posting_adapter.JournalService.submit_journal"
+            ) as mock_submit,
+        ):
             mock_create.return_value = journal
             mock_submit.side_effect = Exception("Cannot submit draft")
 
@@ -219,10 +239,17 @@ class TestCreateAndPostJournal:
         """Test auto-post failure during posting."""
         journal = MockJournalEntry(organization_id=org_id)
 
-        with patch("app.services.finance.gl.gl_posting_adapter.JournalService.create_journal") as mock_create, \
-             patch("app.services.finance.gl.gl_posting_adapter.JournalService.submit_journal") as mock_submit, \
-             patch("app.services.finance.gl.gl_posting_adapter.JournalService.post_journal") as mock_post:
-
+        with (
+            patch(
+                "app.services.finance.gl.gl_posting_adapter.JournalService.create_journal"
+            ) as mock_create,
+            patch(
+                "app.services.finance.gl.gl_posting_adapter.JournalService.submit_journal"
+            ) as mock_submit,
+            patch(
+                "app.services.finance.gl.gl_posting_adapter.JournalService.post_journal"
+            ) as mock_post,
+        ):
             mock_create.return_value = journal
             mock_submit.return_value = journal
             mock_post.side_effect = Exception("Period closed for posting")

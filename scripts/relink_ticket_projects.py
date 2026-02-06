@@ -17,11 +17,10 @@ from pathlib import Path
 # Add app to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from app.db import SessionLocal
 from app.models.support.ticket import Ticket
 from app.models.sync import SyncEntity
-from app.models.finance.core_org.project import Project
 
 logging.basicConfig(
     level=logging.INFO,
@@ -43,9 +42,7 @@ def relink_tickets_to_projects(dry_run: bool = False):
 
     try:
         # Get all organizations with tickets
-        org_ids = db.execute(
-            select(Ticket.organization_id).distinct()
-        ).scalars().all()
+        org_ids = db.execute(select(Ticket.organization_id).distinct()).scalars().all()
 
         total_updated = 0
 
@@ -53,25 +50,33 @@ def relink_tickets_to_projects(dry_run: bool = False):
             logger.info(f"Processing organization: {org_id}")
 
             # Get tickets without project_id
-            tickets_without_project = db.execute(
-                select(Ticket)
-                .where(
-                    Ticket.organization_id == org_id,
-                    Ticket.project_id.is_(None),
+            tickets_without_project = (
+                db.execute(
+                    select(Ticket).where(
+                        Ticket.organization_id == org_id,
+                        Ticket.project_id.is_(None),
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
 
-            logger.info(f"  Found {len(tickets_without_project)} tickets without project link")
+            logger.info(
+                f"  Found {len(tickets_without_project)} tickets without project link"
+            )
 
             # Get project mapping (source_name -> project_id)
-            project_sync = db.execute(
-                select(SyncEntity)
-                .where(
-                    SyncEntity.organization_id == org_id,
-                    SyncEntity.source_system == "erpnext",
-                    SyncEntity.source_doctype == "Project",
+            project_sync = (
+                db.execute(
+                    select(SyncEntity).where(
+                        SyncEntity.organization_id == org_id,
+                        SyncEntity.source_system == "erpnext",
+                        SyncEntity.source_doctype == "Project",
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
 
             project_map = {se.source_name: se.target_id for se in project_sync}
             logger.info(f"  Found {len(project_map)} synced projects")
@@ -87,11 +92,11 @@ def relink_tickets_to_projects(dry_run: bool = False):
             # ERPNext Issues might have project in their naming or custom fields
 
             # For now, just report the gap
-            logger.info(f"  Note: Re-linking requires re-syncing tickets from ERPNext")
-            logger.info(f"  Run: python scripts/erpnext_sync.py --phase 5 --full")
+            logger.info("  Note: Re-linking requires re-syncing tickets from ERPNext")
+            logger.info("  Run: python scripts/erpnext_sync.py --phase 5 --full")
 
         # Summary
-        logger.info(f"\n=== Summary ===")
+        logger.info("\n=== Summary ===")
         logger.info(f"Organizations processed: {len(org_ids)}")
         logger.info(f"Tickets updated: {total_updated}")
 
@@ -122,7 +127,7 @@ def check_project_status():
         if result:
             total, with_proj, total_proj = result
             logger.info(f"Tickets: {total:,}")
-            logger.info(f"With project: {with_proj:,} ({100*with_proj/total:.1f}%)")
+            logger.info(f"With project: {with_proj:,} ({100 * with_proj / total:.1f}%)")
             logger.info(f"Projects available: {total_proj:,}")
 
     finally:

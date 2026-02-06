@@ -7,12 +7,13 @@ like common.py, bulk_actions.py, scheduler.py, audit.py, and scheduler_config.py
 
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, PropertyMock
+from unittest.mock import MagicMock
 
 import pytest
 
 
 # ============ UUID Fixtures ============
+
 
 @pytest.fixture
 def organization_id():
@@ -33,6 +34,7 @@ def entity_id():
 
 
 # ============ Mock Database Session ============
+
 
 @pytest.fixture
 def mock_db():
@@ -56,6 +58,7 @@ def mock_db():
 
 # ============ Mock Entity Classes ============
 
+
 class MockEntity:
     """Base mock entity for testing bulk actions."""
 
@@ -68,7 +71,9 @@ class MockEntity:
         created_at: datetime | None = None,
     ):
         self.id = id or uuid.uuid4()
-        self.organization_id = organization_id or uuid.UUID("00000000-0000-0000-0000-000000000001")
+        self.organization_id = organization_id or uuid.UUID(
+            "00000000-0000-0000-0000-000000000001"
+        )
         self.is_active = is_active
         self.name = name
         self.created_at = created_at or datetime.now(timezone.utc)
@@ -104,6 +109,7 @@ class MockRelatedEntity:
 
 # ============ Mock Model Class ============
 
+
 @pytest.fixture
 def mock_model_class():
     """Create a mock SQLAlchemy model class for testing."""
@@ -127,6 +133,7 @@ def mock_model_class():
 
 
 # ============ Request/Response Mocks ============
+
 
 @pytest.fixture
 def mock_request():
@@ -167,6 +174,7 @@ def mock_response():
 
 
 # ============ Scheduler Fixtures ============
+
 
 @pytest.fixture
 def mock_scheduled_task():
@@ -209,11 +217,12 @@ def mock_scheduled_task_create():
             "args_json": None,
             "kwargs_json": None,
             "enabled": True,
-        }
+        },
     )
 
 
 # ============ Audit Fixtures ============
+
 
 @pytest.fixture
 def mock_audit_event():
@@ -269,11 +278,12 @@ def mock_audit_event_create():
             "request_id": "req-123",
             "metadata_": {},
             "occurred_at": None,
-        }
+        },
     )
 
 
 # ============ Domain Settings Fixtures ============
+
 
 @pytest.fixture
 def mock_domain_setting():

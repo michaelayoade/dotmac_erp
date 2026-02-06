@@ -5,7 +5,6 @@ Tests IAS 12 deferred tax calculations, basis tracking, and movements.
 """
 
 import pytest
-from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -347,8 +346,11 @@ class TestUpdateBasis:
 
         with pytest.raises(HTTPException) as exc:
             DeferredTaxService.update_basis(
-                mock_db, org_id, uuid4(),
-                Decimal("1000.00"), Decimal("800.00"),
+                mock_db,
+                org_id,
+                uuid4(),
+                Decimal("1000.00"),
+                Decimal("800.00"),
             )
 
         assert exc.value.status_code == 404
@@ -360,8 +362,11 @@ class TestUpdateBasis:
 
         with pytest.raises(HTTPException) as exc:
             DeferredTaxService.update_basis(
-                mock_db, org_id, basis.basis_id,
-                Decimal("1000.00"), Decimal("800.00"),
+                mock_db,
+                org_id,
+                basis.basis_id,
+                Decimal("1000.00"),
+                Decimal("800.00"),
             )
 
         assert exc.value.status_code == 404
@@ -432,15 +437,22 @@ class TestCreateMovement:
 
         with pytest.raises(HTTPException) as exc:
             DeferredTaxService.create_movement(
-                mock_db, org_id, uuid4(), uuid4(),
-                Decimal("1000.00"), Decimal("800.00"), Decimal("0.25"),
+                mock_db,
+                org_id,
+                uuid4(),
+                uuid4(),
+                Decimal("1000.00"),
+                Decimal("800.00"),
+                Decimal("0.25"),
                 "OPERATING",
             )
 
         assert exc.value.status_code == 404
 
     @patch("app.services.finance.tax.deferred_tax.DeferredTaxMovement")
-    def test_create_movement_with_rate_change(self, mock_movement_class, mock_db, org_id):
+    def test_create_movement_with_rate_change(
+        self, mock_movement_class, mock_db, org_id
+    ):
         """Test movement with tax rate change."""
         basis = MockDeferredTaxBasis(
             organization_id=org_id,
@@ -539,7 +551,9 @@ class TestGetSummary:
         assert result.total_dtl == Decimal("0")
         assert result.items_count == 0
 
-    def test_get_summary_with_jurisdiction_filter(self, mock_db, org_id, jurisdiction_id):
+    def test_get_summary_with_jurisdiction_filter(
+        self, mock_db, org_id, jurisdiction_id
+    ):
         """Test summary filtered by jurisdiction."""
         bases = [MockDeferredTaxBasis(jurisdiction_id=jurisdiction_id)]
 
@@ -682,7 +696,9 @@ class TestList:
         result = DeferredTaxService.list(mock_db, limit=10, offset=20)
 
         mock_query.order_by.return_value.limit.assert_called_with(10)
-        mock_query.order_by.return_value.limit.return_value.offset.assert_called_with(20)
+        mock_query.order_by.return_value.limit.return_value.offset.assert_called_with(
+            20
+        )
 
 
 class TestListMovements:

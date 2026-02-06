@@ -1,12 +1,23 @@
 """
 Supplier Invoice Line Model - AP Schema.
 """
+
 import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -49,7 +60,9 @@ class SupplierInvoiceLine(Base):
         nullable=True,
     )
 
-    item_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    item_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
     description: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Quantity & Price
@@ -58,8 +71,12 @@ class SupplierInvoiceLine(Base):
     line_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
 
     # Tax
-    tax_code_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
-    tax_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    tax_code_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    tax_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Accounting
     expense_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
@@ -76,11 +93,17 @@ class SupplierInvoiceLine(Base):
         UUID(as_uuid=True),
         nullable=True,
     )
-    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
-    segment_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    segment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
 
     # Capitalization
-    capitalize_flag: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    capitalize_flag: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     asset_category_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("fa.asset_category.category_id"),
@@ -99,7 +122,9 @@ class SupplierInvoiceLine(Base):
     )
 
     # Relationships
-    invoice: Mapped["SupplierInvoice"] = relationship("SupplierInvoice", back_populates="lines")
+    invoice: Mapped["SupplierInvoice"] = relationship(
+        "SupplierInvoice", back_populates="lines"
+    )
     line_taxes: Mapped[list["SupplierInvoiceLineTax"]] = relationship(
         "SupplierInvoiceLineTax",
         back_populates="invoice_line",

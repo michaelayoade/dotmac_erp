@@ -58,8 +58,7 @@ class BankStatement(Base):
     __tablename__ = "bank_statements"
     __table_args__ = (
         UniqueConstraint(
-            "bank_account_id", "statement_number",
-            name="uq_bank_statement_number"
+            "bank_account_id", "statement_number", name="uq_bank_statement_number"
         ),
         Index("ix_bank_statement_period", "bank_account_id", "statement_date"),
         {"schema": "banking"},
@@ -127,14 +126,18 @@ class BankStatement(Base):
     )
 
     # Import metadata
-    import_source: Mapped[str] = mapped_column(String(50), nullable=True)  # e.g., "CSV", "OFX", "MT940"
+    import_source: Mapped[str] = mapped_column(
+        String(50), nullable=True
+    )  # e.g., "CSV", "OFX", "MT940"
     import_filename: Mapped[str] = mapped_column(String(255), nullable=True)
     imported_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         default=datetime.utcnow,
     )
-    imported_by: Mapped[Optional[UUID]] = mapped_column(SAUUID(as_uuid=True), nullable=True)
+    imported_by: Mapped[Optional[UUID]] = mapped_column(
+        SAUUID(as_uuid=True), nullable=True
+    )
 
     # Line counts
     total_lines: Mapped[int] = mapped_column(nullable=False, default=0)
@@ -161,7 +164,7 @@ class BankStatement(Base):
     bank_account: Mapped["BankAccount"] = relationship(
         "BankAccount",
         foreign_keys=[bank_account_id],
-        lazy="joined",
+        lazy="select",
     )
     lines: Mapped[List["BankStatementLine"]] = relationship(
         "BankStatementLine",
@@ -217,7 +220,9 @@ class BankStatementLine(Base):
 
     # Line identification
     line_number: Mapped[int] = mapped_column(nullable=False)
-    transaction_id: Mapped[str] = mapped_column(String(100), nullable=True)  # Bank's transaction ID
+    transaction_id: Mapped[str] = mapped_column(
+        String(100), nullable=True
+    )  # Bank's transaction ID
 
     # Transaction details
     transaction_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -240,18 +245,26 @@ class BankStatementLine(Base):
     # Description/Reference
     description: Mapped[str] = mapped_column(String(500), nullable=True)
     reference: Mapped[str] = mapped_column(String(100), nullable=True)
-    payee_payer: Mapped[str] = mapped_column(String(200), nullable=True)  # Counter-party name
+    payee_payer: Mapped[str] = mapped_column(
+        String(200), nullable=True
+    )  # Counter-party name
     bank_reference: Mapped[str] = mapped_column(String(100), nullable=True)
     check_number: Mapped[str] = mapped_column(String(20), nullable=True)
 
     # Categorization (from bank)
     bank_category: Mapped[str] = mapped_column(String(100), nullable=True)
-    bank_code: Mapped[str] = mapped_column(String(20), nullable=True)  # Bank's transaction code
+    bank_code: Mapped[str] = mapped_column(
+        String(20), nullable=True
+    )  # Bank's transaction code
 
     # Matching status
     is_matched: Mapped[bool] = mapped_column(Boolean, default=False)
-    matched_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    matched_by: Mapped[Optional[UUID]] = mapped_column(SAUUID(as_uuid=True), nullable=True)
+    matched_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    matched_by: Mapped[Optional[UUID]] = mapped_column(
+        SAUUID(as_uuid=True), nullable=True
+    )
 
     # GL matching (for matched transactions)
     matched_journal_line_id: Mapped[Optional[UUID]] = mapped_column(

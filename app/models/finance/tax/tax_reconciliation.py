@@ -1,12 +1,13 @@
 """
 Tax Reconciliation Model - Tax Schema.
 """
+
 import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import DateTime, ForeignKey, Numeric, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -54,7 +55,9 @@ class TaxReconciliation(Base):
     # Starting point
     profit_before_tax: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     statutory_tax_rate: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False)
-    tax_at_statutory_rate: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    tax_at_statutory_rate: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
 
     # Reconciling items (tax effect amounts)
     permanent_differences: Mapped[Decimal] = mapped_column(
@@ -67,7 +70,9 @@ class TaxReconciliation(Base):
         nullable=False,
         default=0,
     )
-    non_taxable_income: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    non_taxable_income: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
     rate_differential_on_foreign_income: Mapped[Decimal] = mapped_column(
         Numeric(20, 6),
         nullable=False,
@@ -103,7 +108,9 @@ class TaxReconciliation(Base):
     # Totals
     total_tax_expense: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     current_tax_expense: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    deferred_tax_expense: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    deferred_tax_expense: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
 
     # Effective tax rate
     effective_tax_rate: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False)

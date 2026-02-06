@@ -1,13 +1,24 @@
 """
 Elimination Entry Model - Consolidation Schema.
 """
+
 import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Numeric, String, Text, func, text
+from sqlalchemy import (
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -75,9 +86,13 @@ class EliminationEntry(Base):
 
     # Amounts (in reporting currency)
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
-    debit_account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    debit_account_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
     debit_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    credit_account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    credit_account_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
     credit_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
 
     # NCI impact
@@ -85,12 +100,16 @@ class EliminationEntry(Base):
         UUID(as_uuid=True),
         nullable=True,
     )
-    nci_debit_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    nci_debit_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
     nci_credit_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    nci_credit_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    nci_credit_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Automatic vs manual
     is_automatic: Mapped[bool] = mapped_column(default=True)

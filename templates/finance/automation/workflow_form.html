@@ -16,17 +16,20 @@
 
 {% block content %}
 <div class="mx-auto max-w-3xl">
-    <form method="post"
-          action="/automation/workflows/{% if is_edit %}{{ rule.rule_id }}/edit{% else %}new{% endif %}"
-          class="space-y-6"
-          x-data="workflowForm({
-            triggerEvent: '{{ rule.trigger_event_raw if rule else form_data.trigger_event | default('', true) }}',
-            actionType: '{{ rule.action_type_raw if rule else form_data.action_type | default('', true) }}',
+    <script>
+        window.__workflowFormInitial = {
+            triggerEvent: {{ (rule.trigger_event_raw if rule else form_data.trigger_event | default('', true)) | tojson }},
+            actionType: {{ (rule.action_type_raw if rule else form_data.action_type | default('', true)) | tojson }},
             triggerConditions: {{ (rule.trigger_conditions if rule else form_data.trigger_conditions | default({}, true)) | tojson }},
             actionConfig: {{ (rule.action_config if rule else form_data.action_config | default({}, true)) | tojson }},
             scheduleConfig: {{ (rule.schedule_config if rule else form_data.schedule_config | default(None, true)) | tojson }},
-            cooldownSeconds: '{{ rule.cooldown_seconds if rule else form_data.cooldown_seconds | default('', true) }}'
-          })"
+            cooldownSeconds: {{ (rule.cooldown_seconds if rule else form_data.cooldown_seconds | default('', true)) | tojson }}
+        };
+    </script>
+    <form method="post"
+          action="/automation/workflows/{% if is_edit %}{{ rule.rule_id }}/edit{% else %}new{% endif %}"
+          class="space-y-6"
+          x-data="workflowForm(window.__workflowFormInitial || {})"
           x-effect="syncAll()">
         <!-- Basic Info -->
         <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
@@ -295,24 +298,26 @@
                     <div>
                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Recipients *</label>
                         <input type="text" placeholder="email1@company.com, email2@company.com" x-model="emailRecipients"
+                               value="{{ (rule.action_config.recipients | join(', ')) if rule and rule.action_config else '' }}"
                                :required="actionType === 'SEND_EMAIL'"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Subject *</label>
                         <input type="text" placeholder="Workflow Notification" x-model="emailSubject"
+                               value="{{ (rule.action_config.subject) if rule and rule.action_config else '' }}"
                                :required="actionType === 'SEND_EMAIL'"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">HTML Body *</label>
                         <textarea rows="4" x-model="emailBodyHtml" :required="actionType === 'SEND_EMAIL'"
-                                  class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white"></textarea>
+                                  class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{% if rule and rule.action_config %}{{ rule.action_config.body_html | default('') }}{% endif %}</textarea>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Text Body (optional)</label>
                         <textarea rows="3" x-model="emailBodyText"
-                                  class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white"></textarea>
+                                  class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{% if rule and rule.action_config %}{{ rule.action_config.body_text | default('') }}{% endif %}</textarea>
                     </div>
                 </div>
 

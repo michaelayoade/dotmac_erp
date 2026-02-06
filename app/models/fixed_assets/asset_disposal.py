@@ -1,13 +1,24 @@
 """
 Asset Disposal Model - FA Schema.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, Numeric, String, Text, func, text
+from sqlalchemy import (
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -67,12 +78,20 @@ class AssetDisposal(Base):
     )
 
     # Disposal proceeds
-    disposal_proceeds: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
-    costs_of_disposal: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
-    net_proceeds: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    disposal_proceeds: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
+    costs_of_disposal: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
+    net_proceeds: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Gain/Loss calculation
-    gain_loss_on_disposal: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    gain_loss_on_disposal: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
 
     # Buyer/Recipient details
     buyer_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
@@ -81,7 +100,9 @@ class AssetDisposal(Base):
 
     # Reason and documentation
     disposal_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    authorization_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    authorization_reference: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
 
     # Trade-in details
     trade_in_asset_id: Mapped[Optional[uuid.UUID]] = mapped_column(
@@ -90,8 +111,12 @@ class AssetDisposal(Base):
     )
 
     # Insurance claim details
-    insurance_claim_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    insurance_proceeds: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6), nullable=True)
+    insurance_claim_reference: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
+    insurance_proceeds: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 6), nullable=True
+    )
 
     # Accounting
     journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(

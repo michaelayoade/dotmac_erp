@@ -57,9 +57,13 @@ def test_loan_search_adds_person_joins():
 
     auth = SimpleNamespace(organization_id="00000000-0000-0000-0000-000000000001")
 
-    with patch.object(loan_web, "select", _select), \
-         patch.object(loan_web, "base_context", lambda *args, **kwargs: {}), \
-         patch.object(loan_web.templates, "TemplateResponse", lambda *_args, **_kwargs: None):
+    with (
+        patch.object(loan_web, "select", _select),
+        patch.object(loan_web, "base_context", lambda *args, **kwargs: {}),
+        patch.object(
+            loan_web.templates, "TemplateResponse", lambda *_args, **_kwargs: None
+        ),
+    ):
         service.list_loans_response(MagicMock(), auth, db, search="Ada")
 
     assert stubs, "expected select() to be called"
@@ -81,9 +85,13 @@ def test_loan_list_without_search_skips_person_joins():
 
     auth = SimpleNamespace(organization_id="00000000-0000-0000-0000-000000000001")
 
-    with patch.object(loan_web, "select", _select), \
-         patch.object(loan_web, "base_context", lambda *args, **kwargs: {}), \
-         patch.object(loan_web.templates, "TemplateResponse", lambda *_args, **_kwargs: None):
+    with (
+        patch.object(loan_web, "select", _select),
+        patch.object(loan_web, "base_context", lambda *args, **kwargs: {}),
+        patch.object(
+            loan_web.templates, "TemplateResponse", lambda *_args, **_kwargs: None
+        ),
+    ):
         service.list_loans_response(MagicMock(), auth, db)
 
     assert stubs, "expected select() to be called"

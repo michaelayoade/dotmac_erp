@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 # Customer
 # =============================================================================
 
+
 class CustomerBase(BaseModel):
     """
     Base customer schema with template-friendly field names.
@@ -27,14 +28,22 @@ class CustomerBase(BaseModel):
 
     customer_code: str = Field(max_length=30)
     customer_type: str = Field(default="COMPANY", max_length=20)
-    customer_name: str = Field(max_length=255)  # Template name (service maps to legal_name)
+    customer_name: str = Field(
+        max_length=255
+    )  # Template name (service maps to legal_name)
     trading_name: Optional[str] = Field(default=None, max_length=255)
-    tax_id: Optional[str] = Field(default=None, max_length=50)  # Template name (service maps to tax_identification_number)
-    payment_terms_days: int = Field(default=30)  # Template name (service maps to credit_terms_days)
+    tax_id: Optional[str] = Field(
+        default=None, max_length=50
+    )  # Template name (service maps to tax_identification_number)
+    payment_terms_days: int = Field(
+        default=30
+    )  # Template name (service maps to credit_terms_days)
     credit_limit: Optional[Decimal] = None
     currency_code: str = Field(default="NGN", max_length=3)
     default_revenue_account_id: Optional[UUID] = None
-    default_receivable_account_id: Optional[UUID] = None  # Template name (service maps to ar_control_account_id)
+    default_receivable_account_id: Optional[UUID] = (
+        None  # Template name (service maps to ar_control_account_id)
+    )
     is_active: bool = True
     # Additional template fields
     email: Optional[str] = Field(default=None, max_length=255)
@@ -73,12 +82,16 @@ class CustomerRead(BaseModel):
     customer_type: str
     customer_name: str = Field(validation_alias="legal_name")
     trading_name: Optional[str] = None
-    tax_id: Optional[str] = Field(default=None, validation_alias="tax_identification_number")
+    tax_id: Optional[str] = Field(
+        default=None, validation_alias="tax_identification_number"
+    )
     payment_terms_days: int = Field(validation_alias="credit_terms_days")
     credit_limit: Optional[Decimal] = None
     currency_code: str
     default_revenue_account_id: Optional[UUID] = None
-    default_receivable_account_id: Optional[UUID] = Field(default=None, validation_alias="ar_control_account_id")
+    default_receivable_account_id: Optional[UUID] = Field(
+        default=None, validation_alias="ar_control_account_id"
+    )
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -87,6 +100,7 @@ class CustomerRead(BaseModel):
 # =============================================================================
 # AR Invoice
 # =============================================================================
+
 
 class ARInvoiceLineCreate(BaseModel):
     """AR invoice line for creation."""
@@ -153,6 +167,7 @@ class ARInvoiceRead(BaseModel):
 # AR Receipt
 # =============================================================================
 
+
 class ReceiptAllocationCreate(BaseModel):
     """Receipt allocation to invoice."""
 
@@ -194,6 +209,7 @@ class ARReceiptRead(BaseModel):
 # AR Aging
 # =============================================================================
 
+
 class ARAgingBucketRead(BaseModel):
     """AR aging bucket."""
 
@@ -220,6 +236,7 @@ class ARAgingReportRead(BaseModel):
 # =============================================================================
 # Credit Note
 # =============================================================================
+
 
 class CreditNoteCreate(BaseModel):
     """Create credit note request."""

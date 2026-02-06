@@ -3,6 +3,7 @@ Task Model - PM Schema.
 
 Core work item entity for project management.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -10,7 +11,6 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import (
-    Boolean,
     Date,
     DateTime,
     Enum,

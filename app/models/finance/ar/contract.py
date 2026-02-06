@@ -2,13 +2,25 @@
 Contract Model - AR Schema.
 IFRS 15 Revenue Recognition.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -37,7 +49,9 @@ class Contract(Base):
 
     __tablename__ = "contract"
     __table_args__ = (
-        UniqueConstraint("organization_id", "contract_number", name="uq_contract_number"),
+        UniqueConstraint(
+            "organization_id", "contract_number", name="uq_contract_number"
+        ),
         {"schema": "ar"},
     )
 
@@ -90,7 +104,9 @@ class Contract(Base):
 
     # IFRS 15 criteria
     is_enforceable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    has_commercial_substance: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    has_commercial_substance: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
     collectability_assessment: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
@@ -110,13 +126,23 @@ class Contract(Base):
     )
 
     # Financing component
-    significant_financing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    financing_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 5), nullable=True)
+    significant_financing: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    financing_rate: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(8, 5), nullable=True
+    )
 
     # Non-cash consideration
-    noncash_consideration: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    consideration_payable: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    terms_and_conditions: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    noncash_consideration: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )
+    consideration_payable: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )
+    terms_and_conditions: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

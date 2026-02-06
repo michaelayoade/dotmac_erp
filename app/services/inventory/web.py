@@ -369,8 +369,10 @@ class InventoryWebService:
                                 ),
                             }
                         )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(
+                    "Failed to load stock balances for item %s: %s", item_id, e
+                )
 
         return {
             "item": item_obj,
@@ -1158,6 +1160,8 @@ class InventoryWebService:
         cogs_account_id: str,
         revenue_account_id: str,
         inventory_adjustment_account_id: str,
+        reorder_point: Optional[str],
+        minimum_stock: Optional[str],
         description: Optional[str],
         parent_category_id: Optional[str],
         purchase_variance_account_id: Optional[str],
@@ -1173,6 +1177,8 @@ class InventoryWebService:
                 cogs_account_id=UUID(cogs_account_id),
                 revenue_account_id=UUID(revenue_account_id),
                 inventory_adjustment_account_id=UUID(inventory_adjustment_account_id),
+                reorder_point=Decimal(reorder_point) if reorder_point else None,
+                minimum_stock=Decimal(minimum_stock) if minimum_stock else None,
                 description=description,
                 parent_category_id=UUID(parent_category_id)
                 if parent_category_id
@@ -1204,6 +1210,8 @@ class InventoryWebService:
         cogs_account_id: str,
         revenue_account_id: str,
         inventory_adjustment_account_id: str,
+        reorder_point: Optional[str],
+        minimum_stock: Optional[str],
         description: Optional[str],
         parent_category_id: Optional[str],
         purchase_variance_account_id: Optional[str],
@@ -1220,6 +1228,8 @@ class InventoryWebService:
                 "inventory_adjustment_account_id": UUID(
                     inventory_adjustment_account_id
                 ),
+                "reorder_point": Decimal(reorder_point) if reorder_point else None,
+                "minimum_stock": Decimal(minimum_stock) if minimum_stock else None,
                 "description": description,
                 "parent_category_id": UUID(parent_category_id)
                 if parent_category_id
@@ -1262,8 +1272,8 @@ class InventoryWebService:
                 item_category_service.update_category(
                     db, org_id, UUID(category_id), {"is_active": True}
                 )
-        except Exception:
-            pass  # Just redirect back
+        except Exception as e:
+            logger.exception("Failed to toggle category %s: %s", category_id, e)
         return RedirectResponse(url="/inventory/categories", status_code=303)
 
     # ========================================================================
@@ -1597,8 +1607,8 @@ class InventoryWebService:
                 warehouse_service.update_warehouse(
                     db, org_id, UUID(warehouse_id), {"is_active": True}
                 )
-        except Exception:
-            pass  # Just redirect back
+        except Exception as e:
+            logger.exception("Failed to toggle warehouse %s: %s", warehouse_id, e)
         return RedirectResponse(url="/inventory/warehouses", status_code=303)
 
     @staticmethod
@@ -1836,15 +1846,6 @@ class InventoryTransactionWebService:
         )
 
         org_id = auth.organization_id
-        user_id = auth.user_id
-        assert org_id is not None
-        assert user_id is not None
-        user_id = auth.user_id
-        assert org_id is not None
-        assert user_id is not None
-        user_id = auth.user_id
-        assert org_id is not None
-        assert user_id is not None
         user_id = auth.user_id
         assert org_id is not None
         assert user_id is not None

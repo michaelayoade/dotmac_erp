@@ -41,14 +41,16 @@ def list_competencies(
     result = comp_svc.list_competencies(category=cat, is_active=None, search=search)
 
     context = base_context(request, auth, "Competencies", "competencies", db=db)
-    context.update({
-        "competencies": result.items,
-        "categories": list(CompetencyCategory),
-        "selected_category": category,
-        "search": search,
-        "success": success,
-        "error": error,
-    })
+    context.update(
+        {
+            "competencies": result.items,
+            "categories": list(CompetencyCategory),
+            "selected_category": category,
+            "search": search,
+            "success": success,
+            "error": error,
+        }
+    )
     return templates.TemplateResponse(request, "people/hr/competencies.html", context)
 
 
@@ -60,11 +62,15 @@ def new_competency_form(
 ):
     """New competency form."""
     context = base_context(request, auth, "Add Competency", "competencies", db=db)
-    context.update({
-        "categories": list(CompetencyCategory),
-        "form_data": {},
-    })
-    return templates.TemplateResponse(request, "people/hr/competency_form.html", context)
+    context.update(
+        {
+            "categories": list(CompetencyCategory),
+            "form_data": {},
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/hr/competency_form.html", context
+    )
 
 
 @router.post("/competencies/new", response_class=HTMLResponse)
@@ -99,26 +105,32 @@ def create_competency(
             level_5_description=level_5_description or None,
         )
         db.commit()
-        return RedirectResponse(url="/people/hr/competencies?success=Competency+created", status_code=303)
+        return RedirectResponse(
+            url="/people/hr/competencies?success=Competency+created", status_code=303
+        )
     except Exception as e:
         db.rollback()
         context = base_context(request, auth, "Add Competency", "competencies", db=db)
-        context.update({
-            "categories": list(CompetencyCategory),
-            "form_data": {
-                "competency_code": competency_code,
-                "competency_name": competency_name,
-                "category": category,
-                "description": description,
-                "level_1_description": level_1_description,
-                "level_2_description": level_2_description,
-                "level_3_description": level_3_description,
-                "level_4_description": level_4_description,
-                "level_5_description": level_5_description,
-            },
-            "error": str(e),
-        })
-        return templates.TemplateResponse(request, "people/hr/competency_form.html", context)
+        context.update(
+            {
+                "categories": list(CompetencyCategory),
+                "form_data": {
+                    "competency_code": competency_code,
+                    "competency_name": competency_name,
+                    "category": category,
+                    "description": description,
+                    "level_1_description": level_1_description,
+                    "level_2_description": level_2_description,
+                    "level_3_description": level_3_description,
+                    "level_4_description": level_4_description,
+                    "level_5_description": level_5_description,
+                },
+                "error": str(e),
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/hr/competency_form.html", context
+        )
 
 
 @router.get("/competencies/{competency_id}", response_class=HTMLResponse)
@@ -134,13 +146,21 @@ def view_competency(
 
     competency = comp_svc.get_competency(coerce_uuid(competency_id))
     if not competency:
-        return RedirectResponse(url="/people/hr/competencies?error=Competency+not+found", status_code=303)
+        return RedirectResponse(
+            url="/people/hr/competencies?error=Competency+not+found", status_code=303
+        )
 
-    context = base_context(request, auth, competency.competency_name, "competencies", db=db)
-    context.update({
-        "competency": competency,
-    })
-    return templates.TemplateResponse(request, "people/hr/competency_detail.html", context)
+    context = base_context(
+        request, auth, competency.competency_name, "competencies", db=db
+    )
+    context.update(
+        {
+            "competency": competency,
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/hr/competency_detail.html", context
+    )
 
 
 @router.get("/competencies/{competency_id}/edit", response_class=HTMLResponse)
@@ -156,15 +176,23 @@ def edit_competency_form(
 
     competency = comp_svc.get_competency(coerce_uuid(competency_id))
     if not competency:
-        return RedirectResponse(url="/people/hr/competencies?error=Competency+not+found", status_code=303)
+        return RedirectResponse(
+            url="/people/hr/competencies?error=Competency+not+found", status_code=303
+        )
 
-    context = base_context(request, auth, f"Edit {competency.competency_name}", "competencies", db=db)
-    context.update({
-        "competency": competency,
-        "categories": list(CompetencyCategory),
-        "form_data": {},
-    })
-    return templates.TemplateResponse(request, "people/hr/competency_form.html", context)
+    context = base_context(
+        request, auth, f"Edit {competency.competency_name}", "competencies", db=db
+    )
+    context.update(
+        {
+            "competency": competency,
+            "categories": list(CompetencyCategory),
+            "form_data": {},
+        }
+    )
+    return templates.TemplateResponse(
+        request, "people/hr/competency_form.html", context
+    )
 
 
 @router.post("/competencies/{competency_id}/edit", response_class=HTMLResponse)
@@ -205,20 +233,26 @@ def update_competency(
             },
         )
         db.commit()
-        return RedirectResponse(url="/people/hr/competencies?success=Competency+updated", status_code=303)
+        return RedirectResponse(
+            url="/people/hr/competencies?success=Competency+updated", status_code=303
+        )
     except Exception as e:
         db.rollback()
         competency = comp_svc.get_competency(coerce_uuid(competency_id))
-        context = base_context(request, auth, f"Edit Competency", "competencies", db=db)
-        context.update({
-            "competency": competency,
-            "categories": list(CompetencyCategory),
-            "form_data": {
-                "competency_code": competency_code,
-                "competency_name": competency_name,
-                "category": category,
-                "description": description,
-            },
-            "error": str(e),
-        })
-        return templates.TemplateResponse(request, "people/hr/competency_form.html", context)
+        context = base_context(request, auth, "Edit Competency", "competencies", db=db)
+        context.update(
+            {
+                "competency": competency,
+                "categories": list(CompetencyCategory),
+                "form_data": {
+                    "competency_code": competency_code,
+                    "competency_name": competency_name,
+                    "category": category,
+                    "description": description,
+                },
+                "error": str(e),
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/hr/competency_form.html", context
+        )

@@ -4,7 +4,7 @@ Tests for ReportInstanceService.
 
 import uuid
 from datetime import datetime, timezone, timedelta
-from unittest.mock import MagicMock, PropertyMock
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -18,7 +18,9 @@ from tests.ifrs.rpt.conftest import (
 class TestReportInstanceServiceQueue:
     """Tests for queue_report method."""
 
-    def test_queue_report_success(self, mock_db, org_id, user_id, mock_report_definition):
+    def test_queue_report_success(
+        self, mock_db, org_id, user_id, mock_report_definition
+    ):
         """Test successful report queue."""
         from app.services.finance.rpt.report_instance import (
             ReportInstanceService,
@@ -33,9 +35,7 @@ class TestReportInstanceServiceQueue:
             parameters={"date": "2024-01-01"},
         )
 
-        result = ReportInstanceService.queue_report(
-            mock_db, org_id, request, user_id
-        )
+        result = ReportInstanceService.queue_report(mock_db, org_id, request, user_id)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -55,9 +55,7 @@ class TestReportInstanceServiceQueue:
         )
 
         with pytest.raises(HTTPException) as exc:
-            ReportInstanceService.queue_report(
-                mock_db, org_id, request, user_id
-            )
+            ReportInstanceService.queue_report(mock_db, org_id, request, user_id)
 
         assert exc.value.status_code == 404
         assert "not found" in exc.value.detail.lower()
@@ -81,9 +79,7 @@ class TestReportInstanceServiceQueue:
         )
 
         with pytest.raises(HTTPException) as exc:
-            ReportInstanceService.queue_report(
-                mock_db, org_id, request, user_id
-            )
+            ReportInstanceService.queue_report(mock_db, org_id, request, user_id)
 
         assert exc.value.status_code == 400
         assert "not active" in exc.value.detail.lower()
@@ -107,9 +103,7 @@ class TestReportInstanceServiceQueue:
         )
 
         with pytest.raises(HTTPException) as exc:
-            ReportInstanceService.queue_report(
-                mock_db, org_id, request, user_id
-            )
+            ReportInstanceService.queue_report(mock_db, org_id, request, user_id)
 
         assert exc.value.status_code == 400
         assert "not supported" in exc.value.detail.lower()
@@ -166,7 +160,9 @@ class TestReportInstanceServiceGeneration:
         from app.models.finance.rpt.report_instance import ReportStatus
 
         mock_report_instance.status = ReportStatus.GENERATING
-        mock_report_instance.started_at = datetime.now(timezone.utc) - timedelta(seconds=5)
+        mock_report_instance.started_at = datetime.now(timezone.utc) - timedelta(
+            seconds=5
+        )
         mock_db.get.return_value = mock_report_instance
 
         result = ReportInstanceService.complete_generation(
@@ -275,9 +271,7 @@ class TestReportInstanceServiceCancel:
         mock_db.get.return_value = None
 
         with pytest.raises(HTTPException) as exc:
-            ReportInstanceService.cancel_report(
-                mock_db, org_id, uuid.uuid4()
-            )
+            ReportInstanceService.cancel_report(mock_db, org_id, uuid.uuid4())
 
         assert exc.value.status_code == 404
 
@@ -316,7 +310,9 @@ class TestReportInstanceServiceQueries:
 
         assert len(result) == 1
 
-    def test_get_queued_reports_with_org_filter(self, mock_db, org_id, mock_report_instance):
+    def test_get_queued_reports_with_org_filter(
+        self, mock_db, org_id, mock_report_instance
+    ):
         """Test getting queued reports with organization filter."""
         from app.services.finance.rpt.report_instance import ReportInstanceService
 
@@ -353,9 +349,7 @@ class TestReportInstanceServiceQueries:
         mock_query.all.return_value = [completed_instance, failed_instance]
         mock_db.query.return_value = mock_query
 
-        result = ReportInstanceService.get_generation_statistics(
-            mock_db, str(org_id)
-        )
+        result = ReportInstanceService.get_generation_statistics(mock_db, str(org_id))
 
         assert result["total"] == 2
         assert result["completed"] == 1
@@ -421,7 +415,10 @@ class TestReportInstanceServiceRegenerate:
         mock_report_instance.schedule_id = None
 
         def mock_get_side_effect(model, id):
-            if hasattr(model, '__tablename__') and model.__tablename__ == 'report_definition':
+            if (
+                hasattr(model, "__tablename__")
+                and model.__tablename__ == "report_definition"
+            ):
                 return mock_report_definition
             return mock_report_instance
 

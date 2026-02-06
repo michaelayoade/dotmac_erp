@@ -1,13 +1,25 @@
 """
 Deferred Tax Basis Model - Tax Schema.
 """
+
 import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -59,17 +71,27 @@ class DeferredTaxBasis(Base):
 
     # Source of difference
     source_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    source_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
-    gl_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    source_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    gl_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
 
     # Current amounts
-    accounting_base: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    accounting_base: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
     tax_base: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
-    temporary_difference: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    temporary_difference: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Deferred tax
     applicable_tax_rate: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False)
-    deferred_tax_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    deferred_tax_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
     is_asset: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
     # Recognition
@@ -78,11 +100,17 @@ class DeferredTaxBasis(Base):
         Numeric(5, 4),
         nullable=True,
     )
-    unrecognized_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    unrecognized_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Reversal expectation
-    expected_reversal_year: Mapped[Optional[int]] = mapped_column(Numeric(4, 0), nullable=True)
-    is_current_year_reversal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    expected_reversal_year: Mapped[Optional[int]] = mapped_column(
+        Numeric(4, 0), nullable=True
+    )
+    is_current_year_reversal: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 

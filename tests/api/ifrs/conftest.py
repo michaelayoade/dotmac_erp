@@ -9,7 +9,6 @@ import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Optional
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -49,7 +48,7 @@ class MockBankAccount:
         last_reconciled_balance: Optional[Decimal] = None,
         created_at: datetime = None,
         updated_at: Optional[datetime] = None,
-        **kwargs
+        **kwargs,
     ):
         self.bank_account_id = bank_account_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -107,7 +106,7 @@ class MockBankStatement:
         matched_lines: int = 0,
         unmatched_lines: int = 0,
         created_at: datetime = None,
-        **kwargs
+        **kwargs,
     ):
         self.statement_id = statement_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -169,7 +168,7 @@ class MockBankReconciliation:
         review_notes: Optional[str] = None,
         created_at: datetime = None,
         updated_at: Optional[datetime] = None,
-        **kwargs
+        **kwargs,
     ):
         self.reconciliation_id = reconciliation_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -225,7 +224,7 @@ class MockAccount:
         is_active: bool = True,
         created_at: datetime = None,
         updated_at: Optional[datetime] = None,
-        **kwargs
+        **kwargs,
     ):
         self.account_id = account_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -262,7 +261,7 @@ class MockFiscalPeriod:
         fiscal_year: int = 2024,
         is_adjustment_period: bool = False,
         created_at: datetime = None,
-        **kwargs
+        **kwargs,
     ):
         self.fiscal_period_id = fiscal_period_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -305,7 +304,7 @@ class MockJournalEntry:
         # Aliases for backward compatibility with tests
         journal_entry_id: uuid.UUID = None,
         journal_number: str = None,
-        **kwargs
+        **kwargs,
     ):
         # Use entry_id or fall back to journal_entry_id
         self.entry_id = entry_id or journal_entry_id or uuid.uuid4()
@@ -354,7 +353,7 @@ class MockInventoryItem:
         is_active: bool = True,
         is_purchaseable: bool = True,
         is_saleable: bool = True,
-        **kwargs
+        **kwargs,
     ):
         self.item_id = item_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -397,7 +396,7 @@ class MockInventoryTransaction:
         quantity_before: Decimal = Decimal("0"),
         quantity_after: Decimal = Decimal("100"),
         reference: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         self.transaction_id = transaction_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -431,7 +430,7 @@ class MockLot:
         unit_cost: Decimal = Decimal("10.00"),
         is_quarantined: bool = False,
         is_active: bool = True,
-        **kwargs
+        **kwargs,
     ):
         self.lot_id = lot_id or uuid.uuid4()
         self.item_id = item_id or uuid.uuid4()
@@ -472,7 +471,7 @@ class MockStatementLine:
         matched_at: Optional[datetime] = None,
         matched_journal_line_id: Optional[uuid.UUID] = None,
         created_at: datetime = None,
-        **kwargs
+        **kwargs,
     ):
         self.line_id = line_id or uuid.uuid4()
         self.statement_id = statement_id or uuid.uuid4()
@@ -521,7 +520,7 @@ class MockReconciliationLine:
         is_cleared: bool = False,
         notes: Optional[str] = None,
         created_at: datetime = None,
-        **kwargs
+        **kwargs,
     ):
         self.line_id = line_id or uuid.uuid4()
         self.reconciliation_id = reconciliation_id or uuid.uuid4()
@@ -556,7 +555,7 @@ class MockStatementImportResult:
         lines_skipped: int = 0,
         errors: list = None,
         warnings: list = None,
-        **kwargs
+        **kwargs,
     ):
         self.statement = statement or MockBankStatement()
         self.lines_imported = lines_imported
@@ -581,7 +580,7 @@ class MockAccountBalance:
         period_credit: Decimal = Decimal("500"),
         closing_balance: Decimal = Decimal("500"),
         currency_code: str = "USD",
-        **kwargs
+        **kwargs,
     ):
         self.account_id = account_id or uuid.uuid4()
         self.account_code = account_code
@@ -607,7 +606,7 @@ class MockTrialBalanceLine:
         account_type: str = "ASSET",
         debit_balance: Decimal = Decimal("1000"),
         credit_balance: Decimal = Decimal("0"),
-        **kwargs
+        **kwargs,
     ):
         self.account_id = account_id or uuid.uuid4()
         self.account_code = account_code
@@ -631,7 +630,7 @@ class MockTrialBalance:
         total_debit: Decimal = Decimal("10000"),
         total_credit: Decimal = Decimal("10000"),
         is_balanced: bool = True,
-        **kwargs
+        **kwargs,
     ):
         self.fiscal_period_id = fiscal_period_id or uuid.uuid4()
         self.period_name = period_name
@@ -654,7 +653,7 @@ class MockPostingResult:
         entry_number: str = "JE-0001",
         message: str = "Posted successfully",
         errors: list = None,
-        **kwargs
+        **kwargs,
     ):
         self.success = success
         self.entry_id = entry_id or uuid.uuid4()

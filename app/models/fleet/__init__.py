@@ -10,6 +10,7 @@ This module provides models for vehicle fleet management:
 - Documents (insurance, registration)
 - Reservations (pool vehicles)
 """
+
 from app.models.fleet.enums import (
     AssignmentType,
     DisposalMethod,

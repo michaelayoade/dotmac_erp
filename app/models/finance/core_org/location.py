@@ -1,6 +1,7 @@
 """
 Location Model - Core Org.
 """
+
 import enum
 import uuid
 from datetime import datetime
@@ -34,8 +35,9 @@ class LocationType(str, enum.Enum):
 
 class GeofenceType(str, enum.Enum):
     """Type of geofence boundary."""
-    CIRCLE = "CIRCLE"      # Traditional radius-based
-    POLYGON = "POLYGON"    # GeoJSON polygon boundary
+
+    CIRCLE = "CIRCLE"  # Traditional radius-based
+    POLYGON = "POLYGON"  # GeoJSON polygon boundary
 
 
 class Location(Base):

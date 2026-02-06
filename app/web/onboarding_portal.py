@@ -16,9 +16,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import SessionLocal
 from app.services.people.hr.errors import (
-    ActivityNotFoundError,
     InvalidSelfServiceTokenError,
-    OnboardingNotFoundError,
     ValidationError,
 )
 from app.services.people.hr.onboarding import OnboardingService
@@ -77,10 +75,17 @@ def onboarding_portal_landing(
     employee = onboarding.employee if hasattr(onboarding, "employee") else None
     employee_name = "New Team Member"
     if employee:
-        employee_name = f"{employee.first_name} {employee.last_name}" if hasattr(employee, "first_name") else str(employee)
+        employee_name = (
+            f"{employee.first_name} {employee.last_name}"
+            if hasattr(employee, "first_name")
+            else str(employee)
+        )
 
     # Get activities grouped by category
-    activities = sorted(onboarding.activities, key=lambda a: (a.sequence or 0, a.due_date or "9999-12-31"))
+    activities = sorted(
+        onboarding.activities,
+        key=lambda a: (a.sequence or 0, a.due_date or "9999-12-31"),
+    )
     self_service_activities = [a for a in activities if a.assigned_to_employee]
     other_activities = [a for a in activities if not a.assigned_to_employee]
 
@@ -94,11 +99,16 @@ def onboarding_portal_landing(
 
     # Progress calculation
     total = len(onboarding.activities) if onboarding.activities else 0
-    completed = sum(
-        1 for a in onboarding.activities
-        if a.activity_status in ("COMPLETED", "SKIPPED")
-        or (hasattr(a, "status") and a.status in ("completed", "skipped"))
-    ) if onboarding.activities else 0
+    completed = (
+        sum(
+            1
+            for a in onboarding.activities
+            if a.activity_status in ("COMPLETED", "SKIPPED")
+            or (hasattr(a, "status") and a.status in ("completed", "skipped"))
+        )
+        if onboarding.activities
+        else 0
+    )
     percentage = int((completed / total) * 100) if total > 0 else 0
     progress = {
         "percentage": percentage,
@@ -150,7 +160,9 @@ def onboarding_task_detail(
     onboarding, service = _require_valid_token(token, db)
 
     # Find the activity
-    activity = next((a for a in onboarding.activities if a.activity_id == activity_id), None)
+    activity = next(
+        (a for a in onboarding.activities if a.activity_id == activity_id), None
+    )
     if not activity:
         raise HTTPException(status_code=404, detail="Task not found")
 
@@ -197,7 +209,9 @@ def complete_onboarding_task(
     onboarding, service = _require_valid_token(token, db)
 
     # Find and validate the activity
-    activity = next((a for a in onboarding.activities if a.activity_id == activity_id), None)
+    activity = next(
+        (a for a in onboarding.activities if a.activity_id == activity_id), None
+    )
     if not activity:
         raise HTTPException(status_code=404, detail="Task not found")
 
@@ -223,7 +237,9 @@ def complete_onboarding_task(
                     "token": token,
                     "onboarding": onboarding,
                     "activity": activity,
-                    "instructions": activity.template_item.instructions if activity.template_item else None,
+                    "instructions": activity.template_item.instructions
+                    if activity.template_item
+                    else None,
                     "error": "Please upload the required document to complete this task.",
                     "brand_name": settings.brand_name,
                     "csrf_token": getattr(request.state, "csrf_token", ""),
@@ -234,12 +250,18 @@ def complete_onboarding_task(
         # TODO: Save document using attachment service
         # For now, we'll skip the document_id requirement
         # document_id = attachment_service.save(...)
-        logger.info("Document uploaded for activity %s: %s", activity_id, document.filename)
+        logger.info(
+            "Document uploaded for activity %s: %s", activity_id, document.filename
+        )
 
     try:
         # Complete the activity
         # Use the employee's person_id as completed_by (get from onboarding.employee)
-        completed_by = onboarding.employee.person_id if onboarding.employee else onboarding.employee_id
+        completed_by = (
+            onboarding.employee.person_id
+            if onboarding.employee
+            else onboarding.employee_id
+        )
 
         service.complete_activity(
             org_id=onboarding.organization_id,
@@ -265,7 +287,9 @@ def complete_onboarding_task(
                 "token": token,
                 "onboarding": onboarding,
                 "activity": activity,
-                "instructions": activity.template_item.instructions if activity.template_item else None,
+                "instructions": activity.template_item.instructions
+                if activity.template_item
+                else None,
                 "error": str(e),
                 "brand_name": settings.brand_name,
                 "csrf_token": getattr(request.state, "csrf_token", ""),
@@ -299,12 +323,14 @@ def onboarding_company_info(
     buddy = None
     if onboarding.buddy_employee_id:
         from app.models.people.hr import Employee
+
         buddy = db.get(Employee, onboarding.buddy_employee_id)
 
     # Get manager info if assigned
     manager = None
     if onboarding.manager_id:
         from app.models.people.hr import Employee
+
         manager = db.get(Employee, onboarding.manager_id)
 
     return templates.TemplateResponse(

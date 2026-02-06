@@ -3,6 +3,7 @@ Salary Slip Model - Payroll Schema.
 
 The core payroll document that generates GL entries.
 """
+
 import enum
 import uuid
 from datetime import date, datetime

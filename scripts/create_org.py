@@ -35,7 +35,9 @@ def main():
             .first()
         )
         if existing:
-            print(f"Organization '{args.code}' already exists with ID: {existing.organization_id}")
+            print(
+                f"Organization '{args.code}' already exists with ID: {existing.organization_id}"
+            )
             return
 
         org = Organization(
@@ -61,15 +63,21 @@ def main():
             config = get_country_config(args.country)
             if config:
                 print(f"\nSeeding tax configuration for {config.country_name}...")
-                summary = seed_default_tax_data(db, org.organization_id, country_code=args.country)
+                summary = seed_default_tax_data(
+                    db, org.organization_id, country_code=args.country
+                )
                 print(f"  Categories created: {summary.categories_created}")
                 print(f"  Accounts created: {summary.accounts_created}")
                 print(f"  Jurisdictions created: {summary.jurisdictions_created}")
                 print(f"  Tax codes created: {summary.tax_codes_created}")
                 if summary.default_jurisdiction_id:
-                    print(f"  Default jurisdiction ID: {summary.default_jurisdiction_id}")
+                    print(
+                        f"  Default jurisdiction ID: {summary.default_jurisdiction_id}"
+                    )
             else:
-                print(f"\n  No tax configuration available for country '{args.country}'")
+                print(
+                    f"\n  No tax configuration available for country '{args.country}'"
+                )
                 print("  Use 'seed_nigeria.py' or create jurisdictions manually")
     finally:
         db.close()

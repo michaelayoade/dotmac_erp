@@ -3,6 +3,7 @@ Employment Type Model - HR Schema.
 
 Types of employment (Full-time, Part-time, Contract, etc.)
 """
+
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional

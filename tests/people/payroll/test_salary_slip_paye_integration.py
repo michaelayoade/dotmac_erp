@@ -7,7 +7,7 @@ Tests the integration between salary slip creation and NTA 2025 PAYE calculation
 import uuid
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -21,8 +21,10 @@ from app.services.people.payroll.salary_slip_service import (
     PAYE_COMPONENT_CODE,
     STATUTORY_COMPONENT_CODES,
 )
-from app.models.people.payroll.salary_component import SalaryComponent, SalaryComponentType
-from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
+from app.models.people.payroll.salary_component import (
+    SalaryComponent,
+    SalaryComponentType,
+)
 
 
 class TestStatutoryComponentConstants:
@@ -274,7 +276,6 @@ class TestPAYECalculationValues:
 
     def test_monthly_pension_calculation(self):
         """Verify pension is 8% of basic salary."""
-        from app.services.people.payroll.paye_calculator import PAYECalculator
 
         # Monthly basic: 300,000
         # Annual basic: 3,600,000

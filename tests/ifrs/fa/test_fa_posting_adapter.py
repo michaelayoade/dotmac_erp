@@ -7,7 +7,6 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from tests.ifrs.fa.conftest import (
     MockAsset,
@@ -209,13 +208,17 @@ class TestFAPostingAdapterDepreciationSuccess:
         mock_db.get.return_value = mock_run
         mock_db.query.return_value.filter.return_value.all.return_value = mock_schedules
 
-        with patch(
-            "app.services.fixed_assets.fa_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.fixed_assets.fa_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc, patch(
-            "app.services.fixed_assets.fa_posting_adapter.org_context_service"
-        ) as mock_org_ctx:
+        with (
+            patch(
+                "app.services.fixed_assets.fa_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.fixed_assets.fa_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+            patch(
+                "app.services.fixed_assets.fa_posting_adapter.org_context_service"
+            ) as mock_org_ctx,
+        ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
             mock_journal_svc.create_journal.return_value = mock_journal_result
@@ -239,7 +242,9 @@ class TestFAPostingAdapterDepreciationSuccess:
             assert result.journal_entry_id is not None
             assert "successfully" in result.message.lower()
 
-    def test_post_depreciation_run_aggregates_by_account(self, mock_db, org_id, user_id):
+    def test_post_depreciation_run_aggregates_by_account(
+        self, mock_db, org_id, user_id
+    ):
         """Test depreciation posting aggregates amounts by account."""
         from app.services.fixed_assets.fa_posting_adapter import FAPostingAdapter
         from app.models.fixed_assets.depreciation_run import DepreciationRunStatus
@@ -267,13 +272,17 @@ class TestFAPostingAdapterDepreciationSuccess:
         mock_db.get.return_value = mock_run
         mock_db.query.return_value.filter.return_value.all.return_value = mock_schedules
 
-        with patch(
-            "app.services.fixed_assets.fa_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.fixed_assets.fa_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc, patch(
-            "app.services.fixed_assets.fa_posting_adapter.org_context_service"
-        ) as mock_org_ctx:
+        with (
+            patch(
+                "app.services.fixed_assets.fa_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.fixed_assets.fa_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+            patch(
+                "app.services.fixed_assets.fa_posting_adapter.org_context_service"
+            ) as mock_org_ctx,
+        ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
             mock_journal_svc.create_journal.return_value = mock_journal_result
@@ -318,11 +327,14 @@ class TestFAPostingAdapterDisposalSuccess:
 
         mock_db.get.side_effect = [mock_disposal, mock_asset, mock_category]
 
-        with patch(
-            "app.services.fixed_assets.fa_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.fixed_assets.fa_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc:
+        with (
+            patch(
+                "app.services.fixed_assets.fa_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.fixed_assets.fa_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+        ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
             mock_journal_svc.create_journal.return_value = mock_journal_result
@@ -360,11 +372,14 @@ class TestFAPostingAdapterDisposalSuccess:
 
         mock_db.get.side_effect = [mock_disposal, mock_asset, mock_category]
 
-        with patch(
-            "app.services.fixed_assets.fa_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.fixed_assets.fa_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc:
+        with (
+            patch(
+                "app.services.fixed_assets.fa_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.fixed_assets.fa_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+        ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
             mock_journal_svc.create_journal.return_value = mock_journal_result
@@ -445,11 +460,14 @@ class TestFAPostingAdapterRevaluationSuccess:
 
         mock_db.get.side_effect = [mock_reval, mock_asset, mock_category]
 
-        with patch(
-            "app.services.fixed_assets.fa_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.fixed_assets.fa_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc:
+        with (
+            patch(
+                "app.services.fixed_assets.fa_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.fixed_assets.fa_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+        ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
             mock_journal_svc.create_journal.return_value = mock_journal_result
@@ -487,11 +505,14 @@ class TestFAPostingAdapterRevaluationSuccess:
 
         mock_db.get.side_effect = [mock_reval, mock_asset, mock_category]
 
-        with patch(
-            "app.services.fixed_assets.fa_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.fixed_assets.fa_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc:
+        with (
+            patch(
+                "app.services.fixed_assets.fa_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.fixed_assets.fa_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+        ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
             mock_journal_svc.create_journal.return_value = mock_journal_result

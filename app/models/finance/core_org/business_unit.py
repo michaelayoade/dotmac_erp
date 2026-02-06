@@ -1,6 +1,7 @@
 """
 Business Unit Model - Core Org.
 """
+
 import enum
 import uuid
 from datetime import date, datetime

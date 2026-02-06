@@ -16,6 +16,7 @@ class TestSettings:
             # Re-import to get fresh settings
             import importlib
             import app.config as config_module
+
             importlib.reload(config_module)
 
             # Should use default value
@@ -62,6 +63,7 @@ class TestSettings:
         with patch.dict(os.environ, {"DATABASE_URL": custom_url}):
             import importlib
             import app.config as config_module
+
             importlib.reload(config_module)
 
             assert config_module.settings.database_url == custom_url
@@ -71,18 +73,23 @@ class TestSettings:
         with patch.dict(os.environ, {"DB_POOL_SIZE": "20"}):
             import importlib
             import app.config as config_module
+
             importlib.reload(config_module)
 
             assert config_module.settings.db_pool_size == 20
 
     def test_custom_avatar_settings_from_env(self):
         """Test that avatar env vars are respected."""
-        with patch.dict(os.environ, {
-            "AVATAR_UPLOAD_DIR": "/custom/path",
-            "AVATAR_MAX_SIZE_BYTES": "5242880",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "AVATAR_UPLOAD_DIR": "/custom/path",
+                "AVATAR_MAX_SIZE_BYTES": "5242880",
+            },
+        ):
             import importlib
             import app.config as config_module
+
             importlib.reload(config_module)
 
             assert config_module.settings.avatar_upload_dir == "/custom/path"
@@ -90,15 +97,21 @@ class TestSettings:
 
     def test_custom_brand_settings_from_env(self):
         """Test that brand env vars are respected."""
-        with patch.dict(os.environ, {
-            "BRAND_NAME": "Custom Brand",
-            "BRAND_TAGLINE": "Custom tagline",
-            "BRAND_LOGO_URL": "https://example.com/logo.png",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "BRAND_NAME": "Custom Brand",
+                "BRAND_TAGLINE": "Custom tagline",
+                "BRAND_LOGO_URL": "https://example.com/logo.png",
+            },
+        ):
             import importlib
             import app.config as config_module
+
             importlib.reload(config_module)
 
             assert config_module.settings.brand_name == "Custom Brand"
             assert config_module.settings.brand_tagline == "Custom tagline"
-            assert config_module.settings.brand_logo_url == "https://example.com/logo.png"
+            assert (
+                config_module.settings.brand_logo_url == "https://example.com/logo.png"
+            )

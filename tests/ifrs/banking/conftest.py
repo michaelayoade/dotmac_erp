@@ -8,7 +8,7 @@ while still testing the service logic.
 import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Dict, Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -21,7 +21,10 @@ from app.models.finance.banking.bank_reconciliation import (
     ReconciliationMatchType,
     ReconciliationStatus,
 )
-from app.models.finance.banking.bank_statement import BankStatementStatus, StatementLineType
+from app.models.finance.banking.bank_statement import (
+    BankStatementStatus,
+    StatementLineType,
+)
 
 MockBankAccountStatus = BankAccountStatus
 MockBankAccountType = BankAccountType
@@ -467,7 +470,9 @@ def mock_bank_statement(organization_id, mock_bank_account) -> MockBankStatement
 
 
 @pytest.fixture
-def mock_bank_reconciliation(organization_id, mock_bank_account) -> MockBankReconciliation:
+def mock_bank_reconciliation(
+    organization_id, mock_bank_account
+) -> MockBankReconciliation:
     """Create a mock bank reconciliation."""
     recon = MockBankReconciliation(
         organization_id=organization_id,

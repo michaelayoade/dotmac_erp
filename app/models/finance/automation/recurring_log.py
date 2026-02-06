@@ -3,6 +3,7 @@ Recurring Log Model.
 
 Tracks generation history for recurring templates.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -27,6 +28,7 @@ from app.db import Base
 
 class RecurringLogStatus(str, enum.Enum):
     """Status of a generation attempt."""
+
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
     SKIPPED = "SKIPPED"

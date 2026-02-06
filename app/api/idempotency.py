@@ -1,6 +1,7 @@
 """
 API idempotency helpers.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -84,5 +85,7 @@ def build_cached_response(replay: IdempotencyReplay) -> Response:
 
 def require_idempotency_key(idempotency_key: Optional[str]) -> str:
     if not idempotency_key:
-        raise HTTPException(status_code=400, detail="Idempotency-Key header is required")
+        raise HTTPException(
+            status_code=400, detail="Idempotency-Key header is required"
+        )
     return idempotency_key

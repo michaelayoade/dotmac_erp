@@ -186,6 +186,13 @@
     </div>
     {% endif %}
 
+    {% if material_request.cancel_reason %}
+    <div class="card p-6">
+        <h3 class="font-semibold text-rose-700 dark:text-rose-300 mb-2">Cancellation Reason</h3>
+        <p class="text-sm text-rose-700 dark:text-rose-300">{{ material_request.cancel_reason }}</p>
+    </div>
+    {% endif %}
+
     <!-- Items Table -->
     <div class="card overflow-hidden">
         <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
@@ -272,13 +279,18 @@
             {% endif %}
 
 {% if material_request.can_cancel and auth is defined and auth.has_any_permission(['inv:material_requests:submit', 'inventory:material_requests:submit']) %}
-            <form method="post" action="/inventory/material-requests/{{ material_request.request_id }}/cancel" class="inline" onsubmit="return confirm('Are you sure you want to cancel this request?')">
-                <button type="submit" class="btn btn-secondary text-rose-600 hover:text-rose-700">
+            <form method="post" action="/inventory/material-requests/{{ material_request.request_id }}/cancel" class="inline">
+                <div class="flex items-center gap-3">
+                    <input type="text" name="cancel_reason" required
+                           placeholder="Cancellation reason"
+                           class="form-input w-72" />
+                    <button type="submit" class="btn btn-secondary text-rose-600 hover:text-rose-700">
                     <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
                     Cancel Request
                 </button>
+                </div>
             </form>
             {% endif %}
 

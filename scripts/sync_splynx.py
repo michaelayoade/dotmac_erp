@@ -47,7 +47,9 @@ def test_connection() -> bool:
     config = SplynxConfig.from_settings()
 
     if not config.is_configured():
-        logger.error("Splynx not configured. Set SPLYNX_API_KEY and SPLYNX_API_SECRET in .env")
+        logger.error(
+            "Splynx not configured. Set SPLYNX_API_KEY and SPLYNX_API_SECRET in .env"
+        )
         return False
 
     logger.info("Testing connection to %s...", config.api_url)
@@ -131,6 +133,8 @@ def run_sync(
                 result = service.sync_payments(
                     date_from=from_date,
                     date_to=to_date,
+                    batch_size=batch_size,
+                    skip_unchanged=skip_unchanged,
                 )
                 results["payments"] = result.to_dict()
                 logger.info("    %s", result.message)

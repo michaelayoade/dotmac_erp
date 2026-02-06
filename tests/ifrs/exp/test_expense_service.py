@@ -5,9 +5,9 @@ Tests expense entry creation, workflow (submit/approve/reject), and GL posting.
 """
 
 import pytest
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 from app.models.finance.exp.expense_entry import ExpenseStatus, PaymentMethod
@@ -91,7 +91,9 @@ class MockJournalEntry:
 class MockTaxCode:
     """Mock TaxCode model."""
 
-    def __init__(self, tax_code_id=None, input_tax_account_id=None, tax_paid_account_id=None):
+    def __init__(
+        self, tax_code_id=None, input_tax_account_id=None, tax_paid_account_id=None
+    ):
         self.tax_code_id = tax_code_id or uuid4()
         self.input_tax_account_id = input_tax_account_id or uuid4()
         self.tax_paid_account_id = tax_paid_account_id or self.input_tax_account_id
@@ -255,7 +257,9 @@ class TestSubmitExpense:
         expense = MockExpenseEntry(status=ExpenseStatus.DRAFT)
         mock_db.query.return_value.filter.return_value.first.return_value = expense
 
-        result = ExpenseService.submit(mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id))
+        result = ExpenseService.submit(
+            mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id)
+        )
 
         assert expense.status == ExpenseStatus.SUBMITTED
         assert expense.submitted_by is not None
@@ -277,7 +281,12 @@ class TestSubmitExpense:
         mock_db.query.return_value.filter.return_value.first.return_value = expense
 
         with pytest.raises(ValueError) as exc:
-            ExpenseService.submit(mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id))
+            ExpenseService.submit(
+                mock_db,
+                str(expense.organization_id),
+                str(expense.expense_id),
+                str(user_id),
+            )
 
         assert "Cannot submit expense" in str(exc.value)
 
@@ -290,7 +299,9 @@ class TestApproveExpense:
         expense = MockExpenseEntry(status=ExpenseStatus.SUBMITTED)
         mock_db.query.return_value.filter.return_value.first.return_value = expense
 
-        result = ExpenseService.approve(mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id))
+        result = ExpenseService.approve(
+            mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id)
+        )
 
         assert expense.status == ExpenseStatus.APPROVED
         assert expense.approved_by is not None
@@ -312,7 +323,12 @@ class TestApproveExpense:
         mock_db.query.return_value.filter.return_value.first.return_value = expense
 
         with pytest.raises(ValueError) as exc:
-            ExpenseService.approve(mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id))
+            ExpenseService.approve(
+                mock_db,
+                str(expense.organization_id),
+                str(expense.expense_id),
+                str(user_id),
+            )
 
         assert "Cannot approve expense" in str(exc.value)
 
@@ -325,7 +341,9 @@ class TestRejectExpense:
         expense = MockExpenseEntry(status=ExpenseStatus.SUBMITTED)
         mock_db.query.return_value.filter.return_value.first.return_value = expense
 
-        result = ExpenseService.reject(mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id))
+        result = ExpenseService.reject(
+            mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id)
+        )
 
         assert expense.status == ExpenseStatus.REJECTED
         assert expense.updated_by is not None
@@ -336,7 +354,9 @@ class TestRejectExpense:
         expense = MockExpenseEntry(status=ExpenseStatus.APPROVED)
         mock_db.query.return_value.filter.return_value.first.return_value = expense
 
-        result = ExpenseService.reject(mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id))
+        result = ExpenseService.reject(
+            mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id)
+        )
 
         assert expense.status == ExpenseStatus.REJECTED
 
@@ -355,7 +375,12 @@ class TestRejectExpense:
         mock_db.query.return_value.filter.return_value.first.return_value = expense
 
         with pytest.raises(ValueError) as exc:
-            ExpenseService.reject(mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id))
+            ExpenseService.reject(
+                mock_db,
+                str(expense.organization_id),
+                str(expense.expense_id),
+                str(user_id),
+            )
 
         assert "Cannot reject expense" in str(exc.value)
 
@@ -426,6 +451,7 @@ class TestPostExpense:
 
         def mock_get(model, id):
             from app.models.finance.tax.tax_code import TaxCode
+
             if model is TaxCode:
                 return tax_code
             # FiscalPeriod lookup
@@ -453,7 +479,9 @@ class TestPostExpense:
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
         with pytest.raises(ValueError) as exc:
-            ExpenseService.post(mock_db, str(uuid4()), str(uuid4()), str(user_id), str(uuid4()))
+            ExpenseService.post(
+                mock_db, str(uuid4()), str(uuid4()), str(user_id), str(uuid4())
+            )
 
         assert "Expense not found" in str(exc.value)
 
@@ -463,7 +491,13 @@ class TestPostExpense:
         mock_db.query.return_value.filter.return_value.first.return_value = expense
 
         with pytest.raises(ValueError) as exc:
-            ExpenseService.post(mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id), str(uuid4()))
+            ExpenseService.post(
+                mock_db,
+                str(expense.organization_id),
+                str(expense.expense_id),
+                str(user_id),
+                str(uuid4()),
+            )
 
         assert "Cannot post expense" in str(exc.value)
 
@@ -476,7 +510,13 @@ class TestPostExpense:
         mock_db.query.return_value.filter.return_value.first.return_value = expense
 
         with pytest.raises(ValueError) as exc:
-            ExpenseService.post(mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id), str(uuid4()))
+            ExpenseService.post(
+                mock_db,
+                str(expense.organization_id),
+                str(expense.expense_id),
+                str(user_id),
+                str(uuid4()),
+            )
 
         assert "Payment account is required" in str(exc.value)
 
@@ -545,12 +585,19 @@ class TestExpenseWorkflow:
         mock_db.query.return_value.filter.return_value.first.return_value = expense
 
         # Submit
-        ExpenseService.submit(mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id))
+        ExpenseService.submit(
+            mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id)
+        )
         assert expense.status == ExpenseStatus.SUBMITTED
 
         # Approve
         approver_id = uuid4()
-        ExpenseService.approve(mock_db, str(expense.organization_id), str(expense.expense_id), str(approver_id))
+        ExpenseService.approve(
+            mock_db,
+            str(expense.organization_id),
+            str(expense.expense_id),
+            str(approver_id),
+        )
         assert expense.status == ExpenseStatus.APPROVED
 
     def test_rejection_workflow(self, mock_db, user_id):
@@ -559,5 +606,7 @@ class TestExpenseWorkflow:
         mock_db.query.return_value.filter.return_value.first.return_value = expense
 
         # Reject
-        ExpenseService.reject(mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id))
+        ExpenseService.reject(
+            mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id)
+        )
         assert expense.status == ExpenseStatus.REJECTED

@@ -34,7 +34,7 @@ class MockTaxJurisdiction:
         deferred_tax_liability_account_id: uuid.UUID = None,
         deferred_tax_expense_account_id: uuid.UUID = None,
         is_active: bool = True,
-        **kwargs
+        **kwargs,
     ):
         self.jurisdiction_id = jurisdiction_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -45,11 +45,21 @@ class MockTaxJurisdiction:
         self.current_tax_rate = current_tax_rate
         self.tax_rate_effective_from = tax_rate_effective_from or date.today()
         self.currency_code = currency_code
-        self.current_tax_payable_account_id = current_tax_payable_account_id or uuid.uuid4()
-        self.current_tax_expense_account_id = current_tax_expense_account_id or uuid.uuid4()
-        self.deferred_tax_asset_account_id = deferred_tax_asset_account_id or uuid.uuid4()
-        self.deferred_tax_liability_account_id = deferred_tax_liability_account_id or uuid.uuid4()
-        self.deferred_tax_expense_account_id = deferred_tax_expense_account_id or uuid.uuid4()
+        self.current_tax_payable_account_id = (
+            current_tax_payable_account_id or uuid.uuid4()
+        )
+        self.current_tax_expense_account_id = (
+            current_tax_expense_account_id or uuid.uuid4()
+        )
+        self.deferred_tax_asset_account_id = (
+            deferred_tax_asset_account_id or uuid.uuid4()
+        )
+        self.deferred_tax_liability_account_id = (
+            deferred_tax_liability_account_id or uuid.uuid4()
+        )
+        self.deferred_tax_expense_account_id = (
+            deferred_tax_expense_account_id or uuid.uuid4()
+        )
         self.is_active = is_active
         self.created_at = datetime.now(timezone.utc)
         for k, v in kwargs.items():
@@ -77,7 +87,7 @@ class MockTaxCode:
         applies_to_purchases: bool = True,
         applies_to_sales: bool = True,
         is_active: bool = True,
-        **kwargs
+        **kwargs,
     ):
         self.tax_code_id = tax_code_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -115,7 +125,7 @@ class MockTaxPeriod:
         filing_due_date: date = None,
         status: str = "OPEN",
         is_closed: bool = False,
-        **kwargs
+        **kwargs,
     ):
         self.period_id = period_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -150,7 +160,7 @@ class MockTaxTransaction:
         source_document_type: str = "INVOICE",
         source_document_id: uuid.UUID = None,
         is_posted: bool = False,
-        **kwargs
+        **kwargs,
     ):
         self.transaction_id = transaction_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -186,7 +196,7 @@ class MockTaxReturn:
         total_output_tax: Decimal = Decimal("0"),
         total_input_tax: Decimal = Decimal("0"),
         net_tax_payable: Decimal = Decimal("0"),
-        **kwargs
+        **kwargs,
     ):
         self.return_id = return_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()

@@ -3,6 +3,7 @@ Attendance Management API Router.
 
 Thin API wrapper for Attendance Management endpoints. All business logic is in services.
 """
+
 from datetime import date, datetime
 from typing import Optional
 import csv
@@ -104,7 +105,9 @@ def list_shift_types(
     )
 
 
-@router.post("/shift-types", response_model=ShiftTypeRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/shift-types", response_model=ShiftTypeRead, status_code=status.HTTP_201_CREATED
+)
 def create_shift_type(
     payload: ShiftTypeCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -141,7 +144,9 @@ def get_shift_type(
 ):
     """Get a shift type by ID."""
     svc = AttendanceService(db)
-    return ShiftTypeRead.model_validate(svc.get_shift_type(organization_id, shift_type_id))
+    return ShiftTypeRead.model_validate(
+        svc.get_shift_type(organization_id, shift_type_id)
+    )
 
 
 @router.patch("/shift-types/{shift_type_id}", response_model=ShiftTypeRead)
@@ -229,7 +234,9 @@ def create_shift_assignment(
     return ShiftAssignmentRead.model_validate(assignment)
 
 
-@router.get("/shift-assignments/{shift_assignment_id}", response_model=ShiftAssignmentRead)
+@router.get(
+    "/shift-assignments/{shift_assignment_id}", response_model=ShiftAssignmentRead
+)
 def get_shift_assignment(
     shift_assignment_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
@@ -264,7 +271,9 @@ def update_shift_assignment(
     return ShiftAssignmentRead.model_validate(assignment)
 
 
-@router.delete("/shift-assignments/{shift_assignment_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/shift-assignments/{shift_assignment_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 def delete_shift_assignment(
     shift_assignment_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
@@ -316,7 +325,9 @@ def list_attendance(
     )
 
 
-@router.post("/records", response_model=AttendanceRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/records", response_model=AttendanceRead, status_code=status.HTTP_201_CREATED
+)
 def create_attendance(
     payload: AttendanceCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -348,7 +359,9 @@ def get_attendance(
 ):
     """Get an attendance record by ID."""
     svc = AttendanceService(db)
-    return AttendanceRead.model_validate(svc.get_attendance(organization_id, attendance_id))
+    return AttendanceRead.model_validate(
+        svc.get_attendance(organization_id, attendance_id)
+    )
 
 
 @router.patch("/records/{attendance_id}", response_model=AttendanceRead)
@@ -525,7 +538,11 @@ def list_attendance_requests(
     )
 
 
-@router.post("/requests", response_model=AttendanceRequestRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/requests",
+    response_model=AttendanceRequestRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_attendance_request(
     payload: AttendanceRequestCreate,
     organization_id: UUID = Depends(require_organization_id),

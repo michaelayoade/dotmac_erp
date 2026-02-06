@@ -35,14 +35,18 @@ def _update_script_src(policy: str) -> str:
         updated.append(directive)
 
     if not seen_script and not seen_script_elem:
-        updated.append("script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net")
+        updated.append(
+            "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net"
+        )
 
     return _join_directives(updated)
 
 
 def add_unsafe_eval_to_csp(policy: str | None) -> str:
     if not policy:
-        return "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net"
+        return (
+            "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net"
+        )
     if "'unsafe-eval'" in policy and "'unsafe-inline'" in policy:
         return policy
     return _update_script_src(policy)

@@ -5,14 +5,8 @@ Tests for CSV parsing, field mapping, transformation, duplicate detection,
 and import operations.
 """
 
-import csv
-import io
-import tempfile
-import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -22,14 +16,13 @@ from app.services.finance.import_export.base import (
     ImportConfig,
     ImportResult,
     ImportStatus,
-    ValidationRule,
     detect_csv_format,
     resolve_column_alias,
-    COLUMN_ALIASES,
 )
 
 
 # ============ TestDetectCSVFormat ============
+
 
 class TestDetectCSVFormat:
     """Tests for the detect_csv_format function."""
@@ -91,6 +84,7 @@ class TestDetectCSVFormat:
 
 # ============ TestResolveColumnAlias ============
 
+
 class TestResolveColumnAlias:
     """Tests for the resolve_column_alias function."""
 
@@ -125,6 +119,7 @@ class TestResolveColumnAlias:
 
 
 # ============ TestAutoMapColumns ============
+
 
 class TestAutoMapColumns:
     """Tests for the auto_map_columns method of BaseImporter."""
@@ -161,15 +156,14 @@ class TestAutoMapColumns:
 
 # ============ TestFieldMapping ============
 
+
 class TestFieldMapping:
     """Tests for the FieldMapping class."""
 
     def test_transform_with_transformer(self):
         """Should apply transformer function."""
         mapping = FieldMapping(
-            "amount",
-            "amount",
-            transformer=lambda x: Decimal(x.replace(",", ""))
+            "amount", "amount", transformer=lambda x: Decimal(x.replace(",", ""))
         )
         result = mapping.transform("1,000.50")
         assert result == Decimal("1000.50")
@@ -194,6 +188,7 @@ class TestFieldMapping:
 
 
 # ============ TestParseHelpers ============
+
 
 class TestParseHelpers:
     """Tests for BaseImporter parsing helper methods."""
@@ -368,6 +363,7 @@ class TestParseHelpers:
 
 # ============ TestImportResult ============
 
+
 class TestImportResult:
     """Tests for the ImportResult class."""
 
@@ -422,6 +418,7 @@ class TestImportResult:
 
 # ============ TestImportFile ============
 
+
 class TestImportFile:
     """Tests for the import_file method of BaseImporter."""
 
@@ -429,7 +426,10 @@ class TestImportFile:
         """Should successfully import valid CSV file."""
         result = test_importer.importer.import_file(sample_account_csv)
 
-        assert result.status in [ImportStatus.COMPLETED, ImportStatus.COMPLETED_WITH_ERRORS]
+        assert result.status in [
+            ImportStatus.COMPLETED,
+            ImportStatus.COMPLETED_WITH_ERRORS,
+        ]
         assert result.total_rows > 0
 
     def test_import_file_not_found(self, test_importer):
@@ -451,7 +451,9 @@ class TestImportFile:
 
         assert result.duration_seconds >= 0
 
-    def test_import_file_dry_run(self, mock_db, organization_id, user_id, sample_account_csv):
+    def test_import_file_dry_run(
+        self, mock_db, organization_id, user_id, sample_account_csv
+    ):
         """Dry run should not commit entities."""
         from tests.ifrs.import_export.conftest import ConcreteTestImporter
 
@@ -470,6 +472,7 @@ class TestImportFile:
 
 # ============ TestImportRows ============
 
+
 class TestImportRows:
     """Tests for the import_rows method of BaseImporter."""
 
@@ -480,12 +483,15 @@ class TestImportRows:
             [
                 ["Cash", "1000", "Bank"],
                 ["Revenue", "4000", "Income"],
-            ]
+            ],
         )
 
         result = test_importer.importer.import_rows(rows)
 
-        assert result.status in [ImportStatus.COMPLETED, ImportStatus.COMPLETED_WITH_ERRORS]
+        assert result.status in [
+            ImportStatus.COMPLETED,
+            ImportStatus.COMPLETED_WITH_ERRORS,
+        ]
         assert result.total_rows == 2
 
     def test_import_rows_skip_duplicates(self, mock_db, import_config, csv_helper):
@@ -500,7 +506,7 @@ class TestImportRows:
             [
                 ["Cash", "1000", "Bank"],  # Duplicate
                 ["Revenue", "4000", "Income"],  # Not duplicate
-            ]
+            ],
         )
 
         result = importer.importer.import_rows(rows)
@@ -514,7 +520,7 @@ class TestImportRows:
             ["Account Name", "Account Code"],  # Missing required field implicit
             [
                 ["", "1000"],  # Missing required name
-            ]
+            ],
         )
 
         result = test_importer.importer.import_rows(rows)
@@ -522,7 +528,9 @@ class TestImportRows:
         # Should have validation errors
         assert result.skipped_count > 0 or result.error_count > 0
 
-    def test_import_rows_stop_on_error(self, mock_db, organization_id, user_id, csv_helper):
+    def test_import_rows_stop_on_error(
+        self, mock_db, organization_id, user_id, csv_helper
+    ):
         """Should stop processing on first error when stop_on_error is True."""
         from tests.ifrs.import_export.conftest import ConcreteTestImporter
 
@@ -538,7 +546,7 @@ class TestImportRows:
             [
                 ["", "1000"],  # Invalid - missing name
                 ["Valid", "2000"],  # Would be valid but won't be processed
-            ]
+            ],
         )
 
         result = importer.importer.import_rows(rows)
@@ -548,6 +556,7 @@ class TestImportRows:
 
 
 # ============ TestPreviewFile ============
+
 
 class TestPreviewFile:
     """Tests for the preview_file method of BaseImporter."""
@@ -580,7 +589,9 @@ class TestPreviewFile:
         assert len(preview.sample_data) <= 5
         assert len(preview.sample_data) > 0
 
-    def test_preview_file_missing_required(self, test_importer, invalid_csv_missing_required):
+    def test_preview_file_missing_required(
+        self, test_importer, invalid_csv_missing_required
+    ):
         """Should identify missing required fields."""
         preview = test_importer.importer.preview_file(invalid_csv_missing_required)
 
@@ -601,6 +612,7 @@ class TestPreviewFile:
 
 # ============ TestGetRequiredFields ============
 
+
 class TestGetRequiredFields:
     """Tests for the get_required_fields method."""
 
@@ -613,6 +625,7 @@ class TestGetRequiredFields:
 
 
 # ============ TestGetOptionalFields ============
+
 
 class TestGetOptionalFields:
     """Tests for the get_optional_fields method."""
@@ -627,6 +640,7 @@ class TestGetOptionalFields:
 
 
 # ============ TestTransformRow ============
+
 
 class TestTransformRow:
     """Tests for the transform_row method."""
@@ -658,6 +672,7 @@ class TestTransformRow:
 
 
 # ============ TestValidateRow ============
+
 
 class TestValidateRow:
     """Tests for the validate_row method."""

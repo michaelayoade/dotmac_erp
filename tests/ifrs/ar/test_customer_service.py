@@ -14,7 +14,6 @@ from app.services.finance.ar.customer import (
 )
 from tests.ifrs.ar.conftest import (
     MockCustomer,
-    MockCustomerType,
     MockRiskCategory,
     MockInvoice,
     MockInvoiceStatus,
@@ -84,7 +83,9 @@ class TestCreateCustomer:
             mock_db.commit.assert_called_once()
             mock_db.refresh.assert_called_once()
 
-    def test_create_duplicate_customer_code_fails(self, mock_db, org_id, sample_customer_input):
+    def test_create_duplicate_customer_code_fails(
+        self, mock_db, org_id, sample_customer_input
+    ):
         """Test that duplicate customer code fails."""
         from fastapi import HTTPException
 
@@ -124,7 +125,10 @@ class TestUpdateCustomer:
         mock_db.query.return_value = mock_query
 
         with patch("app.services.finance.ar.customer.Customer"):
-            with patch("app.services.finance.common.helpers.get_model_pk_column", return_value="customer_id"):
+            with patch(
+                "app.services.finance.common.helpers.get_model_pk_column",
+                return_value="customer_id",
+            ):
                 result = CustomerService.update_customer(
                     mock_db, org_id, customer.customer_id, sample_customer_input
                 )
@@ -132,7 +136,9 @@ class TestUpdateCustomer:
         mock_db.commit.assert_called()
         assert result.customer_code == sample_customer_input.customer_code
 
-    def test_update_nonexistent_customer_fails(self, mock_db, org_id, sample_customer_input):
+    def test_update_nonexistent_customer_fails(
+        self, mock_db, org_id, sample_customer_input
+    ):
         """Test updating non-existent customer fails."""
         from fastapi import HTTPException
 
@@ -146,7 +152,9 @@ class TestUpdateCustomer:
 
         assert exc.value.status_code == 404
 
-    def test_update_wrong_organization_fails(self, mock_db, org_id, sample_customer_input):
+    def test_update_wrong_organization_fails(
+        self, mock_db, org_id, sample_customer_input
+    ):
         """Test updating customer from wrong organization fails."""
         from fastapi import HTTPException
 
@@ -428,7 +436,10 @@ class TestListCustomers:
         mock_db.query.return_value = mock_query
 
         with patch("app.services.finance.ar.customer.Customer"):
-            with patch("app.services.finance.ar.customer.apply_search_filter", return_value=mock_query):
+            with patch(
+                "app.services.finance.ar.customer.apply_search_filter",
+                return_value=mock_query,
+            ):
                 result = CustomerService.list(
                     mock_db,
                     organization_id=str(org_id),

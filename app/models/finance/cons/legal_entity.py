@@ -1,13 +1,26 @@
 """
 Legal Entity Model - Consolidation Schema.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -80,12 +93,16 @@ class LegalEntity(Base):
         Enum(ConsolidationMethod, name="consolidation_method"),
         nullable=False,
     )
-    is_consolidating_entity: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_consolidating_entity: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
 
     # Geographic/legal info
     country_code: Mapped[str] = mapped_column(String(3), nullable=False)
     incorporation_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    registration_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    registration_number: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
     tax_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # Functional currency
@@ -93,16 +110,24 @@ class LegalEntity(Base):
     reporting_currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
 
     # Fiscal year
-    fiscal_year_end_month: Mapped[int] = mapped_column(Numeric(2, 0), nullable=False, default=12)
-    fiscal_year_end_day: Mapped[int] = mapped_column(Numeric(2, 0), nullable=False, default=31)
+    fiscal_year_end_month: Mapped[int] = mapped_column(
+        Numeric(2, 0), nullable=False, default=12
+    )
+    fiscal_year_end_day: Mapped[int] = mapped_column(
+        Numeric(2, 0), nullable=False, default=31
+    )
 
     # Acquisition/disposal
     acquisition_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     disposal_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    acquisition_cost: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6), nullable=True)
+    acquisition_cost: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 6), nullable=True
+    )
 
     # Goodwill
-    goodwill_at_acquisition: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6), nullable=True)
+    goodwill_at_acquisition: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 6), nullable=True
+    )
     accumulated_goodwill_impairment: Mapped[Decimal] = mapped_column(
         Numeric(20, 6),
         nullable=False,

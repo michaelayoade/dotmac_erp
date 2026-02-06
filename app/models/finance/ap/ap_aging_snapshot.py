@@ -1,12 +1,23 @@
 """
 AP Aging Snapshot Model - AP Schema.
 """
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint, func, text
+from sqlalchemy import (
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -39,7 +50,9 @@ class APAgingSnapshot(Base):
         UUID(as_uuid=True),
         nullable=False,
     )
-    fiscal_period_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    fiscal_period_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
     snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
 
     supplier_id: Mapped[uuid.UUID] = mapped_column(

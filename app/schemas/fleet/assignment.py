@@ -3,6 +3,7 @@ Vehicle Assignment Pydantic Schemas.
 
 Schemas for vehicle assignment API endpoints.
 """
+
 from datetime import date, datetime
 from typing import List, Optional
 from uuid import UUID

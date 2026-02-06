@@ -7,6 +7,7 @@ Supports onboarding/offboarding checklists with:
 - Document collection requirements
 - Self-service task assignment
 """
+
 from __future__ import annotations
 
 import enum
@@ -14,7 +15,17 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Enum, ForeignKey, Index, Integer, String, Text, func, text
+from sqlalchemy import (
+    Boolean,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -33,10 +44,10 @@ class OnboardingCategory(str, enum.Enum):
     """Standard categories for phased onboarding tasks."""
 
     PRE_BOARDING = "PRE_BOARDING"  # Before start date
-    DAY_ONE = "DAY_ONE"            # First day tasks
-    FIRST_WEEK = "FIRST_WEEK"      # First week tasks
-    FIRST_MONTH = "FIRST_MONTH"    # First month tasks
-    ONGOING = "ONGOING"            # Continuous/recurring
+    DAY_ONE = "DAY_ONE"  # First day tasks
+    FIRST_WEEK = "FIRST_WEEK"  # First week tasks
+    FIRST_MONTH = "FIRST_MONTH"  # First month tasks
+    ONGOING = "ONGOING"  # Continuous/recurring
 
 
 class AssigneeRole(str, enum.Enum):
@@ -47,7 +58,7 @@ class AssigneeRole(str, enum.Enum):
     IT = "IT"
     FINANCE = "FINANCE"
     EMPLOYEE = "EMPLOYEE"  # Self-service task
-    BUDDY = "BUDDY"        # Assigned mentor/buddy
+    BUDDY = "BUDDY"  # Assigned mentor/buddy
 
 
 class ChecklistTemplate(Base, AuditMixin, ERPNextSyncMixin):
@@ -79,8 +90,12 @@ class ChecklistTemplate(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
     )
     is_active: Mapped[bool] = mapped_column(default=True)
-    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
-    updated_at: Mapped[Optional[datetime]] = mapped_column(nullable=True, onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        nullable=True, onupdate=func.now()
+    )
 
     items: Mapped[list["ChecklistTemplateItem"]] = relationship(
         "ChecklistTemplateItem",

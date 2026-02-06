@@ -1,6 +1,7 @@
 """
 Depreciation Schedule Model - FA Schema.
 """
+
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -73,8 +74,12 @@ class DepreciationSchedule(Base):
     )
 
     # Remaining life tracking
-    remaining_life_months_opening: Mapped[int] = mapped_column(Numeric(10, 0), nullable=False)
-    remaining_life_months_closing: Mapped[int] = mapped_column(Numeric(10, 0), nullable=False)
+    remaining_life_months_opening: Mapped[int] = mapped_column(
+        Numeric(10, 0), nullable=False
+    )
+    remaining_life_months_closing: Mapped[int] = mapped_column(
+        Numeric(10, 0), nullable=False
+    )
 
     # Accounting references
     expense_account_id: Mapped[uuid.UUID] = mapped_column(

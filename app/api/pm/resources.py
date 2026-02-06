@@ -3,6 +3,7 @@ Resource Allocation API Endpoints.
 
 REST API for resource allocation and utilization.
 """
+
 from datetime import date
 from typing import Optional
 from uuid import UUID
@@ -21,7 +22,12 @@ from app.schemas.pm import (
     ResourceAllocationWithDetails,
     UtilizationSummary,
 )
-from app.services.common import ConflictError, NotFoundError, PaginationParams, ValidationError
+from app.services.common import (
+    ConflictError,
+    NotFoundError,
+    PaginationParams,
+    ValidationError,
+)
 from app.services.pm import ResourceService
 
 router = APIRouter(prefix="/resources", tags=["pm-resources"])
@@ -79,7 +85,9 @@ def list_allocations(
                 created_at=alloc.created_at,
                 updated_at=alloc.updated_at,
                 project_name=proj.project_name if proj else None,
-                employee_name=getattr(emp, "full_name", str(alloc.employee_id)[:8]) if emp else None,
+                employee_name=getattr(emp, "full_name", str(alloc.employee_id)[:8])
+                if emp
+                else None,
                 is_current=alloc.is_current,
             )
         )
@@ -92,7 +100,9 @@ def list_allocations(
     )
 
 
-@router.post("", response_model=ResourceAllocationRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=ResourceAllocationRead, status_code=status.HTTP_201_CREATED
+)
 def allocate_resource(
     data: ResourceAllocationCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -139,7 +149,9 @@ def get_project_allocations(
                 created_at=alloc.created_at,
                 updated_at=alloc.updated_at,
                 project_name=proj.project_name if proj else None,
-                employee_name=getattr(emp, "full_name", str(alloc.employee_id)[:8]) if emp else None,
+                employee_name=getattr(emp, "full_name", str(alloc.employee_id)[:8])
+                if emp
+                else None,
                 is_current=alloc.is_current,
             )
         )
@@ -183,7 +195,9 @@ def get_employee_allocations(
                 created_at=alloc.created_at,
                 updated_at=alloc.updated_at,
                 project_name=proj.project_name if proj else None,
-                employee_name=getattr(emp, "full_name", str(alloc.employee_id)[:8]) if emp else None,
+                employee_name=getattr(emp, "full_name", str(alloc.employee_id)[:8])
+                if emp
+                else None,
                 is_current=alloc.is_current,
             )
         )
@@ -244,7 +258,9 @@ def update_allocation(
     """Update a resource allocation."""
     svc = ResourceService(db, organization_id)
     try:
-        allocation = svc.update_allocation(allocation_id, data.model_dump(exclude_unset=True))
+        allocation = svc.update_allocation(
+            allocation_id, data.model_dump(exclude_unset=True)
+        )
         db.commit()
         db.refresh(allocation)
         return ResourceAllocationRead.model_validate(allocation)

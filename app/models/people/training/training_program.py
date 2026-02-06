@@ -3,6 +3,7 @@ Training Program Model - Training Schema.
 
 Defines training curricula and programs.
 """
+
 import enum
 import uuid
 from datetime import datetime
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
 
 class TrainingProgramStatus(str, enum.Enum):
     """Training program status."""
+
     DRAFT = "DRAFT"
     ACTIVE = "ACTIVE"
     ARCHIVED = "ARCHIVED"
@@ -48,7 +50,9 @@ class TrainingProgram(Base, AuditMixin, ERPNextSyncMixin):
 
     __tablename__ = "training_program"
     __table_args__ = (
-        UniqueConstraint("organization_id", "program_code", name="uq_training_program_code"),
+        UniqueConstraint(
+            "organization_id", "program_code", name="uq_training_program_code"
+        ),
         Index("idx_training_program_status", "organization_id", "status"),
         {"schema": "training"},
     )

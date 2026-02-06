@@ -3,8 +3,9 @@ Vehicle Reservation Model - Fleet Schema.
 
 Tracks pool vehicle reservation requests.
 """
+
 import uuid
-from datetime import date, datetime
+from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text

@@ -1,6 +1,7 @@
 """
 Payment Allocation Model - AR Schema.
 """
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -41,8 +42,12 @@ class PaymentAllocation(Base):
     )
 
     allocated_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    discount_taken: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
-    write_off_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    discount_taken: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
+    write_off_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
     exchange_difference: Mapped[Decimal] = mapped_column(
         Numeric(20, 6),
         nullable=False,

@@ -4,7 +4,7 @@ Tests for LotSerialService.
 
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
@@ -68,7 +68,9 @@ class TestCreateLot:
         mock_db.commit.assert_called_once()
         mock_db.refresh.assert_called_once()
 
-    def test_create_lot_item_not_found(self, service, mock_db, org_id, sample_lot_input):
+    def test_create_lot_item_not_found(
+        self, service, mock_db, org_id, sample_lot_input
+    ):
         """Test lot creation with invalid item."""
         from fastapi import HTTPException
 
@@ -417,9 +419,7 @@ class TestListLots:
         """Test listing lots by item."""
         item_id = uuid4()
         lots = [MockInventoryLot(item_id=item_id) for _ in range(3)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.all.return_value = (
-            lots
-        )
+        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.all.return_value = lots
 
         result = service.list_by_item(mock_db, item_id)
 

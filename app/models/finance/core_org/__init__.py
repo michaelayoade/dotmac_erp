@@ -2,6 +2,7 @@
 Core Organization & Dimensions Schema.
 Organizations, business units, segments, cost centers, projects, locations, branding.
 """
+
 from app.models.finance.core_org.organization import Organization, ConsolidationMethod
 from app.models.finance.core_org.business_unit import BusinessUnit, BusinessUnitType
 from app.models.finance.core_org.reporting_segment import ReportingSegment, SegmentType

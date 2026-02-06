@@ -1,6 +1,7 @@
 """
 DotMac CRM Sync Schemas - Pydantic models for CRM sync API.
 """
+
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional

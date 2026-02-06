@@ -3,6 +3,7 @@ Sales Order Model - AR Schema.
 
 Sales orders with fulfillment tracking and invoice generation.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -10,8 +11,19 @@ from decimal import Decimal
 from typing import Optional, List
 
 from sqlalchemy import (
-    Boolean, Date, DateTime, Enum, ForeignKey, Index, Integer,
-    Numeric, String, Text, UniqueConstraint, func, text
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -22,6 +34,7 @@ from app.db import Base
 
 class SOStatus(str, enum.Enum):
     """Sales Order lifecycle status."""
+
     DRAFT = "DRAFT"
     SUBMITTED = "SUBMITTED"
     APPROVED = "APPROVED"
@@ -35,6 +48,7 @@ class SOStatus(str, enum.Enum):
 
 class FulfillmentStatus(str, enum.Enum):
     """Line fulfillment status."""
+
     PENDING = "PENDING"
     PARTIAL = "PARTIAL"
     FULFILLED = "FULFILLED"
@@ -76,7 +90,9 @@ class SalesOrder(Base):
 
     # SO identification
     so_number: Mapped[str] = mapped_column(String(30), nullable=False)
-    customer_po_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    customer_po_number: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
     reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Customer
@@ -103,7 +119,9 @@ class SalesOrder(Base):
     ship_to_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     ship_to_city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     ship_to_state: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    ship_to_postal_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    ship_to_postal_code: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True
+    )
     ship_to_country: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     shipping_method: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
@@ -169,20 +187,36 @@ class SalesOrder(Base):
 
     # Flags
     is_backorder: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    allow_partial_shipment: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    allow_partial_shipment: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
 
     # Notes
     internal_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     customer_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Workflow tracking
-    submitted_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
-    submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    approved_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
-    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    submitted_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    approved_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    approved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    confirmed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     cancellation_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Audit
@@ -192,7 +226,9 @@ class SalesOrder(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
     updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -202,7 +238,9 @@ class SalesOrder(Base):
     # Relationships
     customer = relationship("Customer", foreign_keys=[customer_id], lazy="joined")
     quote = relationship("Quote", foreign_keys=[quote_id], lazy="select")
-    payment_terms = relationship("PaymentTerms", foreign_keys=[payment_terms_id], lazy="joined")
+    payment_terms = relationship(
+        "PaymentTerms", foreign_keys=[payment_terms_id], lazy="joined"
+    )
     lines: Mapped[List["SalesOrderLine"]] = relationship(
         "SalesOrderLine",
         back_populates="sales_order",
@@ -231,16 +269,14 @@ class SalesOrder(Base):
     def is_fully_shipped(self) -> bool:
         """Check if all lines are fully shipped."""
         return all(
-            line.quantity_shipped >= line.quantity_ordered
-            for line in self.lines
+            line.quantity_shipped >= line.quantity_ordered for line in self.lines
         )
 
     @property
     def is_fully_invoiced(self) -> bool:
         """Check if all lines are fully invoiced."""
         return all(
-            line.quantity_invoiced >= line.quantity_ordered
-            for line in self.lines
+            line.quantity_invoiced >= line.quantity_ordered for line in self.lines
         )
 
 
@@ -370,7 +406,9 @@ class SalesOrderLine(Base):
     sales_order = relationship("SalesOrder", back_populates="lines")
     item = relationship("Item", lazy="joined")
     tax_code = relationship("TaxCode", lazy="joined")
-    revenue_account = relationship("Account", foreign_keys=[revenue_account_id], lazy="joined")
+    revenue_account = relationship(
+        "Account", foreign_keys=[revenue_account_id], lazy="joined"
+    )
     project = relationship("Project", lazy="joined")
     cost_center = relationship("CostCenter", lazy="joined")
 
@@ -392,7 +430,9 @@ class Shipment(Base):
 
     __tablename__ = "shipment"
     __table_args__ = (
-        UniqueConstraint("organization_id", "shipment_number", name="uq_shipment_number"),
+        UniqueConstraint(
+            "organization_id", "shipment_number", name="uq_shipment_number"
+        ),
         Index("idx_shipment_so", "so_id"),
         Index("idx_shipment_date", "organization_id", "shipment_date"),
         {"schema": "ar"},
@@ -429,7 +469,9 @@ class Shipment(Base):
 
     # Status
     is_delivered: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    delivered_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Notes
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

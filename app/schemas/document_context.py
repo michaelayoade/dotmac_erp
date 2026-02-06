@@ -9,7 +9,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class OfferLetterContext(BaseModel):
@@ -53,6 +53,7 @@ class OfferLetterContext(BaseModel):
     offer_date: date
     offer_expiry_date: date
     proposed_start_date: date
+    document_date: Optional[date] = None
 
     # Terms
     probation_months: int = 3
@@ -463,7 +464,9 @@ class DisciplineTerminationLetterContext(BaseModel):
 
     # Case history summary
     case_summary: str  # Brief history of the case
-    previous_actions: Optional[list[dict[str, Any]]] = None  # Previous disciplinary actions
+    previous_actions: Optional[list[dict[str, Any]]] = (
+        None  # Previous disciplinary actions
+    )
 
     # Final settlement
     final_settlement_items: Optional[list[dict[str, Any]]] = None  # [{item, amount}]

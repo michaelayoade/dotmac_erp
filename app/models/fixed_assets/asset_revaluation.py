@@ -1,6 +1,7 @@
 """
 Asset Revaluation Model - FA Schema.
 """
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -41,7 +42,9 @@ class AssetRevaluation(Base):
     revaluation_date: Mapped[date] = mapped_column(Date, nullable=False)
 
     # Values before revaluation
-    carrying_amount_before: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    carrying_amount_before: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
     accumulated_depreciation_before: Mapped[Decimal] = mapped_column(
         Numeric(20, 6),
         nullable=False,
@@ -55,7 +58,9 @@ class AssetRevaluation(Base):
     )
 
     # Values after revaluation
-    carrying_amount_after: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    carrying_amount_after: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
     accumulated_depreciation_after: Mapped[Decimal] = mapped_column(
         Numeric(20, 6),
         nullable=False,
@@ -74,8 +79,12 @@ class AssetRevaluation(Base):
     )
 
     # Surplus recognized in equity vs P&L
-    surplus_to_equity: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
-    deficit_to_pl: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    surplus_to_equity: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
+    deficit_to_pl: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Prior revaluation reversal
     prior_deficit_reversed: Mapped[Decimal] = mapped_column(

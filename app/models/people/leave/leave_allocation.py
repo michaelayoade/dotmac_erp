@@ -3,6 +3,7 @@ Leave Allocation Model - Leave Schema.
 
 Tracks leave balance allocation per employee per leave type.
 """
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -14,7 +15,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Numeric,
-    String,
     Text,
     UniqueConstraint,
     func,
@@ -41,8 +41,10 @@ class LeaveAllocation(Base, AuditMixin, ERPNextSyncMixin):
     __tablename__ = "leave_allocation"
     __table_args__ = (
         UniqueConstraint(
-            "employee_id", "leave_type_id", "from_date",
-            name="uq_leave_allocation_emp_type_period"
+            "employee_id",
+            "leave_type_id",
+            "from_date",
+            name="uq_leave_allocation_emp_type_period",
         ),
         Index("idx_leave_allocation_employee", "employee_id", "from_date"),
         Index("idx_leave_allocation_type", "leave_type_id", "from_date"),

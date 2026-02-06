@@ -9,6 +9,7 @@ Additional employee information models:
 - Skill: Skill catalog
 - EmployeeSkill: Employee skill proficiency tracking
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -45,6 +46,7 @@ if TYPE_CHECKING:
 
 class DocumentType(str, enum.Enum):
     """Types of employee documents."""
+
     CONTRACT = "CONTRACT"
     OFFER_LETTER = "OFFER_LETTER"
     ID_PROOF = "ID_PROOF"
@@ -62,6 +64,7 @@ class DocumentType(str, enum.Enum):
 
 class QualificationType(str, enum.Enum):
     """Types of educational qualifications."""
+
     HIGH_SCHOOL = "HIGH_SCHOOL"
     DIPLOMA = "DIPLOMA"
     ASSOCIATE = "ASSOCIATE"
@@ -75,6 +78,7 @@ class QualificationType(str, enum.Enum):
 
 class RelationshipType(str, enum.Enum):
     """Types of dependent relationships."""
+
     SPOUSE = "SPOUSE"
     CHILD = "CHILD"
     PARENT = "PARENT"
@@ -86,6 +90,7 @@ class RelationshipType(str, enum.Enum):
 
 class Gender(str, enum.Enum):
     """Gender options for dependents."""
+
     MALE = "MALE"
     FEMALE = "FEMALE"
     OTHER = "OTHER"
@@ -94,6 +99,7 @@ class Gender(str, enum.Enum):
 
 class SkillCategory(str, enum.Enum):
     """Categories for skills."""
+
     TECHNICAL = "TECHNICAL"
     SOFT_SKILL = "SOFT_SKILL"
     LANGUAGE = "LANGUAGE"
@@ -614,8 +620,13 @@ class EmployeeDependent(Base, AuditMixin, SoftDeleteMixin):
         if self.date_of_birth is None:
             return None
         today = date.today()
-        return today.year - self.date_of_birth.year - (
-            (today.month, today.day) < (self.date_of_birth.month, self.date_of_birth.day)
+        return (
+            today.year
+            - self.date_of_birth.year
+            - (
+                (today.month, today.day)
+                < (self.date_of_birth.month, self.date_of_birth.day)
+            )
         )
 
     def __repr__(self) -> str:

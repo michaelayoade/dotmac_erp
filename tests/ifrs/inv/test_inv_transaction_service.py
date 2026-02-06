@@ -7,7 +7,7 @@ Tests inventory receipts, issues, adjustments, transfers, and costing methods.
 import uuid
 from datetime import datetime, timezone, date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -15,7 +15,6 @@ from fastapi import HTTPException
 from app.services.inventory.transaction import (
     InventoryTransactionService,
     TransactionInput,
-    CostingResult,
 )
 from app.models.inventory.item import CostingMethod
 from app.models.inventory.inventory_transaction import TransactionType
@@ -95,7 +94,9 @@ class MockInventoryLot:
         self.lot_number = lot_number
         self.quantity_on_hand = quantity_on_hand
         self.quantity_allocated = quantity_allocated
-        self.quantity_available = quantity_available if quantity_available is not None else quantity_on_hand
+        self.quantity_available = (
+            quantity_available if quantity_available is not None else quantity_on_hand
+        )
         self.unit_cost = unit_cost
         self.received_date = received_date or date.today()
         self.is_active = is_active
@@ -137,7 +138,7 @@ def create_transaction_input(
     warehouse_id: uuid.UUID = None,
     quantity: Decimal = Decimal("10.00"),
     unit_cost: Decimal = Decimal("10.00"),
-    **kwargs
+    **kwargs,
 ) -> TransactionInput:
     """Helper to create TransactionInput."""
     return TransactionInput(
@@ -174,7 +175,9 @@ class TestCalculateWeightedAverageCost:
         wh_id = uuid.uuid4()
 
         # Mock existing quantity of 100 at $10
-        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal("100")
+        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal(
+            "100"
+        )
 
         mock_item = MockItem(item_id=item_id, average_cost=Decimal("10.00"))
         mock_db.get.return_value = mock_item
@@ -220,7 +223,9 @@ class TestCalculateWeightedAverageCost:
         assert result == Decimal("12.000000")
 
     @patch("app.services.inventory.transaction.func")
-    def test_calculate_returns_new_cost_when_total_quantity_zero_or_negative(self, mock_func):
+    def test_calculate_returns_new_cost_when_total_quantity_zero_or_negative(
+        self, mock_func
+    ):
         """Test when total quantity is zero or negative returns new unit cost."""
         mock_db = MagicMock()
         org_id = uuid.uuid4()
@@ -228,7 +233,9 @@ class TestCalculateWeightedAverageCost:
         wh_id = uuid.uuid4()
 
         # Negative existing (shouldn't happen normally)
-        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal("-50")
+        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal(
+            "-50"
+        )
 
         mock_item = MockItem(item_id=item_id, average_cost=Decimal("10.00"))
         mock_db.get.return_value = mock_item
@@ -257,7 +264,9 @@ class TestGetCurrentBalance:
         item_id = uuid.uuid4()
         wh_id = uuid.uuid4()
 
-        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal("150")
+        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal(
+            "150"
+        )
 
         result = InventoryTransactionService.get_current_balance(
             db=mock_db,
@@ -314,14 +323,23 @@ class TestCreateReceipt:
             from app.models.inventory.item import Item
             from app.models.inventory.warehouse import Warehouse
 
-            if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
+            if (
+                model_class == Item
+                or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>"
+            ):
                 return mock_item
-            elif model_class == Warehouse or str(model_class) == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>":
+            elif (
+                model_class == Warehouse
+                or str(model_class)
+                == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>"
+            ):
                 return mock_warehouse
             return None
 
         mock_db.get.side_effect = mock_get
-        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal("100")
+        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal(
+            "100"
+        )
 
         input_data = create_transaction_input(
             transaction_type=TransactionType.RECEIPT,
@@ -333,13 +351,13 @@ class TestCreateReceipt:
 
         with patch.object(
             InventoryTransactionService,
-            'get_current_balance',
-            return_value=Decimal("100")
+            "get_current_balance",
+            return_value=Decimal("100"),
         ):
             with patch.object(
                 InventoryTransactionService,
-                'calculate_weighted_average_cost',
-                return_value=Decimal("10.666667")
+                "calculate_weighted_average_cost",
+                return_value=Decimal("10.666667"),
             ):
                 result = InventoryTransactionService.create_receipt(
                     db=mock_db,
@@ -423,7 +441,10 @@ class TestCreateReceipt:
         def mock_get(model_class, id_val):
             from app.models.inventory.item import Item
 
-            if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
+            if (
+                model_class == Item
+                or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>"
+            ):
                 return mock_item
             return None
 
@@ -465,9 +486,16 @@ class TestCreateReceipt:
             from app.models.inventory.item import Item
             from app.models.inventory.warehouse import Warehouse
 
-            if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
+            if (
+                model_class == Item
+                or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>"
+            ):
                 return mock_item
-            elif model_class == Warehouse or str(model_class) == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>":
+            elif (
+                model_class == Warehouse
+                or str(model_class)
+                == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>"
+            ):
                 return mock_warehouse
             return None
 
@@ -514,9 +542,16 @@ class TestCreateReceipt:
             from app.models.inventory.item import Item
             from app.models.inventory.warehouse import Warehouse
 
-            if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
+            if (
+                model_class == Item
+                or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>"
+            ):
                 return mock_item
-            elif model_class == Warehouse or str(model_class) == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>":
+            elif (
+                model_class == Warehouse
+                or str(model_class)
+                == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>"
+            ):
                 return mock_warehouse
             return None
 
@@ -532,8 +567,8 @@ class TestCreateReceipt:
 
         with patch.object(
             InventoryTransactionService,
-            'get_current_balance',
-            return_value=Decimal("0")
+            "get_current_balance",
+            return_value=Decimal("0"),
         ):
             result = InventoryTransactionService.create_receipt(
                 db=mock_db,
@@ -575,9 +610,16 @@ class TestCreateIssue:
             from app.models.inventory.item import Item
             from app.models.inventory.warehouse import Warehouse
 
-            if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
+            if (
+                model_class == Item
+                or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>"
+            ):
                 return mock_item
-            elif model_class == Warehouse or str(model_class) == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>":
+            elif (
+                model_class == Warehouse
+                or str(model_class)
+                == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>"
+            ):
                 return mock_warehouse
             return None
 
@@ -592,8 +634,8 @@ class TestCreateIssue:
 
         with patch.object(
             InventoryTransactionService,
-            'get_current_balance',
-            return_value=Decimal("100")  # Sufficient balance
+            "get_current_balance",
+            return_value=Decimal("100"),  # Sufficient balance
         ):
             result = InventoryTransactionService.create_issue(
                 db=mock_db,
@@ -620,9 +662,16 @@ class TestCreateIssue:
             from app.models.inventory.item import Item
             from app.models.inventory.warehouse import Warehouse
 
-            if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
+            if (
+                model_class == Item
+                or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>"
+            ):
                 return mock_item
-            elif model_class == Warehouse or str(model_class) == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>":
+            elif (
+                model_class == Warehouse
+                or str(model_class)
+                == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>"
+            ):
                 return mock_warehouse
             return None
 
@@ -637,8 +686,8 @@ class TestCreateIssue:
 
         with patch.object(
             InventoryTransactionService,
-            'get_current_balance',
-            return_value=Decimal("50")  # Only 50 available
+            "get_current_balance",
+            return_value=Decimal("50"),  # Only 50 available
         ):
             with pytest.raises(HTTPException) as exc_info:
                 InventoryTransactionService.create_issue(
@@ -670,9 +719,16 @@ class TestCreateIssue:
             from app.models.inventory.item import Item
             from app.models.inventory.warehouse import Warehouse
 
-            if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
+            if (
+                model_class == Item
+                or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>"
+            ):
                 return mock_item
-            elif model_class == Warehouse or str(model_class) == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>":
+            elif (
+                model_class == Warehouse
+                or str(model_class)
+                == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>"
+            ):
                 return mock_warehouse
             return None
 
@@ -688,8 +744,8 @@ class TestCreateIssue:
 
         with patch.object(
             InventoryTransactionService,
-            'get_current_balance',
-            return_value=Decimal("100")
+            "get_current_balance",
+            return_value=Decimal("100"),
         ):
             with pytest.raises(HTTPException) as exc_info:
                 InventoryTransactionService.create_issue(
@@ -728,11 +784,22 @@ class TestCreateIssue:
             from app.models.inventory.warehouse import Warehouse
             from app.models.inventory.inventory_lot import InventoryLot
 
-            if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
+            if (
+                model_class == Item
+                or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>"
+            ):
                 return mock_item
-            elif model_class == Warehouse or str(model_class) == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>":
+            elif (
+                model_class == Warehouse
+                or str(model_class)
+                == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>"
+            ):
                 return mock_warehouse
-            elif model_class == InventoryLot or str(model_class) == "<class 'app.models.ifrs.inv.inventory_lot.InventoryLot'>":
+            elif (
+                model_class == InventoryLot
+                or str(model_class)
+                == "<class 'app.models.ifrs.inv.inventory_lot.InventoryLot'>"
+            ):
                 return mock_lot
             return None
 
@@ -748,8 +815,8 @@ class TestCreateIssue:
 
         with patch.object(
             InventoryTransactionService,
-            'get_current_balance',
-            return_value=Decimal("100")
+            "get_current_balance",
+            return_value=Decimal("100"),
         ):
             with pytest.raises(HTTPException) as exc_info:
                 InventoryTransactionService.create_issue(
@@ -788,11 +855,22 @@ class TestCreateIssue:
             from app.models.inventory.warehouse import Warehouse
             from app.models.inventory.inventory_lot import InventoryLot
 
-            if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
+            if (
+                model_class == Item
+                or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>"
+            ):
                 return mock_item
-            elif model_class == Warehouse or str(model_class) == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>":
+            elif (
+                model_class == Warehouse
+                or str(model_class)
+                == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>"
+            ):
                 return mock_warehouse
-            elif model_class == InventoryLot or str(model_class) == "<class 'app.models.ifrs.inv.inventory_lot.InventoryLot'>":
+            elif (
+                model_class == InventoryLot
+                or str(model_class)
+                == "<class 'app.models.ifrs.inv.inventory_lot.InventoryLot'>"
+            ):
                 return mock_lot
             return None
 
@@ -808,8 +886,8 @@ class TestCreateIssue:
 
         with patch.object(
             InventoryTransactionService,
-            'get_current_balance',
-            return_value=Decimal("100")
+            "get_current_balance",
+            return_value=Decimal("100"),
         ):
             with pytest.raises(HTTPException) as exc_info:
                 InventoryTransactionService.create_issue(
@@ -842,9 +920,16 @@ class TestCreateIssue:
             from app.models.inventory.item import Item
             from app.models.inventory.warehouse import Warehouse
 
-            if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
+            if (
+                model_class == Item
+                or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>"
+            ):
                 return mock_item
-            elif model_class == Warehouse or str(model_class) == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>":
+            elif (
+                model_class == Warehouse
+                or str(model_class)
+                == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>"
+            ):
                 return mock_warehouse
             return None
 
@@ -860,8 +945,8 @@ class TestCreateIssue:
 
         with patch.object(
             InventoryTransactionService,
-            'get_current_balance',
-            return_value=Decimal("100")
+            "get_current_balance",
+            return_value=Decimal("100"),
         ):
             with pytest.raises(HTTPException) as exc_info:
                 InventoryTransactionService.create_issue(
@@ -891,7 +976,9 @@ class TestConsumeFifo:
             unit_cost=Decimal("10.00"),
         )
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [mock_lot]
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+            mock_lot
+        ]
 
         result = InventoryTransactionService._consume_fifo(
             db=mock_db,
@@ -924,7 +1011,10 @@ class TestConsumeFifo:
             unit_cost=Decimal("12.00"),
         )
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [lot1, lot2]
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+            lot1,
+            lot2,
+        ]
 
         result = InventoryTransactionService._consume_fifo(
             db=mock_db,
@@ -952,7 +1042,9 @@ class TestConsumeFifo:
             unit_cost=Decimal("10.00"),
         )
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [mock_lot]
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+            mock_lot
+        ]
 
         with pytest.raises(HTTPException) as exc_info:
             InventoryTransactionService._consume_fifo(
@@ -1013,9 +1105,16 @@ class TestCreateAdjustment:
             from app.models.inventory.item import Item
             from app.models.inventory.warehouse import Warehouse
 
-            if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
+            if (
+                model_class == Item
+                or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>"
+            ):
                 return mock_item
-            elif model_class == Warehouse or str(model_class) == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>":
+            elif (
+                model_class == Warehouse
+                or str(model_class)
+                == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>"
+            ):
                 return mock_warehouse
             return None
 
@@ -1030,8 +1129,8 @@ class TestCreateAdjustment:
 
         with patch.object(
             InventoryTransactionService,
-            'get_current_balance',
-            return_value=Decimal("100")
+            "get_current_balance",
+            return_value=Decimal("100"),
         ):
             result = InventoryTransactionService.create_adjustment(
                 db=mock_db,
@@ -1062,9 +1161,16 @@ class TestCreateAdjustment:
             from app.models.inventory.item import Item
             from app.models.inventory.warehouse import Warehouse
 
-            if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
+            if (
+                model_class == Item
+                or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>"
+            ):
                 return mock_item
-            elif model_class == Warehouse or str(model_class) == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>":
+            elif (
+                model_class == Warehouse
+                or str(model_class)
+                == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>"
+            ):
                 return mock_warehouse
             return None
 
@@ -1079,8 +1185,8 @@ class TestCreateAdjustment:
 
         with patch.object(
             InventoryTransactionService,
-            'get_current_balance',
-            return_value=Decimal("100")
+            "get_current_balance",
+            return_value=Decimal("100"),
         ):
             result = InventoryTransactionService.create_adjustment(
                 db=mock_db,
@@ -1107,9 +1213,16 @@ class TestCreateAdjustment:
             from app.models.inventory.item import Item
             from app.models.inventory.warehouse import Warehouse
 
-            if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
+            if (
+                model_class == Item
+                or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>"
+            ):
                 return mock_item
-            elif model_class == Warehouse or str(model_class) == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>":
+            elif (
+                model_class == Warehouse
+                or str(model_class)
+                == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>"
+            ):
                 return mock_warehouse
             return None
 
@@ -1124,8 +1237,8 @@ class TestCreateAdjustment:
 
         with patch.object(
             InventoryTransactionService,
-            'get_current_balance',
-            return_value=Decimal("100")
+            "get_current_balance",
+            return_value=Decimal("100"),
         ):
             with pytest.raises(HTTPException) as exc_info:
                 InventoryTransactionService.create_adjustment(
@@ -1156,7 +1269,9 @@ class TestCreateTransfer:
             organization_id=org_id,
             average_cost=Decimal("10.00"),
         )
-        mock_from_warehouse = MockWarehouse(warehouse_id=from_wh_id, organization_id=org_id)
+        mock_from_warehouse = MockWarehouse(
+            warehouse_id=from_wh_id, organization_id=org_id
+        )
         mock_to_warehouse = MockWarehouse(warehouse_id=to_wh_id, organization_id=org_id)
 
         call_count = [0]
@@ -1165,9 +1280,16 @@ class TestCreateTransfer:
             from app.models.inventory.item import Item
             from app.models.inventory.warehouse import Warehouse
 
-            if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
+            if (
+                model_class == Item
+                or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>"
+            ):
                 return mock_item
-            elif model_class == Warehouse or str(model_class) == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>":
+            elif (
+                model_class == Warehouse
+                or str(model_class)
+                == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>"
+            ):
                 call_count[0] += 1
                 if call_count[0] == 1:
                     return mock_from_warehouse
@@ -1187,8 +1309,7 @@ class TestCreateTransfer:
 
         # Mock balances for both warehouses
         with patch.object(
-            InventoryTransactionService,
-            'get_current_balance'
+            InventoryTransactionService, "get_current_balance"
         ) as mock_balance:
             mock_balance.side_effect = [Decimal("100"), Decimal("0")]  # from, to
 
@@ -1234,7 +1355,9 @@ class TestCreateTransfer:
         to_wh_id = uuid.uuid4()
 
         mock_item = MockItem(item_id=item_id, organization_id=org_id)
-        mock_from_warehouse = MockWarehouse(warehouse_id=from_wh_id, organization_id=org_id)
+        mock_from_warehouse = MockWarehouse(
+            warehouse_id=from_wh_id, organization_id=org_id
+        )
         mock_to_warehouse = MockWarehouse(warehouse_id=to_wh_id, organization_id=org_id)
 
         call_count = [0]
@@ -1243,9 +1366,16 @@ class TestCreateTransfer:
             from app.models.inventory.item import Item
             from app.models.inventory.warehouse import Warehouse
 
-            if model_class == Item or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>":
+            if (
+                model_class == Item
+                or str(model_class) == "<class 'app.models.ifrs.inv.item.Item'>"
+            ):
                 return mock_item
-            elif model_class == Warehouse or str(model_class) == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>":
+            elif (
+                model_class == Warehouse
+                or str(model_class)
+                == "<class 'app.models.ifrs.inv.warehouse.Warehouse'>"
+            ):
                 call_count[0] += 1
                 if call_count[0] == 1:
                     return mock_from_warehouse
@@ -1265,8 +1395,8 @@ class TestCreateTransfer:
 
         with patch.object(
             InventoryTransactionService,
-            'get_current_balance',
-            return_value=Decimal("50")  # Only 50 at source
+            "get_current_balance",
+            return_value=Decimal("50"),  # Only 50 at source
         ):
             with pytest.raises(HTTPException) as exc_info:
                 InventoryTransactionService.create_transfer(
@@ -1312,7 +1442,7 @@ class TestGet:
 class TestCreateTransaction:
     """Tests for create_transaction router method."""
 
-    @patch.object(InventoryTransactionService, 'create_receipt')
+    @patch.object(InventoryTransactionService, "create_receipt")
     def test_create_transaction_routes_receipt(self, mock_create_receipt):
         """Test create_transaction routes RECEIPT to create_receipt."""
         mock_db = MagicMock()
@@ -1330,7 +1460,7 @@ class TestCreateTransaction:
 
         mock_create_receipt.assert_called_once()
 
-    @patch.object(InventoryTransactionService, 'create_receipt')
+    @patch.object(InventoryTransactionService, "create_receipt")
     def test_create_transaction_routes_return(self, mock_create_receipt):
         """Test create_transaction routes RETURN to create_receipt."""
         mock_db = MagicMock()
@@ -1348,7 +1478,7 @@ class TestCreateTransaction:
 
         mock_create_receipt.assert_called_once()
 
-    @patch.object(InventoryTransactionService, 'create_issue')
+    @patch.object(InventoryTransactionService, "create_issue")
     def test_create_transaction_routes_issue(self, mock_create_issue):
         """Test create_transaction routes ISSUE to create_issue."""
         mock_db = MagicMock()
@@ -1366,7 +1496,7 @@ class TestCreateTransaction:
 
         mock_create_issue.assert_called_once()
 
-    @patch.object(InventoryTransactionService, 'create_issue')
+    @patch.object(InventoryTransactionService, "create_issue")
     def test_create_transaction_routes_sale(self, mock_create_issue):
         """Test create_transaction routes SALE to create_issue."""
         mock_db = MagicMock()
@@ -1384,7 +1514,7 @@ class TestCreateTransaction:
 
         mock_create_issue.assert_called_once()
 
-    @patch.object(InventoryTransactionService, 'create_transfer')
+    @patch.object(InventoryTransactionService, "create_transfer")
     def test_create_transaction_routes_transfer(self, mock_create_transfer):
         """Test create_transaction routes TRANSFER to create_transfer."""
         mock_db = MagicMock()
@@ -1407,14 +1537,16 @@ class TestCreateTransaction:
 
         mock_create_transfer.assert_called_once()
 
-    @patch.object(InventoryTransactionService, 'create_adjustment')
+    @patch.object(InventoryTransactionService, "create_adjustment")
     def test_create_transaction_routes_adjustment(self, mock_create_adjustment):
         """Test create_transaction routes ADJUSTMENT to create_adjustment."""
         mock_db = MagicMock()
         org_id = uuid.uuid4()
         user_id = uuid.uuid4()
 
-        input_data = create_transaction_input(transaction_type=TransactionType.ADJUSTMENT)
+        input_data = create_transaction_input(
+            transaction_type=TransactionType.ADJUSTMENT
+        )
 
         InventoryTransactionService.create_transaction(
             db=mock_db,
@@ -1425,7 +1557,7 @@ class TestCreateTransaction:
 
         mock_create_adjustment.assert_called_once()
 
-    @patch.object(InventoryTransactionService, 'create_adjustment')
+    @patch.object(InventoryTransactionService, "create_adjustment")
     def test_create_transaction_routes_scrap(self, mock_create_adjustment):
         """Test create_transaction routes SCRAP to create_adjustment."""
         mock_db = MagicMock()
@@ -1538,4 +1670,6 @@ class TestList:
 
         assert len(result) == 1
         mock_db.query.return_value.order_by.return_value.limit.assert_called_with(10)
-        mock_db.query.return_value.order_by.return_value.limit.return_value.offset.assert_called_with(5)
+        mock_db.query.return_value.order_by.return_value.limit.return_value.offset.assert_called_with(
+            5
+        )

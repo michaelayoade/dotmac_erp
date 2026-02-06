@@ -13,8 +13,6 @@ from tests.ifrs.ar.conftest import (
     MockCustomer,
     MockInvoice,
     MockInvoiceLine,
-    MockInvoiceStatus,
-    MockInvoiceType,
 )
 
 
@@ -85,7 +83,10 @@ class TestCreateInvoice:
                     MockInv.return_value = mock_invoice
 
                     with patch("app.services.finance.ar.invoice.InvoiceLine"):
-                        with patch("app.services.finance.ar.invoice.SequenceService.get_next_number", return_value="INV-0001"):
+                        with patch(
+                            "app.services.finance.ar.invoice.SequenceService.get_next_number",
+                            return_value="INV-0001",
+                        ):
                             result = ARInvoiceService.create_invoice(
                                 mock_db, org_id, invoice_input, user_id
                             )
@@ -125,9 +126,7 @@ class TestCreateInvoice:
 
         with patch("app.services.finance.ar.invoice.Customer"):
             with pytest.raises(HTTPException) as exc:
-                ARInvoiceService.create_invoice(
-                    mock_db, org_id, invoice_input, user_id
-                )
+                ARInvoiceService.create_invoice(mock_db, org_id, invoice_input, user_id)
 
         assert exc.value.status_code == 404
 
@@ -154,9 +153,7 @@ class TestCreateInvoice:
 
         with patch("app.services.finance.ar.invoice.Customer"):
             with pytest.raises(HTTPException) as exc:
-                ARInvoiceService.create_invoice(
-                    mock_db, org_id, invoice_input, user_id
-                )
+                ARInvoiceService.create_invoice(mock_db, org_id, invoice_input, user_id)
 
         assert exc.value.status_code == 400
 
@@ -250,7 +247,10 @@ class TestApproveInvoice:
                 )
 
         assert exc.value.status_code == 400
-        assert "segregation" in exc.value.detail.lower() or "same user" in exc.value.detail.lower()
+        assert (
+            "segregation" in exc.value.detail.lower()
+            or "same user" in exc.value.detail.lower()
+        )
 
 
 class TestVoidInvoice:
@@ -418,7 +418,9 @@ class TestPostInvoice:
 
         with patch("app.services.finance.ar.invoice.Invoice"):
             # ARPostingAdapter is imported inside the method
-            with patch("app.services.finance.ar.ar_posting_adapter.ARPostingAdapter") as MockAdapter:
+            with patch(
+                "app.services.finance.ar.ar_posting_adapter.ARPostingAdapter"
+            ) as MockAdapter:
                 MockAdapter.post_invoice.return_value = mock_result
                 result = ARInvoiceService.post_invoice(
                     mock_db, org_id, invoice.invoice_id, user_id
@@ -464,7 +466,9 @@ class TestPostInvoice:
         mock_result.message = "Posting failed: invalid account"
 
         with patch("app.services.finance.ar.invoice.Invoice"):
-            with patch("app.services.finance.ar.ar_posting_adapter.ARPostingAdapter") as MockAdapter:
+            with patch(
+                "app.services.finance.ar.ar_posting_adapter.ARPostingAdapter"
+            ) as MockAdapter:
                 MockAdapter.post_invoice.return_value = mock_result
                 with pytest.raises(HTTPException) as exc:
                     ARInvoiceService.post_invoice(
@@ -482,9 +486,7 @@ class TestPostInvoice:
 
         with patch("app.services.finance.ar.invoice.Invoice"):
             with pytest.raises(HTTPException) as exc:
-                ARInvoiceService.post_invoice(
-                    mock_db, org_id, uuid4(), user_id
-                )
+                ARInvoiceService.post_invoice(mock_db, org_id, uuid4(), user_id)
 
         assert exc.value.status_code == 404
 
@@ -513,7 +515,10 @@ class TestMarkOverdue:
             amount_paid=Decimal("200.00"),
         )
 
-        mock_db.query.return_value.filter.return_value.all.return_value = [invoice1, invoice2]
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            invoice1,
+            invoice2,
+        ]
 
         # Patch and_ to return a MagicMock that SQLAlchemy accepts
         with patch("app.services.finance.ar.invoice.and_", return_value=MagicMock()):
@@ -753,15 +758,18 @@ class TestCreditNoteHandling:
                     MockInv.return_value = mock_invoice
 
                     with patch("app.services.finance.ar.invoice.InvoiceLine"):
-                        with patch("app.services.finance.ar.invoice.SequenceService.get_next_number", return_value="INV-0002"):
+                        with patch(
+                            "app.services.finance.ar.invoice.SequenceService.get_next_number",
+                            return_value="INV-0002",
+                        ):
                             result = ARInvoiceService.create_invoice(
                                 mock_db, org_id, invoice_input, user_id
                             )
 
         # Verify the invoice was created with negative amounts
         call_kwargs = MockInv.call_args[1]
-        assert call_kwargs['total_amount'] < 0
-        assert call_kwargs['subtotal'] < 0
+        assert call_kwargs["total_amount"] < 0
+        assert call_kwargs["subtotal"] < 0
 
 
 class TestInactiveCustomerHandling:
@@ -800,9 +808,7 @@ class TestInactiveCustomerHandling:
 
         with patch("app.services.finance.ar.invoice.Customer"):
             with pytest.raises(HTTPException) as exc:
-                ARInvoiceService.create_invoice(
-                    mock_db, org_id, invoice_input, user_id
-                )
+                ARInvoiceService.create_invoice(mock_db, org_id, invoice_input, user_id)
 
         assert exc.value.status_code == 400
         assert "not active" in exc.value.detail.lower()
@@ -820,9 +826,7 @@ class TestInvoiceNotFoundScenarios:
 
         with patch("app.services.finance.ar.invoice.Invoice"):
             with pytest.raises(HTTPException) as exc:
-                ARInvoiceService.submit_invoice(
-                    mock_db, org_id, uuid4(), user_id
-                )
+                ARInvoiceService.submit_invoice(mock_db, org_id, uuid4(), user_id)
 
         assert exc.value.status_code == 404
 
@@ -835,9 +839,7 @@ class TestInvoiceNotFoundScenarios:
 
         with patch("app.services.finance.ar.invoice.Invoice"):
             with pytest.raises(HTTPException) as exc:
-                ARInvoiceService.approve_invoice(
-                    mock_db, org_id, uuid4(), user_id
-                )
+                ARInvoiceService.approve_invoice(mock_db, org_id, uuid4(), user_id)
 
         assert exc.value.status_code == 404
 
@@ -850,9 +852,7 @@ class TestInvoiceNotFoundScenarios:
 
         with patch("app.services.finance.ar.invoice.Invoice"):
             with pytest.raises(HTTPException) as exc:
-                ARInvoiceService.void_invoice(
-                    mock_db, org_id, uuid4(), user_id, "Test"
-                )
+                ARInvoiceService.void_invoice(mock_db, org_id, uuid4(), user_id, "Test")
 
         assert exc.value.status_code == 404
 
@@ -892,7 +892,9 @@ class TestListInvoicesEdgeCases:
             MockInv.due_date.__lt__ = MagicMock(return_value=MagicMock())
             MockInv.status.in_ = MagicMock(return_value=MagicMock())
             MockInv.invoice_date = MagicMock()
-            with patch("app.services.finance.ar.invoice.and_", return_value=MagicMock()):
+            with patch(
+                "app.services.finance.ar.invoice.and_", return_value=MagicMock()
+            ):
                 result = ARInvoiceService.list(
                     mock_db,
                     organization_id=str(org_id),

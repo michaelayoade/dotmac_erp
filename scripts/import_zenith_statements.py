@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 import re
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -33,7 +32,6 @@ from app.models.finance.banking.bank_account import (
     BankAccountType,
 )
 from app.models.finance.banking.bank_statement import (
-    BankStatementStatus,
     StatementLineType,
 )
 from app.models.finance.gl.account import Account
@@ -42,7 +40,9 @@ from app.services.finance.banking.bank_statement import (
     StatementLineInput,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 # Path to statement files
@@ -231,15 +231,17 @@ def parse_old_format_statement(filepath: Path) -> Optional[ParsedStatement]:
             if "OPENING BALANCE" in description.upper():
                 continue
 
-            transactions.append({
-                "line_number": len(transactions) + 1,
-                "date_posted": date_posted,
-                "value_date": value_date or date_posted,
-                "description": description,
-                "debit": abs(debit) if debit else None,
-                "credit": credit,
-                "balance": balance,
-            })
+            transactions.append(
+                {
+                    "line_number": len(transactions) + 1,
+                    "date_posted": date_posted,
+                    "value_date": value_date or date_posted,
+                    "description": description,
+                    "debit": abs(debit) if debit else None,
+                    "credit": credit,
+                    "balance": balance,
+                }
+            )
 
         logger.info(f"  Parsed {len(transactions)} transactions from {filepath.name}")
 
@@ -328,15 +330,17 @@ def parse_new_format_statement(filepath: Path) -> Optional[ParsedStatement]:
             actual_debit = debit if debit and debit > 0 else None
             actual_credit = credit if credit and credit > 0 else None
 
-            transactions.append({
-                "line_number": len(transactions) + 1,
-                "date_posted": date_posted,
-                "value_date": value_date or date_posted,
-                "description": description,
-                "debit": actual_debit,
-                "credit": actual_credit,
-                "balance": balance,
-            })
+            transactions.append(
+                {
+                    "line_number": len(transactions) + 1,
+                    "date_posted": date_posted,
+                    "value_date": value_date or date_posted,
+                    "description": description,
+                    "debit": actual_debit,
+                    "credit": actual_credit,
+                    "balance": balance,
+                }
+            )
 
         logger.info(f"  Parsed {len(transactions)} transactions from {filepath.name}")
 
@@ -357,6 +361,7 @@ def parse_new_format_statement(filepath: Path) -> Optional[ParsedStatement]:
     except Exception as e:
         logger.error(f"Error parsing {filepath.name}: {e}")
         import traceback
+
         traceback.print_exc()
         return None
 
@@ -420,31 +425,34 @@ def convert_to_statement_lines(
 
     for i, txn in enumerate(transactions):
         amount = txn["debit"] or txn["credit"] or Decimal("0")
-        txn_type = (
-            StatementLineType.debit if txn["debit"]
-            else StatementLineType.credit
-        )
+        txn_type = StatementLineType.debit if txn["debit"] else StatementLineType.credit
 
         # Convert raw_data to JSON-serializable format
         raw_data = {
-            "date_posted": txn["date_posted"].isoformat() if txn.get("date_posted") else None,
-            "value_date": txn["value_date"].isoformat() if txn.get("value_date") else None,
+            "date_posted": txn["date_posted"].isoformat()
+            if txn.get("date_posted")
+            else None,
+            "value_date": txn["value_date"].isoformat()
+            if txn.get("value_date")
+            else None,
             "description": txn.get("description"),
             "debit": str(txn["debit"]) if txn.get("debit") else None,
             "credit": str(txn["credit"]) if txn.get("credit") else None,
             "balance": str(txn["balance"]) if txn.get("balance") else None,
         }
 
-        lines.append(StatementLineInput(
-            line_number=start_line + i,
-            transaction_date=txn["date_posted"],
-            value_date=txn["value_date"],
-            transaction_type=txn_type,
-            amount=amount,
-            description=txn["description"],
-            running_balance=txn.get("balance"),
-            raw_data=raw_data,
-        ))
+        lines.append(
+            StatementLineInput(
+                line_number=start_line + i,
+                transaction_date=txn["date_posted"],
+                value_date=txn["value_date"],
+                transaction_type=txn_type,
+                amount=amount,
+                description=txn["description"],
+                running_balance=txn.get("balance"),
+                raw_data=raw_data,
+            )
+        )
 
     return lines
 
@@ -461,11 +469,13 @@ def import_statements(dry_run: bool = False):
 
     with SessionLocal() as db:
         # Get organization ID from existing account
-        existing = db.execute(
-            select(BankAccount).where(
-                BankAccount.bank_name.ilike("%zenith%")
+        existing = (
+            db.execute(
+                select(BankAccount).where(BankAccount.bank_name.ilike("%zenith%"))
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
 
         if not existing:
             logger.error("No existing Zenith bank account found to determine org ID")
@@ -602,19 +612,24 @@ def import_statements(dry_run: bool = False):
             except Exception as e:
                 logger.error(f"  Failed to import: {e}")
                 import traceback
+
                 traceback.print_exc()
 
         if not dry_run:
             db.commit()
             logger.info("")
             logger.info("=" * 60)
-            logger.info(f"Import Complete: {total_imported} transactions imported, {total_skipped} skipped")
+            logger.info(
+                f"Import Complete: {total_imported} transactions imported, {total_skipped} skipped"
+            )
             logger.info("=" * 60)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Import Zenith bank statements")
-    parser.add_argument("--dry-run", action="store_true", help="Parse only, don't import")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Parse only, don't import"
+    )
     args = parser.parse_args()
 
     import_statements(dry_run=args.dry_run)

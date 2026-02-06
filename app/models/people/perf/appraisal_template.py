@@ -3,6 +3,7 @@ Appraisal Template Model - Performance Schema.
 
 Defines appraisal structure with KRAs and weightages.
 """
+
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -38,7 +39,9 @@ class AppraisalTemplate(Base, AuditMixin, ERPNextSyncMixin):
 
     __tablename__ = "appraisal_template"
     __table_args__ = (
-        UniqueConstraint("organization_id", "template_code", name="uq_appraisal_template_code"),
+        UniqueConstraint(
+            "organization_id", "template_code", name="uq_appraisal_template_code"
+        ),
         Index("idx_appraisal_template_dept", "organization_id", "department_id"),
         Index("idx_appraisal_template_desig", "organization_id", "designation_id"),
         {"schema": "perf"},

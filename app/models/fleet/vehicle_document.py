@@ -3,6 +3,7 @@ Vehicle Document Model - Fleet Schema.
 
 Tracks vehicle documents: insurance, registration, permits, etc.
 """
+
 import uuid
 from datetime import date
 from decimal import Decimal
@@ -38,7 +39,9 @@ class VehicleDocument(Base, FleetBaseMixin, AuditMixin):
     __table_args__ = (
         Index("idx_fleet_doc_vehicle_type", "vehicle_id", "document_type"),
         Index("idx_fleet_doc_expiry", "organization_id", "expiry_date"),
-        Index("idx_fleet_doc_reminder", "organization_id", "reminder_sent", "expiry_date"),
+        Index(
+            "idx_fleet_doc_reminder", "organization_id", "reminder_sent", "expiry_date"
+        ),
         {"schema": "fleet"},
     )
 

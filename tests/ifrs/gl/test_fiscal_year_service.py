@@ -2,8 +2,7 @@
 Tests for FiscalYearService.
 """
 
-from datetime import date, datetime, timezone
-from unittest.mock import MagicMock, patch
+from datetime import date
 from uuid import uuid4
 
 import pytest
@@ -12,11 +11,8 @@ from app.services.finance.gl.fiscal_year import (
     FiscalYearService,
     FiscalYearInput,
 )
-from app.models.finance.gl.fiscal_period import PeriodStatus
 from tests.ifrs.gl.conftest import (
     MockFiscalYear,
-    MockFiscalPeriod,
-    MockPeriodStatus,
 )
 
 
@@ -50,7 +46,9 @@ class TestCreateYear:
         mock_db.commit.assert_called_once()
         mock_db.refresh.assert_called_once()
 
-    def test_create_year_duplicate_fails(self, service, mock_db, org_id, sample_year_input):
+    def test_create_year_duplicate_fails(
+        self, service, mock_db, org_id, sample_year_input
+    ):
         """Test that duplicate year code fails."""
         from fastapi import HTTPException
 
@@ -148,13 +146,17 @@ class TestCloseYear:
         assert exc.value.status_code == 400
         assert "already closed" in exc.value.detail
 
-    def test_close_year_with_open_periods_fails(self, service, mock_db, org_id, user_id):
+    def test_close_year_with_open_periods_fails(
+        self, service, mock_db, org_id, user_id
+    ):
         """Test closing year with open periods fails."""
         from fastapi import HTTPException
 
         year = MockFiscalYear(organization_id=org_id, is_closed=False)
         mock_db.get.return_value = year
-        mock_db.query.return_value.filter.return_value.count.return_value = 3  # 3 open periods
+        mock_db.query.return_value.filter.return_value.count.return_value = (
+            3  # 3 open periods
+        )
 
         with pytest.raises(HTTPException) as exc:
             service.close_year(mock_db, org_id, year.fiscal_year_id, user_id)
@@ -217,9 +219,7 @@ class TestListYears:
     def test_list_all_years(self, service, mock_db, org_id):
         """Test listing all fiscal years."""
         years = [MockFiscalYear(organization_id=org_id) for _ in range(3)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            years
-        )
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = years
 
         result = service.list(mock_db, organization_id=str(org_id))
 
@@ -228,9 +228,7 @@ class TestListYears:
     def test_list_open_years(self, service, mock_db, org_id):
         """Test listing only open fiscal years."""
         years = [MockFiscalYear(organization_id=org_id, is_closed=False)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            years
-        )
+        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = years
 
         result = service.list(mock_db, organization_id=str(org_id), is_closed=False)
 
@@ -239,9 +237,7 @@ class TestListYears:
     def test_list_closed_years(self, service, mock_db, org_id):
         """Test listing only closed fiscal years."""
         years = [MockFiscalYear(organization_id=org_id, is_closed=True)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            years
-        )
+        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = years
 
         result = service.list(mock_db, organization_id=str(org_id), is_closed=True)
 
@@ -250,9 +246,7 @@ class TestListYears:
     def test_list_with_pagination(self, service, mock_db, org_id):
         """Test listing fiscal years with pagination."""
         years = [MockFiscalYear(organization_id=org_id)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            years
-        )
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = years
 
         result = service.list(mock_db, organization_id=str(org_id), limit=10, offset=5)
 

@@ -3,6 +3,7 @@ Time Entry Pydantic Schemas.
 
 Schemas for PM Time Entry API endpoints.
 """
+
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Dict, List, Optional

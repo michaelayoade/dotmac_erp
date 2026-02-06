@@ -9,9 +9,9 @@ Tests cover:
 """
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -325,9 +325,6 @@ class TestPostInvoice:
         """Test posting invoice with no lines."""
 
         def get_side_effect(model, id):
-            from app.models.finance.ar.invoice import Invoice
-            from app.models.finance.ar.customer import Customer
-
             if str(id) == str(mock_invoice.invoice_id):
                 return mock_invoice
             if str(id) == str(mock_invoice.customer_id):
@@ -335,9 +332,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = (
-            []
-        )
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
 
         result = ARPostingAdapter.post_invoice(
             db=mock_db,
@@ -1140,7 +1135,9 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("0"),
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = fiscal_period
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            fiscal_period
+        )
 
         result = create_tax_transactions(
             db=mock_db,
@@ -1166,7 +1163,9 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("0"),  # But zero amount
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = fiscal_period
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            fiscal_period
+        )
 
         result = create_tax_transactions(
             db=mock_db,
@@ -1194,7 +1193,9 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("100.00"),
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = fiscal_period
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            fiscal_period
+        )
 
         tax_txn_id = uuid.uuid4()
         mock_tax_txn = MagicMock()
@@ -1234,7 +1235,9 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("50.00"),
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = fiscal_period
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            fiscal_period
+        )
 
         mock_tax_txn = MagicMock()
         mock_tax_txn.transaction_id = uuid.uuid4()
@@ -1267,7 +1270,9 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("100.00"),
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = fiscal_period
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            fiscal_period
+        )
 
         mock_tax_service.create_from_invoice_line.side_effect = Exception(
             "Tax service error"
@@ -1315,7 +1320,9 @@ class TestCreateTaxTransactions:
             ),
         ]
 
-        mock_db.query.return_value.filter.return_value.first.return_value = fiscal_period
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            fiscal_period
+        )
 
         # Return different IDs for each call
         mock_tax_service.create_from_invoice_line.side_effect = [

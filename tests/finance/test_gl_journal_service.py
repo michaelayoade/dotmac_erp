@@ -10,7 +10,11 @@ import pytest
 from fastapi import HTTPException
 
 from app.models.finance.gl.journal_entry import JournalStatus, JournalType
-from app.services.finance.gl.journal import JournalInput, JournalLineInput, JournalService
+from app.services.finance.gl.journal import (
+    JournalInput,
+    JournalLineInput,
+    JournalService,
+)
 
 
 def _make_line(debit=Decimal("0"), credit=Decimal("0")):
@@ -48,7 +52,10 @@ def test_create_journal_requires_lines_and_balance():
                 entry_date=date.today(),
                 posting_date=date.today(),
                 description="Unbalanced",
-                lines=[_make_line(debit=Decimal("10")), _make_line(credit=Decimal("5"))],
+                lines=[
+                    _make_line(debit=Decimal("10")),
+                    _make_line(credit=Decimal("5")),
+                ],
             ),
             created_by_user_id=uuid4(),
         )
@@ -62,8 +69,14 @@ def test_create_journal_sets_functional_amounts():
     db.flush.return_value = None
 
     with (
-        patch("app.services.finance.gl.journal.PeriodGuardService.get_period_for_date", return_value=period),
-        patch("app.services.finance.gl.journal.SequenceService.get_next_number", return_value="J-1"),
+        patch(
+            "app.services.finance.gl.journal.PeriodGuardService.get_period_for_date",
+            return_value=period,
+        ),
+        patch(
+            "app.services.finance.gl.journal.SequenceService.get_next_number",
+            return_value="J-1",
+        ),
     ):
         journal = JournalService.create_journal(
             db,
@@ -74,7 +87,10 @@ def test_create_journal_sets_functional_amounts():
                 posting_date=date.today(),
                 description="Balanced",
                 exchange_rate=Decimal("2.0"),
-                lines=[_make_line(debit=Decimal("10"), credit=Decimal("0")), _make_line(debit=Decimal("0"), credit=Decimal("10"))],
+                lines=[
+                    _make_line(debit=Decimal("10"), credit=Decimal("0")),
+                    _make_line(debit=Decimal("0"), credit=Decimal("10")),
+                ],
             ),
             created_by_user_id=uuid4(),
         )
@@ -119,23 +135,38 @@ def test_submit_approve_post_void_and_reverse():
     )
     db.get.return_value = journal
 
-    submitted = JournalService.submit_journal(db, org_id, journal.journal_entry_id, submitted_by_user_id=uuid4())
+    submitted = JournalService.submit_journal(
+        db, org_id, journal.journal_entry_id, submitted_by_user_id=uuid4()
+    )
     assert submitted.status == JournalStatus.SUBMITTED
 
     journal.status = JournalStatus.SUBMITTED
     with pytest.raises(HTTPException):
-        JournalService.approve_journal(db, org_id, journal.journal_entry_id, approved_by_user_id=journal.created_by_user_id)
+        JournalService.approve_journal(
+            db,
+            org_id,
+            journal.journal_entry_id,
+            approved_by_user_id=journal.created_by_user_id,
+        )
 
-    approved = JournalService.approve_journal(db, org_id, journal.journal_entry_id, approved_by_user_id=uuid4())
+    approved = JournalService.approve_journal(
+        db, org_id, journal.journal_entry_id, approved_by_user_id=uuid4()
+    )
     assert approved.status == JournalStatus.APPROVED
 
     journal.status = JournalStatus.APPROVED
-    with patch("app.services.finance.gl.journal.LedgerPostingService.post_journal_entry") as post_entry:
+    with patch(
+        "app.services.finance.gl.journal.LedgerPostingService.post_journal_entry"
+    ) as post_entry:
         post_entry.return_value = SimpleNamespace(success=True, message=None)
-        JournalService.post_journal(db, org_id, journal.journal_entry_id, posted_by_user_id=uuid4())
+        JournalService.post_journal(
+            db, org_id, journal.journal_entry_id, posted_by_user_id=uuid4()
+        )
 
     journal.status = JournalStatus.SUBMITTED
-    voided = JournalService.void_journal(db, org_id, journal.journal_entry_id, voided_by_user_id=uuid4(), reason="err")
+    voided = JournalService.void_journal(
+        db, org_id, journal.journal_entry_id, voided_by_user_id=uuid4(), reason="err"
+    )
     assert voided.status == JournalStatus.VOID
 
     posted = SimpleNamespace(
@@ -171,7 +202,13 @@ def test_submit_approve_post_void_and_reverse():
         source_module="GL",
     )
     db.get.return_value = posted
-    reversal = JournalService.reverse_entry(db, org_id, posted.journal_entry_id, reversal_date=date.today(), reversed_by_user_id=uuid4())
+    reversal = JournalService.reverse_entry(
+        db,
+        org_id,
+        posted.journal_entry_id,
+        reversal_date=date.today(),
+        reversed_by_user_id=uuid4(),
+    )
     assert reversal.journal_type == JournalType.REVERSAL
 
 

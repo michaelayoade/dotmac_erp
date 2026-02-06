@@ -38,7 +38,9 @@ class TestWorkingDaysCalculator:
         """Create a calculator with mocked org proration method."""
         calc = WorkingDaysCalculator(mock_db)
         # Mock the org lookup to avoid DB queries - default to CALENDAR_DAYS
-        calc._get_org_proration_method = MagicMock(return_value=ProrationMethod.CALENDAR_DAYS)
+        calc._get_org_proration_method = MagicMock(
+            return_value=ProrationMethod.CALENDAR_DAYS
+        )
         return calc
 
     def test_full_period_no_proration(self, calculator, org_id):
@@ -222,8 +224,8 @@ class TestWorkingDaysCalculator:
         """Test module-level calculate_proration function."""
         with patch.object(
             WorkingDaysCalculator,
-            '_get_org_proration_method',
-            return_value=ProrationMethod.CALENDAR_DAYS
+            "_get_org_proration_method",
+            return_value=ProrationMethod.CALENDAR_DAYS,
         ):
             result = calculate_proration(
                 db=mock_db,

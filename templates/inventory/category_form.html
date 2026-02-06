@@ -116,8 +116,51 @@
             </div>
         </div>
 
-        <!-- GL Accounts -->
+        <!-- Reorder Defaults -->
         <div class="card stagger-in" style="animation-delay: 100ms;">
+            <div class="card-header border-b border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-4">
+                    <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4m0 4h.01M4.75 6.75h14.5M4.75 17.25h14.5"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Reorder Defaults</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Optional thresholds for items in this category</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 grid gap-6 sm:grid-cols-2">
+                <div>
+                    <label class="form-label">Reorder Point</label>
+                    <input type="number"
+                           name="reorder_point"
+                           value="{{ category.reorder_point if category and category.reorder_point else '' }}"
+                           step="0.000001"
+                           min="0"
+                           placeholder="0"
+                           class="form-input">
+                    <p class="form-hint">Minimum stock level before reorder</p>
+                </div>
+
+                <div>
+                    <label class="form-label">Minimum Stock</label>
+                    <input type="number"
+                           name="minimum_stock"
+                           value="{{ category.minimum_stock if category and category.minimum_stock else '' }}"
+                           step="0.000001"
+                           min="0"
+                           placeholder="0"
+                           class="form-input">
+                    <p class="form-hint">Hard minimum stock threshold</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- GL Accounts -->
+        <div class="card stagger-in" style="animation-delay: 150ms;">
             <div class="card-header border-b border-slate-100 dark:border-slate-700">
                 <div class="flex items-center gap-4">
                     <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">

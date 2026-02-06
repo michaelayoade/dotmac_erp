@@ -35,6 +35,41 @@ _HEADER_NAME_PATTERN = re.compile(r"^[A-Za-z0-9-]+$")
 _ALLOWED_WEBHOOK_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 
 
+def _email_module_for_entity(entity_type: Optional[str]) -> "EmailModule":
+    from app.models.email_profile import EmailModule
+
+    if not entity_type:
+        return EmailModule.FINANCE
+    entity = entity_type.upper()
+    if entity in {
+        "EXPENSE",
+        "CASH_ADVANCE",
+    }:
+        return EmailModule.EXPENSE
+    if entity in {
+        "EMPLOYEE",
+        "LEAVE_REQUEST",
+        "DISCIPLINARY_CASE",
+        "PERFORMANCE_APPRAISAL",
+        "LOAN",
+        "RECRUITMENT",
+        "PAYROLL_RUN",
+        "PAYROLL_ENTRY",
+        "SALARY_SLIP",
+    }:
+        return EmailModule.PEOPLE_PAYROLL
+    if entity in {
+        "MATERIAL_REQUEST",
+        "FLEET_VEHICLE",
+        "FLEET_RESERVATION",
+        "FLEET_MAINTENANCE",
+        "FLEET_INCIDENT",
+    }:
+        return EmailModule.INVENTORY_FLEET
+    # Default: finance workflows
+    return EmailModule.FINANCE
+
+
 def _db_setting(db: Session | None, key: str) -> object | None:
     if db is None:
         return None
@@ -705,8 +740,17 @@ class WorkflowService:
             )
 
             sent_to: list[str] = []
+            module = _email_module_for_entity(context.entity_type)
             for recipient in recipients:
-                if send_email(db, recipient, subject, body_html, body_text):
+                if send_email(
+                    db,
+                    recipient,
+                    subject,
+                    body_html,
+                    body_text,
+                    module=module,
+                    organization_id=context.organization_id,
+                ):
                     sent_to.append(recipient)
 
             return ActionResult(

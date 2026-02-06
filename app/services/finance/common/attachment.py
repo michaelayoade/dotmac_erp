@@ -4,11 +4,7 @@ Attachment Service - File upload and management.
 Handles file storage, retrieval, and metadata management for document attachments.
 """
 
-import hashlib
 import logging
-import os
-import re
-import shutil
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -19,28 +15,15 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.finance.common.attachment import Attachment, AttachmentCategory
+from app.services.common import coerce_uuid
+from app.services.file_upload import (
+    FileUploadError,
+    get_finance_attachment_upload,
+    resolve_safe_path,
+    safe_entity_segment,
+)
 
 logger = logging.getLogger(__name__)
-
-# Configuration
-UPLOAD_BASE_DIR = os.getenv("ATTACHMENT_UPLOAD_DIR", "uploads/attachments")
-MAX_FILE_SIZE = int(os.getenv("MAX_ATTACHMENT_SIZE", 10 * 1024 * 1024))  # 10MB default
-
-ALLOWED_CONTENT_TYPES = {
-    "application/pdf",
-    "image/jpeg",
-    "image/png",
-    "image/gif",
-    "image/webp",
-    "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "text/plain",
-    "text/csv",
-}
-
-SAFE_ENTITY_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 @dataclass
@@ -69,50 +52,8 @@ class AttachmentView:
     download_url: str
 
 
-def _coerce_uuid(value) -> uuid.UUID:
-    """Convert string to UUID if needed."""
-    if isinstance(value, uuid.UUID):
-        return value
-    return uuid.UUID(str(value))
-
-
-def _safe_entity_segment(entity_type: str) -> str:
-    """Validate entity type for filesystem paths."""
-    if not entity_type:
-        raise ValueError("Entity type is required")
-    if not SAFE_ENTITY_PATTERN.match(entity_type):
-        raise ValueError("Invalid entity type")
-    if Path(entity_type).name != entity_type:
-        raise ValueError("Invalid entity type")
-    return entity_type
-
-
-def _resolve_attachment_path(relative_path: str) -> Path:
-    """Resolve attachment path safely within the upload root."""
-    base_dir = Path(UPLOAD_BASE_DIR).resolve()
-    full_path = (base_dir / relative_path).resolve()
-    if base_dir != full_path and base_dir not in full_path.parents:
-        raise ValueError("Invalid attachment path")
-    return full_path
-
-
-def _compute_checksum(file_path: str) -> str:
-    """Compute SHA-256 checksum of a file."""
-    sha256 = hashlib.sha256()
-    with open(file_path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            sha256.update(chunk)
-    return sha256.hexdigest()
-
-
-def _format_file_size(size: int) -> str:
-    """Format file size for display."""
-    if size < 1024:
-        return f"{size} B"
-    elif size < 1024 * 1024:
-        return f"{size / 1024:.1f} KB"
-    else:
-        return f"{size / (1024 * 1024):.1f} MB"
+def _upload_service():
+    return get_finance_attachment_upload()
 
 
 class AttachmentService:
@@ -121,8 +62,12 @@ class AttachmentService:
     @staticmethod
     def get_upload_path(organization_id: uuid.UUID, entity_type: str) -> Path:
         """Get the upload directory path for an organization and entity type."""
-        safe_entity_type = _safe_entity_segment(entity_type)
-        path = Path(UPLOAD_BASE_DIR) / str(organization_id) / safe_entity_type.lower()
+        safe_entity_type = safe_entity_segment(entity_type)
+        path = (
+            _upload_service().base_path
+            / str(organization_id)
+            / safe_entity_type.lower()
+        )
         path.mkdir(parents=True, exist_ok=True)
         return path
 
@@ -147,36 +92,23 @@ class AttachmentService:
         Returns:
             Created Attachment record
         """
-        org_id = _coerce_uuid(organization_id)
-        entity_id = _coerce_uuid(input.entity_id)
-        user_id = _coerce_uuid(uploaded_by)
+        org_id = coerce_uuid(organization_id)
+        entity_id = coerce_uuid(input.entity_id)
+        user_id = coerce_uuid(uploaded_by)
 
-        # Validate content type
-        if input.content_type not in ALLOWED_CONTENT_TYPES:
-            raise ValueError(f"Content type '{input.content_type}' is not allowed")
+        safe_entity_type = safe_entity_segment(input.entity_type)
+        file_bytes = file_content.read()
+        upload_service = _upload_service()
 
-        # Generate unique filename
-        file_ext = Path(input.file_name).suffix.lower()
-        unique_name = f"{uuid.uuid4()}{file_ext}"
-
-        # Get upload directory
-        upload_dir = AttachmentService.get_upload_path(org_id, input.entity_type)
-        file_path = upload_dir / unique_name
-
-        # Save file
-        with open(file_path, "wb") as f:
-            shutil.copyfileobj(file_content, f)
-
-        # Get file size and validate
-        file_size = file_path.stat().st_size
-        if file_size > MAX_FILE_SIZE:
-            file_path.unlink()  # Delete the file
-            raise ValueError(
-                f"File size exceeds maximum allowed ({_format_file_size(MAX_FILE_SIZE)})"
+        try:
+            upload_result = upload_service.save(
+                file_bytes,
+                content_type=input.content_type,
+                subdirs=[str(org_id), safe_entity_type.lower()],
+                original_filename=input.file_name,
             )
-
-        # Compute checksum
-        checksum = _compute_checksum(str(file_path))
+        except FileUploadError as exc:
+            raise ValueError(str(exc)) from exc
 
         # Create attachment record
         attachment = Attachment(
@@ -184,13 +116,13 @@ class AttachmentService:
             entity_type=input.entity_type,
             entity_id=entity_id,
             file_name=input.file_name,
-            file_path=str(file_path.relative_to(UPLOAD_BASE_DIR)),
-            file_size=file_size,
+            file_path=upload_result.relative_path,
+            file_size=upload_result.file_size,
             content_type=input.content_type,
             category=input.category,
             description=input.description,
             storage_provider="LOCAL",
-            checksum=checksum,
+            checksum=upload_result.checksum,
             uploaded_by=user_id,
             uploaded_at=datetime.utcnow(),
         )
@@ -208,8 +140,8 @@ class AttachmentService:
         attachment_id: str,
     ) -> Optional[Attachment]:
         """Get attachment by ID."""
-        org_id = _coerce_uuid(organization_id)
-        att_id = _coerce_uuid(attachment_id)
+        org_id = coerce_uuid(organization_id)
+        att_id = coerce_uuid(attachment_id)
         attachment = db.get(Attachment, att_id)
         if not attachment or attachment.organization_id != org_id:
             return None
@@ -218,7 +150,7 @@ class AttachmentService:
     @staticmethod
     def get_file_path(attachment: Attachment) -> Path:
         """Get the full file path for an attachment."""
-        return _resolve_attachment_path(attachment.file_path)
+        return resolve_safe_path(_upload_service().base_path, attachment.file_path)
 
     @staticmethod
     def list_for_entity(
@@ -228,8 +160,8 @@ class AttachmentService:
         entity_id: uuid.UUID,
     ) -> List[Attachment]:
         """List all attachments for a specific entity."""
-        org_id = _coerce_uuid(organization_id)
-        ent_id = _coerce_uuid(entity_id)
+        org_id = coerce_uuid(organization_id)
+        ent_id = coerce_uuid(entity_id)
 
         return (
             db.query(Attachment)
@@ -249,8 +181,8 @@ class AttachmentService:
 
         Returns True if deleted, False if not found.
         """
-        att_id = _coerce_uuid(attachment_id)
-        org_id = _coerce_uuid(organization_id)
+        att_id = coerce_uuid(attachment_id)
+        org_id = coerce_uuid(organization_id)
 
         attachment = (
             db.query(Attachment)
@@ -287,8 +219,8 @@ class AttachmentService:
         entity_id: uuid.UUID,
     ) -> int:
         """Count attachments for an entity."""
-        org_id = _coerce_uuid(organization_id)
-        ent_id = _coerce_uuid(entity_id)
+        org_id = coerce_uuid(organization_id)
+        ent_id = coerce_uuid(entity_id)
 
         return (
             db.query(func.count(Attachment.attachment_id))

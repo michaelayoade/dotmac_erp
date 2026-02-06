@@ -103,5 +103,6 @@ def mock_attachment(organization_id, entity_id, user_id) -> MockAttachment:
 def mock_file_content():
     """Create mock file content."""
     from io import BytesIO
+
     content = b"Test file content for attachment"
     return BytesIO(content)

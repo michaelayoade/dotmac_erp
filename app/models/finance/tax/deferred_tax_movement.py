@@ -1,6 +1,7 @@
 """
 Deferred Tax Movement Model - Tax Schema.
 """
+
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -39,10 +40,16 @@ class DeferredTaxMovement(Base):
     )
 
     # Opening balances
-    accounting_base_opening: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    accounting_base_opening: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
     tax_base_opening: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    temporary_difference_opening: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    deferred_tax_opening: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    temporary_difference_opening: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
+    deferred_tax_opening: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
 
     # Movements in period
     accounting_base_movement: Mapped[Decimal] = mapped_column(
@@ -50,7 +57,9 @@ class DeferredTaxMovement(Base):
         nullable=False,
         default=0,
     )
-    tax_base_movement: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    tax_base_movement: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
     temporary_difference_movement: Mapped[Decimal] = mapped_column(
         Numeric(20, 6),
         nullable=False,
@@ -84,20 +93,32 @@ class DeferredTaxMovement(Base):
     )
 
     # Closing balances
-    accounting_base_closing: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    accounting_base_closing: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
     tax_base_closing: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    temporary_difference_closing: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    deferred_tax_closing: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    temporary_difference_closing: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
+    deferred_tax_closing: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
 
     # Recognition change
-    recognition_change: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
-    unrecognized_closing: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    recognition_change: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
+    unrecognized_closing: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     movement_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     movement_category: Mapped[str] = mapped_column(String(50), nullable=False)
 
     # Journal entry
-    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

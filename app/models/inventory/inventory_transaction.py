@@ -1,6 +1,7 @@
 """
 Inventory Transaction Model - Inventory Schema.
 """
+
 import enum
 import uuid
 from datetime import datetime
@@ -91,7 +92,9 @@ class InventoryTransaction(Base):
         UUID(as_uuid=True),
         nullable=True,
     )
-    to_location_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    to_location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
 
     # Quantity and cost
     quantity: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
@@ -101,15 +104,21 @@ class InventoryTransaction(Base):
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
 
     # Cost variance (for standard costing)
-    cost_variance: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    cost_variance: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Running balances
     quantity_before: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     quantity_after: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
 
     # Source documents
-    source_document_type: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
-    source_document_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    source_document_type: Mapped[Optional[str]] = mapped_column(
+        String(30), nullable=True
+    )
+    source_document_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
     source_document_line_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
@@ -120,7 +129,9 @@ class InventoryTransaction(Base):
     reason_code: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
 
     # Journal entry
-    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
 
     # Audit
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(

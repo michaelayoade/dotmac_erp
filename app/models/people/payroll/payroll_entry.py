@@ -3,6 +3,7 @@ Payroll Entry Model - Payroll Schema.
 
 Manages bulk payroll processing runs.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -270,4 +271,6 @@ class PayrollEntry(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
         return labels.get(self.status, "Draft")
 
     def __repr__(self) -> str:
-        return f"<PayrollEntry {self.entry_number} ({self.start_date} - {self.end_date})>"
+        return (
+            f"<PayrollEntry {self.entry_number} ({self.start_date} - {self.end_date})>"
+        )

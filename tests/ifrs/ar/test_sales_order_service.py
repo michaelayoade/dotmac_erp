@@ -7,7 +7,7 @@ Tests sales order creation, workflow, shipment, and invoicing.
 import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -89,8 +89,7 @@ class MockSalesOrder:
         if not self.lines:
             return False
         return all(
-            line.quantity_shipped >= line.quantity_ordered
-            for line in self.lines
+            line.quantity_shipped >= line.quantity_ordered for line in self.lines
         )
 
     @property
@@ -98,8 +97,7 @@ class MockSalesOrder:
         if not self.lines:
             return False
         return all(
-            line.quantity_invoiced >= line.quantity_ordered
-            for line in self.lines
+            line.quantity_invoiced >= line.quantity_ordered for line in self.lines
         )
 
 
@@ -140,7 +138,9 @@ class MockSalesOrderLine:
         self.discount_amount = discount_amount
         self.tax_code_id = tax_code_id
         self.tax_amount = tax_amount
-        self.line_total = line_total or (quantity_ordered * unit_price - discount_amount + tax_amount)
+        self.line_total = line_total or (
+            quantity_ordered * unit_price - discount_amount + tax_amount
+        )
         self.revenue_account_id = revenue_account_id
         self.project_id = project_id
         self.cost_center_id = cost_center_id
@@ -220,7 +220,9 @@ class TestCreate:
     @patch("app.services.finance.ar.sales_order.SalesOrderService._add_lines")
     @patch("app.services.finance.ar.sales_order.SalesOrderService._recalculate_totals")
     @patch("app.services.finance.ar.sales_order.SalesOrder")
-    def test_create_order_with_lines(self, mock_so_class, mock_recalc, mock_add_lines, mock_generate):
+    def test_create_order_with_lines(
+        self, mock_so_class, mock_recalc, mock_add_lines, mock_generate
+    ):
         """Test creating a sales order with lines."""
         mock_db = MagicMock()
         org_id = str(uuid.uuid4())
@@ -446,7 +448,9 @@ class TestCreateShipment:
     @patch("app.services.finance.ar.sales_order.SyncNumberingService")
     @patch("app.services.finance.ar.sales_order.Shipment")
     @patch("app.services.finance.ar.sales_order.ShipmentLine")
-    def test_create_shipment_success(self, mock_ship_line_class, mock_shipment_class, mock_numbering_class):
+    def test_create_shipment_success(
+        self, mock_ship_line_class, mock_shipment_class, mock_numbering_class
+    ):
         """Test creating a shipment."""
         mock_db = MagicMock()
         so_id = uuid.uuid4()
@@ -531,7 +535,9 @@ class TestCreateShipment:
 
     @patch("app.services.finance.ar.sales_order.SyncNumberingService")
     @patch("app.services.finance.ar.sales_order.Shipment")
-    def test_create_shipment_over_quantity(self, mock_shipment_class, mock_numbering_class):
+    def test_create_shipment_over_quantity(
+        self, mock_shipment_class, mock_numbering_class
+    ):
         """Test creating shipment with more than available quantity."""
         mock_db = MagicMock()
         so_id = uuid.uuid4()
@@ -573,7 +579,9 @@ class TestCreateShipment:
                 so_id=str(so_id),
                 shipment_date=date.today(),
                 created_by=str(uuid.uuid4()),
-                line_quantities=[{"line_id": str(line_id), "quantity": 5}],  # Try to ship 5
+                line_quantities=[
+                    {"line_id": str(line_id), "quantity": 5}
+                ],  # Try to ship 5
             )
 
         assert "Cannot ship" in str(exc_info.value)
@@ -619,7 +627,9 @@ class TestCreateInvoiceFromSO:
     @patch("app.services.finance.ar.sales_order.InvoiceLine")
     @patch("app.services.finance.ar.sales_order.Invoice")
     @patch("app.services.finance.ar.sales_order.SyncNumberingService")
-    def test_create_invoice_success(self, mock_numbering_class, mock_invoice_class, mock_inv_line_class):
+    def test_create_invoice_success(
+        self, mock_numbering_class, mock_invoice_class, mock_inv_line_class
+    ):
         """Test creating invoice from shipped order."""
         mock_db = MagicMock()
         so_id = uuid.uuid4()
@@ -1064,5 +1074,9 @@ class TestListOrders:
         )
 
         assert len(result) == 1
-        mock_db.query.return_value.filter.return_value.order_by.return_value.offset.assert_called_with(5)
-        mock_db.query.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.assert_called_with(10)
+        mock_db.query.return_value.filter.return_value.order_by.return_value.offset.assert_called_with(
+            5
+        )
+        mock_db.query.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.assert_called_with(
+            10
+        )

@@ -3,6 +3,7 @@ KRA (Key Result Area) Model - Performance Schema.
 
 Defines areas of responsibility and goals.
 """
+
 import uuid
 from datetime import datetime
 from decimal import Decimal

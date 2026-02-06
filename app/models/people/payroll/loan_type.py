@@ -63,7 +63,8 @@ class LoanType(Base):
     __tablename__ = "loan_type"
     __table_args__ = (
         UniqueConstraint(
-            "organization_id", "type_code",
+            "organization_id",
+            "type_code",
             name="uq_loan_type_org_code",
         ),
         Index("idx_loan_type_org", "organization_id"),

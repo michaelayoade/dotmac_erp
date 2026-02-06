@@ -24,9 +24,8 @@ Import order:
 
 import argparse
 import sys
-from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 from uuid import UUID
 
 # Add the project root to the Python path
@@ -44,7 +43,6 @@ from app.services.finance.import_export import (
     InvoiceImporter,
     ExpenseImporter,
     CustomerPaymentImporter,
-    SupplierPaymentImporter,
     ImportConfig,
     ImportResult,
     ImportStatus,
@@ -65,9 +63,9 @@ def print_result(result: ImportResult) -> None:
     reset = "\033[0m"
 
     color = status_colors.get(result.status, "")
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Import Result: {result.entity_type}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"Status: {color}{result.status.value}{reset}")
     print(f"Total Rows: {result.total_rows}")
     print(f"Imported: {result.imported_count}")
@@ -159,7 +157,8 @@ def import_items(args, db, config: ImportConfig) -> ImportResult:
     # For simplicity, use the same account for COGS, revenue, and adjustment
     # In production, you'd want to find the correct accounts
     importer = ItemImporter(
-        db, config,
+        db,
+        config,
         inventory_account_id,
         inventory_account_id,  # COGS
         inventory_account_id,  # Revenue
@@ -199,7 +198,8 @@ def import_assets(args, db, config: ImportConfig) -> ImportResult:
 
     # Use same account for simplicity - in production, find correct accounts
     importer = AssetImporter(
-        db, config,
+        db,
+        config,
         asset_account_id,
         asset_account_id,  # Accumulated depreciation
         asset_account_id,  # Depreciation expense
@@ -321,7 +321,10 @@ def import_all(args, db, config: ImportConfig) -> List[ImportResult]:
 
     # Define import order and file patterns
     import_sequence = [
-        ("accounts", ["chart_of_accounts.csv", "Chart_of_Accounts.csv", "accounts.csv"]),
+        (
+            "accounts",
+            ["chart_of_accounts.csv", "Chart_of_Accounts.csv", "accounts.csv"],
+        ),
         ("customers", ["contacts.csv", "Contacts.csv", "customers.csv"]),
         ("suppliers", ["vendors.csv", "Vendors.csv", "suppliers.csv"]),
         ("items", ["item.csv", "Item.csv", "items.csv", "products.csv"]),
@@ -362,7 +365,7 @@ def import_all(args, db, config: ImportConfig) -> List[ImportResult]:
                         break
 
         if file_path:
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print(f"Found {entity_type} file: {file_path}")
             args.file = str(file_path)
             try:
@@ -384,48 +387,49 @@ def main():
     parser = argparse.ArgumentParser(
         description="Import data from CSV files into the accounting system.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__
+        epilog=__doc__,
     )
 
+    parser.add_argument("--org-id", required=True, help="Organization UUID")
+    parser.add_argument("--user-id", required=True, help="User UUID for audit trail")
     parser.add_argument(
-        "--org-id",
-        required=True,
-        help="Organization UUID"
-    )
-    parser.add_argument(
-        "--user-id",
-        required=True,
-        help="User UUID for audit trail"
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Validate without saving to database"
+        "--dry-run", action="store_true", help="Validate without saving to database"
     )
     parser.add_argument(
         "--skip-duplicates",
         action="store_true",
         default=True,
-        help="Skip duplicate entries (default: True)"
+        help="Skip duplicate entries (default: True)",
     )
     parser.add_argument(
         "--batch-size",
         type=int,
         default=100,
-        help="Number of records to commit at once (default: 100)"
+        help="Number of records to commit at once (default: 100)",
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Import type")
 
     # Individual importers
-    for cmd in ["accounts", "customers", "suppliers", "items", "assets",
-                "banking", "invoices", "expenses", "payments"]:
+    for cmd in [
+        "accounts",
+        "customers",
+        "suppliers",
+        "items",
+        "assets",
+        "banking",
+        "invoices",
+        "expenses",
+        "payments",
+    ]:
         sub = subparsers.add_parser(cmd, help=f"Import {cmd}")
         sub.add_argument("--file", "-f", required=True, help="CSV file path")
 
     # All command
     all_parser = subparsers.add_parser("all", help="Import all data from directory")
-    all_parser.add_argument("--directory", "-d", required=True, help="Directory containing CSV files")
+    all_parser.add_argument(
+        "--directory", "-d", required=True, help="Directory containing CSV files"
+    )
 
     args = parser.parse_args()
 
@@ -457,12 +461,14 @@ def main():
         # Run import
         if args.command == "all":
             results = import_all(args, db, config)
-            print("\n" + "="*60)
+            print("\n" + "=" * 60)
             print("IMPORT SUMMARY")
-            print("="*60)
+            print("=" * 60)
             for result in results:
-                print(f"  {result.entity_type}: {result.imported_count}/{result.total_rows} "
-                      f"({result.success_rate:.1f}%)")
+                print(
+                    f"  {result.entity_type}: {result.imported_count}/{result.total_rows} "
+                    f"({result.success_rate:.1f}%)"
+                )
         else:
             importers = {
                 "accounts": import_accounts,
@@ -491,6 +497,7 @@ def main():
         db.rollback()
         print(f"ERROR: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
     finally:

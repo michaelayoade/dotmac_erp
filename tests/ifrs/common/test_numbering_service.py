@@ -5,7 +5,7 @@ Tests document number generation, sequence reset logic, and formatting.
 """
 
 import pytest
-from datetime import date, datetime
+from datetime import date
 from unittest.mock import MagicMock, AsyncMock, patch
 from uuid import uuid4
 

@@ -1,13 +1,26 @@
 """
 Supplier Invoice Model - AP Schema.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -43,7 +56,9 @@ class SupplierInvoice(Base, VersionedMixin):
 
     __tablename__ = "supplier_invoice"
     __table_args__ = (
-        UniqueConstraint("organization_id", "invoice_number", name="uq_supplier_invoice"),
+        UniqueConstraint(
+            "organization_id", "invoice_number", name="uq_supplier_invoice"
+        ),
         Index("idx_supplier_invoice_supplier", "supplier_id"),
         Index("idx_supplier_invoice_status", "organization_id", "status"),
         Index(
@@ -72,7 +87,9 @@ class SupplierInvoice(Base, VersionedMixin):
     )
 
     invoice_number: Mapped[str] = mapped_column(String(30), nullable=False)
-    supplier_invoice_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    supplier_invoice_number: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )
     invoice_type: Mapped[SupplierInvoiceType] = mapped_column(
         Enum(SupplierInvoiceType, name="supplier_invoice_type"),
         nullable=False,
@@ -85,7 +102,9 @@ class SupplierInvoice(Base, VersionedMixin):
 
     # Currency
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
-    exchange_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 10), nullable=True)
+    exchange_rate: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(20, 10), nullable=True
+    )
     exchange_rate_type_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
@@ -93,9 +112,13 @@ class SupplierInvoice(Base, VersionedMixin):
 
     # Amounts
     subtotal: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    tax_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    tax_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
     total_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    amount_paid: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    amount_paid: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
     # balance_due is computed
     functional_currency_amount: Mapped[Decimal] = mapped_column(
         Numeric(20, 6),
@@ -154,7 +177,9 @@ class SupplierInvoice(Base, VersionedMixin):
     )
 
     # Intercompany
-    is_intercompany: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_intercompany: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     intercompany_org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,

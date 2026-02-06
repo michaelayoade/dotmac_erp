@@ -5,16 +5,8 @@ Tests for LeaseCalculationService.
 import uuid
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
 
 import pytest
-
-from app.models.finance.lease.lease_contract import LeaseClassification, LeaseStatus
-from tests.ifrs.lease.conftest import (
-    MockLeaseContract,
-    MockLeaseLiability,
-    MockLeaseAsset,
-)
 
 
 class TestLeaseCalculationService:
@@ -231,14 +223,18 @@ class TestLeaseCalculationService:
 
         assert exc_info.value.status_code == 404
 
-    def test_calculate_interest_accrual_success(self, mock_db, mock_contract, mock_liability):
+    def test_calculate_interest_accrual_success(
+        self, mock_db, mock_contract, mock_liability
+    ):
         """Test successful interest accrual calculation."""
         from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         mock_contract.discount_rate_used = Decimal("0.06")  # 6% annual
         mock_liability.current_liability_balance = Decimal("120000.00")
         mock_db.get.return_value = mock_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_liability
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            mock_liability
+        )
 
         result = LeaseCalculationService.calculate_interest_accrual(
             mock_db,

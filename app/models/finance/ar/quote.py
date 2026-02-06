@@ -3,6 +3,7 @@ Quote Model - AR Schema.
 
 Sales quotes/proposals that can be converted to invoices or sales orders.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -10,8 +11,18 @@ from decimal import Decimal
 from typing import Optional, List
 
 from sqlalchemy import (
-    Date, DateTime, Enum, ForeignKey, Index, Integer,
-    Numeric, String, Text, UniqueConstraint, func, text
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -22,6 +33,7 @@ from app.db import Base
 
 class QuoteStatus(str, enum.Enum):
     """Quote lifecycle status."""
+
     DRAFT = "DRAFT"
     SENT = "SENT"
     VIEWED = "VIEWED"
@@ -150,11 +162,21 @@ class Quote(Base):
     )
 
     # Workflow tracking
-    sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    sent_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
-    viewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    rejected_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    sent_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    viewed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    accepted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    rejected_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Audit
@@ -164,7 +186,9 @@ class Quote(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
     updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -173,20 +197,26 @@ class Quote(Base):
 
     # Relationships
     customer = relationship("Customer", foreign_keys=[customer_id], lazy="joined")
-    payment_terms = relationship("PaymentTerms", foreign_keys=[payment_terms_id], lazy="joined")
+    payment_terms = relationship(
+        "PaymentTerms", foreign_keys=[payment_terms_id], lazy="joined"
+    )
     lines: Mapped[List["QuoteLine"]] = relationship(
         "QuoteLine",
         back_populates="quote",
         cascade="all, delete-orphan",
         order_by="QuoteLine.line_number",
     )
-    converted_invoice = relationship("Invoice", foreign_keys=[converted_to_invoice_id], lazy="select")
+    converted_invoice = relationship(
+        "Invoice", foreign_keys=[converted_to_invoice_id], lazy="select"
+    )
 
     @property
     def is_expired(self) -> bool:
         """Check if quote has expired."""
         return self.valid_until < date.today() and self.status not in [
-            QuoteStatus.ACCEPTED, QuoteStatus.CONVERTED, QuoteStatus.VOID
+            QuoteStatus.ACCEPTED,
+            QuoteStatus.CONVERTED,
+            QuoteStatus.VOID,
         ]
 
     @property
@@ -288,6 +318,8 @@ class QuoteLine(Base):
     # Relationships
     quote = relationship("Quote", back_populates="lines")
     tax_code = relationship("TaxCode", lazy="joined")
-    revenue_account = relationship("Account", foreign_keys=[revenue_account_id], lazy="joined")
+    revenue_account = relationship(
+        "Account", foreign_keys=[revenue_account_id], lazy="joined"
+    )
     project = relationship("Project", lazy="joined")
     cost_center = relationship("CostCenter", lazy="joined")

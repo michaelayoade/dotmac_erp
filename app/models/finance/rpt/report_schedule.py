@@ -1,6 +1,7 @@
 """
 Report Schedule Model - Reporting Schema.
 """
+
 import enum
 import uuid
 from datetime import datetime
@@ -64,7 +65,9 @@ class ReportSchedule(Base):
 
     # Report parameters
     report_parameters: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
-    output_format: Mapped[str] = mapped_column(String(20), nullable=False, default="PDF")
+    output_format: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="PDF"
+    )
 
     # Distribution
     email_recipients: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)

@@ -1,11 +1,8 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
-import pytest
 
 from app.models.auth import (
-    MFAMethod,
-    MFAMethodType,
     Session as AuthSession,
     SessionStatus,
     UserCredential,
@@ -223,7 +220,9 @@ class TestPasswordAPI:
         data = response.json()
         assert "changed_at" in data
 
-    def test_change_password_wrong_current(self, client, auth_headers, db_session, person):
+    def test_change_password_wrong_current(
+        self, client, auth_headers, db_session, person
+    ):
         """Test changing password with wrong current password."""
         credential = UserCredential(
             person_id=person.id,
@@ -241,7 +240,9 @@ class TestPasswordAPI:
         response = client.post("/auth/me/password", json=payload, headers=auth_headers)
         assert response.status_code == 401
 
-    def test_change_password_same_password(self, client, auth_headers, db_session, person):
+    def test_change_password_same_password(
+        self, client, auth_headers, db_session, person
+    ):
         """Test changing password to the same password."""
         credential = UserCredential(
             person_id=person.id,
@@ -377,7 +378,9 @@ class TestRefreshAPI:
         assert response.status_code == 401
         data = response.json()
         # Error handler transforms response to {"code": ..., "message": ..., "details": ...}
-        assert "missing" in data["message"].lower() or "refresh" in data["message"].lower()
+        assert (
+            "missing" in data["message"].lower() or "refresh" in data["message"].lower()
+        )
 
     def test_refresh_v1_with_cookie(self, client, db_session, person):
         """Test refresh using cookie on v1 endpoint."""
@@ -400,7 +403,9 @@ class TestRefreshAPI:
         assert refresh_token
 
         # Use the refresh token in body since cookie may not be auto-passed to different path
-        response = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
+        response = client.post(
+            "/api/v1/auth/refresh", json={"refresh_token": refresh_token}
+        )
         assert response.status_code == 200
         data = response.json()
         assert "access_token" in data
@@ -430,7 +435,9 @@ class TestRefreshAPI:
         assert new_refresh
         assert new_refresh != old_refresh
 
-        reuse_response = client.post("/auth/refresh", json={"refresh_token": old_refresh})
+        reuse_response = client.post(
+            "/auth/refresh", json={"refresh_token": old_refresh}
+        )
         assert reuse_response.status_code == 401
         data = reuse_response.json()
         # Error handler transforms response to {"code": ..., "message": ..., "details": ...}

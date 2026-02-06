@@ -3,6 +3,7 @@ Workflow Execution Model.
 
 Tracks execution history of workflow rules.
 """
+
 import enum
 import uuid
 from datetime import datetime
@@ -27,6 +28,7 @@ from app.db import Base
 
 class ExecutionStatus(str, enum.Enum):
     """Status of workflow execution."""
+
     PENDING = "PENDING"
     RUNNING = "RUNNING"
     SUCCESS = "SUCCESS"

@@ -28,7 +28,9 @@ from app.templates import templates
 router = APIRouter(prefix="/tasks", tags=["workflow-tasks-web"])
 
 
-def _get_employee_id(db: Session, organization_id: UUID, person_id: UUID) -> Optional[UUID]:
+def _get_employee_id(
+    db: Session, organization_id: UUID, person_id: UUID
+) -> Optional[UUID]:
     """Get employee ID from person ID, returns None if not found."""
     svc = EmployeeService(db, organization_id)
     employee = svc.get_employee_by_person(person_id)
@@ -83,7 +85,10 @@ def format_task_for_template(task) -> dict:
         "priority": task.priority.value,
         "due_at": task.due_at.isoformat() if task.due_at else None,
         "due_display": format_relative_time(task.due_at),
-        "is_overdue": task.due_at and task.due_at.replace(tzinfo=None) < datetime.utcnow() if task.due_at else False,
+        "is_overdue": task.due_at
+        and task.due_at.replace(tzinfo=None) < datetime.utcnow()
+        if task.due_at
+        else False,
         "created_at": task.created_at.isoformat() if task.created_at else None,
     }
 
@@ -114,18 +119,20 @@ async def workflow_tasks_list(
             active_module="tasks",
             db=db,
         )
-        context.update({
-            "tasks": [],
-            "summary": {},
-            "current_status": status,
-            "current_priority": priority,
-            "statuses": [s.value for s in WorkflowTaskStatus],
-            "priorities": [p.value for p in WorkflowTaskPriority],
-            "page": page,
-            "has_more": False,
-            "has_previous": False,
-            "no_employee": True,
-        })
+        context.update(
+            {
+                "tasks": [],
+                "summary": {},
+                "current_status": status,
+                "current_priority": priority,
+                "statuses": [s.value for s in WorkflowTaskStatus],
+                "priorities": [p.value for p in WorkflowTaskPriority],
+                "page": page,
+                "has_more": False,
+                "has_previous": False,
+                "no_employee": True,
+            }
+        )
         return templates.TemplateResponse(request, "workflow_tasks/list.html", context)
 
     svc = WorkflowTaskService(db)
@@ -159,19 +166,21 @@ async def workflow_tasks_list(
         active_module="tasks",
         db=db,
     )
-    context.update({
-        "tasks": formatted_tasks,
-        "summary": summary,
-        "total_tasks": result.total,
-        "current_status": status,
-        "current_priority": priority,
-        "statuses": [s.value for s in WorkflowTaskStatus],
-        "priorities": [p.value for p in WorkflowTaskPriority],
-        "page": page,
-        "has_more": has_more,
-        "has_previous": page > 1,
-        "no_employee": False,
-    })
+    context.update(
+        {
+            "tasks": formatted_tasks,
+            "summary": summary,
+            "total_tasks": result.total,
+            "current_status": status,
+            "current_priority": priority,
+            "statuses": [s.value for s in WorkflowTaskStatus],
+            "priorities": [p.value for p in WorkflowTaskPriority],
+            "page": page,
+            "has_more": has_more,
+            "has_previous": page > 1,
+            "no_employee": False,
+        }
+    )
 
     return templates.TemplateResponse(request, "workflow_tasks/list.html", context)
 

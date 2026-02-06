@@ -8,6 +8,7 @@ This model enables multi-tenant branding with:
 - UI style preferences (border radius, button style, sidebar theme)
 - Custom CSS injection for advanced customization
 """
+
 import enum
 import uuid
 from datetime import datetime

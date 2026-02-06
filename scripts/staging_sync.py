@@ -10,12 +10,12 @@ Usage:
     python scripts/staging_sync.py --report       # Show validation report
     python scripts/staging_sync.py --duplicates   # Show duplicate emails report
 """
+
 import argparse
 import logging
 import sys
 import os
 import uuid
-from datetime import datetime
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -70,17 +70,24 @@ def get_erpnext_config(db, org):
 
 def get_latest_batch(db, organization_id: uuid.UUID):
     """Get the latest staging batch for an organization."""
-    return db.query(StagingSyncBatch).filter(
-        StagingSyncBatch.organization_id == organization_id,
-    ).order_by(StagingSyncBatch.started_at.desc()).first()
+    return (
+        db.query(StagingSyncBatch)
+        .filter(
+            StagingSyncBatch.organization_id == organization_id,
+        )
+        .order_by(StagingSyncBatch.started_at.desc())
+        .first()
+    )
 
 
 def sync_to_staging(org_code: str = "DEFAULT"):
     """Sync ERPNext data to staging tables."""
     with SessionLocal() as db:
-        org = db.query(Organization).filter(
-            Organization.organization_code == org_code
-        ).first()
+        org = (
+            db.query(Organization)
+            .filter(Organization.organization_code == org_code)
+            .first()
+        )
 
         if not org:
             print(f"Organization not found: {org_code}")
@@ -127,9 +134,11 @@ def sync_to_staging(org_code: str = "DEFAULT"):
 def validate_staging(org_code: str = "DEFAULT", batch_id: str = None):
     """Validate staging data."""
     with SessionLocal() as db:
-        org = db.query(Organization).filter(
-            Organization.organization_code == org_code
-        ).first()
+        org = (
+            db.query(Organization)
+            .filter(Organization.organization_code == org_code)
+            .first()
+        )
 
         if not org:
             print(f"Organization not found: {org_code}")
@@ -213,16 +222,20 @@ def validate_staging(org_code: str = "DEFAULT", batch_id: str = None):
         if report.invalid_records == 0:
             print("\n✓ All records valid! Ready for import.")
         else:
-            print(f"\n✗ {report.invalid_records} records have errors that must be fixed.")
+            print(
+                f"\n✗ {report.invalid_records} records have errors that must be fixed."
+            )
             print("  Fix the issues in ERPNext, then run --sync again.")
 
 
 def show_duplicates_report(org_code: str = "DEFAULT", batch_id: str = None):
     """Show detailed duplicate emails report."""
     with SessionLocal() as db:
-        org = db.query(Organization).filter(
-            Organization.organization_code == org_code
-        ).first()
+        org = (
+            db.query(Organization)
+            .filter(Organization.organization_code == org_code)
+            .first()
+        )
 
         if not org:
             print(f"Organization not found: {org_code}")
@@ -265,7 +278,9 @@ def show_duplicates_report(org_code: str = "DEFAULT", batch_id: str = None):
             print()
 
         print("\nACTION REQUIRED:")
-        print("  1. Update emails in ERPNext to ensure each employee has a unique email")
+        print(
+            "  1. Update emails in ERPNext to ensure each employee has a unique email"
+        )
         print("  2. Run --sync again to refresh staging data")
         print("  3. Run --validate to confirm fixes")
 
@@ -273,9 +288,11 @@ def show_duplicates_report(org_code: str = "DEFAULT", batch_id: str = None):
 def show_missing_references(org_code: str = "DEFAULT", batch_id: str = None):
     """Show missing foreign key references."""
     with SessionLocal() as db:
-        org = db.query(Organization).filter(
-            Organization.organization_code == org_code
-        ).first()
+        org = (
+            db.query(Organization)
+            .filter(Organization.organization_code == org_code)
+            .first()
+        )
 
         if not org:
             print(f"Organization not found: {org_code}")
@@ -310,9 +327,11 @@ def show_missing_references(org_code: str = "DEFAULT", batch_id: str = None):
 def show_staging_summary(org_code: str = "DEFAULT"):
     """Show summary of staging data."""
     with SessionLocal() as db:
-        org = db.query(Organization).filter(
-            Organization.organization_code == org_code
-        ).first()
+        org = (
+            db.query(Organization)
+            .filter(Organization.organization_code == org_code)
+            .first()
+        )
 
         if not org:
             print(f"Organization not found: {org_code}")
@@ -335,21 +354,31 @@ def show_staging_summary(org_code: str = "DEFAULT"):
         print()
 
         # Count records
-        dept_count = db.query(StagingDepartment).filter(
-            StagingDepartment.batch_id == batch.batch_id
-        ).count()
-        desg_count = db.query(StagingDesignation).filter(
-            StagingDesignation.batch_id == batch.batch_id
-        ).count()
-        emptype_count = db.query(StagingEmploymentType).filter(
-            StagingEmploymentType.batch_id == batch.batch_id
-        ).count()
-        grade_count = db.query(StagingEmployeeGrade).filter(
-            StagingEmployeeGrade.batch_id == batch.batch_id
-        ).count()
-        emp_count = db.query(StagingEmployee).filter(
-            StagingEmployee.batch_id == batch.batch_id
-        ).count()
+        dept_count = (
+            db.query(StagingDepartment)
+            .filter(StagingDepartment.batch_id == batch.batch_id)
+            .count()
+        )
+        desg_count = (
+            db.query(StagingDesignation)
+            .filter(StagingDesignation.batch_id == batch.batch_id)
+            .count()
+        )
+        emptype_count = (
+            db.query(StagingEmploymentType)
+            .filter(StagingEmploymentType.batch_id == batch.batch_id)
+            .count()
+        )
+        grade_count = (
+            db.query(StagingEmployeeGrade)
+            .filter(StagingEmployeeGrade.batch_id == batch.batch_id)
+            .count()
+        )
+        emp_count = (
+            db.query(StagingEmployee)
+            .filter(StagingEmployee.batch_id == batch.batch_id)
+            .count()
+        )
 
         print("Record Counts:")
         print(f"  Departments: {dept_count}")
@@ -367,9 +396,11 @@ def import_to_production(
 ):
     """Import validated staging data to production tables."""
     with SessionLocal() as db:
-        org = db.query(Organization).filter(
-            Organization.organization_code == org_code
-        ).first()
+        org = (
+            db.query(Organization)
+            .filter(Organization.organization_code == org_code)
+            .first()
+        )
 
         if not org:
             print(f"Organization not found: {org_code}")
@@ -445,7 +476,9 @@ def import_to_production(
                         print(f"    ... and {len(result.errors) - 5} more")
 
             print("\n" + "-" * 60)
-            print(f"TOTAL: {total_imported} imported, {total_skipped} skipped, {total_errors} errors")
+            print(
+                f"TOTAL: {total_imported} imported, {total_skipped} skipped, {total_errors} errors"
+            )
 
             if total_errors == 0:
                 print("\n✓ Import successful!")
@@ -478,12 +511,24 @@ Examples:
     parser.add_argument("--batch-id", help="Specific batch ID (default: latest)")
     parser.add_argument("--sync", action="store_true", help="Sync to staging")
     parser.add_argument("--validate", action="store_true", help="Validate staging data")
-    parser.add_argument("--duplicates", action="store_true", help="Show duplicate emails")
-    parser.add_argument("--missing", action="store_true", help="Show missing references")
+    parser.add_argument(
+        "--duplicates", action="store_true", help="Show duplicate emails"
+    )
+    parser.add_argument(
+        "--missing", action="store_true", help="Show missing references"
+    )
     parser.add_argument("--summary", action="store_true", help="Show staging summary")
-    parser.add_argument("--import", dest="do_import", action="store_true", help="Import to production")
-    parser.add_argument("--skip-invalid", action="store_true", help="Skip invalid records during import")
-    parser.add_argument("--no-placeholder-emails", action="store_true", help="Don't generate placeholder emails")
+    parser.add_argument(
+        "--import", dest="do_import", action="store_true", help="Import to production"
+    )
+    parser.add_argument(
+        "--skip-invalid", action="store_true", help="Skip invalid records during import"
+    )
+    parser.add_argument(
+        "--no-placeholder-emails",
+        action="store_true",
+        help="Don't generate placeholder emails",
+    )
 
     args = parser.parse_args()
 

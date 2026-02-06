@@ -4,10 +4,9 @@ Tests for TAXPostingAdapter - GL posting for tax transactions.
 
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from uuid import uuid4
 
-import pytest
 from fastapi import HTTPException
 
 from app.services.finance.tax.tax_posting_adapter import (
@@ -38,12 +37,16 @@ class MockTaxTransaction:
         self.tax_code_id = kwargs.get("tax_code_id", uuid4())
         self.transaction_type = kwargs.get("transaction_type", TaxTransactionType.INPUT)
         self.transaction_date = kwargs.get("transaction_date", date.today())
-        self.functional_tax_amount = kwargs.get("functional_tax_amount", Decimal("100.00"))
+        self.functional_tax_amount = kwargs.get(
+            "functional_tax_amount", Decimal("100.00")
+        )
         self.recoverable_amount = kwargs.get("recoverable_amount", Decimal("100.00"))
         self.non_recoverable_amount = kwargs.get("non_recoverable_amount", Decimal("0"))
         self.currency_code = kwargs.get("currency_code", "USD")
         self.exchange_rate = kwargs.get("exchange_rate", Decimal("1.0"))
-        self.source_document_reference = kwargs.get("source_document_reference", "INV-001")
+        self.source_document_reference = kwargs.get(
+            "source_document_reference", "INV-001"
+        )
         self.journal_entry_id = kwargs.get("journal_entry_id")
 
 
@@ -141,11 +144,14 @@ class TestTAXPostingAdapterPostTaxTransaction:
 
         mock_db.get.side_effect = [mock_txn, mock_code]
 
-        with patch(
-            "app.services.finance.tax.tax_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc:
+        with (
+            patch(
+                "app.services.finance.tax.tax_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+        ):
             mock_journal_svc.create_journal.return_value = MockJournalResult()
             mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
                 success=True
@@ -181,11 +187,14 @@ class TestTAXPostingAdapterPostTaxTransaction:
 
         mock_db.get.side_effect = [mock_txn, mock_code]
 
-        with patch(
-            "app.services.finance.tax.tax_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc:
+        with (
+            patch(
+                "app.services.finance.tax.tax_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+        ):
             mock_journal_svc.create_journal.return_value = MockJournalResult()
             mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
                 success=True
@@ -219,11 +228,14 @@ class TestTAXPostingAdapterPostTaxTransaction:
 
         mock_db.get.side_effect = [mock_txn, mock_code]
 
-        with patch(
-            "app.services.finance.tax.tax_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc:
+        with (
+            patch(
+                "app.services.finance.tax.tax_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+        ):
             mock_journal_svc.create_journal.return_value = MockJournalResult()
             mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
                 success=True
@@ -316,11 +328,14 @@ class TestTAXPostingAdapterPostTaxTransaction:
 
         mock_db.get.side_effect = [mock_txn, mock_code]
 
-        with patch(
-            "app.services.finance.tax.tax_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc:
+        with (
+            patch(
+                "app.services.finance.tax.tax_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+        ):
             mock_journal_svc.create_journal.return_value = MockJournalResult()
             mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
                 success=False, message="Period closed"
@@ -353,11 +368,14 @@ class TestTAXPostingAdapterPostCurrentTaxProvision:
         )
         mock_db.get.return_value = mock_jurisdiction
 
-        with patch(
-            "app.services.finance.tax.tax_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc:
+        with (
+            patch(
+                "app.services.finance.tax.tax_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+        ):
             mock_journal_svc.create_journal.return_value = MockJournalResult()
             mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
                 success=True
@@ -386,11 +404,14 @@ class TestTAXPostingAdapterPostCurrentTaxProvision:
         )
         mock_db.get.return_value = mock_jurisdiction
 
-        with patch(
-            "app.services.finance.tax.tax_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc:
+        with (
+            patch(
+                "app.services.finance.tax.tax_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+        ):
             mock_journal_svc.create_journal.return_value = MockJournalResult()
             mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
                 success=True
@@ -471,11 +492,14 @@ class TestTAXPostingAdapterPostDeferredTaxMovement:
 
         mock_db.get.side_effect = [mock_movement, mock_basis, mock_jurisdiction]
 
-        with patch(
-            "app.services.finance.tax.tax_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc:
+        with (
+            patch(
+                "app.services.finance.tax.tax_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+        ):
             mock_journal_svc.create_journal.return_value = MockJournalResult()
             mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
                 success=True
@@ -510,11 +534,14 @@ class TestTAXPostingAdapterPostDeferredTaxMovement:
 
         mock_db.get.side_effect = [mock_movement, mock_basis, mock_jurisdiction]
 
-        with patch(
-            "app.services.finance.tax.tax_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc:
+        with (
+            patch(
+                "app.services.finance.tax.tax_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+        ):
             mock_journal_svc.create_journal.return_value = MockJournalResult()
             mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
                 success=True
@@ -549,11 +576,14 @@ class TestTAXPostingAdapterPostDeferredTaxMovement:
 
         mock_db.get.side_effect = [mock_movement, mock_basis, mock_jurisdiction]
 
-        with patch(
-            "app.services.finance.tax.tax_posting_adapter.JournalService"
-        ) as mock_journal_svc, patch(
-            "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
-        ) as mock_posting_svc:
+        with (
+            patch(
+                "app.services.finance.tax.tax_posting_adapter.JournalService"
+            ) as mock_journal_svc,
+            patch(
+                "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
+            ) as mock_posting_svc,
+        ):
             mock_journal_svc.create_journal.return_value = MockJournalResult()
             mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
                 success=True

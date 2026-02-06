@@ -3,6 +3,7 @@ KPI (Key Performance Indicator) Model - Performance Schema.
 
 Tracks specific measurable indicators for employees.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
 
 class KPIStatus(str, enum.Enum):
     """KPI tracking status."""
+
     DRAFT = "DRAFT"
     PENDING = "PENDING"
     ACTIVE = "ACTIVE"
@@ -187,7 +189,11 @@ class KPI(Base, AuditMixin, ERPNextSyncMixin):
 
     def calculate_achievement(self) -> Optional[Decimal]:
         """Calculate achievement percentage."""
-        if self.actual_value is None or self.target_value is None or self.target_value == 0:
+        if (
+            self.actual_value is None
+            or self.target_value is None
+            or self.target_value == 0
+        ):
             return None
         return (self.actual_value / self.target_value) * 100
 

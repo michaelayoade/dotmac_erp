@@ -3,6 +3,7 @@ Shift Scheduling API Router.
 
 Thin API wrapper for Shift Scheduling endpoints. All business logic is in services.
 """
+
 from datetime import date
 from typing import Optional
 from uuid import UUID
@@ -14,7 +15,6 @@ from app.api.deps import (
     require_organization_id,
     require_tenant_auth,
     require_current_employee_id,
-    get_current_employee_id_optional,
 )
 from app.db import SessionLocal
 from app.models.people.scheduling import RotationType, ScheduleStatus, SwapRequestStatus
@@ -65,14 +65,24 @@ from app.services.common import PaginationParams
 
 def handle_scheduling_error(e: Exception) -> None:
     """Convert scheduling service errors to appropriate HTTP exceptions."""
-    if isinstance(e, (ShiftPatternNotFoundError, PatternAssignmentNotFoundError,
-                      ShiftScheduleNotFoundError, SwapRequestNotFoundError)):
+    if isinstance(
+        e,
+        (
+            ShiftPatternNotFoundError,
+            PatternAssignmentNotFoundError,
+            ShiftScheduleNotFoundError,
+            SwapRequestNotFoundError,
+        ),
+    ):
         raise HTTPException(status_code=404, detail=str(e))
     elif isinstance(e, InvalidSwapTransitionError):
         raise HTTPException(status_code=409, detail=str(e))
-    elif isinstance(e, (SchedulingServiceError, ScheduleGeneratorError, SwapServiceError)):
+    elif isinstance(
+        e, (SchedulingServiceError, ScheduleGeneratorError, SwapServiceError)
+    ):
         raise HTTPException(status_code=400, detail=str(e))
     raise
+
 
 router = APIRouter(
     prefix="/scheduling",
@@ -121,7 +131,9 @@ def list_patterns(
     )
 
 
-@router.post("/patterns", response_model=ShiftPatternRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/patterns", response_model=ShiftPatternRead, status_code=status.HTTP_201_CREATED
+)
 def create_pattern(
     payload: ShiftPatternCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -157,7 +169,9 @@ def get_pattern(
     """Get a shift pattern by ID."""
     try:
         svc = SchedulingService(db)
-        return ShiftPatternRead.model_validate(svc.get_pattern(organization_id, pattern_id))
+        return ShiftPatternRead.model_validate(
+            svc.get_pattern(organization_id, pattern_id)
+        )
     except Exception as e:
         handle_scheduling_error(e)
 
@@ -421,7 +435,9 @@ def get_schedule(
 ):
     """Get a shift schedule by ID."""
     svc = SchedulingService(db)
-    return ShiftScheduleRead.model_validate(svc.get_schedule(organization_id, schedule_id))
+    return ShiftScheduleRead.model_validate(
+        svc.get_schedule(organization_id, schedule_id)
+    )
 
 
 @router.patch("/schedules/{schedule_id}", response_model=ShiftScheduleRead)
@@ -483,7 +499,9 @@ def list_swap_requests(
     )
 
 
-@router.post("/swaps", response_model=SwapRequestRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/swaps", response_model=SwapRequestRead, status_code=status.HTTP_201_CREATED
+)
 def create_swap_request(
     payload: SwapRequestCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -560,7 +578,9 @@ def get_swap_request(
 ):
     """Get a swap request by ID."""
     svc = SwapService(db)
-    return SwapRequestRead.model_validate(svc.get_swap_request(organization_id, request_id))
+    return SwapRequestRead.model_validate(
+        svc.get_swap_request(organization_id, request_id)
+    )
 
 
 @router.post("/swaps/{request_id}/accept", response_model=SwapRequestRead)

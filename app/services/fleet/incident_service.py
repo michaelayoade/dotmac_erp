@@ -26,6 +26,7 @@ from app.services.common import (
     ValidationError,
     paginate,
 )
+from app.services.state_machine import StateMachine
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ INCIDENT_STATUS_TRANSITIONS: Dict[IncidentStatus, set] = {
     },
     IncidentStatus.CLOSED: set(),  # Terminal
 }
+_STATE_MACHINE = StateMachine(INCIDENT_STATUS_TRANSITIONS)
 
 
 class IncidentService:
@@ -202,11 +204,7 @@ class IncidentService:
         incident = self.get_or_raise(incident_id)
         current = incident.status
 
-        allowed = INCIDENT_STATUS_TRANSITIONS.get(current, set())
-        if new_status not in allowed:
-            raise ValidationError(
-                f"Cannot transition from {current.value} to {new_status.value}"
-            )
+        _STATE_MACHINE.validate(current, new_status)
 
         incident.status = new_status
 
@@ -233,11 +231,7 @@ class IncidentService:
         """Resolve an incident."""
         incident = self.get_or_raise(incident_id)
 
-        allowed = INCIDENT_STATUS_TRANSITIONS.get(incident.status, set())
-        if IncidentStatus.RESOLVED not in allowed:
-            raise ValidationError(
-                f"Cannot resolve incident in {incident.status.value} status"
-            )
+        _STATE_MACHINE.validate(incident.status, IncidentStatus.RESOLVED)
 
         incident.status = IncidentStatus.RESOLVED
         incident.resolution_date = data.resolution_date or date.today()
@@ -290,11 +284,7 @@ class IncidentService:
         """Close an incident."""
         incident = self.get_or_raise(incident_id)
 
-        allowed = INCIDENT_STATUS_TRANSITIONS.get(incident.status, set())
-        if IncidentStatus.CLOSED not in allowed:
-            raise ValidationError(
-                f"Cannot close incident in {incident.status.value} status"
-            )
+        _STATE_MACHINE.validate(incident.status, IncidentStatus.CLOSED)
 
         incident.status = IncidentStatus.CLOSED
         if not incident.resolution_date:

@@ -3,6 +3,7 @@ IFRS API Utilities.
 
 Common utility functions for API routes.
 """
+
 from enum import Enum
 from typing import Optional, TypeVar
 
@@ -43,7 +44,9 @@ def parse_enum(enum_class: type[E], value: Optional[str]) -> Optional[E]:
     return enum_class(value.upper())
 
 
-def parse_enum_safe(enum_class: type[E], value: Optional[str], default: Optional[E] = None) -> Optional[E]:
+def parse_enum_safe(
+    enum_class: type[E], value: Optional[str], default: Optional[E] = None
+) -> Optional[E]:
     """
     Parse a string value to an enum, returning a default on invalid values.
 

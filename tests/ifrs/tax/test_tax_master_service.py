@@ -5,7 +5,6 @@ Tests for TaxCodeService and TaxJurisdictionService.
 import uuid
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -241,7 +240,10 @@ class TestTaxJurisdictionService:
 
     def test_create_jurisdiction_success(self, mock_db, org_id):
         """Test successful jurisdiction creation."""
-        from app.services.finance.tax.tax_master import TaxJurisdictionService, TaxJurisdictionInput
+        from app.services.finance.tax.tax_master import (
+            TaxJurisdictionService,
+            TaxJurisdictionInput,
+        )
 
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
@@ -267,7 +269,10 @@ class TestTaxJurisdictionService:
 
     def test_create_jurisdiction_duplicate(self, mock_db, org_id):
         """Test jurisdiction creation with duplicate code fails."""
-        from app.services.finance.tax.tax_master import TaxJurisdictionService, TaxJurisdictionInput
+        from app.services.finance.tax.tax_master import (
+            TaxJurisdictionService,
+            TaxJurisdictionInput,
+        )
         from fastapi import HTTPException
 
         existing = MockTaxJurisdiction(organization_id=org_id)
@@ -299,7 +304,9 @@ class TestTaxJurisdictionService:
 
         mock_db.get.return_value = mock_jurisdiction
 
-        result = TaxJurisdictionService.get(mock_db, str(mock_jurisdiction.jurisdiction_id))
+        result = TaxJurisdictionService.get(
+            mock_db, str(mock_jurisdiction.jurisdiction_id)
+        )
 
         assert result is not None
         assert result.jurisdiction_id == mock_jurisdiction.jurisdiction_id
@@ -320,7 +327,9 @@ class TestTaxJurisdictionService:
         """Test listing jurisdictions."""
         from app.services.finance.tax.tax_master import TaxJurisdictionService
 
-        mock_jurisdictions = [MockTaxJurisdiction(organization_id=org_id) for _ in range(3)]
+        mock_jurisdictions = [
+            MockTaxJurisdiction(organization_id=org_id) for _ in range(3)
+        ]
         mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_jurisdictions
 
         result = TaxJurisdictionService.list(mock_db, str(org_id))

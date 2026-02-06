@@ -10,12 +10,12 @@ Tests for all 13 validation rule types:
 import re
 from decimal import Decimal
 
-import pytest
 
-from app.services.finance.import_export.base import ValidationRule, EMAIL_PATTERN
+from app.services.finance.import_export.base import ValidationRule
 
 
 # ============ TestRequiredRule ============
+
 
 class TestRequiredRule:
     """Tests for the 'required' validation rule."""
@@ -63,12 +63,15 @@ class TestRequiredRule:
 
 # ============ TestPatternRule ============
 
+
 class TestPatternRule:
     """Tests for the 'pattern' validation rule."""
 
     def test_pattern_matches(self):
         """Value matching pattern should pass."""
-        rule = ValidationRule("code", "pattern", value=re.compile(r"^[A-Z]{3}[0-9]{3}$"))
+        rule = ValidationRule(
+            "code", "pattern", value=re.compile(r"^[A-Z]{3}[0-9]{3}$")
+        )
         is_valid, error = rule.validate("ABC123")
 
         assert is_valid is True
@@ -76,7 +79,9 @@ class TestPatternRule:
 
     def test_pattern_not_matches(self):
         """Value not matching pattern should fail."""
-        rule = ValidationRule("code", "pattern", value=re.compile(r"^[A-Z]{3}[0-9]{3}$"))
+        rule = ValidationRule(
+            "code", "pattern", value=re.compile(r"^[A-Z]{3}[0-9]{3}$")
+        )
         is_valid, error = rule.validate("abc123")
 
         assert is_valid is False
@@ -91,6 +96,7 @@ class TestPatternRule:
 
 
 # ============ TestMinLengthRule ============
+
 
 class TestMinLengthRule:
     """Tests for the 'min_length' validation rule."""
@@ -121,6 +127,7 @@ class TestMinLengthRule:
 
 # ============ TestMaxLengthRule ============
 
+
 class TestMaxLengthRule:
     """Tests for the 'max_length' validation rule."""
 
@@ -149,6 +156,7 @@ class TestMaxLengthRule:
 
 
 # ============ TestMinValueRule ============
+
 
 class TestMinValueRule:
     """Tests for the 'min_value' validation rule."""
@@ -186,6 +194,7 @@ class TestMinValueRule:
 
 # ============ TestMaxValueRule ============
 
+
 class TestMaxValueRule:
     """Tests for the 'max_value' validation rule."""
 
@@ -215,12 +224,15 @@ class TestMaxValueRule:
 
 # ============ TestChoicesRule ============
 
+
 class TestChoicesRule:
     """Tests for the 'choices' validation rule."""
 
     def test_choices_valid(self):
         """Value in choices should pass."""
-        rule = ValidationRule("status", "choices", value=["active", "inactive", "pending"])
+        rule = ValidationRule(
+            "status", "choices", value=["active", "inactive", "pending"]
+        )
         is_valid, error = rule.validate("active")
 
         assert is_valid is True
@@ -250,6 +262,7 @@ class TestChoicesRule:
 
 
 # ============ TestEmailRule ============
+
 
 class TestEmailRule:
     """Tests for the 'email' validation rule."""
@@ -294,6 +307,7 @@ class TestEmailRule:
 
 # ============ TestPhoneRule ============
 
+
 class TestPhoneRule:
     """Tests for the 'phone' validation rule."""
 
@@ -328,6 +342,7 @@ class TestPhoneRule:
 
 
 # ============ TestCurrencyRule ============
+
 
 class TestCurrencyRule:
     """Tests for the 'currency' validation rule."""
@@ -365,6 +380,7 @@ class TestCurrencyRule:
 
 # ============ TestPositiveRule ============
 
+
 class TestPositiveRule:
     """Tests for the 'positive' validation rule."""
 
@@ -393,6 +409,7 @@ class TestPositiveRule:
 
 
 # ============ TestDateRule ============
+
 
 class TestDateRule:
     """Tests for the 'date' validation rule."""
@@ -430,13 +447,19 @@ class TestDateRule:
 
 # ============ TestCustomRule ============
 
+
 class TestCustomRule:
     """Tests for the 'custom' validation rule."""
 
     def test_custom_validation_passes(self):
         """Custom validation returning True should pass."""
+
         def custom_validator(value):
-            return (True, None) if value.startswith("PRE") else (False, "Must start with PRE")
+            return (
+                (True, None)
+                if value.startswith("PRE")
+                else (False, "Must start with PRE")
+            )
 
         rule = ValidationRule("code", "custom", value=custom_validator)
         is_valid, error = rule.validate("PRE001")
@@ -446,8 +469,13 @@ class TestCustomRule:
 
     def test_custom_validation_fails(self):
         """Custom validation returning False should fail."""
+
         def custom_validator(value):
-            return (True, None) if value.startswith("PRE") else (False, "Must start with PRE")
+            return (
+                (True, None)
+                if value.startswith("PRE")
+                else (False, "Must start with PRE")
+            )
 
         rule = ValidationRule("code", "custom", value=custom_validator)
         is_valid, error = rule.validate("ABC001")
@@ -457,6 +485,7 @@ class TestCustomRule:
 
     def test_custom_complex_validation(self):
         """Custom validation with complex logic."""
+
         def validate_account_code(value):
             # Account code must be 4 digits, starting with 1-9
             if not value.isdigit() or len(value) != 4:

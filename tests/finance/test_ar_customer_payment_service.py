@@ -45,7 +45,9 @@ def test_create_payment_allocation_exceeds_amount():
                 payment_method=PaymentMethod.CARD,
                 currency_code="NGN",
                 amount=Decimal("50.00"),
-                allocations=[PaymentAllocationInput(invoice_id=uuid4(), amount=Decimal("60.00"))],
+                allocations=[
+                    PaymentAllocationInput(invoice_id=uuid4(), amount=Decimal("60.00"))
+                ],
             ),
             created_by_user_id=uuid4(),
         )
@@ -85,7 +87,10 @@ def test_create_payment_calculates_gross_from_wht():
     db.get.return_value = customer
 
     with (
-        patch("app.services.finance.ar.customer_payment.SequenceService.get_next_number", return_value="RCPT-1"),
+        patch(
+            "app.services.finance.ar.customer_payment.SequenceService.get_next_number",
+            return_value="RCPT-1",
+        ),
     ):
         payment = CustomerPaymentService.create_payment(
             db,
@@ -117,7 +122,9 @@ def test_post_payment_requires_bank_account():
     db.get.return_value = payment
 
     with pytest.raises(HTTPException) as excinfo:
-        CustomerPaymentService.post_payment(db, org_id, payment.payment_id, posted_by_user_id=uuid4())
+        CustomerPaymentService.post_payment(
+            db, org_id, payment.payment_id, posted_by_user_id=uuid4()
+        )
     assert excinfo.value.status_code == 400
 
 
@@ -147,7 +154,9 @@ def test_post_payment_wht_requires_receivable_account():
     db.get.side_effect = [payment, customer, None]  # payment, customer, tax code (None)
 
     with pytest.raises(HTTPException) as excinfo:
-        CustomerPaymentService.post_payment(db, org_id, payment.payment_id, posted_by_user_id=uuid4())
+        CustomerPaymentService.post_payment(
+            db, org_id, payment.payment_id, posted_by_user_id=uuid4()
+        )
     assert excinfo.value.status_code == 400
 
 
@@ -179,13 +188,27 @@ def test_post_payment_success_without_wht():
     db.query.return_value.filter.return_value.all.return_value = []
 
     journal = SimpleNamespace(journal_entry_id=uuid4())
-    posting_result = SimpleNamespace(success=True, posting_batch_id=uuid4(), message=None)
+    posting_result = SimpleNamespace(
+        success=True, posting_batch_id=uuid4(), message=None
+    )
 
     with (
-        patch("app.services.finance.gl.journal.JournalService.create_journal", return_value=journal),
-        patch("app.services.finance.gl.journal.JournalService.submit_journal", return_value=None),
-        patch("app.services.finance.gl.journal.JournalService.approve_journal", return_value=None),
-        patch("app.services.finance.gl.ledger_posting.LedgerPostingService.post_journal_entry", return_value=posting_result),
+        patch(
+            "app.services.finance.gl.journal.JournalService.create_journal",
+            return_value=journal,
+        ),
+        patch(
+            "app.services.finance.gl.journal.JournalService.submit_journal",
+            return_value=None,
+        ),
+        patch(
+            "app.services.finance.gl.journal.JournalService.approve_journal",
+            return_value=None,
+        ),
+        patch(
+            "app.services.finance.gl.ledger_posting.LedgerPostingService.post_journal_entry",
+            return_value=posting_result,
+        ),
     ):
         result = CustomerPaymentService.post_payment(
             db,
@@ -206,7 +229,11 @@ def test_void_and_bounce_reverse_allocations():
         organization_id=org_id,
         status=PaymentStatus.CLEARED,
     )
-    invoice = SimpleNamespace(amount_paid=Decimal("50.00"), total_amount=Decimal("100.00"), status=InvoiceStatus.PAID)
+    invoice = SimpleNamespace(
+        amount_paid=Decimal("50.00"),
+        total_amount=Decimal("100.00"),
+        status=InvoiceStatus.PAID,
+    )
     allocation = SimpleNamespace(invoice_id=uuid4(), allocated_amount=Decimal("50.00"))
 
     def _get(model, _id):
@@ -219,12 +246,16 @@ def test_void_and_bounce_reverse_allocations():
     db.get.side_effect = _get
     db.query.return_value.filter.return_value.all.return_value = [allocation]
 
-    voided = CustomerPaymentService.void_payment(db, org_id, payment.payment_id, voided_by_user_id=uuid4(), reason="err")
+    voided = CustomerPaymentService.void_payment(
+        db, org_id, payment.payment_id, voided_by_user_id=uuid4(), reason="err"
+    )
     assert voided.status == PaymentStatus.VOID
     assert invoice.amount_paid == Decimal("0")
     assert invoice.status == InvoiceStatus.POSTED
 
     payment.status = PaymentStatus.CLEARED
     invoice.amount_paid = Decimal("50.00")
-    bounced = CustomerPaymentService.mark_bounced(db, org_id, payment.payment_id, reason="nsf")
+    bounced = CustomerPaymentService.mark_bounced(
+        db, org_id, payment.payment_id, reason="nsf"
+    )
     assert bounced.status == PaymentStatus.BOUNCED

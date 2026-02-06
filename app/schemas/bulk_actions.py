@@ -14,7 +14,9 @@ from pydantic import BaseModel, Field
 class BulkActionRequest(BaseModel):
     """Base request for bulk actions."""
 
-    ids: list[UUID] = Field(..., min_length=1, description="List of entity IDs to act upon")
+    ids: list[UUID] = Field(
+        ..., min_length=1, description="List of entity IDs to act upon"
+    )
     action: str = Field(default="", description="Action type (for routing)")
 
 
@@ -27,7 +29,9 @@ class BulkDeleteRequest(BulkActionRequest):
 class BulkUpdateRequest(BulkActionRequest):
     """Request for bulk update operations with field updates."""
 
-    updates: dict[str, Any] = Field(default_factory=dict, description="Fields to update")
+    updates: dict[str, Any] = Field(
+        default_factory=dict, description="Fields to update"
+    )
 
 
 class BulkStatusUpdateRequest(BulkActionRequest):
@@ -47,7 +51,9 @@ class BulkActionResult(BaseModel):
 
     success_count: int = Field(default=0, description="Number of successful operations")
     failed_count: int = Field(default=0, description="Number of failed operations")
-    errors: list[str] = Field(default_factory=list, description="Error messages for failures")
+    errors: list[str] = Field(
+        default_factory=list, description="Error messages for failures"
+    )
     message: str = Field(default="", description="Summary message")
 
     @classmethod
@@ -60,7 +66,9 @@ class BulkActionResult(BaseModel):
         )
 
     @classmethod
-    def partial(cls, success: int, failed: int, errors: list[str]) -> "BulkActionResult":
+    def partial(
+        cls, success: int, failed: int, errors: list[str]
+    ) -> "BulkActionResult":
         """Create a partial success result."""
         return cls(
             success_count=success,

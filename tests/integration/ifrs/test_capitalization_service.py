@@ -5,13 +5,10 @@ Tests asset creation from AP invoice lines using real PostgreSQL database.
 """
 
 import uuid
-from datetime import date
 from decimal import Decimal
 
-import pytest
 from sqlalchemy.orm import Session
 
-from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.fixed_assets.asset import Asset, AssetStatus
 from app.services.fixed_assets.capitalization import CapitalizationService
@@ -91,9 +88,7 @@ class TestValidateCapitalizationThreshold:
         assert is_valid is False
         assert "not active" in message
 
-    def test_wrong_organization_fails(
-        self, db: Session, asset_category
-    ):
+    def test_wrong_organization_fails(self, db: Session, asset_category):
         """Category from different org should fail validation."""
         other_org_id = uuid.uuid4()
 

@@ -3,6 +3,7 @@ Milestone Model - PM Schema.
 
 Project milestones/phases with target and actual dates.
 """
+
 import enum
 import uuid
 from datetime import date, datetime

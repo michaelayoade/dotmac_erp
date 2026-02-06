@@ -18,6 +18,7 @@ from app.services.common import coerce_uuid, apply_ordering, apply_pagination
 
 # ============ TestCoerceUuid ============
 
+
 class TestCoerceUuid:
     """Tests for the coerce_uuid function."""
 
@@ -68,6 +69,7 @@ class TestCoerceUuid:
 
 
 # ============ TestApplyOrdering ============
+
 
 class TestApplyOrdering:
     """Tests for the apply_ordering function."""
@@ -132,6 +134,7 @@ class TestApplyOrdering:
 
 
 # ============ TestApplyPagination ============
+
 
 class TestApplyPagination:
     """Tests for the apply_pagination function."""

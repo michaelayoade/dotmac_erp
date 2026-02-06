@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime, timezone
 
 from starlette.requests import Request
 from starlette.responses import Response
@@ -11,7 +10,9 @@ from app.services import scheduler as scheduler_service
 
 
 def test_rbac_role_permission_link(db_session, person):
-    role = rbac_service.roles.create(db_session, RoleCreate(name=f"test_role_{uuid.uuid4().hex[:8]}"))
+    role = rbac_service.roles.create(
+        db_session, RoleCreate(name=f"test_role_{uuid.uuid4().hex[:8]}")
+    )
     permission_key = f"people:read:{uuid.uuid4().hex[:8]}"
     permission = rbac_service.permissions.create(
         db_session, PermissionCreate(key=permission_key, description="People Read")

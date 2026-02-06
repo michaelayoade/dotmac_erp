@@ -3,6 +3,7 @@ Training Management API Router.
 
 Thin API wrapper for Training Management endpoints. All business logic is in services.
 """
+
 from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
@@ -12,7 +13,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
 from app.db import SessionLocal
-from app.models.people.training import AttendeeStatus, TrainingEventStatus, TrainingProgramStatus
+from app.models.people.training import (
+    AttendeeStatus,
+    TrainingEventStatus,
+    TrainingProgramStatus,
+)
 from app.schemas.people.training import (
     # Training Program
     TrainingProgramCreate,
@@ -59,7 +64,9 @@ def parse_enum(value: Optional[str], enum_type, field_name: str):
     try:
         return enum_type(value)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid {field_name}: {value}") from exc
+        raise HTTPException(
+            status_code=400, detail=f"Invalid {field_name}: {value}"
+        ) from exc
 
 
 # =============================================================================
@@ -97,7 +104,9 @@ def list_training_programs(
     )
 
 
-@router.post("/programs", response_model=TrainingProgramRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/programs", response_model=TrainingProgramRead, status_code=status.HTTP_201_CREATED
+)
 def create_training_program(
     payload: TrainingProgramCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -136,7 +145,9 @@ def get_training_program(
 ):
     """Get a training program by ID."""
     svc = TrainingService(db)
-    return TrainingProgramRead.model_validate(svc.get_program(organization_id, program_id))
+    return TrainingProgramRead.model_validate(
+        svc.get_program(organization_id, program_id)
+    )
 
 
 @router.patch("/programs/{program_id}", response_model=TrainingProgramRead)
@@ -203,7 +214,9 @@ def list_training_events(
     )
 
 
-@router.post("/events", response_model=TrainingEventRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/events", response_model=TrainingEventRead, status_code=status.HTTP_201_CREATED
+)
 def create_training_event(
     payload: TrainingEventCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -303,7 +316,9 @@ def complete_event(
 ):
     """Mark event as completed."""
     svc = TrainingService(db)
-    event = svc.complete_event(organization_id, event_id, feedback_notes=payload.feedback_notes)
+    event = svc.complete_event(
+        organization_id, event_id, feedback_notes=payload.feedback_notes
+    )
     db.commit()
     return TrainingEventRead.model_validate(event)
 
@@ -379,7 +394,9 @@ def add_attendee(
     if payload.event_id != event_id:
         raise HTTPException(status_code=400, detail="Event ID mismatch")
     svc = TrainingService(db)
-    attendee = svc.invite_attendee(organization_id, event_id, payload.employee_id, notes=payload.notes)
+    attendee = svc.invite_attendee(
+        organization_id, event_id, payload.employee_id, notes=payload.notes
+    )
     db.commit()
     return TrainingAttendeeRead.model_validate(attendee)
 
@@ -423,7 +440,10 @@ def remove_attendee(
 
 
 # Attendee actions
-@router.post("/events/{event_id}/attendees/{attendee_id}/confirm", response_model=TrainingAttendeeRead)
+@router.post(
+    "/events/{event_id}/attendees/{attendee_id}/confirm",
+    response_model=TrainingAttendeeRead,
+)
 def confirm_attendance(
     event_id: UUID,
     attendee_id: UUID,
@@ -440,7 +460,10 @@ def confirm_attendance(
     return TrainingAttendeeRead.model_validate(attendee)
 
 
-@router.post("/events/{event_id}/attendees/{attendee_id}/mark-attended", response_model=TrainingAttendeeRead)
+@router.post(
+    "/events/{event_id}/attendees/{attendee_id}/mark-attended",
+    response_model=TrainingAttendeeRead,
+)
 def mark_attended(
     event_id: UUID,
     attendee_id: UUID,
@@ -458,7 +481,10 @@ def mark_attended(
     return TrainingAttendeeRead.model_validate(attendee)
 
 
-@router.post("/events/{event_id}/attendees/{attendee_id}/feedback", response_model=TrainingAttendeeRead)
+@router.post(
+    "/events/{event_id}/attendees/{attendee_id}/feedback",
+    response_model=TrainingAttendeeRead,
+)
 def submit_feedback(
     event_id: UUID,
     attendee_id: UUID,
@@ -481,7 +507,10 @@ def submit_feedback(
     return TrainingAttendeeRead.model_validate(attendee)
 
 
-@router.post("/events/{event_id}/attendees/{attendee_id}/certificate", response_model=TrainingAttendeeRead)
+@router.post(
+    "/events/{event_id}/attendees/{attendee_id}/certificate",
+    response_model=TrainingAttendeeRead,
+)
 def issue_certificate(
     event_id: UUID,
     attendee_id: UUID,

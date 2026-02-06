@@ -3,7 +3,8 @@ Vehicle Reservation Pydantic Schemas.
 
 Schemas for pool vehicle reservation API endpoints.
 """
-from datetime import date, datetime
+
+from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 

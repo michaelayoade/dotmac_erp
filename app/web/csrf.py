@@ -47,7 +47,9 @@ def _forwarded_host_parts(request: Request) -> tuple[str | None, int | None]:
 def _request_host_candidates(request: Request) -> list[tuple[str | None, int | None]]:
     host = request.url.hostname
     scheme = request.url.scheme
-    request_parts = (host, request.url.port or _default_port(scheme)) if host else (None, None)
+    request_parts = (
+        (host, request.url.port or _default_port(scheme)) if host else (None, None)
+    )
     forwarded_parts = _forwarded_host_parts(request)
     app_url = os.getenv("APP_URL", "").strip()
     app_parts = _origin_parts(app_url) if app_url else (None, None)
@@ -150,9 +152,9 @@ async def _extract_csrf_token(request: Request) -> str | None:
     if header_token:
         return header_token.strip()
     content_type = (request.headers.get("content-type") or "").lower()
-    if content_type.startswith("application/x-www-form-urlencoded") or content_type.startswith(
-        "multipart/form-data"
-    ):
+    if content_type.startswith(
+        "application/x-www-form-urlencoded"
+    ) or content_type.startswith("multipart/form-data"):
         # Read and cache the raw body so downstream form parsing still works.
         try:
             if getattr(request, "_body", None) is None:
@@ -169,7 +171,9 @@ async def _extract_csrf_token(request: Request) -> str | None:
     return None
 
 
-async def csrf_middleware(request: Request, call_next: RequestResponseEndpoint) -> Response:
+async def csrf_middleware(
+    request: Request, call_next: RequestResponseEndpoint
+) -> Response:
     csrf_cookie = request.cookies.get(CSRF_COOKIE_NAME) or ""
     request.state.csrf_token = csrf_cookie
     set_csrf_cookie = False

@@ -6,7 +6,6 @@ including category creation, IFRS mapping, and code generation.
 """
 
 import uuid
-from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,6 +20,7 @@ from app.services.finance.import_export.base import ImportConfig
 
 
 # ============ Fixtures ============
+
 
 @pytest.fixture
 def organization_id():
@@ -53,6 +53,7 @@ def mock_db():
 
 # ============ Test ZOHO_ACCOUNT_TYPE_MAPPING ============
 
+
 class TestZohoAccountTypeMapping:
     """Tests for the ZOHO_ACCOUNT_TYPE_MAPPING constant."""
 
@@ -82,8 +83,14 @@ class TestZohoAccountTypeMapping:
         from app.models.finance.gl.account import NormalBalance
 
         asset_types = [
-            "Cash", "Bank", "Accounts Receivable", "Other Current Asset",
-            "Fixed Asset", "Stock", "Input Tax", "Payment Clearing"
+            "Cash",
+            "Bank",
+            "Accounts Receivable",
+            "Other Current Asset",
+            "Fixed Asset",
+            "Stock",
+            "Input Tax",
+            "Payment Clearing",
         ]
         for zoho_type in asset_types:
             ifrs_category, normal_balance = ZOHO_ACCOUNT_TYPE_MAPPING[zoho_type]
@@ -96,8 +103,11 @@ class TestZohoAccountTypeMapping:
         from app.models.finance.gl.account import NormalBalance
 
         liability_types = [
-            "Accounts Payable", "Other Current Liability",
-            "Long Term Liability", "Other Liability", "Output Tax"
+            "Accounts Payable",
+            "Other Current Liability",
+            "Long Term Liability",
+            "Other Liability",
+            "Output Tax",
         ]
         for zoho_type in liability_types:
             ifrs_category, normal_balance = ZOHO_ACCOUNT_TYPE_MAPPING[zoho_type]
@@ -115,6 +125,7 @@ class TestZohoAccountTypeMapping:
 
 
 # ============ Test ZOHO_SUBLEDGER_MAPPING ============
+
 
 class TestZohoSubledgerMapping:
     """Tests for the ZOHO_SUBLEDGER_MAPPING constant."""
@@ -143,6 +154,7 @@ class TestZohoSubledgerMapping:
 
 # ============ Test AccountCategoryImporter ============
 
+
 class TestAccountCategoryImporter:
     """Tests for AccountCategoryImporter class."""
 
@@ -166,7 +178,9 @@ class TestAccountCategoryImporter:
     def test_make_category_code_uppercase_underscores(self, mock_db, import_config):
         """Category code should be uppercase with underscores."""
         importer = AccountCategoryImporter(mock_db, import_config)
-        assert importer._make_category_code("Other Current Asset") == "OTHER_CURRENT_ASSET"
+        assert (
+            importer._make_category_code("Other Current Asset") == "OTHER_CURRENT_ASSET"
+        )
 
     def test_make_category_code_truncates_at_20(self, mock_db, import_config):
         """Category code should be truncated to 20 characters."""
@@ -178,23 +192,28 @@ class TestAccountCategoryImporter:
     def test_get_display_order_assets(self, mock_db, import_config):
         """Assets should have display order 100."""
         from app.models.finance.gl.account_category import IFRSCategory
+
         importer = AccountCategoryImporter(mock_db, import_config)
         assert importer._get_display_order(IFRSCategory.ASSETS) == 100
 
     def test_get_display_order_liabilities(self, mock_db, import_config):
         """Liabilities should have display order 200."""
         from app.models.finance.gl.account_category import IFRSCategory
+
         importer = AccountCategoryImporter(mock_db, import_config)
         assert importer._get_display_order(IFRSCategory.LIABILITIES) == 200
 
     def test_get_display_order_equity(self, mock_db, import_config):
         """Equity should have display order 300."""
         from app.models.finance.gl.account_category import IFRSCategory
+
         importer = AccountCategoryImporter(mock_db, import_config)
         assert importer._get_display_order(IFRSCategory.EQUITY) == 300
 
     @patch("app.services.finance.import_export.accounts.AccountCategory")
-    def test_create_entity_creates_category(self, mock_category_cls, mock_db, import_config):
+    def test_create_entity_creates_category(
+        self, mock_category_cls, mock_db, import_config
+    ):
         """create_entity should create AccountCategory with correct attributes."""
         importer = AccountCategoryImporter(mock_db, import_config)
         row = {"Account Type": "Bank"}
@@ -215,6 +234,7 @@ class TestAccountCategoryImporter:
 
 
 # ============ Test AccountImporter ============
+
 
 class TestAccountImporter:
     """Tests for AccountImporter class."""
@@ -249,36 +269,42 @@ class TestAccountImporter:
     def test_get_code_prefix_assets(self, mock_db, import_config):
         """Assets should have code prefix 1."""
         from app.models.finance.gl.account_category import IFRSCategory
+
         importer = AccountImporter(mock_db, import_config)
         assert importer._get_code_prefix(IFRSCategory.ASSETS) == "1"
 
     def test_get_code_prefix_liabilities(self, mock_db, import_config):
         """Liabilities should have code prefix 2."""
         from app.models.finance.gl.account_category import IFRSCategory
+
         importer = AccountImporter(mock_db, import_config)
         assert importer._get_code_prefix(IFRSCategory.LIABILITIES) == "2"
 
     def test_get_code_prefix_equity(self, mock_db, import_config):
         """Equity should have code prefix 3."""
         from app.models.finance.gl.account_category import IFRSCategory
+
         importer = AccountImporter(mock_db, import_config)
         assert importer._get_code_prefix(IFRSCategory.EQUITY) == "3"
 
     def test_get_code_prefix_revenue(self, mock_db, import_config):
         """Revenue should have code prefix 4."""
         from app.models.finance.gl.account_category import IFRSCategory
+
         importer = AccountImporter(mock_db, import_config)
         assert importer._get_code_prefix(IFRSCategory.REVENUE) == "4"
 
     def test_get_code_prefix_expenses(self, mock_db, import_config):
         """Expenses should have code prefix 5."""
         from app.models.finance.gl.account_category import IFRSCategory
+
         importer = AccountImporter(mock_db, import_config)
         assert importer._get_code_prefix(IFRSCategory.EXPENSES) == "5"
 
     def test_get_code_prefix_unknown_returns_9(self, mock_db, import_config):
         """Unknown category should have code prefix 9."""
         from app.models.finance.gl.account_category import IFRSCategory
+
         importer = AccountImporter(mock_db, import_config)
         # OCI is last in enum
         assert importer._get_code_prefix(IFRSCategory.OTHER_COMPREHENSIVE_INCOME) == "6"

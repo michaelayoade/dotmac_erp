@@ -9,7 +9,6 @@ Verifies:
 """
 
 import uuid
-from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -152,7 +151,10 @@ class TestProtocolCompliance:
             "total_monthly_deductions",
         ]
         for attr in required_attrs:
-            assert hasattr(PAYEBreakdown, attr) or attr in PAYEBreakdown.__dataclass_fields__
+            assert (
+                hasattr(PAYEBreakdown, attr)
+                or attr in PAYEBreakdown.__dataclass_fields__
+            )
 
     def test_arbitrary_object_not_tax_calculator(self):
         """Random objects should not be TaxCalculator."""
@@ -195,7 +197,9 @@ class TestZeroTaxCalculator:
         expected_annual = gross_monthly * Decimal("12")
         assert result.taxable_income == expected_annual
 
-    def test_preserves_employee_id(self, org_id, gross_monthly, basic_monthly, employee_id):
+    def test_preserves_employee_id(
+        self, org_id, gross_monthly, basic_monthly, employee_id
+    ):
         """Should preserve employee_id in result."""
         calculator = ZeroTaxCalculator()
         result = calculator.calculate(
@@ -280,7 +284,9 @@ class TestPercentageTaxCalculator:
         assert result.monthly_pension == expected_pension
         assert result.monthly_employer_pension == expected_employer_pension
 
-    def test_effective_rate_matches_configured_rate(self, org_id, gross_monthly, basic_monthly):
+    def test_effective_rate_matches_configured_rate(
+        self, org_id, gross_monthly, basic_monthly
+    ):
         """Effective rate should match the configured tax rate."""
         calculator = PercentageTaxCalculator(tax_rate=Decimal("0.15"))
         result = calculator.calculate(org_id, gross_monthly, basic_monthly)
@@ -373,7 +379,9 @@ class TestPAYEBreakdownCompatibility:
         )
 
         # total = tax + pension + nhf + nhis
-        expected = Decimal("50000") + Decimal("24000") + Decimal("7500") + Decimal("5000")
+        expected = (
+            Decimal("50000") + Decimal("24000") + Decimal("7500") + Decimal("5000")
+        )
         assert breakdown.total_monthly_deductions == expected
 
 
@@ -385,7 +393,9 @@ class TestPAYEBreakdownCompatibility:
 class TestDependencyInjectionPattern:
     """Tests demonstrating DI pattern with tax calculators."""
 
-    def test_service_can_accept_any_calculator(self, org_id, gross_monthly, basic_monthly):
+    def test_service_can_accept_any_calculator(
+        self, org_id, gross_monthly, basic_monthly
+    ):
         """Demonstrate that any TaxCalculator can be injected."""
 
         # Simulate a service that accepts a TaxCalculator
@@ -414,7 +424,9 @@ class TestDependencyInjectionPattern:
             assert hasattr(result, "monthly_pension")
             assert hasattr(result, "total_monthly_deductions")
 
-    def test_can_swap_calculator_for_testing(self, org_id, gross_monthly, basic_monthly):
+    def test_can_swap_calculator_for_testing(
+        self, org_id, gross_monthly, basic_monthly
+    ):
         """Demonstrate swapping real calculator with mock for testing."""
 
         # In production: use real PAYE calculator

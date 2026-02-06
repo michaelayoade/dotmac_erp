@@ -9,6 +9,7 @@ This module provides schemas for:
 - Gantt charts
 - Dashboard and reporting
 """
+
 from app.schemas.pm.dashboard import (
     BudgetComparison,
     ExpenseByCategory,

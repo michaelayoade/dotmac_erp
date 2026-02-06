@@ -38,7 +38,12 @@ def test_post_journal_entry_requires_idempotency_key():
 
 def test_post_journal_entry_idempotent_posted_batch():
     db = MagicMock()
-    batch = SimpleNamespace(batch_id=uuid4(), status=BatchStatus.POSTED, posted_entries=2, correlation_id="c")
+    batch = SimpleNamespace(
+        batch_id=uuid4(),
+        status=BatchStatus.POSTED,
+        posted_entries=2,
+        correlation_id="c",
+    )
     db.query.return_value.filter.return_value.first.return_value = batch
     req = _make_request()
     result = LedgerPostingService.post_journal_entry(db, req)
@@ -57,14 +62,26 @@ def test_post_journal_entry_missing_journal():
 
 def test_post_journal_entry_unbalanced_or_missing_functional():
     entries = [
-        PostingEntry(account_id=uuid4(), debit_amount_functional=Decimal("10"), credit_amount_functional=Decimal("0")),
-        PostingEntry(account_id=uuid4(), debit_amount_functional=Decimal("0"), credit_amount_functional=Decimal("5")),
+        PostingEntry(
+            account_id=uuid4(),
+            debit_amount_functional=Decimal("10"),
+            credit_amount_functional=Decimal("0"),
+        ),
+        PostingEntry(
+            account_id=uuid4(),
+            debit_amount_functional=Decimal("0"),
+            credit_amount_functional=Decimal("5"),
+        ),
     ]
     with pytest.raises(HTTPException):
         LedgerPostingService._validate_balance(entries)
 
     entries = [
-        PostingEntry(account_id=uuid4(), debit_amount_functional=Decimal("0"), credit_amount_functional=Decimal("0")),
+        PostingEntry(
+            account_id=uuid4(),
+            debit_amount_functional=Decimal("0"),
+            credit_amount_functional=Decimal("0"),
+        ),
     ]
     with pytest.raises(HTTPException):
         LedgerPostingService._validate_functional_amounts(entries)
@@ -81,8 +98,16 @@ def test_post_journal_entry_success_flow():
         idempotency_key="key",
         source_module="GL",
         entries=[
-            PostingEntry(account_id=uuid4(), debit_amount_functional=Decimal("10"), credit_amount_functional=Decimal("0")),
-            PostingEntry(account_id=uuid4(), debit_amount_functional=Decimal("0"), credit_amount_functional=Decimal("10")),
+            PostingEntry(
+                account_id=uuid4(),
+                debit_amount_functional=Decimal("10"),
+                credit_amount_functional=Decimal("0"),
+            ),
+            PostingEntry(
+                account_id=uuid4(),
+                debit_amount_functional=Decimal("0"),
+                credit_amount_functional=Decimal("10"),
+            ),
         ],
     )
 
@@ -105,8 +130,14 @@ def test_post_journal_entry_success_flow():
     ]
 
     with (
-        patch("app.services.finance.gl.ledger_posting.PeriodGuardService.require_open_period", return_value=uuid4()),
-        patch("app.services.finance.gl.ledger_posting.LedgerPostingService._publish_posting_event", return_value=None),
+        patch(
+            "app.services.finance.gl.ledger_posting.PeriodGuardService.require_open_period",
+            return_value=uuid4(),
+        ),
+        patch(
+            "app.services.finance.gl.ledger_posting.LedgerPostingService._publish_posting_event",
+            return_value=None,
+        ),
     ):
         result = LedgerPostingService.post_journal_entry(db, req)
 
@@ -137,8 +168,18 @@ def test_list_and_post_entry():
     query.limit.return_value.offset.return_value.all.return_value = []
     LedgerPostingService.list(db, organization_id=str(uuid4()))
 
-    journal = SimpleNamespace(journal_entry_id=uuid4(), journal_number="J-1", organization_id=uuid4())
+    journal = SimpleNamespace(
+        journal_entry_id=uuid4(), journal_number="J-1", organization_id=uuid4()
+    )
     db.get.return_value = journal
-    with patch("app.services.finance.gl.journal.journal_service.post_journal", return_value=journal):
-        result = LedgerPostingService.post_entry(db, journal.organization_id, journal.journal_entry_id, posted_by_user_id=uuid4())
+    with patch(
+        "app.services.finance.gl.journal.journal_service.post_journal",
+        return_value=journal,
+    ):
+        result = LedgerPostingService.post_entry(
+            db,
+            journal.organization_id,
+            journal.journal_entry_id,
+            posted_by_user_id=uuid4(),
+        )
     assert result.success is True

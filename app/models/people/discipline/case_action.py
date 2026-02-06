@@ -3,12 +3,13 @@ Case Action Model - HR Schema.
 
 Records disciplinary actions taken against employees.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, String, Text, func, text
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -143,7 +144,10 @@ class CaseAction(Base):
     @property
     def is_suspension(self) -> bool:
         """Check if action is a suspension."""
-        return self.action_type in (ActionType.SUSPENSION_PAID, ActionType.SUSPENSION_UNPAID)
+        return self.action_type in (
+            ActionType.SUSPENSION_PAID,
+            ActionType.SUSPENSION_UNPAID,
+        )
 
     @property
     def is_termination(self) -> bool:

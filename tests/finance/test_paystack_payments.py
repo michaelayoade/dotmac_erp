@@ -49,7 +49,10 @@ def test_verify_payment_rejects_amount_mismatch():
 
     with (
         patch.object(PaymentService, "get_intent_by_reference", return_value=intent),
-        patch("app.services.finance.payments.payment_service.PaystackClient", return_value=client_cm),
+        patch(
+            "app.services.finance.payments.payment_service.PaystackClient",
+            return_value=client_cm,
+        ),
     ):
         with pytest.raises(HTTPException) as excinfo:
             svc.verify_payment_by_reference("REF-1", PaystackConfig("sk", "pk", "wh"))
@@ -128,8 +131,14 @@ def test_expired_invoice_intent_allows_new_payment():
     client_cm.__exit__.return_value = False
 
     with (
-        patch("app.services.finance.payments.payment_service.resolve_value", return_value=None),
-        patch("app.services.finance.payments.payment_service.PaystackClient", return_value=client_cm),
+        patch(
+            "app.services.finance.payments.payment_service.resolve_value",
+            return_value=None,
+        ),
+        patch(
+            "app.services.finance.payments.payment_service.PaystackClient",
+            return_value=client_cm,
+        ),
     ):
         intent = svc.create_invoice_payment_intent(
             invoice_id=invoice_id,

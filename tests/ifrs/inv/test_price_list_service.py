@@ -5,9 +5,9 @@ Tests price list management and price resolution logic.
 """
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -292,22 +292,25 @@ class TestUpdatePriceList:
         mock_db.get.return_value = mock_price_list
 
         result = PriceListService.update_price_list(
-            mock_db, org_id, mock_price_list.price_list_id,
-            {"price_list_name": "Updated Name", "priority": 10}
+            mock_db,
+            org_id,
+            mock_price_list.price_list_id,
+            {"price_list_name": "Updated Name", "priority": 10},
         )
 
         mock_db.commit.assert_called()
         assert mock_price_list.price_list_name == "Updated Name"
         assert mock_price_list.priority == 10
 
-    def test_clears_defaults_when_setting_new_default(self, mock_db, org_id, mock_price_list):
+    def test_clears_defaults_when_setting_new_default(
+        self, mock_db, org_id, mock_price_list
+    ):
         """Should clear other defaults when setting as default."""
         mock_price_list.is_default = False
         mock_db.get.return_value = mock_price_list
 
         PriceListService.update_price_list(
-            mock_db, org_id, mock_price_list.price_list_id,
-            {"is_default": True}
+            mock_db, org_id, mock_price_list.price_list_id, {"is_default": True}
         )
 
         mock_db.query.return_value.filter.return_value.update.assert_called()
@@ -319,7 +322,9 @@ class TestUpdatePriceList:
 class TestAddItemPrice:
     """Tests for add_item_price method."""
 
-    def test_raises_error_when_price_list_not_found(self, mock_db, org_id, price_list_id, item_id):
+    def test_raises_error_when_price_list_not_found(
+        self, mock_db, org_id, price_list_id, item_id
+    ):
         """Should raise HTTPException when price list not found."""
         mock_db.get.return_value = None
 
@@ -335,9 +340,15 @@ class TestAddItemPrice:
         assert exc.value.status_code == 404
         assert "Price list not found" in str(exc.value.detail)
 
-    def test_raises_error_when_item_not_found(self, mock_db, org_id, mock_price_list, item_id):
+    def test_raises_error_when_item_not_found(
+        self, mock_db, org_id, mock_price_list, item_id
+    ):
         """Should raise HTTPException when item not found."""
-        mock_db.get.side_effect = lambda model, id: mock_price_list if id == mock_price_list.price_list_id else None
+        mock_db.get.side_effect = (
+            lambda model, id: mock_price_list
+            if id == mock_price_list.price_list_id
+            else None
+        )
 
         input = PriceListItemInput(
             item_id=item_id,
@@ -374,7 +385,9 @@ class TestAddItemPrice:
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called()
 
-    def test_updates_existing_item_price(self, mock_db, org_id, mock_price_list, mock_item):
+    def test_updates_existing_item_price(
+        self, mock_db, org_id, mock_price_list, mock_item
+    ):
         """Should update existing item price with same quantity break."""
         existing_item = MockPriceListItem(
             price_list_id=mock_price_list.price_list_id,
@@ -385,7 +398,9 @@ class TestAddItemPrice:
         mock_db.get.side_effect = lambda model, id: (
             mock_price_list if id == mock_price_list.price_list_id else mock_item
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = existing_item
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            existing_item
+        )
 
         input = PriceListItemInput(
             item_id=mock_item.item_id,
@@ -403,7 +418,9 @@ class TestAddItemPrice:
         assert existing_item.discount_percent == Decimal("10")
         mock_db.add.assert_not_called()  # Should update existing, not add new
 
-    def test_creates_quantity_break_pricing(self, mock_db, org_id, mock_price_list, mock_item):
+    def test_creates_quantity_break_pricing(
+        self, mock_db, org_id, mock_price_list, mock_item
+    ):
         """Should allow multiple prices for same item with different quantity breaks."""
         mock_db.get.side_effect = lambda model, id: (
             mock_price_list if id == mock_price_list.price_list_id else mock_item
@@ -440,7 +457,9 @@ class TestRemoveItemPrice:
 
         assert exc.value.status_code == 404
 
-    def test_raises_error_when_wrong_organization(self, mock_db, org_id, mock_price_list):
+    def test_raises_error_when_wrong_organization(
+        self, mock_db, org_id, mock_price_list
+    ):
         """Should raise HTTPException when price list belongs to different org."""
         item_price = MockPriceListItem(price_list_id=mock_price_list.price_list_id)
         mock_price_list.organization_id = uuid.uuid4()  # Different org
@@ -486,7 +505,9 @@ class TestResolvePrice:
 
         assert exc.value.status_code == 404
 
-    def test_resolves_from_price_list(self, mock_db, org_id, mock_item, mock_price_list):
+    def test_resolves_from_price_list(
+        self, mock_db, org_id, mock_item, mock_price_list
+    ):
         """Should resolve price from price list when available."""
         item_price = MockPriceListItem(
             price_list_id=mock_price_list.price_list_id,
@@ -495,7 +516,9 @@ class TestResolvePrice:
             min_quantity=Decimal("1"),
         )
         mock_db.get.return_value = mock_item
-        mock_db.query.return_value.filter.return_value.all.return_value = [mock_price_list]
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            mock_price_list
+        ]
         mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = item_price
 
         result = PriceListService.resolve_price(mock_db, org_id, mock_item.item_id)
@@ -505,7 +528,9 @@ class TestResolvePrice:
         assert result.source == "PRICE_LIST"
         assert result.price_list_id == mock_price_list.price_list_id
 
-    def test_applies_discount_percent(self, mock_db, org_id, mock_item, mock_price_list):
+    def test_applies_discount_percent(
+        self, mock_db, org_id, mock_item, mock_price_list
+    ):
         """Should apply discount percentage to calculate net price."""
         item_price = MockPriceListItem(
             price_list_id=mock_price_list.price_list_id,
@@ -515,7 +540,9 @@ class TestResolvePrice:
             min_quantity=Decimal("1"),
         )
         mock_db.get.return_value = mock_item
-        mock_db.query.return_value.filter.return_value.all.return_value = [mock_price_list]
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            mock_price_list
+        ]
         mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = item_price
 
         result = PriceListService.resolve_price(mock_db, org_id, mock_item.item_id)
@@ -534,7 +561,9 @@ class TestResolvePrice:
             min_quantity=Decimal("1"),
         )
         mock_db.get.return_value = mock_item
-        mock_db.query.return_value.filter.return_value.all.return_value = [mock_price_list]
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            mock_price_list
+        ]
         mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = item_price
 
         result = PriceListService.resolve_price(mock_db, org_id, mock_item.item_id)
@@ -552,7 +581,9 @@ class TestResolvePrice:
             min_quantity=Decimal("1"),
         )
         mock_db.get.return_value = mock_item
-        mock_db.query.return_value.filter.return_value.all.return_value = [mock_price_list]
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            mock_price_list
+        ]
         mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = item_price
 
         result = PriceListService.resolve_price(mock_db, org_id, mock_item.item_id)
@@ -569,7 +600,9 @@ class TestResolvePrice:
             min_quantity=Decimal("10"),
         )
         mock_db.get.return_value = mock_item
-        mock_db.query.return_value.filter.return_value.all.return_value = [mock_price_list]
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            mock_price_list
+        ]
         mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = bulk_price
 
         result = PriceListService.resolve_price(
@@ -615,7 +648,9 @@ class TestResolvePrice:
         assert result.source == "ITEM_AVERAGE_COST"
         assert result.unit_price == Decimal("0")
 
-    def test_filters_by_specific_price_list(self, mock_db, org_id, mock_item, mock_price_list):
+    def test_filters_by_specific_price_list(
+        self, mock_db, org_id, mock_item, mock_price_list
+    ):
         """Should filter to specific price list when ID provided."""
         item_price = MockPriceListItem(
             price_list_id=mock_price_list.price_list_id,
@@ -624,12 +659,16 @@ class TestResolvePrice:
             min_quantity=Decimal("1"),
         )
         mock_db.get.return_value = mock_item
-        mock_db.query.return_value.filter.return_value.all.return_value = [mock_price_list]
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            mock_price_list
+        ]
         mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = item_price
 
         result = PriceListService.resolve_price(
-            mock_db, org_id, mock_item.item_id,
-            price_list_id=mock_price_list.price_list_id
+            mock_db,
+            org_id,
+            mock_item.item_id,
+            price_list_id=mock_price_list.price_list_id,
         )
 
         assert result.price_list_id == mock_price_list.price_list_id
@@ -641,8 +680,10 @@ class TestResolvePrice:
 
         # Price list not yet effective
         result = PriceListService.resolve_price(
-            mock_db, org_id, mock_item.item_id,
-            as_of_date=date.today() - timedelta(days=30)
+            mock_db,
+            org_id,
+            mock_item.item_id,
+            as_of_date=date.today() - timedelta(days=30),
         )
 
         # Should fall back to list price
@@ -760,7 +801,9 @@ class TestListPriceLists:
         PriceListService.list(mock_db, limit=25, offset=50)
 
         mock_db.query.return_value.order_by.return_value.limit.assert_called_with(25)
-        mock_db.query.return_value.order_by.return_value.limit.return_value.offset.assert_called_with(50)
+        mock_db.query.return_value.order_by.return_value.limit.return_value.offset.assert_called_with(
+            50
+        )
 
 
 # ============ Tests for list_items ============
@@ -771,10 +814,15 @@ class TestListItems:
 
     def test_returns_items_for_price_list(self, mock_db, price_list_id):
         """Should return items for specified price list."""
-        item1 = MockPriceListItem(price_list_id=price_list_id, min_quantity=Decimal("1"))
-        item2 = MockPriceListItem(price_list_id=price_list_id, min_quantity=Decimal("10"))
+        item1 = MockPriceListItem(
+            price_list_id=price_list_id, min_quantity=Decimal("1")
+        )
+        item2 = MockPriceListItem(
+            price_list_id=price_list_id, min_quantity=Decimal("10")
+        )
         mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = [
-            item1, item2
+            item1,
+            item2,
         ]
 
         result = PriceListService.list_items(mock_db, str(price_list_id))
@@ -796,7 +844,9 @@ class TestListItems:
 
         PriceListService.list_items(mock_db, str(price_list_id), limit=25, offset=10)
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.assert_called_with(25)
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.assert_called_with(
+            25
+        )
 
 
 # ============ Tests for module-level instance ============

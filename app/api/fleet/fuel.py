@@ -3,6 +3,7 @@ Fuel Log API Endpoints.
 
 REST API for fuel log management.
 """
+
 from datetime import date
 from typing import Optional
 from uuid import UUID

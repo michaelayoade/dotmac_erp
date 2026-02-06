@@ -3,6 +3,7 @@
 This module provides reusable validators for common fields like email
 and phone numbers, ensuring consistent validation across the application.
 """
+
 from typing import Annotated, Any
 import re
 
@@ -109,6 +110,7 @@ NonEmptyString = Annotated[
 
 
 # Validation helpers for use in custom validators
+
 
 def validate_required_email(value: Any) -> str:
     """Validate that email is provided and valid.

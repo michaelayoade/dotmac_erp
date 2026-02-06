@@ -39,7 +39,9 @@ def _is_html_request(request: Request) -> bool:
         return False
     if request.url.path.startswith("/api/"):
         return False
-    if request.url.path.startswith("/auth/") and not request.url.path.startswith("/auth/me"):
+    if request.url.path.startswith("/auth/") and not request.url.path.startswith(
+        "/auth/me"
+    ):
         # Auth API endpoints (login, logout, etc.) should return JSON
         # But /auth/me is a web page
         return False
@@ -87,7 +89,9 @@ def register_error_handlers(app) -> None:
         )
 
     @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    async def validation_exception_handler(
+        request: Request, exc: RequestValidationError
+    ):
         try:
             raw_body = await request.body()
             body_len = len(raw_body or b"")
@@ -309,7 +313,5 @@ def register_error_handlers(app) -> None:
             )
         return JSONResponse(
             status_code=500,
-            content=_error_payload(
-                "internal_error", "Internal server error", None
-            ),
+            content=_error_payload("internal_error", "Internal server error", None),
         )

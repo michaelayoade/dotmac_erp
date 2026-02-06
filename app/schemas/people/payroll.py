@@ -7,6 +7,7 @@ Pydantic schemas for Payroll APIs including:
 - Salary Slip
 - Payroll Entry
 """
+
 from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional

@@ -3,6 +3,7 @@ Custom Field Definition Model.
 
 Allows organizations to define custom fields on entities.
 """
+
 import enum
 import uuid
 from datetime import datetime
@@ -29,6 +30,7 @@ from app.db import Base
 
 class CustomFieldEntityType(str, enum.Enum):
     """Entity types that support custom fields."""
+
     CUSTOMER = "CUSTOMER"
     SUPPLIER = "SUPPLIER"
     INVOICE = "INVOICE"
@@ -46,6 +48,7 @@ class CustomFieldEntityType(str, enum.Enum):
 
 class CustomFieldType(str, enum.Enum):
     """Data types for custom fields."""
+
     TEXT = "TEXT"
     TEXTAREA = "TEXTAREA"
     NUMBER = "NUMBER"
@@ -71,7 +74,9 @@ class CustomFieldDefinition(Base):
 
     __tablename__ = "custom_field_definition"
     __table_args__ = (
-        UniqueConstraint("organization_id", "entity_type", "field_code", name="uq_custom_field_code"),
+        UniqueConstraint(
+            "organization_id", "entity_type", "field_code", name="uq_custom_field_code"
+        ),
         Index("idx_custom_field_org", "organization_id"),
         Index("idx_custom_field_entity", "entity_type"),
         Index("idx_custom_field_active", "is_active"),
@@ -257,23 +262,34 @@ class CustomFieldDefinition(Base):
                 return False, f"{self.field_name} must be a decimal number"
 
         elif self.field_type == CustomFieldType.EMAIL:
-            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
             if not re.match(email_pattern, str(value)):
                 return False, f"{self.field_name} must be a valid email address"
 
         elif self.field_type == CustomFieldType.SELECT:
             if self.field_options:
-                valid_values = [opt.get("value") for opt in self.field_options.get("options", [])]
+                valid_values = [
+                    opt.get("value") for opt in self.field_options.get("options", [])
+                ]
                 if str(value) not in valid_values:
-                    return False, f"{self.field_name} must be one of the allowed options"
+                    return (
+                        False,
+                        f"{self.field_name} must be one of the allowed options",
+                    )
 
         # Regex validation
         if self.validation_regex:
             if not re.match(self.validation_regex, str(value)):
-                return False, self.validation_message or f"{self.field_name} format is invalid"
+                return (
+                    False,
+                    self.validation_message or f"{self.field_name} format is invalid",
+                )
 
         # Length validation
         if self.max_length and len(str(value)) > self.max_length:
-            return False, f"{self.field_name} must be at most {self.max_length} characters"
+            return (
+                False,
+                f"{self.field_name} must be at most {self.max_length} characters",
+            )
 
         return True, None

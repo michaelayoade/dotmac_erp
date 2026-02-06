@@ -3,11 +3,23 @@ Project Template Task Models - PM Schema.
 
 Stores ordered tasks and dependencies for project templates.
 """
+
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,7 +35,9 @@ class ProjectTemplateTask(Base):
 
     __tablename__ = "project_template_task"
     __table_args__ = (
-        UniqueConstraint("template_id", "order_index", name="uq_project_template_task_order"),
+        UniqueConstraint(
+            "template_id", "order_index", name="uq_project_template_task_order"
+        ),
         {"schema": "pm"},
     )
 

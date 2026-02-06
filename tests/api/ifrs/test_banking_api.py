@@ -7,7 +7,7 @@ These tests mock the service layer to test API routing and serialization.
 import uuid
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -55,11 +55,17 @@ def mock_auth(org_id, user_id):
 class TestBankAccountAPI:
     """Tests for bank account endpoints."""
 
-    def test_create_bank_account_success(self, mock_db, mock_auth, org_id):
+    @pytest.mark.asyncio
+    async def test_create_bank_account_success(self, mock_db, mock_auth, org_id):
         """Test successful bank account creation."""
         mock_account = MockBankAccount(organization_id=org_id)
 
-        with patch("app.api.finance.banking.bank_account_service.create") as mock_create:
+        with patch(
+            "app.api.finance.banking.bank_account_service.create"
+        ) as mock_create, patch(
+            "app.api.finance.banking._bank_account_payload_from_request",
+            new=AsyncMock(),
+        ) as mock_payload:
             mock_create.return_value = mock_account
 
             payload = BankAccountCreate(
@@ -70,7 +76,10 @@ class TestBankAccountAPI:
                 currency_code="USD",
                 account_type="checking",
             )
-            result = banking.create_bank_account(payload, auth=mock_auth, db=mock_db)
+            mock_payload.return_value = payload
+            result = await banking.create_bank_account(
+                MagicMock(), auth=mock_auth, db=mock_db
+            )
 
         assert result.bank_name == "Test Bank"
 
@@ -115,8 +124,10 @@ class TestBankAccountAPI:
         """Test listing bank accounts."""
         mock_accounts = [MockBankAccount(organization_id=org_id) for _ in range(3)]
 
-        with patch("app.api.finance.banking.bank_account_service.list") as mock_list, \
-             patch("app.api.finance.banking.bank_account_service.count") as mock_count:
+        with (
+            patch("app.api.finance.banking.bank_account_service.list") as mock_list,
+            patch("app.api.finance.banking.bank_account_service.count") as mock_count,
+        ):
             mock_list.return_value = mock_accounts
             mock_count.return_value = 3
 
@@ -137,8 +148,10 @@ class TestBankAccountAPI:
         """Test listing bank accounts with filters."""
         mock_accounts = [MockBankAccount(organization_id=org_id, status="active")]
 
-        with patch("app.api.finance.banking.bank_account_service.list") as mock_list, \
-             patch("app.api.finance.banking.bank_account_service.count") as mock_count:
+        with (
+            patch("app.api.finance.banking.bank_account_service.list") as mock_list,
+            patch("app.api.finance.banking.bank_account_service.count") as mock_count,
+        ):
             mock_list.return_value = mock_accounts
             mock_count.return_value = 1
 
@@ -155,7 +168,8 @@ class TestBankAccountAPI:
         assert result.count == 1
         mock_list.assert_called_once()
 
-    def test_update_bank_account(self, mock_db, mock_auth, org_id):
+    @pytest.mark.asyncio
+    async def test_update_bank_account(self, mock_db, mock_auth, org_id):
         """Test updating a bank account."""
         mock_account = MockBankAccount(organization_id=org_id)
         updated_account = MockBankAccount(
@@ -164,8 +178,14 @@ class TestBankAccountAPI:
             account_name="Updated Account",
         )
 
-        with patch("app.api.finance.banking.bank_account_service.get") as mock_get, \
-             patch("app.api.finance.banking.bank_account_service.update") as mock_update:
+        with (
+            patch("app.api.finance.banking.bank_account_service.get") as mock_get,
+            patch("app.api.finance.banking.bank_account_service.update") as mock_update,
+            patch(
+                "app.api.finance.banking._bank_account_payload_from_request",
+                new=AsyncMock(),
+            ) as mock_payload,
+        ):
             mock_get.return_value = mock_account
             mock_update.return_value = updated_account
 
@@ -173,9 +193,10 @@ class TestBankAccountAPI:
                 account_name="Updated Account",
                 bank_name="Test Bank",
             )
-            result = banking.update_bank_account(
+            mock_payload.return_value = payload
+            result = await banking.update_bank_account(
+                MagicMock(),
                 mock_account.bank_account_id,
-                payload,
                 auth=mock_auth,
                 db=mock_db,
             )
@@ -191,8 +212,12 @@ class TestBankAccountAPI:
             status="inactive",
         )
 
-        with patch("app.api.finance.banking.bank_account_service.get") as mock_get, \
-             patch("app.api.finance.banking.bank_account_service.update_status") as mock_update:
+        with (
+            patch("app.api.finance.banking.bank_account_service.get") as mock_get,
+            patch(
+                "app.api.finance.banking.bank_account_service.update_status"
+            ) as mock_update,
+        ):
             mock_get.return_value = mock_account
             mock_update.return_value = updated_account
 
@@ -210,8 +235,12 @@ class TestBankAccountAPI:
         """Test getting bank account GL balance."""
         mock_account = MockBankAccount(organization_id=org_id)
 
-        with patch("app.api.finance.banking.bank_account_service.get") as mock_get, \
-             patch("app.api.finance.banking.bank_account_service.get_gl_balance") as mock_balance:
+        with (
+            patch("app.api.finance.banking.bank_account_service.get") as mock_get,
+            patch(
+                "app.api.finance.banking.bank_account_service.get_gl_balance"
+            ) as mock_balance,
+        ):
             mock_get.return_value = mock_account
             mock_balance.return_value = Decimal("10000.00")
 
@@ -237,8 +266,12 @@ class TestBankStatementAPI:
             lines_skipped=0,
         )
 
-        with patch("app.api.finance.banking.bank_account_service.get") as mock_get, \
-             patch("app.api.finance.banking.bank_statement_service.import_statement") as mock_import:
+        with (
+            patch("app.api.finance.banking.bank_account_service.get") as mock_get,
+            patch(
+                "app.api.finance.banking.bank_statement_service.import_statement"
+            ) as mock_import,
+        ):
             mock_get.return_value = mock_account
             mock_import.return_value = mock_result
 
@@ -291,8 +324,10 @@ class TestBankStatementAPI:
         """Test listing statements."""
         mock_statements = [MockBankStatement(organization_id=org_id) for _ in range(3)]
 
-        with patch("app.api.finance.banking.bank_statement_service.list") as mock_list, \
-             patch("app.api.finance.banking.bank_statement_service.count") as mock_count:
+        with (
+            patch("app.api.finance.banking.bank_statement_service.list") as mock_list,
+            patch("app.api.finance.banking.bank_statement_service.count") as mock_count,
+        ):
             mock_list.return_value = mock_statements
             mock_count.return_value = 3
 
@@ -321,8 +356,12 @@ class TestBankStatementAPI:
             for i in range(5)
         ]
 
-        with patch("app.api.finance.banking.bank_statement_service.get") as mock_get, \
-             patch("app.api.finance.banking.bank_statement_service.get_unmatched_lines") as mock_lines_fn:
+        with (
+            patch("app.api.finance.banking.bank_statement_service.get") as mock_get,
+            patch(
+                "app.api.finance.banking.bank_statement_service.get_unmatched_lines"
+            ) as mock_lines_fn,
+        ):
             mock_get.return_value = mock_statement
             mock_lines_fn.return_value = mock_lines
 
@@ -336,8 +375,12 @@ class TestBankStatementAPI:
         """Test deleting a statement."""
         mock_statement = MockBankStatement(organization_id=org_id)
 
-        with patch("app.api.finance.banking.bank_statement_service.get") as mock_get, \
-             patch("app.api.finance.banking.bank_statement_service.delete") as mock_delete:
+        with (
+            patch("app.api.finance.banking.bank_statement_service.get") as mock_get,
+            patch(
+                "app.api.finance.banking.bank_statement_service.delete"
+            ) as mock_delete,
+        ):
             mock_get.return_value = mock_statement
             mock_delete.return_value = True
 
@@ -359,8 +402,12 @@ class TestBankReconciliationAPI:
             bank_account_id=mock_account.bank_account_id,
         )
 
-        with patch("app.api.finance.banking.bank_account_service.get") as mock_get, \
-             patch("app.api.finance.banking.bank_reconciliation_service.create_reconciliation") as mock_create:
+        with (
+            patch("app.api.finance.banking.bank_account_service.get") as mock_get,
+            patch(
+                "app.api.finance.banking.bank_reconciliation_service.create_reconciliation"
+            ) as mock_create,
+        ):
             mock_get.return_value = mock_account
             mock_create.return_value = mock_recon
 
@@ -380,7 +427,9 @@ class TestBankReconciliationAPI:
         """Test getting a reconciliation."""
         mock_recon = MockBankReconciliation(organization_id=org_id)
 
-        with patch("app.api.finance.banking.bank_reconciliation_service.get") as mock_get:
+        with patch(
+            "app.api.finance.banking.bank_reconciliation_service.get"
+        ) as mock_get:
             mock_get.return_value = mock_recon
 
             result = banking.get_reconciliation(
@@ -391,7 +440,9 @@ class TestBankReconciliationAPI:
 
     def test_get_reconciliation_not_found(self, mock_db, mock_auth):
         """Test getting non-existent reconciliation."""
-        with patch("app.api.finance.banking.bank_reconciliation_service.get") as mock_get:
+        with patch(
+            "app.api.finance.banking.bank_reconciliation_service.get"
+        ) as mock_get:
             mock_get.return_value = None
 
             with pytest.raises(HTTPException) as exc:
@@ -403,8 +454,14 @@ class TestBankReconciliationAPI:
         """Test listing reconciliations."""
         mock_recons = [MockBankReconciliation(organization_id=org_id) for _ in range(3)]
 
-        with patch("app.api.finance.banking.bank_reconciliation_service.list") as mock_list, \
-             patch("app.api.finance.banking.bank_reconciliation_service.count") as mock_count:
+        with (
+            patch(
+                "app.api.finance.banking.bank_reconciliation_service.list"
+            ) as mock_list,
+            patch(
+                "app.api.finance.banking.bank_reconciliation_service.count"
+            ) as mock_count,
+        ):
             mock_list.return_value = mock_recons
             mock_count.return_value = 3
 
@@ -429,8 +486,14 @@ class TestBankReconciliationAPI:
             match_type="manual",
         )
 
-        with patch("app.api.finance.banking.bank_reconciliation_service.get") as mock_get, \
-             patch("app.api.finance.banking.bank_reconciliation_service.add_match") as mock_add:
+        with (
+            patch(
+                "app.api.finance.banking.bank_reconciliation_service.get"
+            ) as mock_get,
+            patch(
+                "app.api.finance.banking.bank_reconciliation_service.add_match"
+            ) as mock_add,
+        ):
             mock_get.return_value = mock_recon
             mock_add.return_value = mock_line
 
@@ -455,8 +518,14 @@ class TestBankReconciliationAPI:
         mock_result.matches_created = 5
         mock_result.lines_unmatched = 2
 
-        with patch("app.api.finance.banking.bank_reconciliation_service.get") as mock_get, \
-             patch("app.api.finance.banking.bank_reconciliation_service.auto_match") as mock_auto:
+        with (
+            patch(
+                "app.api.finance.banking.bank_reconciliation_service.get"
+            ) as mock_get,
+            patch(
+                "app.api.finance.banking.bank_reconciliation_service.auto_match"
+            ) as mock_auto,
+        ):
             mock_get.return_value = mock_recon
             mock_auto.return_value = mock_result
 
@@ -479,8 +548,14 @@ class TestBankReconciliationAPI:
             status="pending_review",
         )
 
-        with patch("app.api.finance.banking.bank_reconciliation_service.get") as mock_get, \
-             patch("app.api.finance.banking.bank_reconciliation_service.submit_for_review") as mock_submit:
+        with (
+            patch(
+                "app.api.finance.banking.bank_reconciliation_service.get"
+            ) as mock_get,
+            patch(
+                "app.api.finance.banking.bank_reconciliation_service.submit_for_review"
+            ) as mock_submit,
+        ):
             mock_get.return_value = mock_recon
             mock_submit.return_value = submitted_recon
 
@@ -492,15 +567,23 @@ class TestBankReconciliationAPI:
 
     def test_approve_reconciliation(self, mock_db, mock_auth, org_id):
         """Test approving a reconciliation."""
-        mock_recon = MockBankReconciliation(organization_id=org_id, status="pending_review")
+        mock_recon = MockBankReconciliation(
+            organization_id=org_id, status="pending_review"
+        )
         approved_recon = MockBankReconciliation(
             reconciliation_id=mock_recon.reconciliation_id,
             organization_id=org_id,
             status="approved",
         )
 
-        with patch("app.api.finance.banking.bank_reconciliation_service.get") as mock_get, \
-             patch("app.api.finance.banking.bank_reconciliation_service.approve") as mock_approve:
+        with (
+            patch(
+                "app.api.finance.banking.bank_reconciliation_service.get"
+            ) as mock_get,
+            patch(
+                "app.api.finance.banking.bank_reconciliation_service.approve"
+            ) as mock_approve,
+        ):
             mock_get.return_value = mock_recon
             mock_approve.return_value = approved_recon
 
@@ -516,15 +599,23 @@ class TestBankReconciliationAPI:
 
     def test_reject_reconciliation(self, mock_db, mock_auth, org_id):
         """Test rejecting a reconciliation."""
-        mock_recon = MockBankReconciliation(organization_id=org_id, status="pending_review")
+        mock_recon = MockBankReconciliation(
+            organization_id=org_id, status="pending_review"
+        )
         rejected_recon = MockBankReconciliation(
             reconciliation_id=mock_recon.reconciliation_id,
             organization_id=org_id,
             status="rejected",
         )
 
-        with patch("app.api.finance.banking.bank_reconciliation_service.get") as mock_get, \
-             patch("app.api.finance.banking.bank_reconciliation_service.reject") as mock_reject:
+        with (
+            patch(
+                "app.api.finance.banking.bank_reconciliation_service.get"
+            ) as mock_get,
+            patch(
+                "app.api.finance.banking.bank_reconciliation_service.reject"
+            ) as mock_reject,
+        ):
             mock_get.return_value = mock_recon
             mock_reject.return_value = rejected_recon
 

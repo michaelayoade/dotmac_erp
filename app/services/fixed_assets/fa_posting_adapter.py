@@ -14,7 +14,6 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.journal_entry import JournalType
@@ -31,22 +30,16 @@ from app.services.common import coerce_uuid
 from app.services.finance.gl.journal import (
     JournalInput,
     JournalLineInput,
-    JournalService,
 )
-from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
+from app.services.finance.posting.base import BasePostingAdapter, PostingResult
 from app.services.finance.platform.org_context import org_context_service
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class FAPostingResult:
+class FAPostingResult(PostingResult):
     """Result of an FA posting operation."""
-
-    success: bool
-    journal_entry_id: Optional[UUID] = None
-    posting_batch_id: Optional[UUID] = None
-    message: str = ""
 
 
 class FAPostingAdapter:
@@ -137,52 +130,45 @@ class FAPostingAdapter:
             source_document_id=ast_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-        except HTTPException as e:
-            return FAPostingResult(
-                success=False, message=f"Journal creation failed: {e.detail}"
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Journal creation failed",
+        )
+        if error:
+            return FAPostingResult(success=False, message=error.message)
 
         if not idempotency_key:
-            idempotency_key = f"{org_id}:FA:ACQ:{ast_id}:post:v1"
+            idempotency_key = BasePostingAdapter.make_idempotency_key(
+                org_id, "FA:ACQ", ast_id, action="post"
+            )
 
-        posting_request = PostingRequest(
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db,
             organization_id=org_id,
             journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="FA",
+            correlation_id=None,
             posted_by_user_id=user_id,
+            success_message="Asset acquisition posted successfully",
         )
-
-        try:
-            posting_result = LedgerPostingService.post_journal_entry(
-                db, posting_request
-            )
-            if not posting_result.success:
-                return FAPostingResult(
-                    success=False,
-                    journal_entry_id=journal.journal_entry_id,
-                    message=f"Ledger posting failed: {posting_result.message}",
-                )
-
-            return FAPostingResult(
-                success=True,
-                journal_entry_id=journal.journal_entry_id,
-                posting_batch_id=posting_result.posting_batch_id,
-                message="Asset acquisition posted successfully",
-            )
-        except Exception as e:
+        if not posting_result.success:
             return FAPostingResult(
                 success=False,
                 journal_entry_id=journal.journal_entry_id,
-                message=f"Posting error: {str(e)}",
+                message=posting_result.message,
             )
+
+        return FAPostingResult(
+            success=True,
+            journal_entry_id=journal.journal_entry_id,
+            posting_batch_id=posting_result.posting_batch_id,
+            message=posting_result.message,
+        )
 
     @staticmethod
     def post_depreciation_run(
@@ -303,56 +289,46 @@ class FAPostingAdapter:
             source_document_id=r_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-
-        except HTTPException as e:
-            return FAPostingResult(
-                success=False, message=f"Journal creation failed: {e.detail}"
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Journal creation failed",
+        )
+        if error:
+            return FAPostingResult(success=False, message=error.message)
 
         # Post to ledger
         if not idempotency_key:
-            idempotency_key = f"{org_id}:FA:DEP:{r_id}:post:v1"
+            idempotency_key = BasePostingAdapter.make_idempotency_key(
+                org_id, "FA:DEP", r_id, action="post"
+            )
 
-        posting_request = PostingRequest(
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db,
             organization_id=org_id,
             journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="FA",
+            correlation_id=None,
             posted_by_user_id=user_id,
+            success_message="Depreciation posted successfully",
         )
-
-        try:
-            posting_result = LedgerPostingService.post_journal_entry(
-                db, posting_request
-            )
-
-            if not posting_result.success:
-                return FAPostingResult(
-                    success=False,
-                    journal_entry_id=journal.journal_entry_id,
-                    message=f"Ledger posting failed: {posting_result.message}",
-                )
-
-            return FAPostingResult(
-                success=True,
-                journal_entry_id=journal.journal_entry_id,
-                posting_batch_id=posting_result.posting_batch_id,
-                message="Depreciation posted successfully",
-            )
-
-        except Exception as e:
+        if not posting_result.success:
             return FAPostingResult(
                 success=False,
                 journal_entry_id=journal.journal_entry_id,
-                message=f"Posting error: {str(e)}",
+                message=posting_result.message,
             )
+
+        return FAPostingResult(
+            success=True,
+            journal_entry_id=journal.journal_entry_id,
+            posting_batch_id=posting_result.posting_batch_id,
+            message=posting_result.message,
+        )
 
     @staticmethod
     def post_asset_disposal(
@@ -484,56 +460,46 @@ class FAPostingAdapter:
             source_document_id=disp_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-
-        except HTTPException as e:
-            return FAPostingResult(
-                success=False, message=f"Journal creation failed: {e.detail}"
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Journal creation failed",
+        )
+        if error:
+            return FAPostingResult(success=False, message=error.message)
 
         # Post to ledger
         if not idempotency_key:
-            idempotency_key = f"{org_id}:FA:DISP:{disp_id}:post:v1"
+            idempotency_key = BasePostingAdapter.make_idempotency_key(
+                org_id, "FA:DISP", disp_id, action="post"
+            )
 
-        posting_request = PostingRequest(
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db,
             organization_id=org_id,
             journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="FA",
+            correlation_id=None,
             posted_by_user_id=user_id,
+            success_message="Disposal posted successfully",
         )
-
-        try:
-            posting_result = LedgerPostingService.post_journal_entry(
-                db, posting_request
-            )
-
-            if not posting_result.success:
-                return FAPostingResult(
-                    success=False,
-                    journal_entry_id=journal.journal_entry_id,
-                    message=f"Ledger posting failed: {posting_result.message}",
-                )
-
-            return FAPostingResult(
-                success=True,
-                journal_entry_id=journal.journal_entry_id,
-                posting_batch_id=posting_result.posting_batch_id,
-                message="Disposal posted successfully",
-            )
-
-        except Exception as e:
+        if not posting_result.success:
             return FAPostingResult(
                 success=False,
                 journal_entry_id=journal.journal_entry_id,
-                message=f"Posting error: {str(e)}",
+                message=posting_result.message,
             )
+
+        return FAPostingResult(
+            success=True,
+            journal_entry_id=journal.journal_entry_id,
+            posting_batch_id=posting_result.posting_batch_id,
+            message=posting_result.message,
+        )
 
     @staticmethod
     def post_revaluation(
@@ -696,56 +662,46 @@ class FAPostingAdapter:
             source_document_id=reval_id,
         )
 
-        try:
-            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-            JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
-
-        except HTTPException as e:
-            return FAPostingResult(
-                success=False, message=f"Journal creation failed: {e.detail}"
-            )
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db,
+            org_id,
+            journal_input,
+            user_id,
+            error_prefix="Journal creation failed",
+        )
+        if error:
+            return FAPostingResult(success=False, message=error.message)
 
         # Post to ledger
         if not idempotency_key:
-            idempotency_key = f"{org_id}:FA:REVAL:{reval_id}:post:v1"
+            idempotency_key = BasePostingAdapter.make_idempotency_key(
+                org_id, "FA:REVAL", reval_id, action="post"
+            )
 
-        posting_request = PostingRequest(
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db,
             organization_id=org_id,
             journal_entry_id=journal.journal_entry_id,
             posting_date=posting_date,
             idempotency_key=idempotency_key,
             source_module="FA",
+            correlation_id=None,
             posted_by_user_id=user_id,
+            success_message="Revaluation posted successfully",
         )
-
-        try:
-            posting_result = LedgerPostingService.post_journal_entry(
-                db, posting_request
-            )
-
-            if not posting_result.success:
-                return FAPostingResult(
-                    success=False,
-                    journal_entry_id=journal.journal_entry_id,
-                    message=f"Ledger posting failed: {posting_result.message}",
-                )
-
-            return FAPostingResult(
-                success=True,
-                journal_entry_id=journal.journal_entry_id,
-                posting_batch_id=posting_result.posting_batch_id,
-                message="Revaluation posted successfully",
-            )
-
-        except Exception as e:
+        if not posting_result.success:
             return FAPostingResult(
                 success=False,
                 journal_entry_id=journal.journal_entry_id,
-                message=f"Posting error: {str(e)}",
+                message=posting_result.message,
             )
+
+        return FAPostingResult(
+            success=True,
+            journal_entry_id=journal.journal_entry_id,
+            posting_batch_id=posting_result.posting_batch_id,
+            message=posting_result.message,
+        )
 
 
 # Module-level singleton instance

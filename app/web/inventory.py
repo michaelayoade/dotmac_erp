@@ -21,6 +21,10 @@ from app.web.deps import (
 )
 
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/inventory", tags=["inventory-web"])
 
 
@@ -326,6 +330,8 @@ def create_category(
     cogs_account_id: str = Form(...),
     revenue_account_id: str = Form(...),
     inventory_adjustment_account_id: str = Form(...),
+    reorder_point: Optional[str] = Form(default=None),
+    minimum_stock: Optional[str] = Form(default=None),
     description: Optional[str] = Form(default=None),
     parent_category_id: Optional[str] = Form(default=None),
     purchase_variance_account_id: Optional[str] = Form(default=None),
@@ -341,6 +347,8 @@ def create_category(
         cogs_account_id,
         revenue_account_id,
         inventory_adjustment_account_id,
+        reorder_point,
+        minimum_stock,
         description,
         parent_category_id,
         purchase_variance_account_id,
@@ -370,6 +378,8 @@ def update_category(
     cogs_account_id: str = Form(...),
     revenue_account_id: str = Form(...),
     inventory_adjustment_account_id: str = Form(...),
+    reorder_point: Optional[str] = Form(default=None),
+    minimum_stock: Optional[str] = Form(default=None),
     description: Optional[str] = Form(default=None),
     parent_category_id: Optional[str] = Form(default=None),
     purchase_variance_account_id: Optional[str] = Form(default=None),
@@ -386,6 +396,8 @@ def update_category(
         cogs_account_id,
         revenue_account_id,
         inventory_adjustment_account_id,
+        reorder_point,
+        minimum_stock,
         description,
         parent_category_id,
         purchase_variance_account_id,
@@ -975,6 +987,7 @@ def approve_material_request(
 def cancel_material_request(
     request: Request,
     request_id: str,
+    cancel_reason: str = Form(...),
     _perm: WebAuthContext = Depends(
         require_any_web_permission(
             [
@@ -991,6 +1004,7 @@ def cancel_material_request(
         request_id=request_id,
         auth=auth,
         db=db,
+        cancel_reason=cancel_reason,
     )
 
 

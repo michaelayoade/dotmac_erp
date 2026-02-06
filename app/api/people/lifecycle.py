@@ -3,6 +3,7 @@ Employee Lifecycle API Router.
 
 Onboarding, separation, promotions, and transfers.
 """
+
 from typing import Optional
 from uuid import UUID
 
@@ -11,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
 from app.db import SessionLocal
-from app.models.people.hr.lifecycle import BoardingStatus, SeparationType
+from app.models.people.hr.lifecycle import BoardingStatus
 from app.schemas.people.lifecycle import (
     OnboardingCreate,
     OnboardingRead,
@@ -54,7 +55,9 @@ def parse_enum(value: Optional[str], enum_type, field_name: str):
     try:
         return enum_type(value)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid {field_name}: {value}") from exc
+        raise HTTPException(
+            status_code=400, detail=f"Invalid {field_name}: {value}"
+        ) from exc
 
 
 # =============================================================================
@@ -87,7 +90,9 @@ def list_onboardings(
     )
 
 
-@router.post("/onboardings", response_model=OnboardingRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/onboardings", response_model=OnboardingRead, status_code=status.HTTP_201_CREATED
+)
 def create_onboarding(
     payload: OnboardingCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -117,7 +122,9 @@ def get_onboarding(
     db: Session = Depends(get_db),
 ):
     svc = LifecycleService(db)
-    return OnboardingRead.model_validate(svc.get_onboarding(organization_id, onboarding_id))
+    return OnboardingRead.model_validate(
+        svc.get_onboarding(organization_id, onboarding_id)
+    )
 
 
 @router.patch("/onboardings/{onboarding_id}", response_model=OnboardingRead)
@@ -190,7 +197,9 @@ def list_separations(
     )
 
 
-@router.post("/separations", response_model=SeparationRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/separations", response_model=SeparationRead, status_code=status.HTTP_201_CREATED
+)
 def create_separation(
     payload: SeparationCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -222,7 +231,9 @@ def get_separation(
     db: Session = Depends(get_db),
 ):
     svc = LifecycleService(db)
-    return SeparationRead.model_validate(svc.get_separation(organization_id, separation_id))
+    return SeparationRead.model_validate(
+        svc.get_separation(organization_id, separation_id)
+    )
 
 
 @router.patch("/separations/{separation_id}", response_model=SeparationRead)
@@ -292,7 +303,9 @@ def list_promotions(
     )
 
 
-@router.post("/promotions", response_model=PromotionRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/promotions", response_model=PromotionRead, status_code=status.HTTP_201_CREATED
+)
 def create_promotion(
     payload: PromotionCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -317,7 +330,9 @@ def get_promotion(
     db: Session = Depends(get_db),
 ):
     svc = LifecycleService(db)
-    return PromotionRead.model_validate(svc.get_promotion(organization_id, promotion_id))
+    return PromotionRead.model_validate(
+        svc.get_promotion(organization_id, promotion_id)
+    )
 
 
 @router.patch("/promotions/{promotion_id}", response_model=PromotionRead)
@@ -363,7 +378,9 @@ def list_transfers(
     )
 
 
-@router.post("/transfers", response_model=TransferRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/transfers", response_model=TransferRead, status_code=status.HTTP_201_CREATED
+)
 def create_transfer(
     payload: TransferCreate,
     organization_id: UUID = Depends(require_organization_id),

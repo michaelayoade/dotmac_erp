@@ -1,6 +1,7 @@
 """
 Sync Schemas - Pydantic models for sync operations.
 """
+
 from .dotmac_crm import (
     BulkSyncRequest,
     BulkSyncResponse,

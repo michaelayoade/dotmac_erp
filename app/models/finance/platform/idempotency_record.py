@@ -2,6 +2,7 @@
 Idempotency Record - API idempotency tracking.
 Document 11: API Design.
 """
+
 import uuid
 from datetime import datetime
 from typing import Any, Optional

@@ -1,12 +1,24 @@
 """
 Report Definition Model - Reporting Schema.
 """
+
 import enum
 import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -65,7 +77,9 @@ class ReportDefinition(Base):
     subcategory: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     # Output formats
-    default_format: Mapped[str] = mapped_column(String(20), nullable=False, default="PDF")
+    default_format: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="PDF"
+    )
     supported_formats: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
     # Report structure
@@ -79,13 +93,17 @@ class ReportDefinition(Base):
     data_source_config: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
     # Template
-    template_file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    template_file_path: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True
+    )
     template_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     # Security
     required_permissions: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
-    is_system_report: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_system_report: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(

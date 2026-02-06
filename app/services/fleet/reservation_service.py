@@ -29,6 +29,7 @@ from app.services.common import (
     ValidationError,
     paginate,
 )
+from app.services.state_machine import StateMachine
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,7 @@ RESERVATION_STATUS_TRANSITIONS: Dict[ReservationStatus, set] = {
     ReservationStatus.CANCELLED: set(),  # Terminal
     ReservationStatus.NO_SHOW: set(),  # Terminal
 }
+_STATE_MACHINE = StateMachine(RESERVATION_STATUS_TRANSITIONS)
 
 
 class ReservationService:
@@ -252,11 +254,7 @@ class ReservationService:
         self, current: ReservationStatus, target: ReservationStatus
     ) -> None:
         """Validate a status transition against the transition map."""
-        allowed = RESERVATION_STATUS_TRANSITIONS.get(current, set())
-        if target not in allowed:
-            raise ValidationError(
-                f"Cannot transition from {current.value} to {target.value}"
-            )
+        _STATE_MACHINE.validate(current, target)
 
     def approve(
         self,

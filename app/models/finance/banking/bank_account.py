@@ -61,8 +61,10 @@ class BankAccount(Base):
     __tablename__ = "bank_accounts"
     __table_args__ = (
         UniqueConstraint(
-            "organization_id", "account_number", "bank_code",
-            name="uq_bank_account_number"
+            "organization_id",
+            "account_number",
+            "bank_code",
+            name="uq_bank_account_number",
         ),
         {"schema": "banking"},
     )
@@ -83,7 +85,9 @@ class BankAccount(Base):
 
     # Bank details
     bank_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    bank_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # SWIFT/BIC
+    bank_code: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True
+    )  # SWIFT/BIC
     branch_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     branch_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
@@ -162,14 +166,18 @@ class BankAccount(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
     )
-    created_by: Mapped[Optional[UUID]] = mapped_column(SAUUID(as_uuid=True), nullable=True)
-    updated_by: Mapped[Optional[UUID]] = mapped_column(SAUUID(as_uuid=True), nullable=True)
+    created_by: Mapped[Optional[UUID]] = mapped_column(
+        SAUUID(as_uuid=True), nullable=True
+    )
+    updated_by: Mapped[Optional[UUID]] = mapped_column(
+        SAUUID(as_uuid=True), nullable=True
+    )
 
     # Relationships
     gl_account: Mapped["Account"] = relationship(
         "Account",
         foreign_keys=[gl_account_id],
-        lazy="joined",
+        lazy="select",
     )
 
     def __repr__(self) -> str:

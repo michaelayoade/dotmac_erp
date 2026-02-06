@@ -6,14 +6,12 @@ and standalone functions for schedule refresh and task enqueueing.
 """
 
 import uuid
-from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
 
-from app.models.scheduler import ScheduledTask, ScheduleType
-from app.schemas.scheduler import ScheduledTaskCreate, ScheduledTaskUpdate
+from app.models.scheduler import ScheduleType
 from app.services.scheduler import (
     ScheduledTasks,
     _validate_schedule_type,
@@ -23,6 +21,7 @@ from app.services.scheduler import (
 
 
 # ============ TestValidateScheduleType ============
+
 
 class TestValidateScheduleType:
     """Tests for the _validate_schedule_type function."""
@@ -52,6 +51,7 @@ class TestValidateScheduleType:
 
 
 # ============ TestScheduledTasksCreate ============
+
 
 class TestScheduledTasksCreate:
     """Tests for ScheduledTasks.create method."""
@@ -130,6 +130,7 @@ class TestScheduledTasksCreate:
 
 # ============ TestScheduledTasksGet ============
 
+
 class TestScheduledTasksGet:
     """Tests for ScheduledTasks.get method."""
 
@@ -161,6 +162,7 @@ class TestScheduledTasksGet:
 
 
 # ============ TestScheduledTasksList ============
+
 
 class TestScheduledTasksList:
     """Tests for ScheduledTasks.list method."""
@@ -326,6 +328,7 @@ class TestScheduledTasksList:
 
 # ============ TestScheduledTasksUpdate ============
 
+
 class TestScheduledTasksUpdate:
     """Tests for ScheduledTasks.update method."""
 
@@ -381,7 +384,9 @@ class TestScheduledTasksUpdate:
 
         assert exc_info.value.status_code == 400
 
-    def test_update_invalid_schedule_type_raises_400(self, mock_db, mock_scheduled_task):
+    def test_update_invalid_schedule_type_raises_400(
+        self, mock_db, mock_scheduled_task
+    ):
         """Invalid schedule_type should raise HTTPException."""
         mock_db.get.return_value = mock_scheduled_task
         payload = MagicMock()
@@ -409,6 +414,7 @@ class TestScheduledTasksUpdate:
 
 # ============ TestScheduledTasksDelete ============
 
+
 class TestScheduledTasksDelete:
     """Tests for ScheduledTasks.delete method."""
 
@@ -433,6 +439,7 @@ class TestScheduledTasksDelete:
 
 # ============ TestRefreshSchedule ============
 
+
 class TestRefreshSchedule:
     """Tests for the refresh_schedule function."""
 
@@ -446,6 +453,7 @@ class TestRefreshSchedule:
 
 
 # ============ TestEnqueueTask ============
+
 
 class TestEnqueueTask:
     """Tests for the enqueue_task function."""

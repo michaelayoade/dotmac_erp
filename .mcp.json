@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "erp-db": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@bytebase/dbhub",
+        "--dsn",
+        "postgresql://dotmac_erp:dotmac_erp_pass@localhost:5435/dotmac_erp"
+      ],
+      "description": "DotMac ERP database - read-only queries for debugging and analysis"
+    }
+  }
+}

@@ -4,13 +4,13 @@ INV API Router.
 Inventory API endpoints for item management, transactions, and costing.
 """
 
+import logging
 from datetime import date
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
-from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
@@ -21,6 +21,23 @@ from app.models.inventory.inventory_transaction import TransactionType
 from app.config import settings
 from app.db import SessionLocal
 from app.schemas.finance.common import ListResponse, PostingResultSchema
+from app.schemas.inventory import (
+    AddLayerCreate,
+    ConsumptionResultRead,
+    FIFOInventoryRead,
+    InventoryItemCreate,
+    InventoryItemRead,
+    ItemCategoryCreate,
+    ItemCategoryRead,
+    LotCreate,
+    LotRead,
+    LotTraceabilityRead,
+    LowStockItemRead,
+    NRVCalculationRead,
+    StockBalanceRead,
+    TransactionCreate,
+    TransactionRead,
+)
 from app.services.inventory import (
     item_service,
     item_category_service,
@@ -44,6 +61,9 @@ router = APIRouter(
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 def get_db():
     db = SessionLocal()
     try:
@@ -52,173 +72,9 @@ def get_db():
         db.close()
 
 
-# =============================================================================
-# Schemas
-# =============================================================================
-
-class InventoryItemCreate(BaseModel):
-    """Create inventory item request."""
-
-    item_code: str = Field(max_length=30)
-    item_name: str = Field(max_length=200)
-    item_category_id: Optional[UUID] = None
-    unit_of_measure: str = Field(max_length=20)
-    costing_method: str = "WEIGHTED_AVERAGE"
-    standard_cost: Optional[Decimal] = None
-    reorder_point: Optional[Decimal] = None
-    reorder_quantity: Optional[Decimal] = None
-    inventory_account_id: Optional[UUID] = None
-    cogs_account_id: Optional[UUID] = None
-    description: Optional[str] = None
-
-
-class InventoryItemRead(BaseModel):
-    """Inventory item response (model fields only)."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    item_id: UUID
-    organization_id: UUID
-    item_code: str
-    item_name: str
-    base_uom: str
-    costing_method: str
-    standard_cost: Optional[Decimal]
-    average_cost: Optional[Decimal]
-    last_purchase_cost: Optional[Decimal]
-    list_price: Optional[Decimal]
-    reorder_point: Optional[Decimal]
-    reorder_quantity: Optional[Decimal]
-    minimum_stock: Optional[Decimal]
-    maximum_stock: Optional[Decimal]
-    track_inventory: bool
-    track_lots: bool
-    track_serial_numbers: bool
-    is_active: bool
-    is_purchaseable: bool
-    is_saleable: bool
-
-
-class InventoryItemWithBalanceRead(BaseModel):
-    """Inventory item with computed stock levels."""
-
-    item_id: UUID
-    organization_id: UUID
-    item_code: str
-    item_name: str
-    base_uom: str
-    costing_method: str
-    standard_cost: Optional[Decimal]
-    average_cost: Optional[Decimal]
-    quantity_on_hand: Decimal
-    quantity_reserved: Decimal
-    quantity_available: Decimal
-    total_value: Decimal
-    is_active: bool
-
-
-class TransactionCreate(BaseModel):
-    """Create inventory transaction request."""
-
-    item_id: UUID
-    warehouse_id: UUID
-    location_id: Optional[UUID] = None
-    lot_id: Optional[UUID] = None
-    to_warehouse_id: Optional[UUID] = None
-    to_location_id: Optional[UUID] = None
-    transaction_type: str = Field(max_length=30)
-    transaction_date: date
-    quantity: Decimal
-    unit_cost: Optional[Decimal] = None
-    uom: Optional[str] = None
-    currency_code: Optional[str] = None
-    reason_code: Optional[str] = None
-    reference_type: Optional[str] = None
-    reference_id: Optional[UUID] = None
-    notes: Optional[str] = None
-
-
-class TransactionRead(BaseModel):
-    """Inventory transaction response."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    transaction_id: UUID
-    organization_id: UUID
-    item_id: UUID
-    warehouse_id: UUID
-    location_id: Optional[UUID] = None
-    lot_id: Optional[UUID] = None
-    to_warehouse_id: Optional[UUID] = None
-    to_location_id: Optional[UUID] = None
-    transaction_type: str
-    transaction_date: date
-    quantity: Decimal
-    unit_cost: Decimal
-    total_cost: Decimal
-    quantity_before: Decimal
-    quantity_after: Decimal
-    reference: Optional[str] = None
-    reason_code: Optional[str] = None
-
-
-class CostingResultRead(BaseModel):
-    """Costing calculation result."""
-
-    item_id: UUID
-    item_code: str
-    costing_method: str
-    quantity_on_hand: Decimal
-    total_cost: Decimal
-    average_cost: Decimal
-
-
-class InventoryValuationRead(BaseModel):
-    """Inventory valuation report."""
-
-    as_of_date: date
-    total_items: int
-    total_quantity: Decimal
-    total_value: Decimal
-    items: list[CostingResultRead]
-
-
-# =============================================================================
-# Item Categories
-# =============================================================================
-
-class ItemCategoryCreate(BaseModel):
-    """Create item category request."""
-    category_code: str = Field(max_length=30)
-    category_name: str = Field(max_length=100)
-    inventory_account_id: UUID
-    cogs_account_id: UUID
-    revenue_account_id: UUID
-    inventory_adjustment_account_id: UUID
-    description: Optional[str] = None
-    parent_category_id: Optional[UUID] = None
-    purchase_variance_account_id: Optional[UUID] = None
-
-
-class ItemCategoryRead(BaseModel):
-    """Item category response."""
-    model_config = ConfigDict(from_attributes=True)
-
-    category_id: UUID
-    organization_id: UUID
-    category_code: str
-    category_name: str
-    description: Optional[str]
-    parent_category_id: Optional[UUID]
-    inventory_account_id: UUID
-    cogs_account_id: UUID
-    revenue_account_id: UUID
-    inventory_adjustment_account_id: UUID
-    purchase_variance_account_id: Optional[UUID]
-    is_active: bool
-
-
-@router.post("/categories", response_model=ItemCategoryRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/categories", response_model=ItemCategoryRead, status_code=status.HTTP_201_CREATED
+)
 def create_item_category(
     payload: ItemCategoryCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -236,6 +92,8 @@ def create_item_category(
         description=payload.description,
         parent_category_id=payload.parent_category_id,
         purchase_variance_account_id=payload.purchase_variance_account_id,
+        reorder_point=payload.reorder_point,
+        minimum_stock=payload.minimum_stock,
     )
     return item_category_service.create_category(db, organization_id, input_data)
 
@@ -281,7 +139,10 @@ def list_item_categories(
 # Inventory Items
 # =============================================================================
 
-@router.post("/items", response_model=InventoryItemRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/items", response_model=InventoryItemRead, status_code=status.HTTP_201_CREATED
+)
 def create_inventory_item(
     payload: InventoryItemCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -294,7 +155,11 @@ def create_inventory_item(
     from app.models.inventory.item import CostingMethod
 
     # Map costing method string to enum
-    costing_method = CostingMethod(payload.costing_method) if payload.costing_method else CostingMethod.WEIGHTED_AVERAGE
+    costing_method = (
+        CostingMethod(payload.costing_method)
+        if payload.costing_method
+        else CostingMethod.WEIGHTED_AVERAGE
+    )
 
     input_data = ItemInput(
         item_code=payload.item_code,
@@ -326,11 +191,15 @@ def get_inventory_item(
 @router.get("/items", response_model=ListResponse[InventoryItemRead])
 def list_inventory_items(
     organization_id: UUID = Depends(require_organization_id),
-    category_id: Optional[UUID] = Query(default=None, description="Filter by item category"),
+    category_id: Optional[UUID] = Query(
+        default=None, description="Filter by item category"
+    ),
     is_active: Optional[bool] = None,
     is_purchaseable: Optional[bool] = None,
     is_saleable: Optional[bool] = None,
-    search: Optional[str] = Query(default=None, description="Search by code, name, or barcode"),
+    search: Optional[str] = Query(
+        default=None, description="Search by code, name, or barcode"
+    ),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("inventory:items:read")),
@@ -360,7 +229,10 @@ def list_inventory_items(
 # Inventory Transactions
 # =============================================================================
 
-@router.post("/transactions", response_model=TransactionRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/transactions", response_model=TransactionRead, status_code=status.HTTP_201_CREATED
+)
 def create_inventory_transaction(
     payload: TransactionCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -476,38 +348,6 @@ def post_inventory_transaction(
     )
 
 
-# =============================================================================
-# Stock Balances
-# =============================================================================
-
-class StockBalanceRead(BaseModel):
-    """Stock balance response."""
-    item_id: UUID
-    item_code: str
-    item_name: str
-    warehouse_id: Optional[UUID]
-    warehouse_code: Optional[str]
-    quantity_on_hand: Decimal
-    quantity_reserved: Decimal
-    quantity_available: Decimal
-    average_cost: Decimal
-    total_value: Decimal
-
-
-class LowStockItemRead(BaseModel):
-    """Low stock alert item."""
-    item_id: UUID
-    item_code: str
-    item_name: str
-    quantity_on_hand: Decimal
-    quantity_available: Decimal
-    reorder_point: Decimal
-    reorder_quantity: Optional[Decimal]
-    suggested_order_qty: Decimal
-    default_supplier_id: Optional[UUID]
-    lead_time_days: Optional[int]
-
-
 @router.get("/stock/item/{item_id}", response_model=StockBalanceRead)
 def get_item_stock_balance(
     item_id: UUID,
@@ -525,6 +365,7 @@ def get_item_stock_balance(
     )
     if not balance:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="Item not found")
     return StockBalanceRead(
         item_id=balance.item_id,
@@ -540,7 +381,9 @@ def get_item_stock_balance(
     )
 
 
-@router.get("/stock/warehouse/{warehouse_id}", response_model=ListResponse[StockBalanceRead])
+@router.get(
+    "/stock/warehouse/{warehouse_id}", response_model=ListResponse[StockBalanceRead]
+)
 def get_warehouse_inventory(
     warehouse_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
@@ -650,61 +493,7 @@ def deallocate_stock(
     return {"success": success}
 
 
-# =============================================================================
-# FIFO Valuation (IAS 2)
-# =============================================================================
-
 from app.services.inventory import fifo_valuation_service
-
-
-class FIFOLayerRead(BaseModel):
-    """FIFO layer response."""
-    layer_date: date
-    quantity: Decimal
-    unit_cost: Decimal
-    total_cost: Decimal
-    lot_id: Optional[UUID] = None
-    reference: Optional[str] = None
-
-
-class FIFOInventoryRead(BaseModel):
-    """FIFO inventory state."""
-    item_id: UUID
-    layers: list[FIFOLayerRead]
-    total_quantity: Decimal
-    total_cost: Decimal
-    weighted_average_cost: Decimal
-
-
-class ConsumptionResultRead(BaseModel):
-    """Consumption result."""
-    quantity_consumed: Decimal
-    total_cost: Decimal
-    cost_layers_used: list[dict]
-    remaining_quantity: Decimal
-
-
-class NRVCalculationRead(BaseModel):
-    """NRV calculation result."""
-    item_id: UUID
-    cost: Decimal
-    estimated_selling_price: Decimal
-    costs_to_complete: Decimal
-    selling_costs: Decimal
-    nrv: Decimal
-    carrying_amount: Decimal
-    write_down: Decimal
-
-
-class AddLayerCreate(BaseModel):
-    """Add FIFO layer input."""
-    item_id: UUID
-    warehouse_id: UUID
-    quantity: Decimal
-    unit_cost: Decimal
-    layer_date: date
-    lot_id: Optional[UUID] = None
-    reference: Optional[str] = None
 
 
 @router.post("/fifo/add-layer", status_code=status.HTTP_201_CREATED)
@@ -737,7 +526,9 @@ def consume_fifo(
     db: Session = Depends(get_db),
 ):
     """Consume inventory using FIFO method."""
-    return fifo_valuation_service.consume_inventory_fifo(db, organization_id, item_id, quantity)
+    return fifo_valuation_service.consume_inventory_fifo(
+        db, organization_id, item_id, quantity
+    )
 
 
 @router.post("/fifo/calculate-nrv", response_model=NRVCalculationRead)
@@ -776,7 +567,9 @@ def get_fifo_valuation_summary(
     db: Session = Depends(get_db),
 ):
     """Get valuation summary for a period."""
-    return fifo_valuation_service.get_valuation_summary(db, organization_id, fiscal_period_id)
+    return fifo_valuation_service.get_valuation_summary(
+        db, organization_id, fiscal_period_id
+    )
 
 
 @router.get("/fifo/{item_id}", response_model=FIFOInventoryRead)
@@ -790,56 +583,7 @@ def get_fifo_inventory(
     return fifo_valuation_service.get_fifo_inventory(db, organization_id, item_id)
 
 
-# =============================================================================
-# Lot/Serial Tracking
-# =============================================================================
-
 from app.services.inventory import lot_serial_service, LotInput
-
-
-class LotCreate(BaseModel):
-    """Create lot input."""
-    item_id: UUID
-    lot_number: str = Field(max_length=50)
-    received_date: date
-    unit_cost: Decimal
-    initial_quantity: Decimal
-    manufacture_date: Optional[date] = None
-    expiry_date: Optional[date] = None
-    supplier_id: Optional[UUID] = None
-    supplier_lot_number: Optional[str] = None
-    purchase_order_id: Optional[UUID] = None
-    certificate_of_analysis: Optional[str] = None
-
-
-class LotRead(BaseModel):
-    """Lot response."""
-    model_config = ConfigDict(from_attributes=True)
-    lot_id: UUID
-    item_id: UUID
-    lot_number: str
-    received_date: date
-    expiry_date: Optional[date]
-    initial_quantity: Decimal
-    quantity_on_hand: Decimal
-    quantity_available: Decimal
-    unit_cost: Decimal
-    is_quarantined: bool
-    is_active: bool
-
-
-class LotTraceabilityRead(BaseModel):
-    """Lot traceability response."""
-    lot_id: UUID
-    lot_number: str
-    item_id: UUID
-    item_code: str
-    supplier_lot: Optional[str]
-    received_date: date
-    expiry_date: Optional[date]
-    total_received: Decimal
-    total_remaining: Decimal
-    total_consumed: Decimal
 
 
 @router.post("/lots", response_model=LotRead, status_code=status.HTTP_201_CREATED)

@@ -3,7 +3,7 @@ Tests for PeriodGuardService.
 """
 
 from contextlib import contextmanager
-from datetime import date, datetime, timezone
+from datetime import date
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
@@ -11,7 +11,6 @@ import pytest
 
 from app.services.finance.gl.period_guard import (
     PeriodGuardService,
-    PeriodGuardResult,
 )
 
 from app.models.finance.gl.fiscal_period import PeriodStatus
@@ -21,18 +20,25 @@ MockPeriodStatus = PeriodStatus
 
 class MockColumn:
     """Mock SQLAlchemy column that supports comparison operations."""
+
     def __le__(self, other):
         return MagicMock()
+
     def __ge__(self, other):
         return MagicMock()
+
     def __lt__(self, other):
         return MagicMock()
+
     def __gt__(self, other):
         return MagicMock()
+
     def __eq__(self, other):
         return MagicMock()
+
     def __ne__(self, other):
         return MagicMock()
+
     def in_(self, values):
         return MagicMock()
 
@@ -84,8 +90,12 @@ def patch_period_guard():
         mock_fp.end_date = MockColumn()
         mock_fp.status = MockColumn()
         mock_fp.period_number = MockColumn()
-        with patch("app.services.finance.gl.period_guard.and_", return_value=MagicMock()):
-            with patch("app.services.finance.gl.period_guard.PeriodStatus", MockPeriodStatus):
+        with patch(
+            "app.services.finance.gl.period_guard.and_", return_value=MagicMock()
+        ):
+            with patch(
+                "app.services.finance.gl.period_guard.PeriodStatus", MockPeriodStatus
+            ):
                 yield mock_fp
 
 
@@ -137,9 +147,7 @@ class TestCanPostToDate:
         posting_date = date(2024, 1, 15)
 
         with patch_period_guard():
-            result = PeriodGuardService.can_post_to_date(
-                mock_db, org_id, posting_date
-            )
+            result = PeriodGuardService.can_post_to_date(mock_db, org_id, posting_date)
 
         assert result.is_allowed is True
         assert result.fiscal_period_id == period.fiscal_period_id
@@ -155,9 +163,7 @@ class TestCanPostToDate:
         posting_date = date(2024, 1, 15)
 
         with patch_period_guard():
-            result = PeriodGuardService.can_post_to_date(
-                mock_db, org_id, posting_date
-            )
+            result = PeriodGuardService.can_post_to_date(mock_db, org_id, posting_date)
 
         assert result.is_allowed is False
         assert "not yet open" in result.message
@@ -172,9 +178,7 @@ class TestCanPostToDate:
         posting_date = date(2024, 1, 15)
 
         with patch_period_guard():
-            result = PeriodGuardService.can_post_to_date(
-                mock_db, org_id, posting_date
-            )
+            result = PeriodGuardService.can_post_to_date(mock_db, org_id, posting_date)
 
         assert result.is_allowed is False
         assert "soft-closed" in result.message
@@ -189,9 +193,7 @@ class TestCanPostToDate:
         posting_date = date(2024, 1, 15)
 
         with patch_period_guard():
-            result = PeriodGuardService.can_post_to_date(
-                mock_db, org_id, posting_date
-            )
+            result = PeriodGuardService.can_post_to_date(mock_db, org_id, posting_date)
 
         assert result.is_allowed is False
         assert "permanently closed" in result.message
@@ -208,9 +210,7 @@ class TestCanPostToDate:
         posting_date = date(2024, 1, 15)
 
         with patch_period_guard():
-            result = PeriodGuardService.can_post_to_date(
-                mock_db, org_id, posting_date
-            )
+            result = PeriodGuardService.can_post_to_date(mock_db, org_id, posting_date)
 
         assert result.is_allowed is False
         assert "reopen session ID required" in result.message
@@ -245,9 +245,7 @@ class TestCanPostToDate:
         posting_date = date(2024, 1, 15)
 
         with patch_period_guard():
-            result = PeriodGuardService.can_post_to_date(
-                mock_db, org_id, posting_date
-            )
+            result = PeriodGuardService.can_post_to_date(mock_db, org_id, posting_date)
 
         assert result.is_allowed is False
         assert "Adjustment periods require explicit allowance" in result.message
@@ -302,9 +300,7 @@ class TestRequireOpenPeriod:
 
         with patch_period_guard():
             with pytest.raises(HTTPException) as exc:
-                PeriodGuardService.require_open_period(
-                    mock_db, org_id, posting_date
-                )
+                PeriodGuardService.require_open_period(mock_db, org_id, posting_date)
 
         assert exc.value.status_code == 400
 
@@ -323,9 +319,7 @@ class TestPeriodOperations:
         mock_db.get.return_value = period
 
         with patch_period_guard():
-            result = PeriodGuardService.open_period(
-                mock_db, org_id, period_id, user_id
-            )
+            result = PeriodGuardService.open_period(mock_db, org_id, period_id, user_id)
 
         assert result.status == MockPeriodStatus.OPEN
         mock_db.commit.assert_called_once()

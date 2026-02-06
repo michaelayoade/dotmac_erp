@@ -172,7 +172,9 @@ async def create_department(
         department_code=department_code,
         department_name=department_name,
         description=description or None,
-        parent_department_id=coerce_uuid(parent_department_id) if parent_department_id else None,
+        parent_department_id=coerce_uuid(parent_department_id)
+        if parent_department_id
+        else None,
         head_id=coerce_uuid(head_id) if head_id else None,
         is_active=is_active,
     )
@@ -210,7 +212,9 @@ async def update_department(
             DepartmentFilters(is_active=True),
             PaginationParams(limit=DROPDOWN_LIMIT),
         ).items
-        parent_options = [d for d in all_depts if d.department_id != department.department_id]
+        parent_options = [
+            d for d in all_depts if d.department_id != department.department_id
+        ]
         context = {
             **base_context(request, auth, "Edit Department", "departments"),
             "department": SimpleNamespace(
@@ -245,7 +249,9 @@ async def update_department(
         department_code=department_code,
         department_name=department_name,
         description=description or None,
-        parent_department_id=coerce_uuid(parent_department_id) if parent_department_id else None,
+        parent_department_id=coerce_uuid(parent_department_id)
+        if parent_department_id
+        else None,
         head_id=coerce_uuid(head_id) if head_id else None,
         is_active=is_active,
     )
@@ -419,7 +425,9 @@ def list_employment_types(
     db: Session = Depends(get_db),
 ):
     """Employment types list page."""
-    return hr_web_service.list_employment_types_response(request, auth, db, search, page)
+    return hr_web_service.list_employment_types_response(
+        request, auth, db, search, page
+    )
 
 
 @router.get("/employment-types/new", response_class=HTMLResponse)
@@ -440,7 +448,9 @@ def edit_employment_type_form(
     db: Session = Depends(get_db),
 ):
     """Edit employment type form page."""
-    return hr_web_service.employment_type_form_response(request, auth, db, employment_type_id)
+    return hr_web_service.employment_type_form_response(
+        request, auth, db, employment_type_id
+    )
 
 
 @router.post("/employment-types/new")
@@ -640,7 +650,13 @@ async def create_grade(
         except (InvalidOperation, ValueError):
             errors["max_salary"] = "Invalid amount"
 
-    if errors["grade_code"] or errors["grade_name"] or errors["rank"] or errors["min_salary"] or errors["max_salary"]:
+    if (
+        errors["grade_code"]
+        or errors["grade_name"]
+        or errors["rank"]
+        or errors["min_salary"]
+        or errors["max_salary"]
+    ):
         context = {
             **base_context(request, auth, "New Employee Grade", "grades"),
             "grade": SimpleNamespace(
@@ -731,7 +747,13 @@ async def update_grade(
         except (InvalidOperation, ValueError):
             errors["max_salary"] = "Invalid amount"
 
-    if errors["grade_code"] or errors["grade_name"] or errors["rank"] or errors["min_salary"] or errors["max_salary"]:
+    if (
+        errors["grade_code"]
+        or errors["grade_name"]
+        or errors["rank"]
+        or errors["min_salary"]
+        or errors["max_salary"]
+    ):
         org_id = coerce_uuid(auth.organization_id)
         svc = OrganizationService(db, org_id)
         grade = svc.get_employee_grade(coerce_uuid(grade_id))

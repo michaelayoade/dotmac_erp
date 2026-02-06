@@ -3,6 +3,7 @@ Leave Application Model - Leave Schema.
 
 Handles leave requests and approval workflow.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
 
 class LeaveApplicationStatus(str, enum.Enum):
     """Leave application workflow status."""
+
     DRAFT = "DRAFT"
     SUBMITTED = "SUBMITTED"
     APPROVED = "APPROVED"

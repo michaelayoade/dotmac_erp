@@ -7,6 +7,7 @@ Pydantic schemas for Leave APIs including:
 - Leave Allocation
 - Leave Application
 """
+
 from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional

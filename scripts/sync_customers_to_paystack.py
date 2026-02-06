@@ -9,6 +9,7 @@ Usage:
     docker compose exec app-dev python scripts/sync_customers_to_paystack.py
     docker compose exec app-dev python scripts/sync_customers_to_paystack.py --dry-run
 """
+
 import argparse
 import logging
 import sys
@@ -23,9 +24,15 @@ from app.db import SessionLocal
 from app.models.domain_settings import SettingDomain
 from app.models.finance.ar.customer import Customer
 from app.services.settings_spec import resolve_value
-from app.services.finance.payments.paystack_client import PaystackClient, PaystackConfig, PaystackError
+from app.services.finance.payments.paystack_client import (
+    PaystackClient,
+    PaystackConfig,
+    PaystackError,
+)
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 ORG_ID = UUID("00000000-0000-0000-0000-000000000001")
@@ -104,7 +111,9 @@ def sync_customers(dry_run: bool = False) -> dict:
                 email = get_customer_email(customer)
 
                 if not email:
-                    logger.warning(f"[{i}/{len(customers)}] {customer.customer_code}: No email, skipping")
+                    logger.warning(
+                        f"[{i}/{len(customers)}] {customer.customer_code}: No email, skipping"
+                    )
                     results["skipped_no_email"] += 1
                     continue
 
@@ -115,7 +124,9 @@ def sync_customers(dry_run: bool = False) -> dict:
                     "customer_id": str(customer.customer_id),
                     "customer_code": customer.customer_code,
                     "legal_name": customer.legal_name,
-                    "customer_type": customer.customer_type.value if customer.customer_type else None,
+                    "customer_type": customer.customer_type.value
+                    if customer.customer_type
+                    else None,
                 }
 
                 if customer.trading_name:
@@ -166,26 +177,36 @@ def sync_customers(dry_run: bool = False) -> dict:
                     time.sleep(0.1)
 
                 except PaystackError as e:
-                    logger.error(f"[{i}/{len(customers)}] {customer.customer_code}: Error - {e.message}")
-                    results["errors"].append({
-                        "customer_code": customer.customer_code,
-                        "email": email,
-                        "error": str(e.message),
-                    })
+                    logger.error(
+                        f"[{i}/{len(customers)}] {customer.customer_code}: Error - {e.message}"
+                    )
+                    results["errors"].append(
+                        {
+                            "customer_code": customer.customer_code,
+                            "email": email,
+                            "error": str(e.message),
+                        }
+                    )
                 except Exception as e:
-                    logger.error(f"[{i}/{len(customers)}] {customer.customer_code}: Unexpected error - {e}")
-                    results["errors"].append({
-                        "customer_code": customer.customer_code,
-                        "email": email,
-                        "error": str(e),
-                    })
+                    logger.error(
+                        f"[{i}/{len(customers)}] {customer.customer_code}: Unexpected error - {e}"
+                    )
+                    results["errors"].append(
+                        {
+                            "customer_code": customer.customer_code,
+                            "email": email,
+                            "error": str(e),
+                        }
+                    )
 
     return results
 
 
 def main():
     parser = argparse.ArgumentParser(description="Sync AR customers to Paystack")
-    parser.add_argument("--dry-run", action="store_true", help="Preview without making changes")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Preview without making changes"
+    )
     args = parser.parse_args()
 
     logger.info("=" * 80)

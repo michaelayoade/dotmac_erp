@@ -3,6 +3,7 @@ Shift Swap Request Model - Scheduling Schema.
 
 Handles employee requests to swap shifts with each other.
 """
+
 import enum
 import uuid
 from datetime import datetime

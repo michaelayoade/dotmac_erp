@@ -1,0 +1,38 @@
+{# Branded document header block (screen + print) #}
+{% include "partials/_brand_context.html" %}
+{% set org_display_name = organization.legal_name if organization and organization.legal_name else (organization.name if organization and organization.name else brand_name) %}
+{% set org_address = organization.address if organization and organization.address else "" %}
+{% set org_phone = organization.phone if organization and organization.phone else "" %}
+{% set org_email = organization.email if organization and organization.email else "" %}
+
+<div class="document-header-block">
+    <div class="document-brand">
+        {% if document_logo_url %}
+        <img src="{{ document_logo_url }}" alt="{{ org_display_name }} logo" class="document-brand-logo" />
+        {% else %}
+        <div class="document-brand-mark">{{ brand_mark }}</div>
+        {% endif %}
+        <div class="document-org">
+            <div class="document-org-name">{{ org_display_name }}</div>
+            {% if org_address %}
+            <div class="document-org-meta">{{ org_address }}</div>
+            {% endif %}
+            {% if org_phone or org_email %}
+            <div class="document-org-meta">
+                {% if org_phone %}<span>{{ org_phone }}</span>{% endif %}
+                {% if org_phone and org_email %}<span class="document-org-divider">•</span>{% endif %}
+                {% if org_email %}<span>{{ org_email }}</span>{% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="document-meta">
+        <div class="document-meta-title">{{ doc_title }}</div>
+        {% if doc_number %}
+        <div class="document-meta-number">{{ doc_number }}</div>
+        {% endif %}
+        {% if doc_status %}
+        <span class="document-meta-status">{{ doc_status }}</span>
+        {% endif %}
+    </div>
+</div>

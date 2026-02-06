@@ -259,7 +259,9 @@ class TestSubmitJournal:
         mock_db.get.return_value = journal
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 result = JournalService.submit_journal(
                     mock_db, org_id, journal.journal_entry_id, user_id
                 )
@@ -277,7 +279,9 @@ class TestSubmitJournal:
         mock_db.get.return_value = journal
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.submit_journal(
                         mock_db, org_id, journal.journal_entry_id, user_id
@@ -300,7 +304,9 @@ class TestApproveJournal:
         mock_db.get.return_value = journal
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 result = JournalService.approve_journal(
                     mock_db, org_id, journal.journal_entry_id, user_id
                 )
@@ -318,7 +324,9 @@ class TestApproveJournal:
         mock_db.get.return_value = journal
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.approve_journal(
                         mock_db, org_id, journal.journal_entry_id, user_id
@@ -339,7 +347,9 @@ class TestApproveJournal:
         mock_db.get.return_value = journal
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 with pytest.raises(HTTPException) as exc:
                     # Same user who created tries to approve
                     JournalService.approve_journal(
@@ -347,7 +357,10 @@ class TestApproveJournal:
                     )
 
         assert exc.value.status_code == 403
-        assert "segregation" in exc.value.detail.lower() or "creator" in exc.value.detail.lower()
+        assert (
+            "segregation" in exc.value.detail.lower()
+            or "creator" in exc.value.detail.lower()
+        )
 
 
 class TestVoidJournal:
@@ -361,7 +374,9 @@ class TestVoidJournal:
         mock_db.get.return_value = journal
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 result = JournalService.void_journal(
                     mock_db, org_id, journal.journal_entry_id, user_id, "Not needed"
                 )
@@ -379,7 +394,9 @@ class TestVoidJournal:
         mock_db.get.return_value = journal
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.void_journal(
                         mock_db, org_id, journal.journal_entry_id, user_id, "Mistake"
@@ -429,7 +446,9 @@ class TestListJournals:
         mock_db.query.return_value = mock_query
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 result = JournalService.list(
                     mock_db,
                     organization_id=str(org_id),
@@ -459,7 +478,7 @@ class TestCreateJournalSuccess:
 
     def test_create_journal_success(self, mock_db, org_id, user_id, sample_lines):
         """Test successful journal creation."""
-        from app.models.finance.gl.journal_entry import JournalType, JournalEntry
+        from app.models.finance.gl.journal_entry import JournalType
 
         journal_input = JournalInput(
             journal_type=JournalType.STANDARD,
@@ -636,14 +655,20 @@ class TestUpdateJournal:
         period = MockFiscalPeriod()
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 with patch(
                     "app.services.finance.gl.journal.PeriodGuardService.get_period_for_date"
                 ) as mock_period:
                     mock_period.return_value = period
                     with patch("app.services.finance.gl.journal.JournalEntryLine"):
                         result = JournalService.update_journal(
-                            mock_db, org_id, journal.journal_entry_id, updated_input, user_id
+                            mock_db,
+                            org_id,
+                            journal.journal_entry_id,
+                            updated_input,
+                            user_id,
                         )
 
         assert result.description == "Updated description"
@@ -670,10 +695,16 @@ class TestUpdateJournal:
         )
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.update_journal(
-                        mock_db, org_id, journal.journal_entry_id, updated_input, user_id
+                        mock_db,
+                        org_id,
+                        journal.journal_entry_id,
+                        updated_input,
+                        user_id,
                     )
 
         assert exc.value.status_code == 400
@@ -739,10 +770,16 @@ class TestUpdateJournal:
         )
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.update_journal(
-                        mock_db, org_id, journal.journal_entry_id, updated_input, user_id
+                        mock_db,
+                        org_id,
+                        journal.journal_entry_id,
+                        updated_input,
+                        user_id,
                     )
 
         assert exc.value.status_code == 400
@@ -769,15 +806,23 @@ class TestUpdateJournal:
         )
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.update_journal(
-                        mock_db, org_id, journal.journal_entry_id, updated_input, user_id
+                        mock_db,
+                        org_id,
+                        journal.journal_entry_id,
+                        updated_input,
+                        user_id,
                     )
 
         assert exc.value.status_code == 400
 
-    def test_update_journal_no_fiscal_period_fails(self, mock_db, org_id, user_id, sample_lines):
+    def test_update_journal_no_fiscal_period_fails(
+        self, mock_db, org_id, user_id, sample_lines
+    ):
         """Test updating journal when fiscal period not found fails."""
         from fastapi import HTTPException
         from app.models.finance.gl.journal_entry import JournalType
@@ -798,14 +843,20 @@ class TestUpdateJournal:
         )
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 with patch(
                     "app.services.finance.gl.journal.PeriodGuardService.get_period_for_date"
                 ) as mock_period:
                     mock_period.return_value = None
                     with pytest.raises(HTTPException) as exc:
                         JournalService.update_journal(
-                            mock_db, org_id, journal.journal_entry_id, updated_input, user_id
+                            mock_db,
+                            org_id,
+                            journal.journal_entry_id,
+                            updated_input,
+                            user_id,
                         )
 
         assert exc.value.status_code == 400
@@ -830,7 +881,9 @@ class TestPostJournal:
         mock_result.message = "Posted"
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 with patch("app.services.finance.gl.journal.PostingRequest"):
                     with patch(
                         "app.services.finance.gl.journal.LedgerPostingService.post_journal_entry"
@@ -852,7 +905,9 @@ class TestPostJournal:
         mock_db.get.return_value = journal
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 result = JournalService.post_journal(
                     mock_db, org_id, journal.journal_entry_id, user_id
                 )
@@ -882,7 +937,9 @@ class TestPostJournal:
         mock_db.get.return_value = journal
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.post_journal(
                         mock_db, org_id, journal.journal_entry_id, user_id
@@ -906,7 +963,9 @@ class TestPostJournal:
         mock_result.message = "Period is closed"
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 with patch("app.services.finance.gl.journal.PostingRequest"):
                     with patch(
                         "app.services.finance.gl.journal.LedgerPostingService.post_journal_entry"
@@ -933,8 +992,12 @@ class TestPostJournal:
         mock_result.success = True
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
-                with patch("app.services.finance.gl.journal.PostingRequest") as MockPostReq:
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
+                with patch(
+                    "app.services.finance.gl.journal.PostingRequest"
+                ) as MockPostReq:
                     mock_req = MagicMock()
                     mock_req.idempotency_key = "custom-key-123"
                     MockPostReq.return_value = mock_req
@@ -943,8 +1006,11 @@ class TestPostJournal:
                     ) as mock_posting:
                         mock_posting.return_value = mock_result
                         result = JournalService.post_journal(
-                            mock_db, org_id, journal.journal_entry_id, user_id,
-                            idempotency_key="custom-key-123"
+                            mock_db,
+                            org_id,
+                            journal.journal_entry_id,
+                            user_id,
+                            idempotency_key="custom-key-123",
                         )
 
         # Verify the posting was called
@@ -956,7 +1022,7 @@ class TestReverseEntry:
 
     def test_reverse_posted_journal_success(self, mock_db, org_id, user_id):
         """Test reversing a posted journal successfully."""
-        from app.models.finance.gl.journal_entry import JournalType, JournalStatus
+        from app.models.finance.gl.journal_entry import JournalStatus
 
         mock_line = MagicMock()
         mock_line.account_id = uuid4()
@@ -1015,7 +1081,9 @@ class TestReverseEntry:
         mock_db.get.return_value = journal
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.reverse_entry(
                         mock_db, org_id, journal.journal_entry_id, date.today(), user_id
@@ -1036,7 +1104,9 @@ class TestReverseEntry:
         mock_db.get.return_value = journal
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.reverse_entry(
                         mock_db, org_id, journal.journal_entry_id, date.today(), user_id
@@ -1214,7 +1284,9 @@ class TestVoidSubmittedJournal:
         mock_db.get.return_value = journal
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 result = JournalService.void_journal(
                     mock_db, org_id, journal.journal_entry_id, user_id, "Rejected"
                 )
@@ -1236,7 +1308,9 @@ class TestVoidReversedJournalFails:
         mock_db.get.return_value = journal
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.void_journal(
                         mock_db, org_id, journal.journal_entry_id, user_id, "Reason"
@@ -1304,7 +1378,9 @@ class TestPostDraftJournal:
         mock_result.message = "Posted"
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 with patch("app.services.finance.gl.journal.PostingRequest"):
                     with patch(
                         "app.services.finance.gl.journal.LedgerPostingService.post_journal_entry"
@@ -1334,15 +1410,22 @@ class TestPostJournalWithAdjustment:
         mock_result.success = True
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
-                with patch("app.services.finance.gl.journal.PostingRequest") as MockPostReq:
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
+                with patch(
+                    "app.services.finance.gl.journal.PostingRequest"
+                ) as MockPostReq:
                     with patch(
                         "app.services.finance.gl.journal.LedgerPostingService.post_journal_entry"
                     ) as mock_posting:
                         mock_posting.return_value = mock_result
                         result = JournalService.post_journal(
-                            mock_db, org_id, journal.journal_entry_id, user_id,
-                            allow_adjustment=True
+                            mock_db,
+                            org_id,
+                            journal.journal_entry_id,
+                            user_id,
+                            allow_adjustment=True,
                         )
 
         mock_posting.assert_called_once()
@@ -1361,15 +1444,22 @@ class TestPostJournalWithAdjustment:
         reopen_session_id = uuid4()
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
-                with patch("app.services.finance.gl.journal.PostingRequest") as MockPostReq:
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
+                with patch(
+                    "app.services.finance.gl.journal.PostingRequest"
+                ) as MockPostReq:
                     with patch(
                         "app.services.finance.gl.journal.LedgerPostingService.post_journal_entry"
                     ) as mock_posting:
                         mock_posting.return_value = mock_result
                         result = JournalService.post_journal(
-                            mock_db, org_id, journal.journal_entry_id, user_id,
-                            reopen_session_id=reopen_session_id
+                            mock_db,
+                            org_id,
+                            journal.journal_entry_id,
+                            user_id,
+                            reopen_session_id=reopen_session_id,
                         )
 
         mock_posting.assert_called_once()
@@ -1391,7 +1481,9 @@ class TestJournalWrongOrganization:
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
             with pytest.raises(HTTPException) as exc:
-                JournalService.submit_journal(mock_db, org_id, journal.journal_entry_id, user_id)
+                JournalService.submit_journal(
+                    mock_db, org_id, journal.journal_entry_id, user_id
+                )
 
         assert exc.value.status_code == 404
 
@@ -1408,7 +1500,9 @@ class TestJournalWrongOrganization:
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
             with pytest.raises(HTTPException) as exc:
-                JournalService.approve_journal(mock_db, org_id, journal.journal_entry_id, user_id)
+                JournalService.approve_journal(
+                    mock_db, org_id, journal.journal_entry_id, user_id
+                )
 
         assert exc.value.status_code == 404
 
@@ -1425,7 +1519,9 @@ class TestJournalWrongOrganization:
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
             with pytest.raises(HTTPException) as exc:
-                JournalService.void_journal(mock_db, org_id, journal.journal_entry_id, user_id, "Wrong org")
+                JournalService.void_journal(
+                    mock_db, org_id, journal.journal_entry_id, user_id, "Wrong org"
+                )
 
         assert exc.value.status_code == 404
 
@@ -1442,11 +1538,15 @@ class TestJournalWrongOrganization:
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
             with pytest.raises(HTTPException) as exc:
-                JournalService.post_journal(mock_db, org_id, journal.journal_entry_id, user_id)
+                JournalService.post_journal(
+                    mock_db, org_id, journal.journal_entry_id, user_id
+                )
 
         assert exc.value.status_code == 404
 
-    def test_update_journal_wrong_organization(self, mock_db, org_id, user_id, sample_lines):
+    def test_update_journal_wrong_organization(
+        self, mock_db, org_id, user_id, sample_lines
+    ):
         """Test updating journal from wrong organization fails."""
         from fastapi import HTTPException
         from app.models.finance.gl.journal_entry import JournalType
@@ -1658,7 +1758,9 @@ class TestApproveJournalVoid:
         mock_db.get.return_value = journal
 
         with patch("app.services.finance.gl.journal.JournalEntry"):
-            with patch("app.services.finance.gl.journal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.journal.JournalStatus", MockJournalStatus
+            ):
                 with pytest.raises(HTTPException) as exc:
                     JournalService.approve_journal(
                         mock_db, org_id, journal.journal_entry_id, user_id

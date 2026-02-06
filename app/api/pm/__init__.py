@@ -8,6 +8,7 @@ REST API endpoints for:
 - Time Entries
 - Dashboard
 """
+
 from fastapi import APIRouter, Depends
 
 from app.api.deps import require_tenant_permission

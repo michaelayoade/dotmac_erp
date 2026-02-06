@@ -33,7 +33,6 @@ from app.db import Base
 if TYPE_CHECKING:
     from app.models.finance.core_org import Organization
     from app.models.people.hr import Employee
-    from app.models.person import Person
 
 
 class DocumentCategory(str, enum.Enum):
@@ -74,8 +73,10 @@ class HRDocument(Base):
         Index("idx_hr_document_category", "category"),
         Index("idx_hr_document_status", "status"),
         UniqueConstraint(
-            "organization_id", "document_code", "version",
-            name="uq_hr_document_code_version"
+            "organization_id",
+            "document_code",
+            "version",
+            name="uq_hr_document_code_version",
         ),
         {"schema": "hr"},
     )
@@ -292,8 +293,7 @@ class HRDocumentAcknowledgment(Base):
         Index("idx_hr_doc_ack_document", "document_id"),
         Index("idx_hr_doc_ack_employee", "employee_id"),
         UniqueConstraint(
-            "document_id", "employee_id",
-            name="uq_hr_doc_ack_document_employee"
+            "document_id", "employee_id", name="uq_hr_doc_ack_document_employee"
         ),
         {"schema": "hr"},
     )

@@ -1,12 +1,25 @@
 """
 Intercompany Balance Model - Consolidation Schema.
 """
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -67,7 +80,9 @@ class IntercompanyBalance(Base):
     )
     from_entity_currency: Mapped[str] = mapped_column(String(3), nullable=False)
     from_entity_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    from_entity_functional_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    from_entity_functional_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
 
     # To entity perspective
     to_entity_gl_account_id: Mapped[uuid.UUID] = mapped_column(
@@ -76,15 +91,21 @@ class IntercompanyBalance(Base):
     )
     to_entity_currency: Mapped[str] = mapped_column(String(3), nullable=False)
     to_entity_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    to_entity_functional_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    to_entity_functional_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
 
     # Reporting currency
     reporting_currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
-    reporting_currency_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    reporting_currency_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False
+    )
 
     # Matching
     is_matched: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    difference_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    difference_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
     difference_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Elimination

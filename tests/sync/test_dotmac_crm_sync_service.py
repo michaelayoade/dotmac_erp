@@ -4,8 +4,8 @@ Tests for DotMac CRM Sync Service.
 Tests the business logic for syncing CRM entities to the ERP system.
 Uses mocking for database operations since sync models use PostgreSQL-specific features.
 """
+
 import uuid
-from datetime import datetime, timezone
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -49,7 +49,14 @@ class TestStatusMappings:
 
     def test_project_status_map_keys(self):
         """Project status map should have common CRM statuses."""
-        expected_keys = {"planned", "active", "on_hold", "completed", "cancelled", "canceled"}
+        expected_keys = {
+            "planned",
+            "active",
+            "on_hold",
+            "completed",
+            "cancelled",
+            "canceled",
+        }
         assert expected_keys.issubset(set(PROJECT_STATUS_MAP.keys()))
 
     def test_ticket_status_map_keys(self):
@@ -264,9 +271,13 @@ class TestSyncWorkOrder:
         )
 
         with patch.object(service, "_get_mapping", return_value=None):
-            with patch.object(service, "_resolve_project_id", return_value=project_local_id):
+            with patch.object(
+                service, "_resolve_project_id", return_value=project_local_id
+            ):
                 with patch.object(service, "_resolve_ticket_id", return_value=None):
-                    with patch.object(service, "_resolve_employee_id", return_value=None):
+                    with patch.object(
+                        service, "_resolve_employee_id", return_value=None
+                    ):
                         with patch.object(service, "_create_task") as mock_create:
                             mock_task = MagicMock()
                             mock_task.task_id = uuid.uuid4()
@@ -279,7 +290,9 @@ class TestSyncWorkOrder:
         call_args = mock_create.call_args
         assert call_args[0][2] == project_local_id  # project_id argument
 
-    def test_sync_work_order_without_project_creates_default(self, service, org_id, mock_db):
+    def test_sync_work_order_without_project_creates_default(
+        self, service, org_id, mock_db
+    ):
         """Work order without project should use default project."""
         crm_id = str(uuid.uuid4())
         default_project_id = uuid.uuid4()
@@ -293,8 +306,14 @@ class TestSyncWorkOrder:
         with patch.object(service, "_get_mapping", return_value=None):
             with patch.object(service, "_resolve_project_id", return_value=None):
                 with patch.object(service, "_resolve_ticket_id", return_value=None):
-                    with patch.object(service, "_resolve_employee_id", return_value=None):
-                        with patch.object(service, "_get_or_create_default_project", return_value=default_project_id):
+                    with patch.object(
+                        service, "_resolve_employee_id", return_value=None
+                    ):
+                        with patch.object(
+                            service,
+                            "_get_or_create_default_project",
+                            return_value=default_project_id,
+                        ):
                             with patch.object(service, "_create_task") as mock_create:
                                 mock_task = MagicMock()
                                 mock_task.task_id = uuid.uuid4()
@@ -323,8 +342,14 @@ class TestSyncWorkOrder:
         with patch.object(service, "_get_mapping", return_value=existing_mapping):
             with patch.object(service, "_resolve_project_id", return_value=None):
                 with patch.object(service, "_resolve_ticket_id", return_value=None):
-                    with patch.object(service, "_resolve_employee_id", return_value=None):
-                        with patch.object(service, "_get_or_create_default_project", return_value=default_project_id):
+                    with patch.object(
+                        service, "_resolve_employee_id", return_value=None
+                    ):
+                        with patch.object(
+                            service,
+                            "_get_or_create_default_project",
+                            return_value=default_project_id,
+                        ):
                             with patch.object(service, "_create_task") as mock_create:
                                 mock_task = MagicMock()
                                 mock_task.task_id = uuid.uuid4()
@@ -365,7 +390,7 @@ class TestListOperations:
 
     def test_list_projects_returns_correct_format(self, service, org_id, mock_db):
         """list_projects should return CRMProjectRead objects."""
-        from app.models.sync.dotmac_crm_sync import CRMEntityType, CRMSyncStatus
+        from app.models.sync.dotmac_crm_sync import CRMSyncStatus
 
         mock_mapping = MagicMock()
         mock_mapping.mapping_id = uuid.uuid4()
@@ -670,7 +695,9 @@ class TestInventorySync:
         assert result is None
 
     @patch("app.services.inventory.balance.InventoryBalanceService")
-    def test_get_inventory_item_detail_success(self, mock_balance_class, service, org_id):
+    def test_get_inventory_item_detail_success(
+        self, mock_balance_class, service, org_id
+    ):
         """Should return detailed item info with warehouse breakdown."""
         item_id = uuid.uuid4()
         category_id = uuid.uuid4()
@@ -733,7 +760,9 @@ class TestInventorySync:
         assert result.warehouses[0].warehouse_name == "Main Warehouse"
 
     @patch("app.services.inventory.balance.InventoryBalanceService")
-    def test_list_inventory_items_filtered_pagination(self, mock_balance_class, service, org_id):
+    def test_list_inventory_items_filtered_pagination(
+        self, mock_balance_class, service, org_id
+    ):
         """Filtered pagination should count and page based on available stock."""
         mock_item1 = MagicMock()
         mock_item1.item_id = uuid.uuid4()
@@ -773,7 +802,10 @@ class TestInventorySync:
         mock_category.category_name = "Category"
 
         page1 = MagicMock()
-        page1.all.return_value = [(mock_item1, mock_category), (mock_item2, mock_category)]
+        page1.all.return_value = [
+            (mock_item1, mock_category),
+            (mock_item2, mock_category),
+        ]
         page2 = MagicMock()
         page2.all.return_value = [(mock_item3, mock_category)]
         page3 = MagicMock()

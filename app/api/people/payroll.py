@@ -3,6 +3,7 @@ Payroll API Router.
 
 Thin API wrapper for Payroll endpoints. All business logic is in services.
 """
+
 from datetime import date
 from typing import Optional
 import csv
@@ -44,9 +45,11 @@ from app.schemas.people.payroll import (
     PayrollEntryCreate,
     PayrollEntryRead,
 )
-from app.models.people.payroll.salary_component import SalaryComponent, SalaryComponentType
+from app.models.people.payroll.salary_component import (
+    SalaryComponent,
+    SalaryComponentType,
+)
 from app.models.people.payroll.salary_structure import PayrollFrequency
-from app.models.people.payroll.salary_structure import SalaryStructure
 from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
 from app.services.people.payroll import (
     salary_slip_service,
@@ -111,7 +114,9 @@ def list_salary_components(
         query = query.filter(SalaryComponent.is_active == is_active)
 
     total = query.count()
-    items = query.order_by(SalaryComponent.display_order).offset(offset).limit(limit).all()
+    items = (
+        query.order_by(SalaryComponent.display_order).offset(offset).limit(limit).all()
+    )
 
     return SalaryComponentListResponse(
         items=[SalaryComponentRead.model_validate(c) for c in items],
@@ -121,7 +126,11 @@ def list_salary_components(
     )
 
 
-@router.post("/components", response_model=SalaryComponentRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/components",
+    response_model=SalaryComponentRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_salary_component(
     data: SalaryComponentCreate,
     db: Session = Depends(get_db),
@@ -212,7 +221,11 @@ def list_salary_structures(
     )
 
 
-@router.post("/structures", response_model=SalaryStructureRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/structures",
+    response_model=SalaryStructureRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_salary_structure(
     data: SalaryStructureCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -309,7 +322,11 @@ def list_salary_assignments(
     )
 
 
-@router.post("/assignments", response_model=SalaryStructureAssignmentRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/assignments",
+    response_model=SalaryStructureAssignmentRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_salary_assignment(
     data: SalaryStructureAssignmentCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -331,7 +348,9 @@ def create_salary_assignment(
     return SalaryStructureAssignmentRead.model_validate(assignment)
 
 
-@router.get("/assignments/{assignment_id}", response_model=SalaryStructureAssignmentRead)
+@router.get(
+    "/assignments/{assignment_id}", response_model=SalaryStructureAssignmentRead
+)
 def get_salary_assignment(
     assignment_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
@@ -343,7 +362,9 @@ def get_salary_assignment(
     return SalaryStructureAssignmentRead.model_validate(assignment)
 
 
-@router.patch("/assignments/{assignment_id}", response_model=SalaryStructureAssignmentRead)
+@router.patch(
+    "/assignments/{assignment_id}", response_model=SalaryStructureAssignmentRead
+)
 def update_salary_assignment(
     assignment_id: UUID,
     data: SalaryStructureAssignmentUpdate,
@@ -436,36 +457,42 @@ def export_salary_slips(
         offset=0,
     )
 
-    rows = [[
-        "Slip #",
-        "Employee",
-        "Period",
-        "Gross",
-        "Deductions",
-        "Net Pay",
-        "Status",
-        "Bank Name",
-        "Bank Account Number",
-        "Bank Branch Code",
-    ]]
+    rows = [
+        [
+            "Slip #",
+            "Employee",
+            "Period",
+            "Gross",
+            "Deductions",
+            "Net Pay",
+            "Status",
+            "Bank Name",
+            "Bank Account Number",
+            "Bank Branch Code",
+        ]
+    ]
     for slip in slips:
         period = f"{slip.start_date.strftime('%b %d')} - {slip.end_date.strftime('%b %d, %Y')}"
-        rows.append([
-            slip.slip_number,
-            slip.employee_name or "",
-            period,
-            f"{slip.gross_pay:,.2f}",
-            f"({slip.total_deduction:,.2f})",
-            f"{slip.net_pay:,.2f}",
-            slip.status.value.title(),
-            slip.bank_name or "",
-            slip.bank_account_number or "",
-            slip.bank_branch_code or "",
-        ])
+        rows.append(
+            [
+                slip.slip_number,
+                slip.employee_name or "",
+                period,
+                f"{slip.gross_pay:,.2f}",
+                f"({slip.total_deduction:,.2f})",
+                f"{slip.net_pay:,.2f}",
+                slip.status.value.title(),
+                slip.bank_name or "",
+                slip.bank_account_number or "",
+                slip.bank_branch_code or "",
+            ]
+        )
     return csv_response(rows, "salary_slips.csv")
 
 
-@router.post("/slips", response_model=SalarySlipRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/slips", response_model=SalarySlipRead, status_code=status.HTTP_201_CREATED
+)
 def create_salary_slip(
     data: SalarySlipCreate,
     user_id: UUID = Query(..., description="ID of user creating the slip"),
@@ -608,7 +635,9 @@ def list_payroll_entries(
         try:
             frequency = PayrollFrequency(payroll_frequency)
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail="Invalid payroll frequency") from exc
+            raise HTTPException(
+                status_code=400, detail="Invalid payroll frequency"
+            ) from exc
     result = svc.list_payroll_entries(
         org_id=organization_id,
         status=status,
@@ -625,7 +654,9 @@ def list_payroll_entries(
     )
 
 
-@router.post("/entries", response_model=PayrollEntryRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/entries", response_model=PayrollEntryRead, status_code=status.HTTP_201_CREATED
+)
 def create_payroll_entry(
     data: PayrollEntryCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -690,7 +721,9 @@ def delete_payroll_entry(
     db.commit()
 
 
-@router.post("/entries/{entry_id}/generate-slips", response_model=PayrollSlipGenerationResult)
+@router.post(
+    "/entries/{entry_id}/generate-slips", response_model=PayrollSlipGenerationResult
+)
 def generate_salary_slips(
     entry_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
@@ -708,7 +741,9 @@ def generate_salary_slips(
     return PayrollSlipGenerationResult(**result)
 
 
-@router.post("/entries/{entry_id}/regenerate-slips", response_model=PayrollSlipGenerationResult)
+@router.post(
+    "/entries/{entry_id}/regenerate-slips", response_model=PayrollSlipGenerationResult
+)
 def regenerate_salary_slips(
     entry_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
@@ -773,8 +808,7 @@ def handoff_payroll_to_books(
 
 from decimal import Decimal as PyDecimal
 from pydantic import BaseModel, Field
-from app.services.people.payroll.paye_calculator import PAYECalculator, PAYEBreakdown
-from app.models.people.payroll.tax_band import TaxBand
+from app.services.people.payroll.paye_calculator import PAYECalculator
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 
 
@@ -811,19 +845,38 @@ class PAYECalculateRequest(BaseModel):
     """PAYE calculation request."""
 
     gross_monthly: PyDecimal = Field(
-        ..., gt=0, le=float(MAX_MONTHLY_SALARY), description="Monthly gross salary (max ₦1B)"
+        ...,
+        gt=0,
+        le=float(MAX_MONTHLY_SALARY),
+        description="Monthly gross salary (max ₦1B)",
     )
     basic_monthly: PyDecimal = Field(
-        ..., gt=0, le=float(MAX_MONTHLY_SALARY), description="Monthly basic salary (max ₦1B)"
+        ...,
+        gt=0,
+        le=float(MAX_MONTHLY_SALARY),
+        description="Monthly basic salary (max ₦1B)",
     )
     annual_rent: Optional[PyDecimal] = Field(
-        None, ge=0, le=float(MAX_ANNUAL_RENT), description="Annual rent for relief (max ₦100M)"
+        None,
+        ge=0,
+        le=float(MAX_ANNUAL_RENT),
+        description="Annual rent for relief (max ₦100M)",
     )
-    rent_verified: bool = Field(False, description="Whether rent documentation is verified")
-    pension_rate: Optional[PyDecimal] = Field(None, ge=0, le=1, description="Override pension rate")
-    nhf_rate: Optional[PyDecimal] = Field(None, ge=0, le=1, description="Override NHF rate")
-    nhis_rate: Optional[PyDecimal] = Field(None, ge=0, le=1, description="Override NHIS rate")
-    employee_id: Optional[UUID] = Field(None, description="Employee ID for profile lookup")
+    rent_verified: bool = Field(
+        False, description="Whether rent documentation is verified"
+    )
+    pension_rate: Optional[PyDecimal] = Field(
+        None, ge=0, le=1, description="Override pension rate"
+    )
+    nhf_rate: Optional[PyDecimal] = Field(
+        None, ge=0, le=1, description="Override NHF rate"
+    )
+    nhis_rate: Optional[PyDecimal] = Field(
+        None, ge=0, le=1, description="Override NHIS rate"
+    )
+    employee_id: Optional[UUID] = Field(
+        None, description="Employee ID for profile lookup"
+    )
 
 
 class TaxBandBreakdownResponse(BaseModel):
@@ -969,7 +1022,9 @@ def list_tax_bands(
 @router.post("/tax/bands/seed-nta-2025", response_model=TaxBandListResponse)
 def seed_nta_2025_tax_bands(
     organization_id: UUID = Depends(require_organization_id),
-    effective_from: date = Query(default=date(2026, 1, 1), description="When bands become effective"),
+    effective_from: date = Query(
+        default=date(2026, 1, 1), description="When bands become effective"
+    ),
     db: Session = Depends(get_db),
     auth: dict = Depends(require_tenant_auth),
 ):
@@ -1071,7 +1126,11 @@ def get_employee_tax_profile(
     return EmployeeTaxProfileRead.model_validate(profile)
 
 
-@router.post("/tax/profile", response_model=EmployeeTaxProfileRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/tax/profile",
+    response_model=EmployeeTaxProfileRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_employee_tax_profile(
     data: EmployeeTaxProfileCreate,
     organization_id: UUID = Depends(require_organization_id),

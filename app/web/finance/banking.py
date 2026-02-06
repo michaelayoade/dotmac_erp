@@ -27,7 +27,9 @@ def list_bank_accounts(
     db: Session = Depends(get_db),
 ):
     """Bank accounts list page."""
-    return banking_web_service.list_accounts_response(request, auth, db, search, status, page)
+    return banking_web_service.list_accounts_response(
+        request, auth, db, search, status, page
+    )
 
 
 @router.get("/accounts/new", response_class=HTMLResponse)
@@ -104,7 +106,9 @@ def view_statement(
     db: Session = Depends(get_db),
 ):
     """Statement detail page with lines."""
-    return banking_web_service.statement_detail_response(request, auth, db, statement_id)
+    return banking_web_service.statement_detail_response(
+        request, auth, db, statement_id
+    )
 
 
 @router.get("/reconciliations", response_class=HTMLResponse)
@@ -149,7 +153,9 @@ def view_reconciliation(
     db: Session = Depends(get_db),
 ):
     """Reconciliation workspace page."""
-    return banking_web_service.reconciliation_detail_response(request, auth, db, reconciliation_id)
+    return banking_web_service.reconciliation_detail_response(
+        request, auth, db, reconciliation_id
+    )
 
 
 @router.get("/reconciliations/{reconciliation_id}/report", response_class=HTMLResponse)
@@ -178,7 +184,9 @@ def list_payees(
     db: Session = Depends(get_db),
 ):
     """Payees list page."""
-    return banking_web_service.list_payees_response(request, auth, db, search, payee_type, page)
+    return banking_web_service.list_payees_response(
+        request, auth, db, search, payee_type, page
+    )
 
 
 @router.get("/payees/new", response_class=HTMLResponse)

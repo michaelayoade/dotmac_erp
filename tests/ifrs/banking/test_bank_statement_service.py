@@ -4,7 +4,7 @@ Tests for BankStatementService.
 
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
@@ -17,8 +17,6 @@ from tests.ifrs.banking.conftest import (
     MockBankAccount,
     MockBankStatement,
     MockBankStatementLine,
-    MockBankStatementStatus,
-    MockStatementLineType,
 )
 
 
@@ -306,9 +304,7 @@ class TestMarkLineMatched:
         line.statement = statement
         mock_db.get.return_value = line
 
-        result = service.mark_line_matched(
-            mock_db, line.line_id, uuid4(), user_id
-        )
+        result = service.mark_line_matched(mock_db, line.line_id, uuid4(), user_id)
 
         assert result.is_matched is True
         assert result.matched_by == user_id
@@ -331,7 +327,9 @@ class TestUnmatchLine:
 
     def test_unmatch_line_success(self, service, mock_db):
         """Test unmatching a line."""
-        statement = MockBankStatement(matched_lines=3, unmatched_lines=2, status="processing")
+        statement = MockBankStatement(
+            matched_lines=3, unmatched_lines=2, status="processing"
+        )
         line = MockBankStatementLine(is_matched=True)
         line.statement = statement
         mock_db.get.return_value = line

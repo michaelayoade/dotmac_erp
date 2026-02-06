@@ -3,7 +3,6 @@ Tests for ItemService and ItemCategoryService.
 """
 
 from decimal import Decimal
-from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
@@ -19,7 +18,6 @@ from tests.ifrs.inv.conftest import (
     MockItem,
     MockItemCategory,
     MockItemType,
-    MockCostingMethod,
 )
 
 
@@ -147,9 +145,7 @@ class TestListCategories:
     def test_list_all_categories(self, category_service, mock_db, org_id):
         """Test listing all categories."""
         categories = [MockItemCategory(organization_id=org_id) for _ in range(3)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            categories
-        )
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = categories
 
         result = category_service.list(mock_db, str(org_id))
 
@@ -158,9 +154,7 @@ class TestListCategories:
     def test_list_active_categories_only(self, category_service, mock_db, org_id):
         """Test listing only active categories."""
         categories = [MockItemCategory(organization_id=org_id, is_active=True)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            categories
-        )
+        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = categories
 
         result = category_service.list(mock_db, str(org_id), is_active=True)
 
@@ -333,7 +327,9 @@ class TestUpdateItem:
         mock_db.get.return_value = item
 
         with pytest.raises(HTTPException) as exc:
-            item_service.update_item(mock_db, org_id, item.item_id, {"item_name": "New"})
+            item_service.update_item(
+                mock_db, org_id, item.item_id, {"item_name": "New"}
+            )
 
         assert exc.value.status_code == 404
 
@@ -443,9 +439,7 @@ class TestListItems:
     def test_list_all_items(self, item_service, mock_db, org_id):
         """Test listing all items."""
         items = [MockItem(organization_id=org_id) for _ in range(5)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            items
-        )
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = items
 
         result = item_service.list(mock_db, str(org_id))
 
@@ -454,9 +448,7 @@ class TestListItems:
     def test_list_with_type_filter(self, item_service, mock_db, org_id):
         """Test listing items with type filter."""
         items = [MockItem(organization_id=org_id, item_type=MockItemType.INVENTORY)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            items
-        )
+        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = items
 
         result = item_service.list(mock_db, str(org_id), item_type=ItemType.INVENTORY)
 
@@ -465,9 +457,7 @@ class TestListItems:
     def test_list_with_search(self, item_service, mock_db, org_id):
         """Test listing items with search filter."""
         items = [MockItem(organization_id=org_id, item_name="Test Widget")]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            items
-        )
+        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = items
 
         result = item_service.list(mock_db, str(org_id), search="Widget")
 

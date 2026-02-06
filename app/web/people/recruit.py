@@ -92,7 +92,9 @@ def job_opening_detail(
     db: Session = Depends(get_db),
 ):
     """Job opening detail page."""
-    return recruit_web_service.job_opening_detail_response(request, auth, db, job_opening_id)
+    return recruit_web_service.job_opening_detail_response(
+        request, auth, db, job_opening_id
+    )
 
 
 @router.get("/jobs/{job_opening_id}/edit", response_class=HTMLResponse)
@@ -103,7 +105,9 @@ def edit_job_opening_form(
     db: Session = Depends(get_db),
 ):
     """Edit job opening form."""
-    return recruit_web_service.job_opening_edit_form_response(request, auth, db, job_opening_id)
+    return recruit_web_service.job_opening_edit_form_response(
+        request, auth, db, job_opening_id
+    )
 
 
 @router.post("/jobs/{job_opening_id}/edit", response_class=HTMLResponse)
@@ -114,7 +118,9 @@ async def update_job_opening(
     db: Session = Depends(get_db),
 ):
     """Update a job opening."""
-    return await recruit_web_service.update_job_opening_response(request, auth, db, job_opening_id)
+    return await recruit_web_service.update_job_opening_response(
+        request, auth, db, job_opening_id
+    )
 
 
 @router.post("/jobs/{job_opening_id}/publish")
@@ -197,7 +203,9 @@ def new_applicant_form(
     db: Session = Depends(get_db),
 ):
     """New applicant form."""
-    return recruit_web_service.applicant_new_form_response(request, auth, db, job_opening_id)
+    return recruit_web_service.applicant_new_form_response(
+        request, auth, db, job_opening_id
+    )
 
 
 @router.post("/applicants/new", response_class=HTMLResponse)
@@ -218,7 +226,9 @@ def applicant_detail(
     db: Session = Depends(get_db),
 ):
     """Applicant detail page."""
-    return recruit_web_service.applicant_detail_response(request, auth, db, applicant_id)
+    return recruit_web_service.applicant_detail_response(
+        request, auth, db, applicant_id
+    )
 
 
 @router.get("/applicants/{applicant_id}/edit", response_class=HTMLResponse)
@@ -229,7 +239,9 @@ def edit_applicant_form(
     db: Session = Depends(get_db),
 ):
     """Edit applicant form."""
-    return recruit_web_service.applicant_edit_form_response(request, auth, db, applicant_id)
+    return recruit_web_service.applicant_edit_form_response(
+        request, auth, db, applicant_id
+    )
 
 
 @router.post("/applicants/{applicant_id}/edit", response_class=HTMLResponse)
@@ -240,7 +252,9 @@ async def update_applicant(
     db: Session = Depends(get_db),
 ):
     """Update an applicant."""
-    return await recruit_web_service.update_applicant_response(request, auth, db, applicant_id)
+    return await recruit_web_service.update_applicant_response(
+        request, auth, db, applicant_id
+    )
 
 
 @router.post("/applicants/{applicant_id}/advance")
@@ -251,7 +265,9 @@ async def advance_applicant_status(
     db: Session = Depends(get_db),
 ):
     """Advance applicant through pipeline."""
-    return await recruit_web_service.advance_applicant_response(request, auth, db, applicant_id)
+    return await recruit_web_service.advance_applicant_response(
+        request, auth, db, applicant_id
+    )
 
 
 @router.post("/applicants/{applicant_id}/reject")
@@ -262,7 +278,9 @@ async def reject_applicant(
     db: Session = Depends(get_db),
 ):
     """Reject an applicant."""
-    return await recruit_web_service.reject_applicant_response(request, auth, db, applicant_id)
+    return await recruit_web_service.reject_applicant_response(
+        request, auth, db, applicant_id
+    )
 
 
 @router.post("/applicants/{applicant_id}/delete")
@@ -294,7 +312,15 @@ def list_interviews(
 ):
     """Interviews list page."""
     return recruit_web_service.list_interviews_response(
-        request, auth, db, status, job_opening_id, applicant_id, start_date, end_date, page
+        request,
+        auth,
+        db,
+        status,
+        job_opening_id,
+        applicant_id,
+        start_date,
+        end_date,
+        page,
     )
 
 
@@ -306,7 +332,9 @@ def new_interview_form(
     db: Session = Depends(get_db),
 ):
     """New interview form."""
-    return recruit_web_service.interview_new_form_response(request, auth, db, applicant_id)
+    return recruit_web_service.interview_new_form_response(
+        request, auth, db, applicant_id
+    )
 
 
 @router.post("/interviews/new", response_class=HTMLResponse)
@@ -327,7 +355,9 @@ def interview_detail(
     db: Session = Depends(get_db),
 ):
     """Interview detail page."""
-    return recruit_web_service.interview_detail_response(request, auth, db, interview_id)
+    return recruit_web_service.interview_detail_response(
+        request, auth, db, interview_id
+    )
 
 
 @router.get("/interviews/{interview_id}/edit", response_class=HTMLResponse)
@@ -338,7 +368,9 @@ def edit_interview_form(
     db: Session = Depends(get_db),
 ):
     """Edit interview form."""
-    return recruit_web_service.interview_edit_form_response(request, auth, db, interview_id)
+    return recruit_web_service.interview_edit_form_response(
+        request, auth, db, interview_id
+    )
 
 
 @router.post("/interviews/{interview_id}/edit", response_class=HTMLResponse)
@@ -349,7 +381,9 @@ async def update_interview(
     db: Session = Depends(get_db),
 ):
     """Update an interview."""
-    return await recruit_web_service.update_interview_response(request, auth, db, interview_id)
+    return await recruit_web_service.update_interview_response(
+        request, auth, db, interview_id
+    )
 
 
 @router.post("/interviews/{interview_id}/cancel")
@@ -360,7 +394,9 @@ async def cancel_interview(
     db: Session = Depends(get_db),
 ):
     """Cancel an interview."""
-    return await recruit_web_service.cancel_interview_response(request, auth, db, interview_id)
+    return await recruit_web_service.cancel_interview_response(
+        request, auth, db, interview_id
+    )
 
 
 @router.post("/interviews/{interview_id}/feedback")
@@ -371,7 +407,9 @@ async def record_interview_feedback(
     db: Session = Depends(get_db),
 ):
     """Record interview feedback."""
-    return await recruit_web_service.record_interview_feedback_response(request, auth, db, interview_id)
+    return await recruit_web_service.record_interview_feedback_response(
+        request, auth, db, interview_id
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -488,7 +526,9 @@ async def withdraw_offer(
     db: Session = Depends(get_db),
 ):
     """Withdraw an offer."""
-    return await recruit_web_service.withdraw_offer_response(request, auth, db, offer_id)
+    return await recruit_web_service.withdraw_offer_response(
+        request, auth, db, offer_id
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -504,7 +544,9 @@ def report_pipeline(
     db: Session = Depends(get_db),
 ):
     """Recruitment pipeline report."""
-    return recruit_web_service.pipeline_report_response(request, auth, db, job_opening_id)
+    return recruit_web_service.pipeline_report_response(
+        request, auth, db, job_opening_id
+    )
 
 
 @router.get("/reports/time-to-hire", response_class=HTMLResponse)
@@ -516,7 +558,9 @@ def report_time_to_hire(
     db: Session = Depends(get_db),
 ):
     """Time to hire report."""
-    return recruit_web_service.time_to_hire_report_response(request, auth, db, start_date, end_date)
+    return recruit_web_service.time_to_hire_report_response(
+        request, auth, db, start_date, end_date
+    )
 
 
 @router.get("/reports/sources", response_class=HTMLResponse)
@@ -528,7 +572,9 @@ def report_sources(
     db: Session = Depends(get_db),
 ):
     """Applicant source analysis report."""
-    return recruit_web_service.source_analysis_report_response(request, auth, db, start_date, end_date)
+    return recruit_web_service.source_analysis_report_response(
+        request, auth, db, start_date, end_date
+    )
 
 
 @router.get("/reports/overview", response_class=HTMLResponse)
@@ -540,4 +586,6 @@ def report_overview(
     db: Session = Depends(get_db),
 ):
     """Recruitment overview report."""
-    return recruit_web_service.overview_report_response(request, auth, db, start_date, end_date)
+    return recruit_web_service.overview_report_response(
+        request, auth, db, start_date, end_date
+    )

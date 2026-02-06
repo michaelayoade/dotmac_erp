@@ -3,6 +3,7 @@ Expense Management API Router.
 
 Thin API wrapper for Expense Management endpoints. All business logic is in services.
 """
+
 from datetime import date
 from decimal import Decimal
 from typing import Optional
@@ -13,7 +14,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
 from app.db import SessionLocal
-from app.models.people.exp import CashAdvanceStatus, CardTransactionStatus, ExpenseClaimStatus
+from app.models.people.exp import (
+    CashAdvanceStatus,
+    CardTransactionStatus,
+    ExpenseClaimStatus,
+)
 from app.schemas.people.expense import (
     # Expense Category
     ExpenseCategoryCreate,
@@ -79,7 +84,9 @@ def parse_enum(value: Optional[str], enum_type, field_name: str):
     try:
         return enum_type(value)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid {field_name}: {value}") from exc
+        raise HTTPException(
+            status_code=400, detail=f"Invalid {field_name}: {value}"
+        ) from exc
 
 
 # =============================================================================
@@ -114,7 +121,11 @@ def list_expense_categories(
     )
 
 
-@router.post("/categories", response_model=ExpenseCategoryRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/categories",
+    response_model=ExpenseCategoryRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_expense_category(
     payload: ExpenseCategoryCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -144,7 +155,9 @@ def get_expense_category(
 ):
     """Get an expense category by ID."""
     svc = ExpenseService(db)
-    return ExpenseCategoryRead.model_validate(svc.get_category(organization_id, category_id))
+    return ExpenseCategoryRead.model_validate(
+        svc.get_category(organization_id, category_id)
+    )
 
 
 @router.patch("/categories/{category_id}", response_model=ExpenseCategoryRead)
@@ -209,7 +222,9 @@ def list_expense_claims(
     )
 
 
-@router.post("/claims", response_model=ExpenseClaimRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/claims", response_model=ExpenseClaimRead, status_code=status.HTTP_201_CREATED
+)
 def create_expense_claim(
     payload: ExpenseClaimCreate,
     request: Request,
@@ -322,7 +337,11 @@ def delete_expense_claim(
 
 
 # Claim items
-@router.post("/claims/{claim_id}/items", response_model=ExpenseClaimItemRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/claims/{claim_id}/items",
+    response_model=ExpenseClaimItemRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def add_claim_item(
     claim_id: UUID,
     payload: ExpenseClaimItemCreate,
@@ -353,7 +372,9 @@ def add_claim_item(
     return ExpenseClaimItemRead.model_validate(item)
 
 
-@router.delete("/claims/{claim_id}/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/claims/{claim_id}/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 def remove_claim_item(
     claim_id: UUID,
     item_id: UUID,
@@ -750,7 +771,9 @@ def list_cash_advances(
     )
 
 
-@router.post("/advances", response_model=CashAdvanceRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/advances", response_model=CashAdvanceRead, status_code=status.HTTP_201_CREATED
+)
 def create_cash_advance(
     payload: CashAdvanceCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -925,7 +948,9 @@ def list_corporate_cards(
     )
 
 
-@router.post("/cards", response_model=CorporateCardRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/cards", response_model=CorporateCardRead, status_code=status.HTTP_201_CREATED
+)
 def create_corporate_card(
     payload: CorporateCardCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -1029,7 +1054,11 @@ def list_card_transactions(
     )
 
 
-@router.post("/transactions", response_model=CardTransactionRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/transactions",
+    response_model=CardTransactionRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_card_transaction(
     payload: CardTransactionCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -1064,7 +1093,9 @@ def get_card_transaction(
 ):
     """Get a card transaction by ID."""
     svc = ExpenseService(db)
-    return CardTransactionRead.model_validate(svc.get_transaction(organization_id, transaction_id))
+    return CardTransactionRead.model_validate(
+        svc.get_transaction(organization_id, transaction_id)
+    )
 
 
 @router.patch("/transactions/{transaction_id}", response_model=CardTransactionRead)

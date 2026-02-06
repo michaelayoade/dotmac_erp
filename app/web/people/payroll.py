@@ -47,6 +47,7 @@ def new_component_form(
     """New salary component form."""
     return payroll_web_service.component_new_form_response(request, auth, db)
 
+
 @router.get("/components/{component_id}/edit", response_class=HTMLResponse)
 def edit_component_form(
     request: Request,
@@ -55,7 +56,9 @@ def edit_component_form(
     db: Session = Depends(get_db),
 ):
     """Edit salary component form."""
-    return payroll_web_service.component_edit_form_response(request, auth, db, component_id)
+    return payroll_web_service.component_edit_form_response(
+        request, auth, db, component_id
+    )
 
 
 @router.post("/components/new")
@@ -67,6 +70,7 @@ async def create_component(
     """Create new salary component."""
     return await payroll_web_service.create_component_response(request, auth, db)
 
+
 @router.post("/components/{component_id}/edit")
 async def update_component(
     request: Request,
@@ -75,7 +79,9 @@ async def update_component(
     db: Session = Depends(get_db),
 ):
     """Update salary component."""
-    return await payroll_web_service.update_component_response(request, auth, db, component_id)
+    return await payroll_web_service.update_component_response(
+        request, auth, db, component_id
+    )
 
 
 @router.post("/components/{component_id}/delete")
@@ -103,7 +109,9 @@ def list_salary_slips(
     db: Session = Depends(get_db),
 ):
     """Salary slip list page."""
-    return payroll_web_service.list_slips_response(request, auth, db, search, status, page)
+    return payroll_web_service.list_slips_response(
+        request, auth, db, search, status, page
+    )
 
 
 @router.get("/slips/export")
@@ -238,6 +246,7 @@ def new_structure_form(
     """New salary structure form."""
     return payroll_web_service.structure_new_form_response(request, auth, db)
 
+
 @router.get("/structures/{structure_id}/edit", response_class=HTMLResponse)
 def edit_structure_form(
     request: Request,
@@ -246,7 +255,9 @@ def edit_structure_form(
     db: Session = Depends(get_db),
 ):
     """Edit salary structure form."""
-    return payroll_web_service.structure_edit_form_response(request, auth, db, structure_id)
+    return payroll_web_service.structure_edit_form_response(
+        request, auth, db, structure_id
+    )
 
 
 @router.post("/structures/new")
@@ -258,6 +269,7 @@ async def create_structure(
     """Create new salary structure."""
     return await payroll_web_service.create_structure_response(request, auth, db)
 
+
 @router.post("/structures/{structure_id}/edit")
 async def update_structure(
     request: Request,
@@ -266,7 +278,9 @@ async def update_structure(
     db: Session = Depends(get_db),
 ):
     """Update salary structure."""
-    return await payroll_web_service.update_structure_response(request, auth, db, structure_id)
+    return await payroll_web_service.update_structure_response(
+        request, auth, db, structure_id
+    )
 
 
 @router.post("/structures/{structure_id}/delete")
@@ -278,6 +292,7 @@ def delete_structure(
     """Delete salary structure."""
     return payroll_web_service.delete_structure_response(auth, db, structure_id)
 
+
 @router.get("/structures/{structure_id}", response_class=HTMLResponse)
 def view_structure(
     request: Request,
@@ -286,7 +301,9 @@ def view_structure(
     db: Session = Depends(get_db),
 ):
     """View salary structure details."""
-    return payroll_web_service.structure_detail_response(request, auth, db, structure_id)
+    return payroll_web_service.structure_detail_response(
+        request, auth, db, structure_id
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -318,7 +335,9 @@ def new_assignment_form(
     db: Session = Depends(get_db),
 ):
     """New salary assignment form."""
-    return payroll_web_service.assignment_new_form_response(request, auth, db, employee_id)
+    return payroll_web_service.assignment_new_form_response(
+        request, auth, db, employee_id
+    )
 
 
 @router.post("/assignments/new")
@@ -359,7 +378,9 @@ def edit_assignment_form(
     db: Session = Depends(get_db),
 ):
     """Edit salary assignment form."""
-    return payroll_web_service.assignment_edit_form_response(request, auth, db, assignment_id)
+    return payroll_web_service.assignment_edit_form_response(
+        request, auth, db, assignment_id
+    )
 
 
 @router.post("/assignments/{assignment_id}/edit")
@@ -370,7 +391,9 @@ async def update_assignment(
     db: Session = Depends(get_db),
 ):
     """Update salary structure assignment."""
-    return await payroll_web_service.update_assignment_response(request, auth, db, assignment_id)
+    return await payroll_web_service.update_assignment_response(
+        request, auth, db, assignment_id
+    )
 
 
 @router.post("/assignments/{assignment_id}/end")
@@ -381,7 +404,9 @@ def end_assignment(
     db: Session = Depends(get_db),
 ):
     """End salary structure assignment."""
-    return payroll_web_service.end_assignment_response(auth, db, assignment_id, end_date)
+    return payroll_web_service.end_assignment_response(
+        auth, db, assignment_id, end_date
+    )
 
 
 @router.post("/assignments/{assignment_id}/delete")
@@ -410,7 +435,9 @@ def list_payroll_runs(
     db: Session = Depends(get_db),
 ):
     """Payroll runs list page."""
-    return payroll_web_service.list_runs_response(request, auth, db, status, year, month, page)
+    return payroll_web_service.list_runs_response(
+        request, auth, db, status, year, month, page
+    )
 
 
 @router.get("/runs/new", response_class=HTMLResponse)
@@ -443,7 +470,9 @@ def view_run(
     db: Session = Depends(get_db),
 ):
     """Payroll run detail page."""
-    return payroll_web_service.run_detail_response(request, auth, db, entry_id, success, error)
+    return payroll_web_service.run_detail_response(
+        request, auth, db, entry_id, success, error
+    )
 
 
 @router.post("/runs/{entry_id}/generate")
@@ -544,7 +573,9 @@ def report_by_department(
     db: Session = Depends(get_db),
 ):
     """Payroll by department report."""
-    return payroll_web_service.by_department_report_response(request, auth, db, year, month)
+    return payroll_web_service.by_department_report_response(
+        request, auth, db, year, month
+    )
 
 
 @router.get("/reports/tax-summary", response_class=HTMLResponse)
@@ -556,7 +587,9 @@ def report_tax_summary(
     db: Session = Depends(get_db),
 ):
     """Tax summary report."""
-    return payroll_web_service.tax_summary_report_response(request, auth, db, year, month)
+    return payroll_web_service.tax_summary_report_response(
+        request, auth, db, year, month
+    )
 
 
 @router.get("/reports/trends", response_class=HTMLResponse)
@@ -644,7 +677,9 @@ def new_tax_profile_form(
     db: Session = Depends(get_db),
 ):
     """New tax profile form."""
-    return payroll_web_service.tax_profile_new_form_response(request, auth, db, employee_id)
+    return payroll_web_service.tax_profile_new_form_response(
+        request, auth, db, employee_id
+    )
 
 
 @router.post("/tax/profiles/new")
@@ -665,7 +700,9 @@ def view_tax_profile(
     db: Session = Depends(get_db),
 ):
     """Tax profile detail page."""
-    return payroll_web_service.tax_profile_detail_response(request, auth, db, employee_id)
+    return payroll_web_service.tax_profile_detail_response(
+        request, auth, db, employee_id
+    )
 
 
 @router.get("/tax/profiles/{employee_id}/edit", response_class=HTMLResponse)
@@ -676,7 +713,9 @@ def edit_tax_profile_form(
     db: Session = Depends(get_db),
 ):
     """Edit tax profile form."""
-    return payroll_web_service.tax_profile_edit_form_response(request, auth, db, employee_id)
+    return payroll_web_service.tax_profile_edit_form_response(
+        request, auth, db, employee_id
+    )
 
 
 @router.post("/tax/profiles/{employee_id}/edit")
@@ -687,4 +726,6 @@ async def update_tax_profile(
     db: Session = Depends(get_db),
 ):
     """Update tax profile."""
-    return await payroll_web_service.update_tax_profile_response(request, auth, db, employee_id)
+    return await payroll_web_service.update_tax_profile_response(
+        request, auth, db, employee_id
+    )

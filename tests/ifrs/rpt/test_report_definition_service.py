@@ -70,9 +70,7 @@ class TestReportDefinitionServiceCreate:
 class TestReportDefinitionServiceUpdate:
     """Tests for update_definition method."""
 
-    def test_update_definition_success(
-        self, mock_db, org_id, mock_report_definition
-    ):
+    def test_update_definition_success(self, mock_db, org_id, mock_report_definition):
         """Test successful report definition update."""
         from app.services.finance.rpt.report_definition import ReportDefinitionService
 
@@ -296,9 +294,7 @@ class TestReportDefinitionServiceQueries:
             mock_report_definition
         )
 
-        result = ReportDefinitionService.get_by_code(
-            mock_db, str(org_id), "RPT-001"
-        )
+        result = ReportDefinitionService.get_by_code(mock_db, str(org_id), "RPT-001")
 
         assert result is not None
 

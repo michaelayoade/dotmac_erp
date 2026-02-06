@@ -83,7 +83,9 @@ def edit_appraisal_form(
     db: Session = Depends(get_db),
 ):
     """Edit appraisal form."""
-    return perf_web_service.appraisal_edit_form_response(request, auth, db, appraisal_id)
+    return perf_web_service.appraisal_edit_form_response(
+        request, auth, db, appraisal_id
+    )
 
 
 @router.post("/appraisals/{appraisal_id}/edit", response_class=HTMLResponse)
@@ -94,7 +96,9 @@ async def update_appraisal(
     db: Session = Depends(get_db),
 ):
     """Update an appraisal."""
-    return await perf_web_service.update_appraisal_response(request, auth, db, appraisal_id)
+    return await perf_web_service.update_appraisal_response(
+        request, auth, db, appraisal_id
+    )
 
 
 @router.post("/appraisals/{appraisal_id}/cancel")
@@ -130,7 +134,9 @@ def self_assessment_form(
     db: Session = Depends(get_db),
 ):
     """Self-assessment form page."""
-    return perf_web_service.self_assessment_form_response(request, auth, db, appraisal_id)
+    return perf_web_service.self_assessment_form_response(
+        request, auth, db, appraisal_id
+    )
 
 
 @router.post("/appraisals/{appraisal_id}/self-assessment", response_class=HTMLResponse)
@@ -141,7 +147,9 @@ async def submit_self_assessment(
     db: Session = Depends(get_db),
 ):
     """Submit self-assessment."""
-    return await perf_web_service.submit_self_assessment_response(request, auth, db, appraisal_id)
+    return await perf_web_service.submit_self_assessment_response(
+        request, auth, db, appraisal_id
+    )
 
 
 @router.get("/appraisals/{appraisal_id}/manager-review", response_class=HTMLResponse)
@@ -152,7 +160,9 @@ def manager_review_form(
     db: Session = Depends(get_db),
 ):
     """Manager review form page."""
-    return perf_web_service.manager_review_form_response(request, auth, db, appraisal_id)
+    return perf_web_service.manager_review_form_response(
+        request, auth, db, appraisal_id
+    )
 
 
 @router.post("/appraisals/{appraisal_id}/manager-review", response_class=HTMLResponse)
@@ -163,7 +173,9 @@ async def submit_manager_review(
     db: Session = Depends(get_db),
 ):
     """Submit manager review."""
-    return await perf_web_service.submit_manager_review_response(request, auth, db, appraisal_id)
+    return await perf_web_service.submit_manager_review_response(
+        request, auth, db, appraisal_id
+    )
 
 
 @router.get("/appraisals/{appraisal_id}/calibration", response_class=HTMLResponse)
@@ -185,7 +197,9 @@ async def submit_calibration(
     db: Session = Depends(get_db),
 ):
     """Submit calibration and complete appraisal."""
-    return await perf_web_service.submit_calibration_response(request, auth, db, appraisal_id)
+    return await perf_web_service.submit_calibration_response(
+        request, auth, db, appraisal_id
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -217,7 +231,9 @@ def request_feedback_form(
     db: Session = Depends(get_db),
 ):
     """Request feedback form."""
-    return perf_web_service.request_feedback_form_response(request, auth, db, appraisal_id)
+    return perf_web_service.request_feedback_form_response(
+        request, auth, db, appraisal_id
+    )
 
 
 @router.post("/feedback/request", response_class=HTMLResponse)
@@ -253,7 +269,9 @@ def submit_feedback_form(
     db: Session = Depends(get_db),
 ):
     """Submit feedback form."""
-    return perf_web_service.submit_feedback_form_response(request, auth, db, feedback_id)
+    return perf_web_service.submit_feedback_form_response(
+        request, auth, db, feedback_id
+    )
 
 
 @router.post("/feedback/{feedback_id}/submit", response_class=HTMLResponse)
@@ -264,7 +282,9 @@ async def submit_feedback(
     db: Session = Depends(get_db),
 ):
     """Submit feedback."""
-    return await perf_web_service.submit_feedback_response(request, auth, db, feedback_id)
+    return await perf_web_service.submit_feedback_response(
+        request, auth, db, feedback_id
+    )
 
 
 @router.post("/feedback/{feedback_id}/delete")
@@ -362,7 +382,9 @@ async def update_kpi_progress(
     db: Session = Depends(get_db),
 ):
     """Update KPI progress."""
-    return await perf_web_service.update_goal_progress_response(request, auth, db, kpi_id)
+    return await perf_web_service.update_goal_progress_response(
+        request, auth, db, kpi_id
+    )
 
 
 @router.post("/goals/{kpi_id}/delete")
@@ -637,7 +659,9 @@ def template_detail(
     db: Session = Depends(get_db),
 ):
     """Template detail page."""
-    return perf_web_service.template_detail_response(request, auth, db, template_id, success)
+    return perf_web_service.template_detail_response(
+        request, auth, db, template_id, success
+    )
 
 
 @router.get("/templates/{template_id}/edit", response_class=HTMLResponse)
@@ -659,7 +683,9 @@ async def update_template(
     db: Session = Depends(get_db),
 ):
     """Update a template."""
-    return await perf_web_service.update_template_response(request, auth, db, template_id)
+    return await perf_web_service.update_template_response(
+        request, auth, db, template_id
+    )
 
 
 @router.post("/templates/{template_id}/toggle-active")
@@ -733,7 +759,9 @@ def scorecard_detail(
     db: Session = Depends(get_db),
 ):
     """Scorecard detail page."""
-    return perf_web_service.scorecard_detail_response(request, auth, db, scorecard_id, success)
+    return perf_web_service.scorecard_detail_response(
+        request, auth, db, scorecard_id, success
+    )
 
 
 @router.get("/scorecards/{scorecard_id}/items/{item_id}", response_class=HTMLResponse)
@@ -772,7 +800,9 @@ def scorecard_finalize_form(
     db: Session = Depends(get_db),
 ):
     """Finalize scorecard form."""
-    return perf_web_service.scorecard_finalize_form_response(request, auth, db, scorecard_id)
+    return perf_web_service.scorecard_finalize_form_response(
+        request, auth, db, scorecard_id
+    )
 
 
 @router.post("/scorecards/{scorecard_id}/finalize", response_class=HTMLResponse)
@@ -783,7 +813,9 @@ async def finalize_scorecard(
     db: Session = Depends(get_db),
 ):
     """Finalize a scorecard."""
-    return await perf_web_service.finalize_scorecard_response(request, auth, db, scorecard_id)
+    return await perf_web_service.finalize_scorecard_response(
+        request, auth, db, scorecard_id
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

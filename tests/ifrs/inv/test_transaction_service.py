@@ -4,7 +4,7 @@ Tests for InventoryTransactionService.
 
 from datetime import datetime, timezone
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -13,7 +13,6 @@ from app.services.inventory.transaction import (
     InventoryTransactionService,
     TransactionInput,
 )
-from app.models.inventory.item import CostingMethod
 from app.models.inventory.inventory_transaction import TransactionType
 from tests.ifrs.inv.conftest import (
     MockItem,
@@ -102,12 +101,19 @@ class TestCreateReceipt:
         )
 
         mock_db.get.side_effect = [item, warehouse]
-        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal("0")
+        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal(
+            "0"
+        )
 
-        with patch.object(InventoryTransactionService, "get_current_balance", return_value=Decimal("0")):
+        with patch.object(
+            InventoryTransactionService,
+            "get_current_balance",
+            return_value=Decimal("0"),
+        ):
             with patch.object(
-                InventoryTransactionService, "calculate_weighted_average_cost",
-                return_value=Decimal("10.00")
+                InventoryTransactionService,
+                "calculate_weighted_average_cost",
+                return_value=Decimal("10.00"),
             ):
                 result = service.create_receipt(
                     mock_db, org_id, sample_receipt_input, user_id
@@ -195,10 +201,12 @@ class TestCreateIssue:
 
         mock_db.get.side_effect = [item, warehouse]
 
-        with patch.object(InventoryTransactionService, "get_current_balance", return_value=Decimal("100")):
-            result = service.create_issue(
-                mock_db, org_id, sample_issue_input, user_id
-            )
+        with patch.object(
+            InventoryTransactionService,
+            "get_current_balance",
+            return_value=Decimal("100"),
+        ):
+            result = service.create_issue(mock_db, org_id, sample_issue_input, user_id)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -221,7 +229,11 @@ class TestCreateIssue:
 
         mock_db.get.side_effect = [item, warehouse]
 
-        with patch.object(InventoryTransactionService, "get_current_balance", return_value=Decimal("10")):
+        with patch.object(
+            InventoryTransactionService,
+            "get_current_balance",
+            return_value=Decimal("10"),
+        ):
             with pytest.raises(HTTPException) as exc:
                 service.create_issue(mock_db, org_id, sample_issue_input, user_id)
 
@@ -274,7 +286,11 @@ class TestCreateAdjustment:
 
         mock_db.get.side_effect = [item, warehouse]
 
-        with patch.object(InventoryTransactionService, "get_current_balance", return_value=Decimal("100")):
+        with patch.object(
+            InventoryTransactionService,
+            "get_current_balance",
+            return_value=Decimal("100"),
+        ):
             result = service.create_adjustment(mock_db, org_id, input_data, user_id)
 
         mock_db.add.assert_called_once()
@@ -308,7 +324,11 @@ class TestCreateAdjustment:
 
         mock_db.get.side_effect = [item, warehouse]
 
-        with patch.object(InventoryTransactionService, "get_current_balance", return_value=Decimal("100")):
+        with patch.object(
+            InventoryTransactionService,
+            "get_current_balance",
+            return_value=Decimal("100"),
+        ):
             result = service.create_adjustment(mock_db, org_id, input_data, user_id)
 
         mock_db.add.assert_called_once()
@@ -343,7 +363,11 @@ class TestCreateAdjustment:
 
         mock_db.get.side_effect = [item, warehouse]
 
-        with patch.object(InventoryTransactionService, "get_current_balance", return_value=Decimal("100")):
+        with patch.object(
+            InventoryTransactionService,
+            "get_current_balance",
+            return_value=Decimal("100"),
+        ):
             with pytest.raises(HTTPException) as exc:
                 service.create_adjustment(mock_db, org_id, input_data, user_id)
 
@@ -387,10 +411,14 @@ class TestCreateTransfer:
 
         mock_db.get.side_effect = [item, from_warehouse, to_warehouse]
 
-        with patch.object(InventoryTransactionService, "get_current_balance", side_effect=[
-            Decimal("100"),  # Source warehouse
-            Decimal("50"),   # Destination warehouse
-        ]):
+        with patch.object(
+            InventoryTransactionService,
+            "get_current_balance",
+            side_effect=[
+                Decimal("100"),  # Source warehouse
+                Decimal("50"),  # Destination warehouse
+            ],
+        ):
             result = service.create_transfer(mock_db, org_id, input_data, user_id)
 
         # Should create 2 transactions (issue and receipt)
@@ -457,7 +485,11 @@ class TestCreateTransfer:
 
         mock_db.get.side_effect = [item, from_warehouse, to_warehouse]
 
-        with patch.object(InventoryTransactionService, "get_current_balance", return_value=Decimal("100")):
+        with patch.object(
+            InventoryTransactionService,
+            "get_current_balance",
+            return_value=Decimal("100"),
+        ):
             with pytest.raises(HTTPException) as exc:
                 service.create_transfer(mock_db, org_id, input_data, user_id)
 
@@ -471,12 +503,9 @@ class TestListTransactions:
     def test_list_all_transactions(self, service, mock_db, org_id):
         """Test listing all transactions."""
         transactions = [
-            MockInventoryTransaction(organization_id=org_id)
-            for _ in range(5)
+            MockInventoryTransaction(organization_id=org_id) for _ in range(5)
         ]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            transactions
-        )
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = transactions
 
         result = service.list(mock_db, str(org_id))
 
@@ -488,9 +517,7 @@ class TestListTransactions:
         transactions = [
             MockInventoryTransaction(organization_id=org_id, item_id=item_id)
         ]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            transactions
-        )
+        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = transactions
 
         result = service.list(mock_db, str(org_id), item_id=str(item_id))
 
@@ -504,9 +531,7 @@ class TestListTransactions:
                 transaction_type="RECEIPT",
             )
         ]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = (
-            transactions
-        )
+        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = transactions
 
         result = service.list(
             mock_db, str(org_id), transaction_type=TransactionType.RECEIPT

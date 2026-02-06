@@ -7,6 +7,7 @@ This module provides models for:
 - Resource allocation
 - Time tracking
 """
+
 from app.models.pm.milestone import Milestone, MilestoneStatus
 from app.models.pm.resource_allocation import ResourceAllocation
 from app.models.pm.task import Task, TaskPriority, TaskStatus

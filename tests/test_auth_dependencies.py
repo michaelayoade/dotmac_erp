@@ -6,7 +6,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
-from jose import jwt
 from starlette.requests import Request
 
 from app.models.auth import ApiKey, Session as AuthSession, SessionStatus
@@ -17,11 +16,8 @@ from app.services.auth_dependencies import (
     _is_jwt,
     _make_aware,
     require_audit_auth,
-    require_permission,
-    require_role,
     require_user_auth,
 )
-from app.services.auth_flow import hash_password
 
 
 class TestHelperFunctions:
@@ -241,7 +237,9 @@ class TestRequireAuditAuthWithApiKey:
 class TestSessionExpiry:
     """Tests for session expiry edge cases."""
 
-    def test_expired_session_token_via_hash_lookup_returns_401(self, db_session, person):
+    def test_expired_session_token_via_hash_lookup_returns_401(
+        self, db_session, person
+    ):
         """Test that expired session via hash lookup returns 401."""
         from app.services.auth_flow import hash_session_token
 

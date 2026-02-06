@@ -3,6 +3,7 @@ Project Model - Core Org.
 
 Extended with Project Management fields for tasks, milestones, and resources.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -122,7 +123,9 @@ class Project(Base, ERPNextSyncMixin):
         Numeric(20, 6),
         nullable=True,
     )
-    budget_currency_code: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
+    budget_currency_code: Mapped[Optional[str]] = mapped_column(
+        String(3), nullable=True
+    )
 
     # Status
     status: Mapped[ProjectStatus] = mapped_column(
@@ -132,7 +135,9 @@ class Project(Base, ERPNextSyncMixin):
     )
 
     # Accounting
-    is_capitalizable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_capitalizable: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
 
     # Cost center for project expenses
     cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(

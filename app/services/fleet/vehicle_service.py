@@ -30,6 +30,7 @@ from app.services.common import (
     ValidationError,
     paginate,
 )
+from app.services.state_machine import StateMachine
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,7 @@ VEHICLE_STATUS_TRANSITIONS: Dict[VehicleStatus, set] = {
     },
     VehicleStatus.DISPOSED: set(),  # Terminal state
 }
+_STATE_MACHINE = StateMachine(VEHICLE_STATUS_TRANSITIONS)
 
 
 class VehicleService:
@@ -304,11 +306,7 @@ class VehicleService:
         current = vehicle.status
 
         # Validate transition
-        allowed = VEHICLE_STATUS_TRANSITIONS.get(current, set())
-        if new_status not in allowed:
-            raise ValidationError(
-                f"Cannot transition from {current.value} to {new_status.value}"
-            )
+        _STATE_MACHINE.validate(current, new_status)
 
         # Handle disposal
         if new_status == VehicleStatus.DISPOSED:
@@ -365,11 +363,7 @@ class VehicleService:
         vehicle = self.get_or_raise(vehicle_id)
 
         # Validate transition via the status map (same as change_status)
-        allowed = VEHICLE_STATUS_TRANSITIONS.get(vehicle.status, set())
-        if VehicleStatus.DISPOSED not in allowed:
-            raise ValidationError(
-                f"Cannot dispose vehicle in {vehicle.status.value} status"
-            )
+        _STATE_MACHINE.validate(vehicle.status, VehicleStatus.DISPOSED)
 
         vehicle.status = VehicleStatus.DISPOSED
         vehicle.disposal_date = date.today()

@@ -1,12 +1,24 @@
 """
 Disclosure Checklist Model - Reporting Schema.
 """
+
 import enum
 import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -61,7 +73,9 @@ class DisclosureChecklist(Base):
 
     # IFRS standard reference
     ifrs_standard: Mapped[str] = mapped_column(String(50), nullable=False)
-    paragraph_reference: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    paragraph_reference: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )
 
     # Hierarchy
     parent_checklist_id: Mapped[Optional[uuid.UUID]] = mapped_column(
@@ -84,7 +98,9 @@ class DisclosureChecklist(Base):
     )
 
     # Completion details
-    disclosure_location: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    disclosure_location: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True
+    )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Review

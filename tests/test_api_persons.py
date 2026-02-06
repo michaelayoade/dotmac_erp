@@ -1,6 +1,5 @@
 import uuid
 
-import pytest
 
 from tests.conftest import DEFAULT_TEST_ORG_ID
 
@@ -97,9 +96,7 @@ class TestPersonsAPI:
 
     def test_list_people_with_filters(self, client, auth_headers, person):
         """Test listing people with email filter."""
-        response = client.get(
-            f"/people?email={person.email}", headers=auth_headers
-        )
+        response = client.get(f"/people?email={person.email}", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) >= 1

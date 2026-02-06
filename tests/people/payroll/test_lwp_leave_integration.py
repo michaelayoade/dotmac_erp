@@ -8,7 +8,7 @@ deducted from salary slips during payroll processing.
 import uuid
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -221,9 +221,7 @@ class TestCalculateLwpDaysInPeriod:
         # 3 days + 3 days = 6 days
         assert result == Decimal("6")
 
-    def test_no_overlap_leave_before_period(
-        self, mock_db, employee_id, lwp_leave_type
-    ):
+    def test_no_overlap_leave_before_period(self, mock_db, employee_id, lwp_leave_type):
         """Test LWP leave entirely before pay period."""
         from app.services.people.leave.leave_service import LeaveService
 
@@ -327,9 +325,7 @@ class TestLwpDeductionCalculation:
         lwp_days = Decimal("3")
 
         daily_rate = gross_pay / total_working_days
-        lwp_deduction = (daily_rate * lwp_days).quantize(
-            Decimal("0.01")
-        )
+        lwp_deduction = (daily_rate * lwp_days).quantize(Decimal("0.01"))
 
         assert lwp_deduction == Decimal("40909.09")
 
@@ -340,9 +336,7 @@ class TestLwpDeductionCalculation:
         lwp_days = Decimal("0.5")
 
         daily_rate = gross_pay / total_working_days
-        lwp_deduction = (daily_rate * lwp_days).quantize(
-            Decimal("0.01")
-        )
+        lwp_deduction = (daily_rate * lwp_days).quantize(Decimal("0.01"))
 
         assert lwp_deduction == Decimal("6818.18")
 

@@ -3,6 +3,7 @@ Fuel Log Pydantic Schemas.
 
 Schemas for fuel log API endpoints.
 """
+
 from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional

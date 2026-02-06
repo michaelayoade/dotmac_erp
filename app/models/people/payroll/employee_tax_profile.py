@@ -8,6 +8,7 @@ Stores employee-specific tax information for Nigerian PAYE calculation:
 - Statutory deduction rates (Pension, NHF, NHIS)
 - Tax exemption settings
 """
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal

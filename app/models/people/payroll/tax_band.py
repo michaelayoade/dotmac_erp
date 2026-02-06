@@ -12,6 +12,7 @@ NTA 2025 Tax Bands:
 - Band 5: ₦25,000,001 - ₦50,000,000 @ 23%
 - Band 6: Above ₦50,000,000 @ 25%
 """
+
 import uuid
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
@@ -29,7 +30,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
 from app.models.people.base import AuditMixin

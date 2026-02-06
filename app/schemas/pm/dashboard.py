@@ -3,6 +3,7 @@ Dashboard Pydantic Schemas.
 
 Schemas for PM Dashboard and reporting.
 """
+
 from datetime import date
 from decimal import Decimal
 from typing import Dict, List, Optional

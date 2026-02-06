@@ -209,7 +209,9 @@ class TestReversalResult:
 class TestCreateReversal:
     """Tests for create_reversal method."""
 
-    def test_successful_reversal(self, mock_db, org_id, user_id, posted_journal, journal_lines):
+    def test_successful_reversal(
+        self, mock_db, org_id, user_id, posted_journal, journal_lines
+    ):
         """Test successfully creating a reversal entry."""
         mock_db.get.return_value = posted_journal
         mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = journal_lines
@@ -219,8 +221,12 @@ class TestCreateReversal:
 
         with patch("app.services.finance.gl.reversal.JournalEntry") as mock_je:
             with patch("app.services.finance.gl.reversal.JournalEntryLine"):
-                with patch("app.services.finance.gl.reversal.JournalStatus", MockJournalStatus):
-                    with patch("app.services.finance.gl.reversal.JournalType", MockJournalType):
+                with patch(
+                    "app.services.finance.gl.reversal.JournalStatus", MockJournalStatus
+                ):
+                    with patch(
+                        "app.services.finance.gl.reversal.JournalType", MockJournalType
+                    ):
                         with patch(
                             "app.services.finance.gl.reversal.PeriodGuardService.get_period_for_date"
                         ) as mock_period:
@@ -267,7 +273,12 @@ class TestCreateReversal:
         with patch("app.services.finance.gl.reversal.JournalEntry"):
             with pytest.raises(HTTPException) as exc:
                 ReversalService.create_reversal(
-                    mock_db, org_id, wrong_org_journal.journal_entry_id, date.today(), user_id, "Test"
+                    mock_db,
+                    org_id,
+                    wrong_org_journal.journal_entry_id,
+                    date.today(),
+                    user_id,
+                    "Test",
                 )
 
         assert exc.value.status_code == 404
@@ -282,10 +293,17 @@ class TestCreateReversal:
         mock_db.get.return_value = draft_journal
 
         with patch("app.services.finance.gl.reversal.JournalEntry"):
-            with patch("app.services.finance.gl.reversal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.reversal.JournalStatus", MockJournalStatus
+            ):
                 with pytest.raises(HTTPException) as exc:
                     ReversalService.create_reversal(
-                        mock_db, org_id, draft_journal.journal_entry_id, date.today(), user_id, "Test"
+                        mock_db,
+                        org_id,
+                        draft_journal.journal_entry_id,
+                        date.today(),
+                        user_id,
+                        "Test",
                     )
 
         assert exc.value.status_code == 400
@@ -303,10 +321,17 @@ class TestCreateReversal:
         mock_db.get.return_value = already_reversed
 
         with patch("app.services.finance.gl.reversal.JournalEntry"):
-            with patch("app.services.finance.gl.reversal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.reversal.JournalStatus", MockJournalStatus
+            ):
                 with pytest.raises(HTTPException) as exc:
                     ReversalService.create_reversal(
-                        mock_db, org_id, already_reversed.journal_entry_id, date.today(), user_id, "Test"
+                        mock_db,
+                        org_id,
+                        already_reversed.journal_entry_id,
+                        date.today(),
+                        user_id,
+                        "Test",
                     )
 
         assert exc.value.status_code == 400
@@ -319,7 +344,9 @@ class TestCreateReversal:
         mock_db.get.return_value = posted_journal
 
         with patch("app.services.finance.gl.reversal.JournalEntry"):
-            with patch("app.services.finance.gl.reversal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.reversal.JournalStatus", MockJournalStatus
+            ):
                 with patch(
                     "app.services.finance.gl.reversal.PeriodGuardService.get_period_for_date"
                 ) as mock_period:
@@ -327,7 +354,12 @@ class TestCreateReversal:
 
                     with pytest.raises(HTTPException) as exc:
                         ReversalService.create_reversal(
-                            mock_db, org_id, posted_journal.journal_entry_id, date.today(), user_id, "Test"
+                            mock_db,
+                            org_id,
+                            posted_journal.journal_entry_id,
+                            date.today(),
+                            user_id,
+                            "Test",
                         )
 
         assert exc.value.status_code == 400
@@ -342,7 +374,9 @@ class TestCanReverse:
         mock_db.get.return_value = posted_journal
 
         with patch("app.services.finance.gl.reversal.JournalEntry"):
-            with patch("app.services.finance.gl.reversal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.reversal.JournalStatus", MockJournalStatus
+            ):
                 can, reason = ReversalService.can_reverse(
                     mock_db, org_id, posted_journal.journal_entry_id
                 )
@@ -366,7 +400,9 @@ class TestCanReverse:
         mock_db.get.return_value = draft
 
         with patch("app.services.finance.gl.reversal.JournalEntry"):
-            with patch("app.services.finance.gl.reversal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.reversal.JournalStatus", MockJournalStatus
+            ):
                 can, reason = ReversalService.can_reverse(
                     mock_db, org_id, draft.journal_entry_id
                 )
@@ -384,7 +420,9 @@ class TestCanReverse:
         mock_db.get.return_value = already_reversed
 
         with patch("app.services.finance.gl.reversal.JournalEntry"):
-            with patch("app.services.finance.gl.reversal.JournalStatus", MockJournalStatus):
+            with patch(
+                "app.services.finance.gl.reversal.JournalStatus", MockJournalStatus
+            ):
                 can, reason = ReversalService.can_reverse(
                     mock_db, org_id, already_reversed.journal_entry_id
                 )

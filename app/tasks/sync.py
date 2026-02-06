@@ -7,6 +7,7 @@ These tasks handle:
 - Entity-specific sync for retrying failures
 - Outbound sync to push changes back to ERPNext
 """
+
 import logging
 import uuid
 from typing import Optional
@@ -16,25 +17,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.models.sync import SyncHistory, SyncType, IntegrationConfig, IntegrationType
+from app.models.sync import SyncHistory, SyncType, IntegrationType
 from app.models.finance.core_org.organization import Organization
 from app.services.erpnext.client import ERPNextClient, ERPNextConfig
-from app.services.erpnext.sync.orchestrator import ERPNextSyncOrchestrator, MigrationConfig
-from app.services.erpnext.sync import (
-    DepartmentSyncService,
-    DesignationSyncService,
-    EmploymentTypeSyncService,
-    EmployeeGradeSyncService,
-    EmployeeSyncService,
-    LeaveTypeSyncService,
-    LeaveAllocationSyncService,
-    LeaveApplicationSyncService,
-    ShiftTypeSyncService,
-    AttendanceSyncService,
-    ExpenseCategorySyncService,
-    ExpenseClaimSyncService,
-    ProjectSyncService,
-    TicketSyncService,
+from app.services.erpnext.sync.orchestrator import (
+    ERPNextSyncOrchestrator,
+    MigrationConfig,
 )
 
 logger = logging.getLogger(__name__)
@@ -314,21 +302,18 @@ def scheduled_hr_sync() -> dict:
         # Uses subquery to get the most recent sync per organization
         from sqlalchemy import func as sqlfunc
 
-        recent_syncs = (
-            db.execute(
-                select(
-                    SyncHistory.organization_id,
-                    SyncHistory.created_by_user_id,
-                    sqlfunc.max(SyncHistory.started_at).label("last_sync"),
-                )
-                .where(
-                    SyncHistory.source_system == "erpnext",
-                    SyncHistory.status.in_(["COMPLETED", "COMPLETED_WITH_ERRORS"]),
-                )
-                .group_by(SyncHistory.organization_id, SyncHistory.created_by_user_id)
+        recent_syncs = db.execute(
+            select(
+                SyncHistory.organization_id,
+                SyncHistory.created_by_user_id,
+                sqlfunc.max(SyncHistory.started_at).label("last_sync"),
             )
-            .all()
-        )
+            .where(
+                SyncHistory.source_system == "erpnext",
+                SyncHistory.status.in_(["COMPLETED", "COMPLETED_WITH_ERRORS"]),
+            )
+            .group_by(SyncHistory.organization_id, SyncHistory.created_by_user_id)
+        ).all()
 
         for row in recent_syncs:
             org_id = row.organization_id
@@ -349,20 +334,24 @@ def scheduled_hr_sync() -> dict:
                     str(user_id),
                     hr_entity_types,
                 )
-                results.append({
-                    "organization_id": str(org_id),
-                    "task_id": task.id,
-                })
+                results.append(
+                    {
+                        "organization_id": str(org_id),
+                        "task_id": task.id,
+                    }
+                )
             except Exception as e:
                 logger.error(
                     "Failed to dispatch HR sync for org %s: %s",
                     org_id,
                     e,
                 )
-                results.append({
-                    "organization_id": str(org_id),
-                    "error": str(e),
-                })
+                results.append(
+                    {
+                        "organization_id": str(org_id),
+                        "error": str(e),
+                    }
+                )
 
     return {"organizations_processed": len(results), "results": results}
 
@@ -390,21 +379,18 @@ def scheduled_expense_sync() -> dict:
         from sqlalchemy import func as sqlfunc
 
         # Find organizations that have successfully synced from ERPNext before
-        recent_syncs = (
-            db.execute(
-                select(
-                    SyncHistory.organization_id,
-                    SyncHistory.created_by_user_id,
-                    sqlfunc.max(SyncHistory.started_at).label("last_sync"),
-                )
-                .where(
-                    SyncHistory.source_system == "erpnext",
-                    SyncHistory.status.in_(["COMPLETED", "COMPLETED_WITH_ERRORS"]),
-                )
-                .group_by(SyncHistory.organization_id, SyncHistory.created_by_user_id)
+        recent_syncs = db.execute(
+            select(
+                SyncHistory.organization_id,
+                SyncHistory.created_by_user_id,
+                sqlfunc.max(SyncHistory.started_at).label("last_sync"),
             )
-            .all()
-        )
+            .where(
+                SyncHistory.source_system == "erpnext",
+                SyncHistory.status.in_(["COMPLETED", "COMPLETED_WITH_ERRORS"]),
+            )
+            .group_by(SyncHistory.organization_id, SyncHistory.created_by_user_id)
+        ).all()
 
         for row in recent_syncs:
             org_id = row.organization_id
@@ -424,10 +410,12 @@ def scheduled_expense_sync() -> dict:
                     str(user_id),
                     expense_entity_types,
                 )
-                results.append({
-                    "organization_id": str(org_id),
-                    "task_id": task.id,
-                })
+                results.append(
+                    {
+                        "organization_id": str(org_id),
+                        "task_id": task.id,
+                    }
+                )
             except Exception as e:
                 logger.error(
                     "Failed to dispatch expense sync for org %s: %s",

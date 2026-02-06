@@ -23,7 +23,6 @@ Usage:
 import argparse
 import hashlib
 import sys
-import os
 from pathlib import Path
 
 # Add project root to path
@@ -43,7 +42,10 @@ from app.models.people.hr.department import Department
 from app.models.people.hr.designation import Designation
 from app.models.people.hr.employment_type import EmploymentType
 from app.models.person import Person, PersonStatus
-from app.models.people.payroll.salary_component import SalaryComponent, SalaryComponentType
+from app.models.people.payroll.salary_component import (
+    SalaryComponent,
+    SalaryComponentType,
+)
 from app.models.people.payroll.salary_structure import (
     SalaryStructure,
     SalaryStructureEarning,
@@ -51,16 +53,16 @@ from app.models.people.payroll.salary_structure import (
     PayrollFrequency,
 )
 from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
-from app.models.people.payroll.salary_slip import SalarySlip
-from app.models.people.payroll.payroll_entry import PayrollEntry
-from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
-from app.models.people.payroll.tax_band import TaxBand
-from app.models.batch_operation import BatchOperation, BatchOperationType, BatchOperationStatus
+from app.models.batch_operation import BatchOperation, BatchOperationType
 from app.services.people.payroll.paye_calculator import PAYECalculator
 
 
 # Excel file path - works both locally and in Docker
-EXCEL_PATH = Path("/app/jan paye.xlsx") if Path("/app/jan paye.xlsx").exists() else Path("/root/.dotmac/jan paye.xlsx")
+EXCEL_PATH = (
+    Path("/app/jan paye.xlsx")
+    if Path("/app/jan paye.xlsx").exists()
+    else Path("/root/.dotmac/jan paye.xlsx")
+)
 
 # Division to Department mapping
 DIVISION_MAP = {
@@ -85,7 +87,9 @@ def get_file_checksum(file_path: Path) -> str:
 
 def get_org_id(db: Session) -> UUID:
     """Get the first organization ID."""
-    result = db.execute(text("SELECT organization_id FROM core_org.organization LIMIT 1"))
+    result = db.execute(
+        text("SELECT organization_id FROM core_org.organization LIMIT 1")
+    )
     row = result.fetchone()
     if not row:
         raise ValueError("No organization found. Please seed organization first.")
@@ -94,7 +98,11 @@ def get_org_id(db: Session) -> UUID:
 
 def get_admin_user_id(db: Session) -> UUID:
     """Get admin user ID for audit fields."""
-    result = db.execute(text("SELECT person_id FROM public.user_credentials WHERE username = 'admin' LIMIT 1"))
+    result = db.execute(
+        text(
+            "SELECT person_id FROM public.user_credentials WHERE username = 'admin' LIMIT 1"
+        )
+    )
     row = result.fetchone()
     if row:
         return row[0]
@@ -111,40 +119,79 @@ def clear_payroll_data(db: Session, org_id: UUID):
     print("Clearing existing payroll data...")
 
     # Delete in order of dependencies
-    db.execute(text("""
+    db.execute(
+        text("""
         DELETE FROM payroll.salary_slip_deduction
         WHERE slip_id IN (SELECT slip_id FROM payroll.salary_slip WHERE organization_id = :org_id)
-    """), {"org_id": org_id})
+    """),
+        {"org_id": org_id},
+    )
 
-    db.execute(text("""
+    db.execute(
+        text("""
         DELETE FROM payroll.salary_slip_earning
         WHERE slip_id IN (SELECT slip_id FROM payroll.salary_slip WHERE organization_id = :org_id)
-    """), {"org_id": org_id})
+    """),
+        {"org_id": org_id},
+    )
 
-    db.execute(text("DELETE FROM payroll.salary_slip WHERE organization_id = :org_id"), {"org_id": org_id})
-    db.execute(text("DELETE FROM payroll.payroll_entry WHERE organization_id = :org_id"), {"org_id": org_id})
-    db.execute(text("DELETE FROM payroll.salary_structure_assignment WHERE organization_id = :org_id"), {"org_id": org_id})
+    db.execute(
+        text("DELETE FROM payroll.salary_slip WHERE organization_id = :org_id"),
+        {"org_id": org_id},
+    )
+    db.execute(
+        text("DELETE FROM payroll.payroll_entry WHERE organization_id = :org_id"),
+        {"org_id": org_id},
+    )
+    db.execute(
+        text(
+            "DELETE FROM payroll.salary_structure_assignment WHERE organization_id = :org_id"
+        ),
+        {"org_id": org_id},
+    )
 
-    db.execute(text("""
+    db.execute(
+        text("""
         DELETE FROM payroll.salary_structure_earning
         WHERE structure_id IN (SELECT structure_id FROM payroll.salary_structure WHERE organization_id = :org_id)
-    """), {"org_id": org_id})
+    """),
+        {"org_id": org_id},
+    )
 
-    db.execute(text("""
+    db.execute(
+        text("""
         DELETE FROM payroll.salary_structure_deduction
         WHERE structure_id IN (SELECT structure_id FROM payroll.salary_structure WHERE organization_id = :org_id)
-    """), {"org_id": org_id})
+    """),
+        {"org_id": org_id},
+    )
 
-    db.execute(text("DELETE FROM payroll.salary_structure WHERE organization_id = :org_id"), {"org_id": org_id})
-    db.execute(text("DELETE FROM payroll.salary_component WHERE organization_id = :org_id"), {"org_id": org_id})
-    db.execute(text("DELETE FROM payroll.employee_tax_profile WHERE organization_id = :org_id"), {"org_id": org_id})
-    db.execute(text("DELETE FROM payroll.tax_band WHERE organization_id = :org_id"), {"org_id": org_id})
+    db.execute(
+        text("DELETE FROM payroll.salary_structure WHERE organization_id = :org_id"),
+        {"org_id": org_id},
+    )
+    db.execute(
+        text("DELETE FROM payroll.salary_component WHERE organization_id = :org_id"),
+        {"org_id": org_id},
+    )
+    db.execute(
+        text(
+            "DELETE FROM payroll.employee_tax_profile WHERE organization_id = :org_id"
+        ),
+        {"org_id": org_id},
+    )
+    db.execute(
+        text("DELETE FROM payroll.tax_band WHERE organization_id = :org_id"),
+        {"org_id": org_id},
+    )
 
     db.commit()
     print("  Done.")
 
 
-def create_components(db: Session, org_id: UUID, user_id: UUID) -> dict[str, SalaryComponent]:
+def create_components(
+    db: Session, org_id: UUID, user_id: UUID
+) -> dict[str, SalaryComponent]:
     """Create salary components."""
     print("Creating salary components...")
 
@@ -152,11 +199,32 @@ def create_components(db: Session, org_id: UUID, user_id: UUID) -> dict[str, Sal
         # Earnings
         ("BASIC", "Basic Salary", "Basic", SalaryComponentType.EARNING, True, 1),
         ("HOUSING", "Housing Allowance", "Hsg", SalaryComponentType.EARNING, True, 2),
-        ("TRANSPORT", "Transport Allowance", "Trsp", SalaryComponentType.EARNING, True, 3),
+        (
+            "TRANSPORT",
+            "Transport Allowance",
+            "Trsp",
+            SalaryComponentType.EARNING,
+            True,
+            3,
+        ),
         ("OTHER", "Other Allowances", "Other", SalaryComponentType.EARNING, True, 4),
         # Deductions
-        ("PENSION", "Employee Pension (8%)", "Pen", SalaryComponentType.DEDUCTION, False, 10),
-        ("NHF", "National Housing Fund (2.5%)", "NHF", SalaryComponentType.DEDUCTION, False, 11),
+        (
+            "PENSION",
+            "Employee Pension (8%)",
+            "Pen",
+            SalaryComponentType.DEDUCTION,
+            False,
+            10,
+        ),
+        (
+            "NHF",
+            "National Housing Fund (2.5%)",
+            "NHF",
+            SalaryComponentType.DEDUCTION,
+            False,
+            11,
+        ),
         ("PAYE", "PAYE Tax", "PAYE", SalaryComponentType.DEDUCTION, False, 12),
     ]
 
@@ -204,10 +272,10 @@ def create_structures(
 
     # Add earnings to permanent structure (formula-based)
     perm_earnings = [
-        (components["BASIC"], "base * 0.30", 1),      # 30% of gross
-        (components["HOUSING"], "base * 0.15", 2),    # 15% of gross
+        (components["BASIC"], "base * 0.30", 1),  # 30% of gross
+        (components["HOUSING"], "base * 0.15", 2),  # 15% of gross
         (components["TRANSPORT"], "base * 0.10", 3),  # 10% of gross
-        (components["OTHER"], "base * 0.45", 4),      # 45% of gross
+        (components["OTHER"], "base * 0.45", 4),  # 45% of gross
     ]
     for comp, formula, order in perm_earnings:
         earning = SalaryStructureEarning(
@@ -222,8 +290,8 @@ def create_structures(
     # Add deductions to permanent structure
     perm_deductions = [
         (components["PENSION"], "basic * 0.08", 10),  # 8% of basic
-        (components["NHF"], "basic * 0.025", 11),     # 2.5% of basic
-        (components["PAYE"], None, 12),               # Calculated by PAYE calculator
+        (components["NHF"], "basic * 0.025", 11),  # 2.5% of basic
+        (components["PAYE"], None, 12),  # Calculated by PAYE calculator
     ]
     for comp, formula, order in perm_deductions:
         deduction = SalaryStructureDeduction(
@@ -260,16 +328,24 @@ def create_structures(
     db.add(contract_earning)
 
     db.flush()
-    print(f"  Created structures: {perm_struct.structure_name}, {contract_struct.structure_name}")
+    print(
+        f"  Created structures: {perm_struct.structure_name}, {contract_struct.structure_name}"
+    )
     return perm_struct, contract_struct
 
 
-def get_or_create_department(db: Session, org_id: UUID, name: str, user_id: UUID) -> Department:
+def get_or_create_department(
+    db: Session, org_id: UUID, name: str, user_id: UUID
+) -> Department:
     """Get or create a department."""
-    dept = db.query(Department).filter(
-        Department.organization_id == org_id,
-        Department.department_name == name,
-    ).first()
+    dept = (
+        db.query(Department)
+        .filter(
+            Department.organization_id == org_id,
+            Department.department_name == name,
+        )
+        .first()
+    )
 
     if not dept:
         dept = Department(
@@ -285,12 +361,18 @@ def get_or_create_department(db: Session, org_id: UUID, name: str, user_id: UUID
     return dept
 
 
-def get_or_create_designation(db: Session, org_id: UUID, title: str, user_id: UUID) -> Designation:
+def get_or_create_designation(
+    db: Session, org_id: UUID, title: str, user_id: UUID
+) -> Designation:
     """Get or create a designation."""
-    desig = db.query(Designation).filter(
-        Designation.organization_id == org_id,
-        Designation.designation_name == title,
-    ).first()
+    desig = (
+        db.query(Designation)
+        .filter(
+            Designation.organization_id == org_id,
+            Designation.designation_name == title,
+        )
+        .first()
+    )
 
     if not desig:
         desig = Designation(
@@ -305,12 +387,18 @@ def get_or_create_designation(db: Session, org_id: UUID, title: str, user_id: UU
     return desig
 
 
-def get_or_create_employment_type(db: Session, org_id: UUID, type_name: str, user_id: UUID) -> EmploymentType:
+def get_or_create_employment_type(
+    db: Session, org_id: UUID, type_name: str, user_id: UUID
+) -> EmploymentType:
     """Get or create an employment type."""
-    emp_type = db.query(EmploymentType).filter(
-        EmploymentType.organization_id == org_id,
-        EmploymentType.type_name == type_name,
-    ).first()
+    emp_type = (
+        db.query(EmploymentType)
+        .filter(
+            EmploymentType.organization_id == org_id,
+            EmploymentType.type_name == type_name,
+        )
+        .first()
+    )
 
     if not emp_type:
         emp_type = EmploymentType(
@@ -325,7 +413,9 @@ def get_or_create_employment_type(db: Session, org_id: UUID, type_name: str, use
     return emp_type
 
 
-def excel_to_decimal(value: float | int | str | None, decimal_places: int = 2) -> Decimal:
+def excel_to_decimal(
+    value: float | int | str | None, decimal_places: int = 2
+) -> Decimal:
     """
     Safely convert Excel cell value to Decimal with proper rounding.
 
@@ -396,14 +486,16 @@ def parse_excel_data(excel_path: Path) -> tuple[list[dict], list[dict]]:
             category = str(row[4]).strip() if row[4] else "Staff"
             monthly_gross = excel_to_decimal(row[6])
 
-            permanent_staff.append({
-                "name": name,
-                "division": division,
-                "role": role,
-                "category": category,
-                "monthly_gross": monthly_gross,
-                "is_nysc": category.upper() == "NYSC",
-            })
+            permanent_staff.append(
+                {
+                    "name": name,
+                    "division": division,
+                    "role": role,
+                    "category": category,
+                    "monthly_gross": monthly_gross,
+                    "is_nysc": category.upper() == "NYSC",
+                }
+            )
 
     # Parse Contract Staff sheet
     ws = wb["Payroll (January Contract)"]
@@ -417,18 +509,24 @@ def parse_excel_data(excel_path: Path) -> tuple[list[dict], list[dict]]:
             role = str(row[3]).strip() if row[3] else ""
             category = str(row[4]).strip() if row[4] else ""
             # Contract staff: use column 6 if available, else column 5 (Current Take-Home)
-            monthly_gross = excel_to_decimal(row[6]) if row[6] else excel_to_decimal(row[5])
+            monthly_gross = (
+                excel_to_decimal(row[6]) if row[6] else excel_to_decimal(row[5])
+            )
 
-            contract_staff.append({
-                "name": name,
-                "division": division,
-                "role": role,
-                "category": category,
-                "monthly_gross": monthly_gross,
-                "is_nysc": category.upper() == "NYSC",
-            })
+            contract_staff.append(
+                {
+                    "name": name,
+                    "division": division,
+                    "role": role,
+                    "category": category,
+                    "monthly_gross": monthly_gross,
+                    "is_nysc": category.upper() == "NYSC",
+                }
+            )
 
-    print(f"  Found {len(permanent_staff)} permanent staff, {len(contract_staff)} contract staff")
+    print(
+        f"  Found {len(permanent_staff)} permanent staff, {len(contract_staff)} contract staff"
+    )
     return permanent_staff, contract_staff
 
 
@@ -524,17 +622,25 @@ def find_or_create_employee(
     email = f"{email_name}@dotmac.ng"
 
     # Check if person with this email already exists IN THIS ORGANIZATION
-    existing_person = db.query(Person).filter(
-        Person.email == email,
-        Person.organization_id == org_id,  # CRITICAL: Filter by org_id
-    ).first()
+    existing_person = (
+        db.query(Person)
+        .filter(
+            Person.email == email,
+            Person.organization_id == org_id,  # CRITICAL: Filter by org_id
+        )
+        .first()
+    )
 
     if existing_person:
         # Check if employee exists for this person IN THIS ORGANIZATION
-        existing_emp = db.query(Employee).filter(
-            Employee.person_id == existing_person.id,
-            Employee.organization_id == org_id,  # CRITICAL: Filter by org_id
-        ).first()
+        existing_emp = (
+            db.query(Employee)
+            .filter(
+                Employee.person_id == existing_person.id,
+                Employee.organization_id == org_id,  # CRITICAL: Filter by org_id
+            )
+            .first()
+        )
         if existing_emp:
             return existing_emp, "found"
         person = existing_person
@@ -692,7 +798,9 @@ def main():
         components = create_components(db, org_id, user_id)
 
         # Step 3: Create structures
-        perm_struct, contract_struct = create_structures(db, org_id, user_id, components)
+        perm_struct, contract_struct = create_structures(
+            db, org_id, user_id, components
+        )
 
         # Step 4: Seed tax bands
         seed_tax_bands(db, org_id, user_id)
@@ -702,7 +810,9 @@ def main():
 
         # Step 6: Get/create employment types
         perm_emp_type = get_or_create_employment_type(db, org_id, "Permanent", user_id)
-        contract_emp_type = get_or_create_employment_type(db, org_id, "Contract", user_id)
+        contract_emp_type = get_or_create_employment_type(
+            db, org_id, "Contract", user_id
+        )
         nysc_emp_type = get_or_create_employment_type(db, org_id, "NYSC", user_id)
 
         # Step 7: Process employees and create assignments
@@ -714,20 +824,42 @@ def main():
             employee_code = f"EMP{emp_counter:04d}"
 
             emp, status = find_or_create_employee(
-                db, org_id, user_id, data, emp_type, employee_code,
-                batch.id, match_only=args.match_only
+                db,
+                org_id,
+                user_id,
+                data,
+                emp_type,
+                employee_code,
+                batch.id,
+                match_only=args.match_only,
             )
 
             if status == "found":
                 print(f"  ✓ Found: {data['name']} (code: {emp.employee_code})")
                 stats["found"] += 1
-                create_assignment(db, org_id, user_id, emp, perm_struct, data["monthly_gross"], batch.id)
+                create_assignment(
+                    db,
+                    org_id,
+                    user_id,
+                    emp,
+                    perm_struct,
+                    data["monthly_gross"],
+                    batch.id,
+                )
             elif status == "created":
                 print(f"  + Created: {data['name']} (code: {employee_code})")
                 stats["created"] += 1
                 batch.track_created("employee", emp.employee_id)
                 batch.track_created("person", emp.person_id)
-                create_assignment(db, org_id, user_id, emp, perm_struct, data["monthly_gross"], batch.id)
+                create_assignment(
+                    db,
+                    org_id,
+                    user_id,
+                    emp,
+                    perm_struct,
+                    data["monthly_gross"],
+                    batch.id,
+                )
             else:
                 print(f"  ⚠ Skipped: {data['name']} (not found, match-only mode)")
                 stats["skipped"] += 1
@@ -739,20 +871,42 @@ def main():
             employee_code = f"EMP{emp_counter:04d}"
 
             emp, status = find_or_create_employee(
-                db, org_id, user_id, data, emp_type, employee_code,
-                batch.id, match_only=args.match_only
+                db,
+                org_id,
+                user_id,
+                data,
+                emp_type,
+                employee_code,
+                batch.id,
+                match_only=args.match_only,
             )
 
             if status == "found":
                 print(f"  ✓ Found: {data['name']} (code: {emp.employee_code})")
                 stats["found"] += 1
-                create_assignment(db, org_id, user_id, emp, contract_struct, data["monthly_gross"], batch.id)
+                create_assignment(
+                    db,
+                    org_id,
+                    user_id,
+                    emp,
+                    contract_struct,
+                    data["monthly_gross"],
+                    batch.id,
+                )
             elif status == "created":
                 print(f"  + Created: {data['name']} (code: {employee_code})")
                 stats["created"] += 1
                 batch.track_created("employee", emp.employee_id)
                 batch.track_created("person", emp.person_id)
-                create_assignment(db, org_id, user_id, emp, contract_struct, data["monthly_gross"], batch.id)
+                create_assignment(
+                    db,
+                    org_id,
+                    user_id,
+                    emp,
+                    contract_struct,
+                    data["monthly_gross"],
+                    batch.id,
+                )
             else:
                 print(f"  ⚠ Skipped: {data['name']} (not found, match-only mode)")
                 stats["skipped"] += 1
@@ -785,15 +939,20 @@ def main():
 
         if not args.dry_run:
             print("\nSUCCESS: Payroll data seeded successfully!")
-            print(f"\nTo rollback this batch, run:")
-            print(f"  DELETE FROM payroll.salary_structure_assignment WHERE batch_operation_id = '{batch.id}';")
+            print("\nTo rollback this batch, run:")
+            print(
+                f"  DELETE FROM payroll.salary_structure_assignment WHERE batch_operation_id = '{batch.id}';"
+            )
             print(f"  DELETE FROM hr.employee WHERE batch_operation_id = '{batch.id}';")
-            print(f"  DELETE FROM public.people WHERE batch_operation_id = '{batch.id}';")
+            print(
+                f"  DELETE FROM public.people WHERE batch_operation_id = '{batch.id}';"
+            )
 
     except Exception as e:
         db.rollback()
         print(f"\nERROR: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
     finally:

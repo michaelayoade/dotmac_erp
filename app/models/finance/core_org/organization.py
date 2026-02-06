@@ -1,6 +1,7 @@
 """
 Organization Model - Core Org.
 """
+
 import enum
 import uuid
 from datetime import date, datetime
@@ -27,6 +28,7 @@ from app.db import Base
 
 class SectorType(str, enum.Enum):
     """Organization sector classification."""
+
     PRIVATE = "PRIVATE"
     PUBLIC = "PUBLIC"
     NGO = "NGO"
@@ -34,6 +36,7 @@ class SectorType(str, enum.Enum):
 
 class AccountingFramework(str, enum.Enum):
     """Accounting standard the organization follows."""
+
     IFRS = "IFRS"
     IPSAS = "IPSAS"
     BOTH = "BOTH"
@@ -76,7 +79,9 @@ class Organization(Base):
     # Legal identity
     legal_name: Mapped[str] = mapped_column(String(255), nullable=False)
     trading_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    registration_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    registration_number: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )
     tax_identification_number: Mapped[Optional[str]] = mapped_column(
         String(50),
         nullable=True,

@@ -3,6 +3,7 @@ DotMac CRM Sync Mapping Model - Track entities synced from DotMac CRM.
 
 Maps CRM entity IDs to local ERP entities (Project, Ticket, Task).
 """
+
 import enum
 import uuid
 from datetime import datetime
@@ -63,7 +64,9 @@ class CRMSyncMapping(Base):
         Index("idx_crm_sync_org", "organization_id"),
         Index("idx_crm_sync_crm_id", "crm_id"),
         Index("idx_crm_sync_local", "local_entity_type", "local_entity_id"),
-        Index("idx_crm_sync_status", "organization_id", "crm_entity_type", "crm_status"),
+        Index(
+            "idx_crm_sync_status", "organization_id", "crm_entity_type", "crm_status"
+        ),
         {"schema": "sync"},
     )
 

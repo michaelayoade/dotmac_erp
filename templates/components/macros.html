@@ -833,3 +833,108 @@ if (typeof window.searchAutosuggest === 'undefined') {
   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
 </svg>
 {% endmacro %}
+
+{# ============================================
+   TOP BAR (APP SHELL)
+   Usage:
+   {% from "components/macros.html" import topbar %}
+   {{ topbar(page_title_html, breadcrumbs_html, header_actions_html, accent="teal") }}
+   ============================================ #}
+{% macro topbar(page_title_html, breadcrumbs_html="", header_actions_html="", accent="teal") %}
+{% set accent_map = {
+  'teal': {'hover': 'hover:border-teal-400', 'hover_dark': 'dark:hover:border-teal-500'},
+  'violet': {'hover': 'hover:border-violet-400', 'hover_dark': 'dark:hover:border-violet-500'},
+  'amber': {'hover': 'hover:border-amber-400', 'hover_dark': 'dark:hover:border-amber-500'},
+  'blue': {'hover': 'hover:border-blue-400', 'hover_dark': 'dark:hover:border-blue-500'}
+} %}
+{% set a = accent_map.get(accent, accent_map.teal) %}
+<header class="sticky top-0 z-20 border-b border-slate-200 bg-white/80 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/80">
+  <div class="app-header flex h-16 items-center justify-between">
+    <div class="flex items-center gap-4">
+      <button @click="toggleSidebar()"
+              x-show="!isDesktop || sidebarCollapsed"
+              x-cloak
+              class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"
+              aria-label="Open sidebar">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+      <div>
+        <h1 class="text-xl font-semibold text-slate-900 dark:text-white font-display" data-testid="page-title">
+          {{ page_title_html | safe }}
+        </h1>
+        {{ breadcrumbs_html | safe }}
+      </div>
+      <button @click="window.dispatchEvent(new CustomEvent('open-command-palette'))"
+              class="flex items-center gap-3 rounded-lg border border-slate-200 bg-white/60 px-3 py-2 text-sm text-slate-500 transition-all {{ a.hover }} hover:bg-white dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400 {{ a.hover_dark }} dark:hover:bg-slate-800">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <span class="hidden sm:inline-flex flex-1 text-left">Search...</span>
+        <kbd class="hidden xl:inline-flex h-5 items-center gap-1 rounded border border-slate-300 bg-slate-100 px-1.5 font-mono text-[10px] font-medium text-slate-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-400">
+          <span class="text-xs">⌘</span>K
+        </kbd>
+      </button>
+    </div>
+    <div class="flex items-center gap-3">
+      {{ header_actions_html | safe }}
+      <button @click="darkMode = !darkMode"
+              class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"
+              :title="darkMode ? 'Switch to light mode' : 'Switch to dark mode'"
+              aria-label="Toggle theme">
+        <template x-if="!darkMode">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+          </svg>
+        </template>
+        <template x-if="darkMode">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+          </svg>
+        </template>
+      </button>
+      <div x-data='{ open: false, notifications: {{ notifications | default([]) | tojson }} }' class="relative">
+        <button @click="open = !open"
+                class="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"
+                aria-label="Notifications">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+          </svg>
+          <span x-show="notifications.length > 0" class="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900"></span>
+        </button>
+        <div x-show="open"
+             @click.away="open = false"
+             x-transition:enter="transition ease-out duration-100"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-75"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95"
+             class="absolute right-0 mt-2 w-80 rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-800 overflow-hidden"
+             x-cloak>
+          <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+            <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-200">Notifications</h4>
+            <button @click="open = false" class="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300">Close</button>
+          </div>
+          <div class="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700">
+            <template x-if="notifications.length === 0">
+              <div class="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">No new notifications</div>
+            </template>
+            <template x-for="n in notifications" :key="n.id">
+              <a :href="n.url" class="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors border-b border-slate-100 dark:border-slate-700 last:border-0">
+                <div class="mt-1 h-2.5 w-2.5 rounded-full" :class="n.read ? 'bg-slate-300 dark:bg-slate-600' : 'bg-rose-500'"></div>
+                <div class="flex-1">
+                  <p class="text-sm font-medium text-slate-700 dark:text-slate-200" x-text="n.title"></p>
+                  <p class="text-xs text-slate-500 dark:text-slate-400" x-text="n.message"></p>
+                </div>
+                <span class="text-xs text-slate-400" x-text="n.time"></span>
+              </a>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+{% endmacro %}

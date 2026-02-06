@@ -3,6 +3,7 @@ Attendance management web routes.
 
 Attendance list and shift type configuration pages.
 """
+
 from typing import Optional
 from urllib.parse import quote
 
@@ -306,7 +307,9 @@ def attendance_request_new_form(
     db: Session = Depends(get_db),
 ):
     """New attendance request form."""
-    return attendance_web_service.attendance_request_new_form_response(request, auth, db)
+    return attendance_web_service.attendance_request_new_form_response(
+        request, auth, db
+    )
 
 
 @router.post("/requests/new", response_class=HTMLResponse)
@@ -316,7 +319,9 @@ async def create_attendance_request(
     db: Session = Depends(get_db),
 ):
     """Create a new attendance request."""
-    return await attendance_web_service.create_attendance_request_response(request, auth, db)
+    return await attendance_web_service.create_attendance_request_response(
+        request, auth, db
+    )
 
 
 @router.post("/requests/{request_id}/approve")
@@ -335,7 +340,9 @@ async def approve_attendance_request(
     except Exception as e:
         db.rollback()
         error_msg = quote(str(e))
-        return RedirectResponse(url=f"/people/attendance/requests?error={error_msg}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/attendance/requests?error={error_msg}", status_code=303
+        )
 
 
 @router.post("/requests/{request_id}/reject")
@@ -354,7 +361,9 @@ async def reject_attendance_request(
     except Exception as e:
         db.rollback()
         error_msg = quote(str(e))
-        return RedirectResponse(url=f"/people/attendance/requests?error={error_msg}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/attendance/requests?error={error_msg}", status_code=303
+        )
 
 
 @router.post("/requests/bulk-approve")
@@ -373,7 +382,9 @@ async def bulk_approve_attendance_requests(
     except Exception as e:
         db.rollback()
         error_msg = quote(str(e))
-        return RedirectResponse(url=f"/people/attendance/requests?error={error_msg}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/attendance/requests?error={error_msg}", status_code=303
+        )
 
 
 @router.post("/requests/bulk-reject")
@@ -392,4 +403,6 @@ async def bulk_reject_attendance_requests(
     except Exception as e:
         db.rollback()
         error_msg = quote(str(e))
-        return RedirectResponse(url=f"/people/attendance/requests?error={error_msg}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/attendance/requests?error={error_msg}", status_code=303
+        )

@@ -92,13 +92,10 @@ def require_current_employee_id(
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     person_uuid = coerce_uuid(person_id)
-    employee = db.scalar(
-        select(Employee).where(Employee.person_id == person_uuid)
-    )
+    employee = db.scalar(select(Employee).where(Employee.person_id == person_uuid))
     if not employee:
         raise HTTPException(
-            status_code=403,
-            detail="No employee record linked to this user account"
+            status_code=403, detail="No employee record linked to this user account"
         )
     return employee.employee_id
 
@@ -119,7 +116,5 @@ def get_current_employee_id_optional(
         return None
 
     person_uuid = coerce_uuid(person_id)
-    employee = db.scalar(
-        select(Employee).where(Employee.person_id == person_uuid)
-    )
+    employee = db.scalar(select(Employee).where(Employee.person_id == person_uuid))
     return employee.employee_id if employee else None

@@ -1,12 +1,23 @@
 """
 Purchase Order Line Model - AP Schema.
 """
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -37,21 +48,31 @@ class PurchaseOrderLine(Base):
     )
     line_number: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    item_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    item_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
     description: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Quantities
     quantity_ordered: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    quantity_received: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
-    quantity_invoiced: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    quantity_received: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
+    quantity_invoiced: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Pricing
     unit_price: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     line_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
 
     # Tax
-    tax_code_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
-    tax_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=0)
+    tax_code_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    tax_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
 
     # Accounting
     expense_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
@@ -69,8 +90,12 @@ class PurchaseOrderLine(Base):
         UUID(as_uuid=True),
         nullable=True,
     )
-    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
-    segment_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    segment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
 
     delivery_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 

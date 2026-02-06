@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy.orm import Session
 
+from app.models.email_profile import EmailModule
 from app.services.email import send_email
 
 if TYPE_CHECKING:
@@ -154,6 +155,8 @@ HR Notifications
                 subject,
                 body_html=body.replace("\n", "<br>"),
                 body_text=body,
+                module=EmailModule.PEOPLE_PAYROLL,
+                organization_id=employee.organization_id,
             )
             logger.info(
                 "Sent probation notification for %s to %s",
@@ -225,6 +228,8 @@ HR Notifications
                 subject,
                 body_html=body.replace("\n", "<br>"),
                 body_text=body,
+                module=EmailModule.PEOPLE_PAYROLL,
+                organization_id=employee.organization_id,
             )
             logger.info(
                 "Sent contract expiry notification for %s to %s",
@@ -294,6 +299,8 @@ HR Notifications
                 subject,
                 body_html=body.replace("\n", "<br>"),
                 body_text=body,
+                module=EmailModule.PEOPLE_PAYROLL,
+                organization_id=employee.organization_id,
             )
             logger.info(
                 "Sent anniversary notification for %s to %s",
@@ -354,6 +361,8 @@ HR Notifications
                 subject,
                 body_html=body.replace("\n", "<br>"),
                 body_text=body,
+                module=EmailModule.PEOPLE_PAYROLL,
+                organization_id=employee.organization_id,
             )
             logger.info(
                 "Sent birthday notification for %s to %s",
@@ -423,6 +432,8 @@ HR Notifications
                 subject,
                 body_html=body.replace("\n", "<br>"),
                 body_text=body,
+                module=EmailModule.PEOPLE_PAYROLL,
+                organization_id=cycle.organization_id,
             )
             logger.info(
                 "Sent self-assessment reminder to %s",
@@ -491,6 +502,8 @@ HR Notifications
                 subject,
                 body_html=body.replace("\n", "<br>"),
                 body_text=body,
+                module=EmailModule.PEOPLE_PAYROLL,
+                organization_id=cycle.organization_id,
             )
             logger.info(
                 "Sent manager review reminder to %s for employee %s",
@@ -554,6 +567,8 @@ HR Notifications
                 subject,
                 body_html=body.replace("\n", "<br>"),
                 body_text=body,
+                module=EmailModule.PEOPLE_PAYROLL,
+                organization_id=employee.organization_id,
             )
             logger.info(
                 "Sent certification expiry notification to %s for cert %s",

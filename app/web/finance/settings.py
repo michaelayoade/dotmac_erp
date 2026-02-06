@@ -7,6 +7,7 @@ automation settings, and report configuration.
 Note: Org-wide settings (organization profile, branding, email, features,
 payments) have moved to Admin settings at /admin/settings/hub.
 """
+
 import uuid
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -16,13 +17,20 @@ from sqlalchemy.orm import Session
 
 from app.services.finance.settings_web import settings_web_service
 from app.templates import templates
-from app.web.deps import get_async_db, get_db, require_finance_access, WebAuthContext, base_context
+from app.web.deps import (
+    get_async_db,
+    get_db,
+    require_finance_access,
+    WebAuthContext,
+    base_context,
+)
 
 
 router = APIRouter(prefix="/settings", tags=["finance-settings"])
 
 
 # ========== Settings Index ==========
+
 
 @router.get("", response_class=HTMLResponse)
 async def settings_index(
@@ -33,39 +41,42 @@ async def settings_index(
     """Settings index page."""
     context = base_context(request, auth, "Settings", "settings", db=db)
     # Finance-specific settings only - org-wide settings moved to Admin
-    context.update({
-        "settings_sections": [
-            {
-                "title": "Numbering Sequences",
-                "description": "Configure document number formats for invoices, quotes, orders, and more.",
-                "url": "/settings/numbering",
-                "icon": "hashtag",
-            },
-            {
-                "title": "Automation Settings",
-                "description": "Configure recurring transactions, workflows, and custom fields.",
-                "url": "/settings/automation-settings",
-                "icon": "arrow-path",
-            },
-            {
-                "title": "Report Settings",
-                "description": "Default export formats, page layout, and report branding.",
-                "url": "/settings/reports",
-                "icon": "document-text",
-            },
-            {
-                "title": "Payroll Settings",
-                "description": "Auto-posting behavior and rounding account for payroll journals.",
-                "url": "/settings/payroll",
-                "icon": "cog",
-            },
-        ],
-        "admin_settings_url": "/admin/settings/hub",
-    })
+    context.update(
+        {
+            "settings_sections": [
+                {
+                    "title": "Numbering Sequences",
+                    "description": "Configure document number formats for invoices, quotes, orders, and more.",
+                    "url": "/settings/numbering",
+                    "icon": "hashtag",
+                },
+                {
+                    "title": "Automation Settings",
+                    "description": "Configure recurring transactions, workflows, and custom fields.",
+                    "url": "/settings/automation-settings",
+                    "icon": "arrow-path",
+                },
+                {
+                    "title": "Report Settings",
+                    "description": "Default export formats, page layout, and report branding.",
+                    "url": "/settings/reports",
+                    "icon": "document-text",
+                },
+                {
+                    "title": "Payroll Settings",
+                    "description": "Auto-posting behavior and rounding account for payroll journals.",
+                    "url": "/settings/payroll",
+                    "icon": "cog",
+                },
+            ],
+            "admin_settings_url": "/admin/settings/hub",
+        }
+    )
     return templates.TemplateResponse(request, "finance/settings/index.html", context)
 
 
 # ========== Numbering Sequences ==========
+
 
 @router.get("/numbering", response_class=HTMLResponse)
 async def numbering_sequences_list(
@@ -75,12 +86,16 @@ async def numbering_sequences_list(
     sync_db: Session = Depends(get_db),
 ):
     """List all numbering sequences for the organization."""
-    result = await settings_web_service.get_numbering_list_context(db, auth.organization_id)
+    result = await settings_web_service.get_numbering_list_context(
+        db, auth.organization_id
+    )
 
     context = base_context(request, auth, "Numbering Sequences", "settings", db=sync_db)
     context.update(result)
 
-    return templates.TemplateResponse(request, "finance/settings/numbering.html", context)
+    return templates.TemplateResponse(
+        request, "finance/settings/numbering.html", context
+    )
 
 
 @router.get("/numbering/{sequence_id}", response_class=HTMLResponse)
@@ -99,10 +114,14 @@ async def edit_numbering_sequence(
     if error:
         return RedirectResponse(url="/settings/numbering", status_code=302)
 
-    context = base_context(request, auth, "Edit Numbering Sequence", "settings", db=sync_db)
+    context = base_context(
+        request, auth, "Edit Numbering Sequence", "settings", db=sync_db
+    )
     context.update(result)
 
-    return templates.TemplateResponse(request, "finance/settings/numbering_edit.html", context)
+    return templates.TemplateResponse(
+        request, "finance/settings/numbering_edit.html", context
+    )
 
 
 @router.post("/numbering/{sequence_id}", response_class=HTMLResponse)
@@ -155,6 +174,7 @@ async def reset_numbering_sequence(
 
 # ========== Automation Settings ==========
 
+
 @router.get("/automation-settings", response_class=HTMLResponse)
 async def automation_settings(
     request: Request,
@@ -162,13 +182,17 @@ async def automation_settings(
     db: Session = Depends(get_db),
 ):
     """Automation settings page."""
-    result = settings_web_service.get_automation_settings_context(db, auth.organization_id)
+    result = settings_web_service.get_automation_settings_context(
+        db, auth.organization_id
+    )
 
     context = base_context(request, auth, "Automation Settings", "settings", db=db)
     context.update(result)
     context["is_admin"] = "admin" in auth.roles
 
-    return templates.TemplateResponse(request, "finance/settings/automation_settings.html", context)
+    return templates.TemplateResponse(
+        request, "finance/settings/automation_settings.html", context
+    )
 
 
 @router.post("/automation-settings", response_class=HTMLResponse)
@@ -200,17 +224,24 @@ async def update_automation_settings(
     )
 
     if not success:
-        result = settings_web_service.get_automation_settings_context(db, auth.organization_id)
+        result = settings_web_service.get_automation_settings_context(
+            db, auth.organization_id
+        )
         context = base_context(request, auth, "Automation Settings", "settings", db=db)
         context.update(result)
         context["is_admin"] = is_admin
         context["error"] = error
-        return templates.TemplateResponse(request, "finance/settings/automation_settings.html", context)
+        return templates.TemplateResponse(
+            request, "finance/settings/automation_settings.html", context
+        )
 
-    return RedirectResponse(url="/settings/automation-settings?saved=1", status_code=303)
+    return RedirectResponse(
+        url="/settings/automation-settings?saved=1", status_code=303
+    )
 
 
 # ========== Payroll Settings ==========
+
 
 @router.get("/payroll", response_class=HTMLResponse)
 async def payroll_settings(
@@ -244,16 +275,21 @@ async def update_payroll_settings(
     )
 
     if not success:
-        result = settings_web_service.get_payroll_settings_context(db, auth.organization_id)
+        result = settings_web_service.get_payroll_settings_context(
+            db, auth.organization_id
+        )
         context = base_context(request, auth, "Payroll Settings", "settings", db=db)
         context.update(result)
         context["error"] = error
-        return templates.TemplateResponse(request, "finance/settings/payroll.html", context)
+        return templates.TemplateResponse(
+            request, "finance/settings/payroll.html", context
+        )
 
     return RedirectResponse(url="/settings/payroll?saved=1", status_code=303)
 
 
 # ========== Report Settings ==========
+
 
 @router.get("/reports", response_class=HTMLResponse)
 async def report_settings(
@@ -291,7 +327,9 @@ async def update_report_settings(
         context = base_context(request, auth, "Report Settings", "settings", db=db)
         context.update(result)
         context["error"] = error
-        return templates.TemplateResponse(request, "finance/settings/reports.html", context)
+        return templates.TemplateResponse(
+            request, "finance/settings/reports.html", context
+        )
 
     return RedirectResponse(url="/settings/reports?saved=1", status_code=303)
 
@@ -299,6 +337,7 @@ async def update_report_settings(
 # ========== Legacy Route Redirects ==========
 # These routes previously lived in Finance but have moved to Admin.
 # Redirects are provided for backwards compatibility.
+
 
 @router.get("/organization")
 async def redirect_organization():

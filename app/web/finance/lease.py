@@ -11,7 +11,10 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
-from app.services.finance.lease import lease_modification_service, lease_variable_payment_service
+from app.services.finance.lease import (
+    lease_modification_service,
+    lease_variable_payment_service,
+)
 from app.services.finance.lease.web import lease_web_service
 from app.services.finance.platform.currency_context import get_currency_context
 from app.templates import templates
@@ -24,6 +27,7 @@ router = APIRouter(prefix="/lease", tags=["lease-web"])
 # =============================================================================
 # Lease Contracts
 # =============================================================================
+
 
 @router.get("/contracts", response_class=HTMLResponse)
 def list_contracts(
@@ -52,15 +56,26 @@ def list_contracts(
 
 
 @router.get("/contracts/new", response_class=HTMLResponse)
-def new_contract_form(request: Request, auth: WebAuthContext = Depends(require_finance_access), db: Session = Depends(get_db)):
+def new_contract_form(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
     """New lease contract form page."""
     context = base_context(request, auth, "New Lease Contract", "lease")
     context.update(get_currency_context(db, str(auth.organization_id)))
-    return templates.TemplateResponse(request, "finance/lease/contract_form.html", context)
+    return templates.TemplateResponse(
+        request, "finance/lease/contract_form.html", context
+    )
 
 
 @router.get("/contracts/{lease_id}", response_class=HTMLResponse)
-def view_contract(request: Request, lease_id: str, auth: WebAuthContext = Depends(require_finance_access), db: Session = Depends(get_db)):
+def view_contract(
+    request: Request,
+    lease_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
     """Lease contract detail page."""
     context = base_context(request, auth, "Lease Details", "lease")
     context.update(
@@ -71,11 +86,18 @@ def view_contract(request: Request, lease_id: str, auth: WebAuthContext = Depend
         )
     )
 
-    return templates.TemplateResponse(request, "finance/lease/contract_detail.html", context)
+    return templates.TemplateResponse(
+        request, "finance/lease/contract_detail.html", context
+    )
 
 
 @router.get("/contracts/{lease_id}/schedule", response_class=HTMLResponse)
-def view_schedule(request: Request, lease_id: str, auth: WebAuthContext = Depends(require_finance_access), db: Session = Depends(get_db)):
+def view_schedule(
+    request: Request,
+    lease_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
     """Lease payment schedule page."""
     context = base_context(request, auth, "Payment Schedule", "lease")
     context.update(
@@ -93,6 +115,7 @@ def view_schedule(request: Request, lease_id: str, auth: WebAuthContext = Depend
 # =============================================================================
 # Lease Modifications
 # =============================================================================
+
 
 @router.get("/modifications", response_class=HTMLResponse)
 def list_modifications(
@@ -116,19 +139,24 @@ def list_modifications(
     )
 
     context = base_context(request, auth, "Lease Modifications", "lease")
-    context.update({
-        "modifications": modifications,
-        "lease_id": lease_id,
-        "modification_type": modification_type,
-        "page": page,
-    })
+    context.update(
+        {
+            "modifications": modifications,
+            "lease_id": lease_id,
+            "modification_type": modification_type,
+            "page": page,
+        }
+    )
 
-    return templates.TemplateResponse(request, "finance/lease/modifications.html", context)
+    return templates.TemplateResponse(
+        request, "finance/lease/modifications.html", context
+    )
 
 
 # =============================================================================
 # Variable Payments
 # =============================================================================
+
 
 @router.get("/variable-payments", response_class=HTMLResponse)
 def list_variable_payments(
@@ -142,7 +170,9 @@ def list_variable_payments(
     context = base_context(request, auth, "Variable Payments", "lease")
     context["lease_id"] = lease_id
 
-    return templates.TemplateResponse(request, "finance/lease/variable_payments.html", context)
+    return templates.TemplateResponse(
+        request, "finance/lease/variable_payments.html", context
+    )
 
 
 @router.get("/overdue", response_class=HTMLResponse)

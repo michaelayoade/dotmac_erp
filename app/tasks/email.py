@@ -22,33 +22,39 @@ logger = logging.getLogger(__name__)
 
 # SMTP error codes that indicate permanent failures (don't retry)
 # 5xx errors are generally permanent, but some are transient
-PERMANENT_SMTP_CODES = frozenset({
-    550,  # Mailbox unavailable, user unknown
-    551,  # User not local
-    552,  # Exceeded storage allocation
-    553,  # Mailbox name not allowed
-    554,  # Transaction failed
-    530,  # Authentication required (config issue)
-    535,  # Authentication credentials invalid
-    556,  # Domain does not accept mail
-})
+PERMANENT_SMTP_CODES = frozenset(
+    {
+        550,  # Mailbox unavailable, user unknown
+        551,  # User not local
+        552,  # Exceeded storage allocation
+        553,  # Mailbox name not allowed
+        554,  # Transaction failed
+        530,  # Authentication required (config issue)
+        535,  # Authentication credentials invalid
+        556,  # Domain does not accept mail
+    }
+)
 
 # Transient codes that should be retried (4xx and some 5xx)
-TRANSIENT_SMTP_CODES = frozenset({
-    421,  # Service not available, closing connection
-    450,  # Mailbox temporarily unavailable
-    451,  # Local error in processing
-    452,  # Insufficient system storage
-})
+TRANSIENT_SMTP_CODES = frozenset(
+    {
+        421,  # Service not available, closing connection
+        450,  # Mailbox temporarily unavailable
+        451,  # Local error in processing
+        452,  # Insufficient system storage
+    }
+)
 
 
 class PermanentEmailError(Exception):
     """Email error that should not be retried."""
+
     pass
 
 
 class TransientEmailError(Exception):
     """Email error that may succeed on retry."""
+
     pass
 
 
@@ -90,15 +96,18 @@ def classify_email_error(exc: Exception) -> type[Exception]:
         return PermanentEmailError
 
     # Connection errors are transient (network issues)
-    if isinstance(exc, (
-        smtplib.SMTPConnectError,
-        smtplib.SMTPServerDisconnected,
-        socket.timeout,
-        socket.gaierror,  # DNS resolution failure
-        ConnectionRefusedError,
-        ConnectionResetError,
-        OSError,  # General network errors
-    )):
+    if isinstance(
+        exc,
+        (
+            smtplib.SMTPConnectError,
+            smtplib.SMTPServerDisconnected,
+            socket.timeout,
+            socket.gaierror,  # DNS resolution failure
+            ConnectionRefusedError,
+            ConnectionResetError,
+            OSError,  # General network errors
+        ),
+    ):
         return TransientEmailError
 
     # Default: treat unknown errors as transient (safer to retry)
@@ -120,6 +129,8 @@ def send_email_async(
     body_html: str,
     body_text: Optional[str] = None,
     attachments_b64: Optional[list[dict[str, str]]] = None,
+    module: Optional[str] = None,
+    organization_id: Optional[str] = None,
 ) -> dict[str, Any]:
     """
     Asynchronously send an email.
@@ -142,9 +153,15 @@ def send_email_async(
     Returns:
         Dict with success status and error details if any
     """
+    from app.models.email_profile import EmailModule
     from app.services.email import send_email
 
-    logger.info("Sending email to %s: %s (attempt %d)", to_email, subject, self.request.retries + 1)
+    logger.info(
+        "Sending email to %s: %s (attempt %d)",
+        to_email,
+        subject,
+        self.request.retries + 1,
+    )
 
     result: dict[str, Any] = {
         "success": False,
@@ -169,6 +186,7 @@ def send_email_async(
         # Use SessionLocal to get SMTP settings from DB
         # Use raise_on_error=True to get the actual exception for classification
         with SessionLocal() as db:
+            module_enum = EmailModule(module) if module else None
             send_email(
                 db=db,
                 to_email=to_email,
@@ -177,6 +195,8 @@ def send_email_async(
                 body_text=body_text,
                 attachments=attachments,
                 raise_on_error=True,
+                module=module_enum,
+                organization_id=organization_id,
             )
 
         result["success"] = True
@@ -194,15 +214,13 @@ def send_email_async(
         if error_class is PermanentEmailError:
             result["is_permanent_failure"] = True
             logger.error(
-                "Permanent email failure to %s: %s (not retrying)",
-                to_email, e
+                "Permanent email failure to %s: %s (not retrying)", to_email, e
             )
             # Don't retry - return result with failure info
             return result
         else:
             logger.warning(
-                "Transient email failure to %s: %s (will retry)",
-                to_email, e
+                "Transient email failure to %s: %s (will retry)", to_email, e
             )
             raise TransientEmailError(str(e)) from e
 
@@ -215,6 +233,8 @@ def queue_email(
     body_html: str,
     body_text: Optional[str] = None,
     attachments: Optional[list[tuple[str, bytes, str]]] = None,
+    module: Optional[str] = None,
+    organization_id: Optional[str] = None,
 ) -> None:
     """
     Queue an email for async delivery via Celery.
@@ -233,11 +253,13 @@ def queue_email(
     if attachments:
         attachments_b64 = []
         for filename, data, mime_type in attachments:
-            attachments_b64.append({
-                "filename": filename,
-                "data_b64": base64.b64encode(data).decode("ascii"),
-                "mime_type": mime_type,
-            })
+            attachments_b64.append(
+                {
+                    "filename": filename,
+                    "data_b64": base64.b64encode(data).decode("ascii"),
+                    "mime_type": mime_type,
+                }
+            )
 
     send_email_async.delay(
         to_email=to_email,
@@ -245,4 +267,6 @@ def queue_email(
         body_html=body_html,
         body_text=body_text,
         attachments_b64=attachments_b64,
+        module=module,
+        organization_id=organization_id,
     )

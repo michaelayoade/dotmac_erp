@@ -3,6 +3,7 @@ Shift Scheduling web routes.
 
 Shift patterns, assignments, schedules, and swap requests pages.
 """
+
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request

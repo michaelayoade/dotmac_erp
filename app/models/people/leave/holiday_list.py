@@ -3,6 +3,7 @@ Holiday List Model - Leave Schema.
 
 Defines company holidays and public holidays.
 """
+
 import uuid
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Optional
@@ -37,7 +38,9 @@ class HolidayList(Base, AuditMixin, ERPNextSyncMixin):
 
     __tablename__ = "holiday_list"
     __table_args__ = (
-        UniqueConstraint("organization_id", "list_code", name="uq_holiday_list_org_code"),
+        UniqueConstraint(
+            "organization_id", "list_code", name="uq_holiday_list_org_code"
+        ),
         Index("idx_holiday_list_year", "organization_id", "year"),
         {"schema": "leave"},
     )
@@ -132,7 +135,9 @@ class Holiday(Base):
 
     __tablename__ = "holiday"
     __table_args__ = (
-        UniqueConstraint("holiday_list_id", "holiday_date", name="uq_holiday_list_date"),
+        UniqueConstraint(
+            "holiday_list_id", "holiday_date", name="uq_holiday_list_date"
+        ),
         Index("idx_holiday_date", "holiday_list_id", "holiday_date"),
         {"schema": "leave"},
     )

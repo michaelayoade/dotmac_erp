@@ -5,7 +5,6 @@ Tests state transition validations and event dispatching.
 """
 
 import uuid
-from datetime import datetime, timezone
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -18,7 +17,6 @@ from app.services.people.payroll.lifecycle import (
     PayrollLifecycleError,
     SLIP_TRANSITIONS,
     RUN_TRANSITIONS,
-    TransitionResult,
 )
 from app.services.people.payroll.events import (
     PayrollEventDispatcher,
@@ -187,9 +185,9 @@ class TestSlipTransitionValidation:
             SalarySlipStatus.PAID,
         ]
         for status in cancellable_states:
-            assert lifecycle.can_transition_slip(
-                status, SalarySlipStatus.CANCELLED
-            ), f"{status} should be cancellable"
+            assert lifecycle.can_transition_slip(status, SalarySlipStatus.CANCELLED), (
+                f"{status} should be cancellable"
+            )
 
     def test_validate_slip_transition_raises_on_invalid(self, mock_db, dispatcher):
         """validate_slip_transition raises PayrollLifecycleError for invalid transitions."""
@@ -280,7 +278,9 @@ class TestSubmitSlip:
         assert len(events_received) == 1
         assert events_received[0].slip_id == slip.slip_id
 
-    def test_submit_slip_from_wrong_status_fails(self, mock_db, dispatcher, org_id, user_id):
+    def test_submit_slip_from_wrong_status_fails(
+        self, mock_db, dispatcher, org_id, user_id
+    ):
         """Cannot submit an already posted slip."""
         slip = MockSalarySlip(organization_id=org_id, status=SalarySlipStatus.POSTED)
         mock_db.get.return_value = slip
@@ -297,7 +297,9 @@ class TestSubmitSlip:
 class TestApproveSlip:
     """Tests for approve_slip method."""
 
-    def test_approve_slip_success(self, mock_db, dispatcher, org_id, user_id, other_user_id):
+    def test_approve_slip_success(
+        self, mock_db, dispatcher, org_id, user_id, other_user_id
+    ):
         """Test successful slip approval."""
         slip = MockSalarySlip(
             organization_id=org_id,
@@ -378,7 +380,9 @@ class TestCancelSlip:
         assert len(events_received) == 1
         assert events_received[0].reason == "Test reason"
 
-    def test_cannot_cancel_already_cancelled(self, mock_db, dispatcher, org_id, user_id):
+    def test_cannot_cancel_already_cancelled(
+        self, mock_db, dispatcher, org_id, user_id
+    ):
         """Cannot cancel an already cancelled slip."""
         slip = MockSalarySlip(organization_id=org_id, status=SalarySlipStatus.CANCELLED)
         mock_db.get.return_value = slip
@@ -418,7 +422,9 @@ class TestRejectSlip:
 class TestApproveRun:
     """Tests for approve_run method."""
 
-    def test_approve_run_success(self, mock_db, dispatcher, org_id, user_id, other_user_id):
+    def test_approve_run_success(
+        self, mock_db, dispatcher, org_id, user_id, other_user_id
+    ):
         """Test successful run approval."""
         run = MockPayrollEntry(
             organization_id=org_id,
@@ -477,7 +483,9 @@ class TestMarkSlipsCreated:
         assert len(events_received) == 1
         assert events_received[0].slip_count == 5
 
-    def test_mark_slips_created_invalid_status(self, mock_db, dispatcher, org_id, user_id):
+    def test_mark_slips_created_invalid_status(
+        self, mock_db, dispatcher, org_id, user_id
+    ):
         """Cannot mark slips created from POSTED status."""
         run = MockPayrollEntry(organization_id=org_id, status=PayrollEntryStatus.POSTED)
         mock_db.get.return_value = run
@@ -733,7 +741,9 @@ class TestSlipTransitionMatrix:
             (SalarySlipStatus.CANCELLED, SalarySlipStatus.PAID, False),
         ],
     )
-    def test_slip_transition(self, mock_db, dispatcher, from_status, to_status, expected):
+    def test_slip_transition(
+        self, mock_db, dispatcher, from_status, to_status, expected
+    ):
         """Parametrized test for all slip status transitions."""
         lifecycle = PayrollLifecycle(mock_db, dispatcher)
         result = lifecycle.can_transition_slip(from_status, to_status)
@@ -760,11 +770,19 @@ class TestRunTransitionMatrix:
             (PayrollEntryStatus.SLIPS_CREATED, PayrollEntryStatus.CANCELLED, True),
             # SUBMITTED transitions
             (PayrollEntryStatus.SUBMITTED, PayrollEntryStatus.APPROVED, True),
-            (PayrollEntryStatus.SUBMITTED, PayrollEntryStatus.SLIPS_CREATED, True),  # rejection
+            (
+                PayrollEntryStatus.SUBMITTED,
+                PayrollEntryStatus.SLIPS_CREATED,
+                True,
+            ),  # rejection
             (PayrollEntryStatus.SUBMITTED, PayrollEntryStatus.CANCELLED, True),
             # APPROVED transitions
             (PayrollEntryStatus.APPROVED, PayrollEntryStatus.POSTED, True),
-            (PayrollEntryStatus.APPROVED, PayrollEntryStatus.SUBMITTED, True),  # unapprove
+            (
+                PayrollEntryStatus.APPROVED,
+                PayrollEntryStatus.SUBMITTED,
+                True,
+            ),  # unapprove
             (PayrollEntryStatus.APPROVED, PayrollEntryStatus.CANCELLED, True),
             # POSTED transitions
             (PayrollEntryStatus.POSTED, PayrollEntryStatus.APPROVED, False),
@@ -774,7 +792,9 @@ class TestRunTransitionMatrix:
             (PayrollEntryStatus.CANCELLED, PayrollEntryStatus.PENDING, False),
         ],
     )
-    def test_run_transition(self, mock_db, dispatcher, from_status, to_status, expected):
+    def test_run_transition(
+        self, mock_db, dispatcher, from_status, to_status, expected
+    ):
         """Parametrized test for all run status transitions."""
         lifecycle = PayrollLifecycle(mock_db, dispatcher)
         result = lifecycle.can_transition_run(from_status, to_status)
@@ -792,7 +812,7 @@ class TestPostSlipToGL:
     def test_post_slip_to_gl_success(self, mock_db, dispatcher, org_id, user_id):
         """Test successful unified slip posting to GL."""
         from datetime import date
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock
 
         slip = MockSalarySlip(organization_id=org_id, status=SalarySlipStatus.APPROVED)
         mock_db.get.return_value = slip
@@ -825,10 +845,12 @@ class TestPostSlipToGL:
         assert len(events_received) == 1
         assert events_received[0].journal_entry_id == mock_gl_result.journal_entry_id
 
-    def test_post_slip_to_gl_handler_failure_does_not_block(self, mock_db, dispatcher, org_id, user_id):
+    def test_post_slip_to_gl_handler_failure_does_not_block(
+        self, mock_db, dispatcher, org_id, user_id
+    ):
         """Handler failure should not prevent successful posting."""
         from datetime import date
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock
 
         slip = MockSalarySlip(organization_id=org_id, status=SalarySlipStatus.APPROVED)
         mock_db.get.return_value = slip
@@ -860,7 +882,7 @@ class TestPostSlipToGL:
     def test_post_slip_to_gl_gl_failure(self, mock_db, dispatcher, org_id, user_id):
         """Test unified slip posting when GL fails."""
         from datetime import date
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock
 
         slip = MockSalarySlip(organization_id=org_id, status=SalarySlipStatus.APPROVED)
         mock_db.get.return_value = slip
@@ -911,9 +933,11 @@ class TestPostRunToGL:
     def test_post_run_to_gl_success(self, mock_db, dispatcher, org_id, user_id):
         """Test successful unified run posting to GL."""
         from datetime import date
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock
 
-        run = MockPayrollEntry(organization_id=org_id, status=PayrollEntryStatus.APPROVED)
+        run = MockPayrollEntry(
+            organization_id=org_id, status=PayrollEntryStatus.APPROVED
+        )
         mock_db.get.return_value = run
 
         # Create mock slips
@@ -960,11 +984,15 @@ class TestPostRunToGL:
         mock_db.commit.assert_called_once()
         assert len(events_received) == 1
 
-    def test_post_run_to_gl_no_approved_slips(self, mock_db, dispatcher, org_id, user_id):
+    def test_post_run_to_gl_no_approved_slips(
+        self, mock_db, dispatcher, org_id, user_id
+    ):
         """Test run posting fails when no slips exist."""
         from datetime import date
 
-        run = MockPayrollEntry(organization_id=org_id, status=PayrollEntryStatus.APPROVED)
+        run = MockPayrollEntry(
+            organization_id=org_id, status=PayrollEntryStatus.APPROVED
+        )
         mock_db.get.return_value = run
 
         # No slips
@@ -984,9 +1012,11 @@ class TestPostRunToGL:
     def test_post_run_to_gl_gl_failure(self, mock_db, dispatcher, org_id, user_id):
         """Test run posting when GL fails."""
         from datetime import date
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock
 
-        run = MockPayrollEntry(organization_id=org_id, status=PayrollEntryStatus.APPROVED)
+        run = MockPayrollEntry(
+            organization_id=org_id, status=PayrollEntryStatus.APPROVED
+        )
         mock_db.get.return_value = run
 
         slips = [
@@ -1016,11 +1046,15 @@ class TestPostRunToGL:
         assert run.status == PayrollEntryStatus.APPROVED  # Unchanged
         mock_db.commit.assert_not_called()
 
-    def test_post_run_to_gl_rejects_mixed_status(self, mock_db, dispatcher, org_id, user_id):
+    def test_post_run_to_gl_rejects_mixed_status(
+        self, mock_db, dispatcher, org_id, user_id
+    ):
         """Run posting should fail if any slip is not APPROVED."""
         from datetime import date
 
-        run = MockPayrollEntry(organization_id=org_id, status=PayrollEntryStatus.APPROVED)
+        run = MockPayrollEntry(
+            organization_id=org_id, status=PayrollEntryStatus.APPROVED
+        )
         mock_db.get.return_value = run
 
         slips = [
@@ -1040,15 +1074,23 @@ class TestPostRunToGL:
         assert "All slips must be APPROVED" in result.message
         mock_db.commit.assert_not_called()
 
-    def test_post_run_to_gl_rejects_mixed_currency(self, mock_db, dispatcher, org_id, user_id):
+    def test_post_run_to_gl_rejects_mixed_currency(
+        self, mock_db, dispatcher, org_id, user_id
+    ):
         """Run posting should fail if slips have mixed currency or rates."""
         from datetime import date
 
-        run = MockPayrollEntry(organization_id=org_id, status=PayrollEntryStatus.APPROVED)
+        run = MockPayrollEntry(
+            organization_id=org_id, status=PayrollEntryStatus.APPROVED
+        )
         mock_db.get.return_value = run
 
-        slip_ngn = MockSalarySlip(organization_id=org_id, status=SalarySlipStatus.APPROVED)
-        slip_usd = MockSalarySlip(organization_id=org_id, status=SalarySlipStatus.APPROVED)
+        slip_ngn = MockSalarySlip(
+            organization_id=org_id, status=SalarySlipStatus.APPROVED
+        )
+        slip_usd = MockSalarySlip(
+            organization_id=org_id, status=SalarySlipStatus.APPROVED
+        )
         slip_usd.currency_code = "USD"
         slips = [slip_ngn, slip_usd]
 
@@ -1069,7 +1111,9 @@ class TestPostRunToGL:
         """Cannot post run that isn't APPROVED."""
         from datetime import date
 
-        run = MockPayrollEntry(organization_id=org_id, status=PayrollEntryStatus.SUBMITTED)
+        run = MockPayrollEntry(
+            organization_id=org_id, status=PayrollEntryStatus.SUBMITTED
+        )
         mock_db.get.return_value = run
 
         lifecycle = PayrollLifecycle(mock_db, dispatcher)

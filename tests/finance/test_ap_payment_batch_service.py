@@ -40,7 +40,10 @@ def test_create_batch_requires_payments():
 def test_create_batch_sets_totals():
     db = MagicMock()
     org_id = uuid4()
-    with patch("app.services.finance.ap.payment_batch.SequenceService.get_next_number", return_value="001"):
+    with patch(
+        "app.services.finance.ap.payment_batch.SequenceService.get_next_number",
+        return_value="001",
+    ):
         batch = PaymentBatchService.create_batch(
             db,
             org_id,
@@ -65,18 +68,34 @@ def test_create_batch_sets_totals():
 def test_add_and_remove_payment_from_batch():
     db = MagicMock()
     org_id = uuid4()
-    batch = SimpleNamespace(batch_id=uuid4(), organization_id=org_id, status=APBatchStatus.DRAFT, total_payments=0, total_amount=Decimal("0"))
-    payment = SimpleNamespace(payment_id=uuid4(), organization_id=org_id, status=APPaymentStatus.DRAFT, payment_batch_id=None, amount=Decimal("40.00"))
+    batch = SimpleNamespace(
+        batch_id=uuid4(),
+        organization_id=org_id,
+        status=APBatchStatus.DRAFT,
+        total_payments=0,
+        total_amount=Decimal("0"),
+    )
+    payment = SimpleNamespace(
+        payment_id=uuid4(),
+        organization_id=org_id,
+        status=APPaymentStatus.DRAFT,
+        payment_batch_id=None,
+        amount=Decimal("40.00"),
+    )
 
-    db.query.return_value.filter.return_value.first.side_effect = [batch, payment]
+    db.scalars.return_value.first.side_effect = [batch, payment]
 
-    updated = PaymentBatchService.add_payment_to_batch(db, org_id, batch.batch_id, payment.payment_id)
+    updated = PaymentBatchService.add_payment_to_batch(
+        db, org_id, batch.batch_id, payment.payment_id
+    )
     assert updated.total_payments == 1
     assert updated.total_amount == Decimal("40.00")
     assert payment.payment_batch_id == batch.batch_id
 
-    db.query.return_value.filter.return_value.first.side_effect = [batch, payment]
-    removed = PaymentBatchService.remove_payment_from_batch(db, org_id, batch.batch_id, payment.payment_id)
+    db.scalars.return_value.first.side_effect = [batch, payment]
+    removed = PaymentBatchService.remove_payment_from_batch(
+        db, org_id, batch.batch_id, payment.payment_id
+    )
     assert removed.total_payments == 0
     assert removed.total_amount == Decimal("0.00")
     assert payment.payment_batch_id is None
@@ -93,21 +112,30 @@ def test_approve_and_process_batch():
     )
     payment = SimpleNamespace(payment_id=uuid4(), status=APPaymentStatus.DRAFT)
 
-    db.query.return_value.filter.return_value.first.return_value = batch
-    db.query.return_value.filter.return_value.count.return_value = 1
-    db.query.return_value.filter.return_value.all.return_value = [payment]
+    db.scalars.return_value.first.return_value = batch
+    db.scalar.return_value = 1
+    db.scalars.return_value.all.return_value = [payment]
 
     with pytest.raises(HTTPException):
-        PaymentBatchService.approve_batch(db, org_id, batch.batch_id, batch.created_by_user_id)
+        PaymentBatchService.approve_batch(
+            db, org_id, batch.batch_id, batch.created_by_user_id
+        )
 
-    approved = PaymentBatchService.approve_batch(db, org_id, batch.batch_id, approved_by_user_id=uuid4())
+    approved = PaymentBatchService.approve_batch(
+        db, org_id, batch.batch_id, approved_by_user_id=uuid4()
+    )
     assert approved.status == APBatchStatus.APPROVED
     assert payment.status == APPaymentStatus.APPROVED
 
     batch.status = APBatchStatus.APPROVED
     payment.status = APPaymentStatus.APPROVED
-    with patch("app.services.finance.ap.supplier_payment.SupplierPaymentService.post_payment", return_value=None):
-        processed = PaymentBatchService.process_batch(db, org_id, batch.batch_id, processed_by_user_id=uuid4())
+    with patch(
+        "app.services.finance.ap.supplier_payment.SupplierPaymentService.post_payment",
+        return_value=None,
+    ):
+        processed = PaymentBatchService.process_batch(
+            db, org_id, batch.batch_id, processed_by_user_id=uuid4()
+        )
     assert processed.status in [APBatchStatus.COMPLETED, APBatchStatus.FAILED]
 
 
@@ -123,22 +151,35 @@ def test_generate_bank_file_and_get_batch_payments():
         total_amount=Decimal("100.00"),
         currency_code="NGN",
     )
-    payment = SimpleNamespace(payment_number="PAY-1", supplier_id=uuid4(), amount=Decimal("100.00"), reference="Ref")
+    payment = SimpleNamespace(
+        payment_number="PAY-1",
+        supplier_id=uuid4(),
+        amount=Decimal("100.00"),
+        reference="Ref",
+    )
     supplier = SimpleNamespace(trading_name="Supplier", legal_name=None)
 
-    db.query.return_value.filter.return_value.first.side_effect = [batch, supplier, batch]
+    db.query.return_value.filter.return_value.first.side_effect = [
+        batch,
+        supplier,
+        batch,
+    ]
     db.query.return_value.filter.return_value.all.return_value = [payment]
 
     with patch("app.services.finance.ap.payment_batch.datetime") as dt:
         dt.now.return_value = datetime(2024, 1, 1, 10, 0, 0)
         dt.strftime = datetime.strftime
-        result = PaymentBatchService.generate_bank_file(db, org_id, batch.batch_id, file_format="ACH")
+        result = PaymentBatchService.generate_bank_file(
+            db, org_id, batch.batch_id, file_format="ACH"
+        )
 
     assert result["payment_count"] == 1
     assert "HEADER" in result["content"]
     assert "TRAILER" in result["content"]
 
     db.query.return_value.filter.return_value.first.return_value = batch
-    db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [payment]
+    db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        payment
+    ]
     payments = PaymentBatchService.get_batch_payments(db, org_id, batch.batch_id)
     assert payments == [payment]

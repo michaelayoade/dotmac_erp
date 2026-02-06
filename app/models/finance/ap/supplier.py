@@ -1,12 +1,25 @@
 """
 Supplier Model - AP Schema.
 """
+
 import enum
 import uuid
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -56,8 +69,12 @@ class Supplier(Base):
     # Identity
     legal_name: Mapped[str] = mapped_column(String(255), nullable=False)
     trading_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    tax_identification_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    registration_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    tax_identification_number: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )
+    registration_number: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )
 
     # Payment terms
     payment_terms_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
@@ -82,8 +99,12 @@ class Supplier(Base):
     )
 
     # Related party
-    is_related_party: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    related_party_relationship: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_related_party: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    related_party_relationship: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )
 
     # Withholding tax
     withholding_tax_applicable: Mapped[bool] = mapped_column(
@@ -97,9 +118,15 @@ class Supplier(Base):
     )
 
     # Contact & Address
-    billing_address: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    remittance_address: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    primary_contact: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    billing_address: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )
+    remittance_address: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )
+    primary_contact: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )
     bank_details: Mapped[Optional[dict[str, Any]]] = mapped_column(
         JSONB,
         nullable=True,

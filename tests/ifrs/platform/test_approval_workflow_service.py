@@ -17,13 +17,21 @@ from tests.ifrs.platform.conftest import MockColumn
 @contextmanager
 def patch_approval_workflow_service():
     """Helper context manager that sets up all required patches for ApprovalWorkflowService."""
-    with patch('app.services.finance.platform.approval_workflow.ApprovalWorkflow') as mock_workflow:
+    with patch(
+        "app.services.finance.platform.approval_workflow.ApprovalWorkflow"
+    ) as mock_workflow:
         mock_workflow.organization_id = MockColumn()
         mock_workflow.document_type = MockColumn()
         mock_workflow.is_active = MockColumn()
         mock_workflow.threshold_amount = MockColumn()
-        with patch('app.services.finance.platform.approval_workflow.and_', return_value=MagicMock()):
-            with patch('app.services.finance.platform.approval_workflow.coerce_uuid', side_effect=lambda x: x):
+        with patch(
+            "app.services.finance.platform.approval_workflow.and_",
+            return_value=MagicMock(),
+        ):
+            with patch(
+                "app.services.finance.platform.approval_workflow.coerce_uuid",
+                side_effect=lambda x: x,
+            ):
                 yield mock_workflow
 
 
@@ -80,7 +88,9 @@ class MockApprovalRequest:
     ):
         self.request_id = request_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
-        self.workflow_id = workflow_id or (workflow.workflow_id if workflow else uuid.uuid4())
+        self.workflow_id = workflow_id or (
+            workflow.workflow_id if workflow else uuid.uuid4()
+        )
         self.workflow = workflow
         self.document_type = document_type
         self.document_id = document_id or uuid.uuid4()
@@ -127,23 +137,33 @@ class TestApprovalWorkflowService:
     @pytest.fixture
     def service(self):
         """Import the service with mocked dependencies."""
-        with patch.dict('sys.modules', {
-            'app.models.ifrs.audit.approval_workflow': MagicMock(),
-            'app.models.ifrs.audit.approval_request': MagicMock(),
-            'app.models.ifrs.audit.approval_decision': MagicMock(),
-            'app.models.rbac': MagicMock(),
-        }):
-            from app.services.finance.platform.approval_workflow import ApprovalWorkflowService
+        with patch.dict(
+            "sys.modules",
+            {
+                "app.models.ifrs.audit.approval_workflow": MagicMock(),
+                "app.models.ifrs.audit.approval_request": MagicMock(),
+                "app.models.ifrs.audit.approval_decision": MagicMock(),
+                "app.models.rbac": MagicMock(),
+            },
+        ):
+            from app.services.finance.platform.approval_workflow import (
+                ApprovalWorkflowService,
+            )
+
             return ApprovalWorkflowService
 
-    @pytest.mark.skip(reason="Complex FXService mocking requires integration testing - tested via integration tests")
+    @pytest.mark.skip(
+        reason="Complex FXService mocking requires integration testing - tested via integration tests"
+    )
     def test_check_workflow_required_selects_threshold_workflow(
         self, service, mock_db_session, organization_id
     ):
         """check_workflow_required should choose threshold workflow with FX conversion."""
         pass
 
-    @pytest.mark.skip(reason="Complex FXService mocking requires integration testing - tested via integration tests")
+    @pytest.mark.skip(
+        reason="Complex FXService mocking requires integration testing - tested via integration tests"
+    )
     def test_check_workflow_required_falls_back_to_default(
         self, service, mock_db_session, organization_id
     ):
@@ -161,10 +181,18 @@ class TestApprovalWorkflowService:
         mock_request = MagicMock()
         mock_request.request_id = uuid.uuid4()
 
-        with patch('app.services.finance.platform.approval_workflow.ApprovalRequest', return_value=mock_request):
-            with patch('app.services.finance.platform.approval_workflow.ApprovalRequestStatus') as MockStatus:
+        with patch(
+            "app.services.finance.platform.approval_workflow.ApprovalRequest",
+            return_value=mock_request,
+        ):
+            with patch(
+                "app.services.finance.platform.approval_workflow.ApprovalRequestStatus"
+            ) as MockStatus:
                 MockStatus.PENDING = "PENDING"
-                with patch('app.services.finance.platform.approval_workflow.coerce_uuid', side_effect=lambda x: x):
+                with patch(
+                    "app.services.finance.platform.approval_workflow.coerce_uuid",
+                    side_effect=lambda x: x,
+                ):
                     result = service.submit_for_approval(
                         mock_db_session,
                         organization_id=organization_id,
@@ -187,7 +215,10 @@ class TestApprovalWorkflowService:
         """submit_for_approval should raise when workflow is missing."""
         mock_db_session.get.return_value = None
 
-        with patch('app.services.finance.platform.approval_workflow.coerce_uuid', side_effect=lambda x: x):
+        with patch(
+            "app.services.finance.platform.approval_workflow.coerce_uuid",
+            side_effect=lambda x: x,
+        ):
             with pytest.raises(HTTPException) as exc_info:
                 service.submit_for_approval(
                     mock_db_session,
@@ -220,15 +251,26 @@ class TestApprovalWorkflowService:
         )
         mock_db_session.get.return_value = request
 
-        with patch.object(service, "_is_user_allowed_for_level", return_value=(True, None)):
+        with patch.object(
+            service, "_is_user_allowed_for_level", return_value=(True, None)
+        ):
             with patch.object(service, "get_approval_status", return_value=MagicMock()):
-                with patch('app.services.finance.platform.approval_workflow.ApprovalDecision'):
-                    with patch('app.services.finance.platform.approval_workflow.ApprovalDecisionAction') as MockAction:
+                with patch(
+                    "app.services.finance.platform.approval_workflow.ApprovalDecision"
+                ):
+                    with patch(
+                        "app.services.finance.platform.approval_workflow.ApprovalDecisionAction"
+                    ) as MockAction:
                         MockAction.APPROVE = "APPROVE"
-                        with patch('app.services.finance.platform.approval_workflow.ApprovalRequestStatus') as MockStatus:
+                        with patch(
+                            "app.services.finance.platform.approval_workflow.ApprovalRequestStatus"
+                        ) as MockStatus:
                             MockStatus.PENDING = "PENDING"
                             MockStatus.APPROVED = "APPROVED"
-                            with patch('app.services.finance.platform.approval_workflow.coerce_uuid', side_effect=lambda x: x):
+                            with patch(
+                                "app.services.finance.platform.approval_workflow.coerce_uuid",
+                                side_effect=lambda x: x,
+                            ):
                                 service.approve(
                                     mock_db_session,
                                     request_id=request.request_id,
@@ -260,9 +302,14 @@ class TestApprovalWorkflowService:
         )
         mock_db_session.get.return_value = request
 
-        with patch('app.services.finance.platform.approval_workflow.ApprovalRequestStatus') as MockStatus:
+        with patch(
+            "app.services.finance.platform.approval_workflow.ApprovalRequestStatus"
+        ) as MockStatus:
             MockStatus.PENDING = "PENDING"
-            with patch('app.services.finance.platform.approval_workflow.coerce_uuid', side_effect=lambda x: x):
+            with patch(
+                "app.services.finance.platform.approval_workflow.coerce_uuid",
+                side_effect=lambda x: x,
+            ):
                 with pytest.raises(HTTPException) as exc_info:
                     service.approve(
                         mock_db_session,
@@ -286,13 +333,22 @@ class TestApprovalWorkflowService:
         mock_db_session.get.return_value = request
 
         with patch.object(service, "get_approval_status", return_value=MagicMock()):
-            with patch('app.services.finance.platform.approval_workflow.ApprovalDecision'):
-                with patch('app.services.finance.platform.approval_workflow.ApprovalDecisionAction') as MockAction:
+            with patch(
+                "app.services.finance.platform.approval_workflow.ApprovalDecision"
+            ):
+                with patch(
+                    "app.services.finance.platform.approval_workflow.ApprovalDecisionAction"
+                ) as MockAction:
                     MockAction.REJECT = "REJECT"
-                    with patch('app.services.finance.platform.approval_workflow.ApprovalRequestStatus') as MockStatus:
+                    with patch(
+                        "app.services.finance.platform.approval_workflow.ApprovalRequestStatus"
+                    ) as MockStatus:
                         MockStatus.PENDING = "PENDING"
                         MockStatus.REJECTED = "REJECTED"
-                        with patch('app.services.finance.platform.approval_workflow.coerce_uuid', side_effect=lambda x: x):
+                        with patch(
+                            "app.services.finance.platform.approval_workflow.coerce_uuid",
+                            side_effect=lambda x: x,
+                        ):
                             service.reject(
                                 mock_db_session,
                                 request_id=request.request_id,
@@ -315,9 +371,14 @@ class TestApprovalWorkflowService:
         )
         mock_db_session.get.return_value = request
 
-        with patch('app.services.finance.platform.approval_workflow.ApprovalRequestStatus') as MockStatus:
+        with patch(
+            "app.services.finance.platform.approval_workflow.ApprovalRequestStatus"
+        ) as MockStatus:
             MockStatus.PENDING = "PENDING"
-            with patch('app.services.finance.platform.approval_workflow.coerce_uuid', side_effect=lambda x: x):
+            with patch(
+                "app.services.finance.platform.approval_workflow.coerce_uuid",
+                side_effect=lambda x: x,
+            ):
                 with pytest.raises(HTTPException) as exc_info:
                     service.cancel_request(
                         mock_db_session,
@@ -339,10 +400,19 @@ class TestApprovalWorkflowService:
         ]
         mock_db_session.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = requests
 
-        with patch('app.services.finance.platform.approval_workflow.ApprovalRequestStatus') as MockStatus:
+        with patch(
+            "app.services.finance.platform.approval_workflow.ApprovalRequestStatus"
+        ) as MockStatus:
             MockStatus.PENDING = "PENDING"
-            with patch.object(service, "_is_user_allowed_for_request", side_effect=[(True, None), (False, "no")]):
-                with patch('app.services.finance.platform.approval_workflow.coerce_uuid', side_effect=lambda x: x):
+            with patch.object(
+                service,
+                "_is_user_allowed_for_request",
+                side_effect=[(True, None), (False, "no")],
+            ):
+                with patch(
+                    "app.services.finance.platform.approval_workflow.coerce_uuid",
+                    side_effect=lambda x: x,
+                ):
                     result = service.get_pending_approvals(
                         mock_db_session,
                         organization_id=organization_id,
@@ -373,7 +443,10 @@ class TestApprovalWorkflowService:
         )
         mock_db_session.get.return_value = request
 
-        with patch('app.services.finance.platform.approval_workflow.coerce_uuid', side_effect=lambda x: x):
+        with patch(
+            "app.services.finance.platform.approval_workflow.coerce_uuid",
+            side_effect=lambda x: x,
+        ):
             result = service.get_approval_status(
                 mock_db_session,
                 request_id=request.request_id,

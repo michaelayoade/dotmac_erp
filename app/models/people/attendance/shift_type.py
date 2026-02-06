@@ -3,6 +3,7 @@ Shift Type Model - Attendance Schema.
 
 Defines work shift schedules.
 """
+
 import uuid
 from datetime import datetime, time
 from decimal import Decimal
@@ -36,7 +37,9 @@ class ShiftType(Base, AuditMixin, ERPNextSyncMixin):
 
     __tablename__ = "shift_type"
     __table_args__ = (
-        UniqueConstraint("organization_id", "shift_code", name="uq_shift_type_org_code"),
+        UniqueConstraint(
+            "organization_id", "shift_code", name="uq_shift_type_org_code"
+        ),
         Index("idx_shift_type_active", "organization_id", "is_active"),
         {"schema": "attendance"},
     )

@@ -208,38 +208,47 @@ def main() -> None:
             )
             print(f"Updated {result.rowcount} employee record(s).")
 
-        unmatched_names = conn.execute(
-            text(
-                match_cte
-                + r"""
+        unmatched_names = (
+            conn.execute(
+                text(
+                    match_cte
+                    + r"""
                 SELECT DISTINCT t.full_name
                 FROM tmp t
                 LEFT JOIN name_scores ns ON ns.full_name = t.full_name
                 WHERE ns.full_name IS NULL
                 ORDER BY t.full_name
                 """
-            ),
-            {"fuzzy": args.fuzzy},
-        ).scalars().all()
+                ),
+                {"fuzzy": args.fuzzy},
+            )
+            .scalars()
+            .all()
+        )
 
-        ambiguous_names = conn.execute(
-            text(
-                match_cte
-                + r"""
+        ambiguous_names = (
+            conn.execute(
+                text(
+                    match_cte
+                    + r"""
                 SELECT DISTINCT b.full_name
                 FROM best b
                 WHERE b.score = b.max_score
                   AND b.score_ties > 1
                 ORDER BY b.full_name
                 """
-            ),
-            {"fuzzy": args.fuzzy},
-        ).scalars().all()
+                ),
+                {"fuzzy": args.fuzzy},
+            )
+            .scalars()
+            .all()
+        )
 
-        unmatched_branches = conn.execute(
-            text(
-                match_cte
-                + r"""
+        unmatched_branches = (
+            conn.execute(
+                text(
+                    match_cte
+                    + r"""
                 SELECT DISTINCT s.branch
                 FROM selected s
                 LEFT JOIN locations l
@@ -248,9 +257,12 @@ def main() -> None:
                 WHERE l.location_id IS NULL
                 ORDER BY s.branch
                 """
-            ),
-            {"fuzzy": args.fuzzy},
-        ).scalars().all()
+                ),
+                {"fuzzy": args.fuzzy},
+            )
+            .scalars()
+            .all()
+        )
 
         if unmatched_names:
             print("\nUnmatched employee names:")

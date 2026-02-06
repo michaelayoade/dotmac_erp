@@ -1,9 +1,8 @@
 import enum
 import uuid
 from datetime import date, datetime, timezone
-from typing import Optional
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, ForeignKey, Index, String, Text
+from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column
@@ -95,7 +94,9 @@ class Person(Base):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
     )
 
     @property

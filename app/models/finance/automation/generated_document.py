@@ -10,7 +10,6 @@ from datetime import date, datetime
 from typing import Any, Optional
 
 from sqlalchemy import (
-    Boolean,
     Date,
     DateTime,
     Enum,
@@ -18,7 +17,6 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
-    Text,
     func,
     text,
 )

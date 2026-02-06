@@ -29,6 +29,7 @@ from app.services.common import (
 )
 from app.models.finance.audit.audit_log import AuditAction
 from app.services.audit_dispatcher import fire_audit_event
+from app.services.state_machine import StateMachine
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ MAINTENANCE_STATUS_TRANSITIONS: Dict[MaintenanceStatus, set] = {
     MaintenanceStatus.COMPLETED: set(),  # Terminal
     MaintenanceStatus.CANCELLED: set(),  # Terminal
 }
+_STATE_MACHINE = StateMachine(MAINTENANCE_STATUS_TRANSITIONS)
 
 
 class MaintenanceService:
@@ -200,8 +202,7 @@ class MaintenanceService:
         """Mark maintenance as in progress and update vehicle status."""
         record = self.get_or_raise(maintenance_id)
 
-        if record.status != MaintenanceStatus.SCHEDULED:
-            raise ValidationError("Can only start scheduled maintenance")
+        _STATE_MACHINE.validate(record.status, MaintenanceStatus.IN_PROGRESS)
 
         record.status = MaintenanceStatus.IN_PROGRESS
 
@@ -232,13 +233,7 @@ class MaintenanceService:
         """Complete a maintenance record."""
         record = self.get_or_raise(maintenance_id)
 
-        if record.status not in (
-            MaintenanceStatus.SCHEDULED,
-            MaintenanceStatus.IN_PROGRESS,
-        ):
-            raise ValidationError(
-                "Can only complete scheduled or in-progress maintenance"
-            )
+        _STATE_MACHINE.validate(record.status, MaintenanceStatus.COMPLETED)
 
         record.status = MaintenanceStatus.COMPLETED
         record.completed_date = data.completed_date or date.today()
@@ -303,10 +298,7 @@ class MaintenanceService:
         """Cancel a maintenance record."""
         record = self.get_or_raise(maintenance_id)
 
-        if record.status in (MaintenanceStatus.COMPLETED, MaintenanceStatus.CANCELLED):
-            raise ValidationError(
-                "Cannot cancel completed or already cancelled maintenance"
-            )
+        _STATE_MACHINE.validate(record.status, MaintenanceStatus.CANCELLED)
 
         record.status = MaintenanceStatus.CANCELLED
         if reason:

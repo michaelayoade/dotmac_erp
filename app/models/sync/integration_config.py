@@ -3,6 +3,7 @@ Integration Configuration Model - Per-organization external system credentials.
 
 Stores configuration for external system integrations like ERPNext.
 """
+
 import enum
 import uuid
 from datetime import datetime
@@ -17,6 +18,7 @@ from app.db import Base
 
 class IntegrationType(str, enum.Enum):
     """Supported external integrations."""
+
     ERPNEXT = "ERPNEXT"
     QUICKBOOKS = "QUICKBOOKS"
     XERO = "XERO"

@@ -3,6 +3,7 @@ Case Document Model - HR Schema.
 
 Stores documents and evidence related to disciplinary cases.
 """
+
 import enum
 import uuid
 from datetime import datetime

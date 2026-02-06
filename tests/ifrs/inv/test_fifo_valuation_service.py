@@ -4,7 +4,7 @@ Tests for FIFOValuationService.
 
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -12,8 +12,6 @@ import pytest
 from app.services.inventory.fifo_valuation import (
     FIFOValuationService,
     FIFOInventory,
-    FIFOLayer,
-    ConsumptionResult,
     NRVCalculation,
 )
 from app.models.inventory.item import CostingMethod
@@ -77,7 +75,9 @@ class TestAddInventoryLayer:
         """Test successful layer addition."""
         item = MockItem(organization_id=org_id)
         mock_db.query.return_value.filter.return_value.first.return_value = item
-        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal("0")
+        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal(
+            "0"
+        )
 
         result = service.add_inventory_layer(
             mock_db,
@@ -117,13 +117,9 @@ class TestConsumeInventoryFifo:
 
     def test_consume_success(self, service, mock_db, org_id, sample_fifo_layers):
         """Test successful FIFO consumption."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = (
-            sample_fifo_layers
-        )
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = sample_fifo_layers
 
-        result = service.consume_inventory_fifo(
-            mock_db, org_id, uuid4(), Decimal("60")
-        )
+        result = service.consume_inventory_fifo(mock_db, org_id, uuid4(), Decimal("60"))
 
         mock_db.commit.assert_called_once()
         assert result.quantity_consumed == Decimal("60")
@@ -137,13 +133,14 @@ class TestConsumeInventoryFifo:
         """Test consumption with insufficient inventory."""
         from fastapi import HTTPException
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = (
-            sample_fifo_layers
-        )
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = sample_fifo_layers
 
         with pytest.raises(HTTPException) as exc:
             service.consume_inventory_fifo(
-                mock_db, org_id, uuid4(), Decimal("200")  # More than available
+                mock_db,
+                org_id,
+                uuid4(),
+                Decimal("200"),  # More than available
             )
 
         assert exc.value.status_code == 400
@@ -153,13 +150,9 @@ class TestConsumeInventoryFifo:
         self, service, mock_db, org_id, sample_fifo_layers
     ):
         """Test consumption from single layer."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = (
-            sample_fifo_layers
-        )
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = sample_fifo_layers
 
-        result = service.consume_inventory_fifo(
-            mock_db, org_id, uuid4(), Decimal("30")
-        )
+        result = service.consume_inventory_fifo(mock_db, org_id, uuid4(), Decimal("30"))
 
         assert result.quantity_consumed == Decimal("30")
         # 30 units at $10 = 300
@@ -174,9 +167,7 @@ class TestGetFifoInventory:
         self, service, mock_db, org_id, sample_fifo_layers
     ):
         """Test getting FIFO inventory state."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = (
-            sample_fifo_layers
-        )
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = sample_fifo_layers
 
         result = service.get_fifo_inventory(mock_db, org_id, uuid4())
 
@@ -246,7 +237,9 @@ class TestCalculateWriteDown:
             weighted_average_cost=Decimal("15.00"),
         )
 
-        with patch.object(FIFOValuationService, "get_fifo_inventory", return_value=fifo_inv):
+        with patch.object(
+            FIFOValuationService, "get_fifo_inventory", return_value=fifo_inv
+        ):
             result = service.calculate_write_down(
                 mock_db,
                 org_id,
@@ -274,7 +267,9 @@ class TestCalculateWriteDown:
             weighted_average_cost=Decimal("10.00"),
         )
 
-        with patch.object(FIFOValuationService, "get_fifo_inventory", return_value=fifo_inv):
+        with patch.object(
+            FIFOValuationService, "get_fifo_inventory", return_value=fifo_inv
+        ):
             result = service.calculate_write_down(
                 mock_db,
                 org_id,
@@ -300,7 +295,9 @@ class TestCalculateWriteDown:
             weighted_average_cost=Decimal("0"),
         )
 
-        with patch.object(FIFOValuationService, "get_fifo_inventory", return_value=fifo_inv):
+        with patch.object(
+            FIFOValuationService, "get_fifo_inventory", return_value=fifo_inv
+        ):
             result = service.calculate_write_down(
                 mock_db,
                 org_id,
@@ -343,7 +340,9 @@ class TestCreateValuationRecord:
             write_down=Decimal("0"),
         )
 
-        with patch.object(FIFOValuationService, "get_fifo_inventory", return_value=fifo_inv):
+        with patch.object(
+            FIFOValuationService, "get_fifo_inventory", return_value=fifo_inv
+        ):
             result = service.create_valuation_record(
                 mock_db,
                 org_id,

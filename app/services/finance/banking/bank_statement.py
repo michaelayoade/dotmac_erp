@@ -80,24 +80,28 @@ class BankStatementService:
         db: Session,
         bank_account_id: UUID,
         line: StatementLineInput,
+        organization_id: Optional[UUID] = None,
     ) -> Optional[BankStatementLine]:
         """
         Check if a transaction line is a potential duplicate.
 
         Matches on: same account, date, amount, and transaction type.
+        Scoped to organization_id to prevent cross-tenant matches.
         """
         # Find existing lines with same date/amount/type
-        existing = (
-            db.query(BankStatementLine)
+        stmt = (
+            select(BankStatementLine)
             .join(BankStatement)
-            .filter(
+            .where(
                 BankStatement.bank_account_id == bank_account_id,
                 BankStatementLine.transaction_date == line.transaction_date,
                 BankStatementLine.amount == line.amount,
                 BankStatementLine.transaction_type == line.transaction_type,
             )
-            .first()
         )
+        if organization_id is not None:
+            stmt = stmt.where(BankStatement.organization_id == organization_id)
+        existing = db.execute(stmt).scalars().first()
 
         if existing:
             # Additional check: if bank_reference matches, it's definitely a duplicate
@@ -214,7 +218,7 @@ class BankStatementService:
                 # Check for duplicates
                 if check_duplicates:
                     duplicate = self._check_duplicate_line(
-                        db, bank_account_id, line_input
+                        db, bank_account_id, line_input, organization_id
                     )
                     if duplicate:
                         result.duplicates_found += 1

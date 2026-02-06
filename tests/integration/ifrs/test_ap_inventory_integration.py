@@ -149,10 +149,14 @@ class TestGoodsReceiptInventoryIntegration:
         # Check inventory transaction was created
         from app.models.inventory.inventory_transaction import InventoryTransaction
 
-        txn = db.query(InventoryTransaction).filter(
-            InventoryTransaction.source_document_type == "GOODS_RECEIPT",
-            InventoryTransaction.source_document_id == goods_receipt.receipt_id,
-        ).first()
+        txn = (
+            db.query(InventoryTransaction)
+            .filter(
+                InventoryTransaction.source_document_type == "GOODS_RECEIPT",
+                InventoryTransaction.source_document_id == goods_receipt.receipt_id,
+            )
+            .first()
+        )
 
         # Transaction should exist for inventory items
         if txn:

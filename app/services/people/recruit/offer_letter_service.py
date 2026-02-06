@@ -6,14 +6,19 @@ Wraps DocumentGeneratorService with offer-specific context building.
 """
 
 import logging
+from pathlib import Path
 from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.finance.automation.document_template import TemplateType
+from app.models.finance.automation.document_template import (
+    TemplateType,
+    DocumentTemplate,
+)
 from app.models.finance.automation.generated_document import GeneratedDocument
 from app.models.people.recruit.job_offer import JobOffer, OfferStatus
+from app.models.finance.core_org.organization import Organization
 from app.schemas.document_context import OfferLetterContext
 from app.services.automation.document_generator import (
     DocumentGeneratorService,
@@ -118,6 +123,7 @@ class OfferLetterService:
             OfferStatus.PENDING_APPROVAL,
             OfferStatus.APPROVED,
             OfferStatus.EXTENDED,
+            OfferStatus.ACCEPTED,
         ):
             raise InvalidOfferStateError(
                 f"Cannot generate offer letter for offer in {offer.status.value} status"
@@ -135,6 +141,7 @@ class OfferLetterService:
         )
 
         # Generate PDF
+        self._ensure_default_template(offer.organization_id, user_id)
         pdf_bytes, doc_record = self._doc_service.generate_pdf(
             organization_id=offer.organization_id,
             template_type=TemplateType.OFFER_LETTER,
@@ -160,6 +167,48 @@ class OfferLetterService:
 
         return pdf_bytes, doc_record
 
+    def _ensure_default_template(self, organization_id: UUID, user_id: UUID) -> None:
+        """Ensure a default offer letter template exists for the organization."""
+        existing = self._doc_service.get_template(
+            organization_id, TemplateType.OFFER_LETTER, None
+        )
+        if existing:
+            return
+
+        template_path = (
+            Path(__file__).resolve().parents[4]
+            / "templates"
+            / "documents"
+            / "offer_letter_default.html"
+        )
+        try:
+            template_content = template_path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            logger.error(
+                "Default offer letter template file not found at %s", template_path
+            )
+            raise
+
+        default_template = DocumentTemplate(
+            organization_id=organization_id,
+            template_type=TemplateType.OFFER_LETTER,
+            template_name="Default Offer Letter",
+            description="System default offer letter template",
+            template_content=template_content,
+            css_styles=None,
+            header_config=None,
+            footer_config=None,
+            page_size="A4",
+            page_orientation="portrait",
+            page_margins=None,
+            is_default=True,
+            is_active=True,
+            version=1,
+            created_by=user_id,
+        )
+        self.db.add(default_template)
+        self.db.flush()
+
     def _build_offer_context(
         self,
         offer: JobOffer,
@@ -184,9 +233,7 @@ class OfferLetterService:
 
         # Get organization info
         org = (
-            self.db.query(
-                # Minimal org query for name/address
-            ).first()
+            self.db.get(Organization, offer.organization_id)
             if not organization_name
             else None
         )
@@ -213,6 +260,23 @@ class OfferLetterService:
             ]
 
         # Build context
+        org_name = (
+            organization_name
+            or (org.trading_name or org.legal_name if org else None)
+            or "Your Organization"
+        )
+        org_address = organization_address
+        if not org_address and org:
+            address_parts = [
+                org.address_line1,
+                org.address_line2,
+                org.city,
+                org.state,
+                org.postal_code,
+                org.country,
+            ]
+            org_address = ", ".join([p for p in address_parts if p])
+
         context = OfferLetterContext(
             # Candidate
             candidate_name=f"{applicant.first_name} {applicant.last_name}",
@@ -241,14 +305,16 @@ class OfferLetterService:
             offer_date=offer.offer_date,
             offer_expiry_date=offer.valid_until,
             proposed_start_date=offer.expected_joining_date,
+            document_date=offer.offer_date,
             # Terms
             probation_months=offer.probation_months,
             notice_period_days=offer.notice_period_days,
             terms_and_conditions=offer.terms_and_conditions,
             # Organization
-            organization_name=organization_name or "Your Organization",
-            organization_address=organization_address,
-            organization_logo_url=organization_logo_url,
+            organization_name=org_name,
+            organization_address=org_address,
+            organization_logo_url=organization_logo_url
+            or (org.logo_url if org else None),
             # Signatory
             signatory_name=signatory_name or "Human Resources",
             signatory_title=signatory_title or "HR Department",

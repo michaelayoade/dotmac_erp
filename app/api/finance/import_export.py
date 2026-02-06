@@ -4,13 +4,10 @@ Import/Export API Endpoints.
 Provides REST API endpoints for importing data from CSV files.
 """
 
-import csv
-import io
 import tempfile
-from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -37,8 +34,6 @@ from app.services.finance.import_export import (
     ImportResult,
     ImportStatus,
     PreviewResult,
-    COLUMN_ALIASES,
-    detect_csv_format,
     get_ar_control_account,
     get_ap_control_account,
     find_account_by_subledger_type,
@@ -55,6 +50,7 @@ router = APIRouter(
 
 class EntityType(str, Enum):
     """Supported entity types for import."""
+
     ACCOUNTS = "accounts"
     CUSTOMERS = "customers"
     SUPPLIERS = "suppliers"
@@ -69,6 +65,7 @@ class EntityType(str, Enum):
 
 class ImportOptions(BaseModel):
     """Options for import operation."""
+
     skip_duplicates: bool = Field(default=True, description="Skip duplicate entries")
     dry_run: bool = Field(default=False, description="Validate without saving")
     batch_size: int = Field(default=100, ge=1, le=1000, description="Records per batch")
@@ -76,6 +73,7 @@ class ImportOptions(BaseModel):
 
 class ImportResultResponse(BaseModel):
     """Response model for import results."""
+
     entity_type: str
     status: str
     total_rows: int
@@ -107,6 +105,7 @@ class ImportResultResponse(BaseModel):
 
 class ColumnMappingResponse(BaseModel):
     """Column mapping with confidence score."""
+
     source: str
     target: str
     confidence: float
@@ -115,6 +114,7 @@ class ColumnMappingResponse(BaseModel):
 
 class ImportPreviewResponse(BaseModel):
     """Enhanced response for import preview with visual data."""
+
     entity_type: str
     total_rows: int
     sample_data: List[Dict[str, Any]]
@@ -164,7 +164,12 @@ async def get_supported_types(
                 "name": "Chart of Accounts",
                 "description": "Import account categories and accounts",
                 "required_columns": ["Account Name", "Account Type"],
-                "optional_columns": ["Account Code", "Description", "Currency", "Status"],
+                "optional_columns": [
+                    "Account Code",
+                    "Description",
+                    "Currency",
+                    "Status",
+                ],
                 "import_order": 1,
             },
             {
@@ -172,7 +177,13 @@ async def get_supported_types(
                 "name": "Customers",
                 "description": "Import customer contacts",
                 "required_columns": ["Display Name OR Company Name"],
-                "optional_columns": ["Phone", "Email", "Currency Code", "Credit Limit", "Billing Address"],
+                "optional_columns": [
+                    "Phone",
+                    "Email",
+                    "Currency Code",
+                    "Credit Limit",
+                    "Billing Address",
+                ],
                 "import_order": 2,
             },
             {
@@ -180,7 +191,12 @@ async def get_supported_types(
                 "name": "Suppliers/Vendors",
                 "description": "Import supplier/vendor contacts",
                 "required_columns": ["Display Name OR Contact Name"],
-                "optional_columns": ["Phone", "Email", "Currency Code", "Payment Terms"],
+                "optional_columns": [
+                    "Phone",
+                    "Email",
+                    "Currency Code",
+                    "Payment Terms",
+                ],
                 "import_order": 3,
             },
             {
@@ -188,7 +204,13 @@ async def get_supported_types(
                 "name": "Inventory Items",
                 "description": "Import inventory products and services",
                 "required_columns": ["Item Name OR Name"],
-                "optional_columns": ["Item Code", "SKU", "Description", "Unit Price", "Category"],
+                "optional_columns": [
+                    "Item Code",
+                    "SKU",
+                    "Description",
+                    "Unit Price",
+                    "Category",
+                ],
                 "import_order": 4,
             },
             {
@@ -196,7 +218,12 @@ async def get_supported_types(
                 "name": "Fixed Assets",
                 "description": "Import fixed assets",
                 "required_columns": ["Asset Name"],
-                "optional_columns": ["Asset Number", "Acquisition Date", "Cost", "Category"],
+                "optional_columns": [
+                    "Asset Number",
+                    "Acquisition Date",
+                    "Cost",
+                    "Category",
+                ],
                 "import_order": 5,
             },
             {
@@ -212,7 +239,12 @@ async def get_supported_types(
                 "name": "Customer Invoices",
                 "description": "Import customer invoices",
                 "required_columns": ["Customer Name", "Total Amount"],
-                "optional_columns": ["Invoice Number", "Invoice Date", "Due Date", "Status"],
+                "optional_columns": [
+                    "Invoice Number",
+                    "Invoice Date",
+                    "Due Date",
+                    "Status",
+                ],
                 "import_order": 7,
                 "prerequisites": ["customers"],
             },
@@ -221,7 +253,12 @@ async def get_supported_types(
                 "name": "Expenses",
                 "description": "Import expense entries",
                 "required_columns": ["Amount"],
-                "optional_columns": ["Date", "Description", "Category", "Payment Method"],
+                "optional_columns": [
+                    "Date",
+                    "Description",
+                    "Category",
+                    "Payment Method",
+                ],
                 "import_order": 8,
                 "prerequisites": ["accounts"],
             },
@@ -245,9 +282,17 @@ async def get_supported_types(
             },
         ],
         "recommended_order": [
-            "accounts", "customers", "suppliers", "items", "assets",
-            "bank_accounts", "invoices", "expenses", "customer_payments", "supplier_payments"
-        ]
+            "accounts",
+            "customers",
+            "suppliers",
+            "items",
+            "assets",
+            "bank_accounts",
+            "invoices",
+            "expenses",
+            "customer_payments",
+            "supplier_payments",
+        ],
     }
 
 
@@ -274,13 +319,13 @@ async def preview_import(
     if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only CSV files are supported"
+            detail="Only CSV files are supported",
         )
 
     content = await file.read()
 
     # Save to temp file for processing
-    with tempfile.NamedTemporaryFile(mode='wb', suffix='.csv', delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp:
         tmp.write(content)
         tmp_path = tmp.name
 
@@ -312,7 +357,7 @@ async def preview_import(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Preview failed: {str(e)}"
+            detail=f"Preview failed: {str(e)}",
         )
     finally:
         # Clean up temp file
@@ -340,14 +385,14 @@ async def import_data(
     if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only CSV files are supported"
+            detail="Only CSV files are supported",
         )
 
     # Read file content
     content = await file.read()
 
     # Save to temp file for processing
-    with tempfile.NamedTemporaryFile(mode='wb', suffix='.csv', delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp:
         tmp.write(content)
         tmp_path = tmp.name
 
@@ -367,7 +412,10 @@ async def import_data(
         result = importer.import_file(tmp_path)
 
         # Commit if not dry run and successful
-        if not dry_run and result.status in (ImportStatus.COMPLETED, ImportStatus.COMPLETED_WITH_ERRORS):
+        if not dry_run and result.status in (
+            ImportStatus.COMPLETED,
+            ImportStatus.COMPLETED_WITH_ERRORS,
+        ):
             db.commit()
         else:
             db.rollback()
@@ -376,15 +424,12 @@ async def import_data(
 
     except ValueError as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Import failed: {str(e)}"
+            detail=f"Import failed: {str(e)}",
         )
     finally:
         # Clean up temp file
@@ -420,7 +465,9 @@ def _get_importer(entity_type: EntityType, db: Session, config: ImportConfig):
             inv_account = find_account_by_name_pattern(db, org_id, "inventory")
         if not inv_account:
             raise ValueError("No inventory account found. Import accounts first.")
-        return ItemImporter(db, config, inv_account, inv_account, inv_account, inv_account)
+        return ItemImporter(
+            db, config, inv_account, inv_account, inv_account, inv_account
+        )
 
     elif entity_type == EntityType.ASSETS:
         asset_account = find_account_by_subledger_type(db, org_id, "ASSET")
@@ -428,7 +475,9 @@ def _get_importer(entity_type: EntityType, db: Session, config: ImportConfig):
             asset_account = find_account_by_name_pattern(db, org_id, "fixed asset")
         if not asset_account:
             raise ValueError("No fixed asset account found. Import accounts first.")
-        return AssetImporter(db, config, asset_account, asset_account, asset_account, asset_account)
+        return AssetImporter(
+            db, config, asset_account, asset_account, asset_account, asset_account
+        )
 
     elif entity_type == EntityType.BANK_ACCOUNTS:
         gl_account = find_account_by_subledger_type(db, org_id, "BANK")
@@ -438,7 +487,9 @@ def _get_importer(entity_type: EntityType, db: Session, config: ImportConfig):
         ar_control_id = get_ar_control_account(db, org_id)
         if not ar_control_id:
             raise ValueError("No AR control account found. Import accounts first.")
-        revenue_account = find_account_by_name_pattern(db, org_id, "sales") or ar_control_id
+        revenue_account = (
+            find_account_by_name_pattern(db, org_id, "sales") or ar_control_id
+        )
         return InvoiceImporter(db, config, ar_control_id, revenue_account)
 
     elif entity_type == EntityType.EXPENSES:
@@ -450,6 +501,7 @@ def _get_importer(entity_type: EntityType, db: Session, config: ImportConfig):
 
     elif entity_type == EntityType.CUSTOMER_PAYMENTS:
         from app.models.finance.banking.bank_account import BankAccount
+
         result = db.execute(
             select(BankAccount).where(BankAccount.organization_id == org_id)
         ).first()
@@ -458,6 +510,7 @@ def _get_importer(entity_type: EntityType, db: Session, config: ImportConfig):
 
     elif entity_type == EntityType.SUPPLIER_PAYMENTS:
         from app.models.finance.banking.bank_account import BankAccount
+
         result = db.execute(
             select(BankAccount).where(BankAccount.organization_id == org_id)
         ).first()
@@ -503,7 +556,9 @@ def _get_column_mappings(entity_type: EntityType, columns: List[str]) -> Dict[st
     return mappings
 
 
-def _validate_preview(entity_type: EntityType, rows: List[Dict], mappings: Dict) -> List[str]:
+def _validate_preview(
+    entity_type: EntityType, rows: List[Dict], mappings: Dict
+) -> List[str]:
     """Validate preview data and return errors."""
     errors = []
 
@@ -529,12 +584,14 @@ def _validate_preview(entity_type: EntityType, rows: List[Dict], mappings: Dict)
                 found = True
                 break
         if not found:
-            errors.append(f"Missing required column. Expected one of: {', '.join(required)}")
+            errors.append(
+                f"Missing required column. Expected one of: {', '.join(required)}"
+            )
 
     # Check for empty required values
     sample_errors = 0
     for i, row in enumerate(rows[:10]):
-        if all(not v or v.strip() == '' for v in row.values()):
+        if all(not v or v.strip() == "" for v in row.values()):
             sample_errors += 1
 
     if sample_errors > 0:

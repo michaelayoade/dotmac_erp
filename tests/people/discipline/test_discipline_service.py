@@ -16,7 +16,6 @@ from app.models.people.discipline import (
     ViolationType,
     SeverityLevel,
     ActionType,
-    DocumentType,
 )
 from app.services.people.discipline import DisciplineService
 from app.schemas.people.discipline import (
@@ -37,7 +36,6 @@ from .conftest import (
     MockDisciplinaryCase,
     MockCaseAction,
     MockCaseWitness,
-    MockCaseResponse,
     MockEmployee,
     create_mock_db_session,
 )

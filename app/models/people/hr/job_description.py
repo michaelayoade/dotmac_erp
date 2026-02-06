@@ -3,6 +3,7 @@ Job Description and Competency Models - HR Schema.
 
 Detailed job descriptions and competency frameworks for positions.
 """
+
 import enum
 import uuid
 from datetime import date, datetime

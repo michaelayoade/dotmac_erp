@@ -2,12 +2,24 @@
 Account Model - GL Schema.
 Chart of accounts.
 """
+
 import enum
 import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -34,7 +46,9 @@ class Account(Base):
     __table_args__ = (
         UniqueConstraint("organization_id", "account_code", name="uq_account_code"),
         Index("idx_account_category", "category_id"),
-        Index("idx_account_active", "organization_id", "is_active", "is_posting_allowed"),
+        Index(
+            "idx_account_active", "organization_id", "is_active", "is_posting_allowed"
+        ),
         {"schema": "gl"},
     )
 
@@ -77,12 +91,18 @@ class Account(Base):
     )
 
     # Currency
-    is_multi_currency: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    default_currency_code: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
+    is_multi_currency: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    default_currency_code: Mapped[Optional[str]] = mapped_column(
+        String(3), nullable=True
+    )
 
     # Control flags
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    is_posting_allowed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_posting_allowed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
     is_budgetable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_reconciliation_required: Mapped[bool] = mapped_column(
         Boolean,
@@ -104,7 +124,9 @@ class Account(Base):
         default=False,
         comment="For IAS 7 Cash Flow Statement",
     )
-    is_financial_instrument: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_financial_instrument: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
 
     # Audit fields
     created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(

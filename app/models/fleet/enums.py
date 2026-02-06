@@ -3,6 +3,7 @@ Fleet Management Enumerations.
 
 Defines all status, type, and category enums for the fleet module.
 """
+
 import enum
 
 

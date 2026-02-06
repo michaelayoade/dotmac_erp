@@ -3,6 +3,7 @@ Document API Endpoints.
 
 REST API for vehicle document management.
 """
+
 from typing import Optional
 from uuid import UUID
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any, Optional
+from datetime import date
 from uuid import UUID
 
 from fastapi import Request, UploadFile
@@ -170,6 +171,7 @@ class OfferWebService:
         return {
             "offer": offer,
             "statuses": [s.value for s in OfferStatus],
+            "today": date.today(),
         }
 
     @staticmethod
@@ -440,9 +442,7 @@ class OfferWebService:
         svc = RecruitmentService(db)
 
         try:
-            svc.update_job_offer(
-                org_id, coerce_uuid(offer_id), status=OfferStatus.WITHDRAWN
-            )
+            svc.withdraw_offer(org_id, coerce_uuid(offer_id))
             db.commit()
         except Exception:
             db.rollback()

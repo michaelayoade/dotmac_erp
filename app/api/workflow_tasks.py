@@ -1,6 +1,7 @@
 """
 Workflow task API endpoints.
 """
+
 from typing import Optional
 from uuid import UUID
 
@@ -10,7 +11,11 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_tenant_auth
 from app.db import SessionLocal
 from app.models.workflow_task import WorkflowTaskPriority, WorkflowTaskStatus
-from app.schemas.workflow_task import WorkflowTaskRead, WorkflowTaskStatusUpdate, WorkflowTaskSnoozeRequest
+from app.schemas.workflow_task import (
+    WorkflowTaskRead,
+    WorkflowTaskStatusUpdate,
+    WorkflowTaskSnoozeRequest,
+)
 from app.services.common import PaginationParams
 from app.services.people.hr.employees import EmployeeService
 from app.services.workflow_task_service import WorkflowTaskService
@@ -32,7 +37,9 @@ def parse_enum(value: Optional[str], enum_type, field_name: str):
     try:
         return enum_type(value)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid {field_name}: {value}") from exc
+        raise HTTPException(
+            status_code=400, detail=f"Invalid {field_name}: {value}"
+        ) from exc
 
 
 def _get_employee_id(db: Session, organization_id: UUID, person_id: UUID) -> UUID:

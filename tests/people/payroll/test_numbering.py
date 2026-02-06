@@ -7,7 +7,7 @@ concurrent access scenarios.
 
 import uuid
 from datetime import datetime
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock
 from concurrent.futures import ThreadPoolExecutor
 import threading
 
@@ -110,7 +110,9 @@ class TestSlipNumberGeneration:
             mock_db.reset_mock()
 
             result = numbering_service.generate_slip_number(org_id)
-            assert result == f"SLIP-{year}-{expected_suffix}", f"Failed for max_seq={max_seq}"
+            assert result == f"SLIP-{year}-{expected_suffix}", (
+                f"Failed for max_seq={max_seq}"
+            )
 
 
 class TestEntryNumberGeneration:
@@ -125,7 +127,9 @@ class TestEntryNumberGeneration:
         year = datetime.now().year
         assert result == f"PAY-{year}-0001"
 
-    def test_generates_sequential_entry_number(self, numbering_service, mock_db, org_id):
+    def test_generates_sequential_entry_number(
+        self, numbering_service, mock_db, org_id
+    ):
         """Next entry should increment from max sequence."""
         mock_db.scalar.return_value = 15
 

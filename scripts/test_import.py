@@ -15,20 +15,19 @@ from uuid import uuid4
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from app.services.finance.import_export.base import ImportConfig, ImportResult
+from app.services.finance.import_export.base import ImportConfig
 from app.services.finance.import_export.accounts import (
     ZOHO_ACCOUNT_TYPE_MAPPING,
-    AccountImporter,
 )
 
 
 def test_csv_parsing(file_path: str) -> None:
     """Test CSV parsing and show statistics."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Testing CSV: {file_path}")
-    print('='*60)
+    print("=" * 60)
 
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
 
@@ -38,69 +37,73 @@ def test_csv_parsing(file_path: str) -> None:
     # Analyze account types
     account_types = {}
     for row in rows:
-        acc_type = row.get('Account Type', 'Unknown')
+        acc_type = row.get("Account Type", "Unknown")
         account_types[acc_type] = account_types.get(acc_type, 0) + 1
 
-    print(f"\nAccount Types Distribution:")
+    print("\nAccount Types Distribution:")
     for acc_type, count in sorted(account_types.items(), key=lambda x: -x[1]):
-        mapped = ZOHO_ACCOUNT_TYPE_MAPPING.get(acc_type, ('UNKNOWN', 'UNKNOWN'))
-        print(f"  {acc_type}: {count} -> {mapped[0].value if hasattr(mapped[0], 'value') else mapped[0]}")
+        mapped = ZOHO_ACCOUNT_TYPE_MAPPING.get(acc_type, ("UNKNOWN", "UNKNOWN"))
+        print(
+            f"  {acc_type}: {count} -> {mapped[0].value if hasattr(mapped[0], 'value') else mapped[0]}"
+        )
 
     # Check for active/inactive
     statuses = {}
     for row in rows:
-        status = row.get('Account Status', 'Unknown')
+        status = row.get("Account Status", "Unknown")
         statuses[status] = statuses.get(status, 0) + 1
 
-    print(f"\nStatus Distribution:")
+    print("\nStatus Distribution:")
     for status, count in statuses.items():
         print(f"  {status}: {count}")
 
     # Check currencies
     currencies = {}
     for row in rows:
-        currency = row.get('Currency', 'Unknown')
+        currency = row.get("Currency", "Unknown")
         currencies[currency] = currencies.get(currency, 0) + 1
 
-    print(f"\nCurrencies:")
+    print("\nCurrencies:")
     for currency, count in currencies.items():
         print(f"  {currency}: {count}")
 
     # Sample data
-    print(f"\nSample accounts (first 5):")
+    print("\nSample accounts (first 5):")
     for i, row in enumerate(rows[:5], 1):
-        print(f"  {i}. {row.get('Account Name', 'N/A')[:40]} ({row.get('Account Type', 'N/A')})")
+        print(
+            f"  {i}. {row.get('Account Name', 'N/A')[:40]} ({row.get('Account Type', 'N/A')})"
+        )
 
     # Validate required fields
-    missing_name = sum(1 for r in rows if not r.get('Account Name'))
-    missing_type = sum(1 for r in rows if not r.get('Account Type'))
+    missing_name = sum(1 for r in rows if not r.get("Account Name"))
+    missing_type = sum(1 for r in rows if not r.get("Account Type"))
 
-    print(f"\nValidation:")
+    print("\nValidation:")
     print(f"  Missing Account Name: {missing_name}")
     print(f"  Missing Account Type: {missing_type}")
 
     # Check for unmapped account types
     unmapped = set()
     for row in rows:
-        acc_type = row.get('Account Type', '')
+        acc_type = row.get("Account Type", "")
         if acc_type and acc_type not in ZOHO_ACCOUNT_TYPE_MAPPING:
             unmapped.add(acc_type)
 
     if unmapped:
         print(f"\n⚠️  Unmapped Account Types: {unmapped}")
     else:
-        print(f"\n✓ All account types are mapped")
+        print("\n✓ All account types are mapped")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("CSV validation complete!")
-    print('='*60)
+    print("=" * 60)
 
 
 def test_field_transformation() -> None:
     """Test field transformation logic."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Testing Field Transformations")
-    print('='*60)
+    print("=" * 60)
 
     from app.services.finance.import_export.base import BaseImporter
 
@@ -134,14 +137,14 @@ def test_field_transformation() -> None:
         except Exception as e:
             print(f"  '{b}' -> ERROR: {e}")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
 
 
 def simulate_import(file_path: str) -> None:
     """Simulate import without database (dry run validation)."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Simulating Import (Validation Only)")
-    print('='*60)
+    print("=" * 60)
 
     # Create mock config
     config = ImportConfig(
@@ -153,7 +156,7 @@ def simulate_import(file_path: str) -> None:
     )
 
     # Read and validate rows
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
 
@@ -163,8 +166,8 @@ def simulate_import(file_path: str) -> None:
 
     for i, row in enumerate(rows, 1):
         # Validate required fields
-        account_name = row.get('Account Name', '').strip()
-        account_type = row.get('Account Type', '').strip()
+        account_name = row.get("Account Name", "").strip()
+        account_type = row.get("Account Type", "").strip()
 
         if not account_name:
             errors.append(f"Row {i}: Missing Account Name")
@@ -183,18 +186,18 @@ def simulate_import(file_path: str) -> None:
 
         valid_count += 1
 
-    print(f"\nSimulation Results:")
+    print("\nSimulation Results:")
     print(f"  Total rows: {len(rows)}")
     print(f"  Valid: {valid_count}")
     print(f"  Errors: {error_count}")
-    print(f"  Success rate: {(valid_count/len(rows)*100):.1f}%")
+    print(f"  Success rate: {(valid_count / len(rows) * 100):.1f}%")
 
     if errors:
-        print(f"\nFirst 10 errors:")
+        print("\nFirst 10 errors:")
         for err in errors[:10]:
             print(f"  - {err}")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
 
 
 if __name__ == "__main__":

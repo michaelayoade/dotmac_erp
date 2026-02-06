@@ -62,8 +62,7 @@ class BankReconciliation(Base):
     __tablename__ = "bank_reconciliations"
     __table_args__ = (
         UniqueConstraint(
-            "bank_account_id", "reconciliation_date",
-            name="uq_bank_reconciliation_date"
+            "bank_account_id", "reconciliation_date", name="uq_bank_reconciliation_date"
         ),
         Index("ix_bank_reconciliation_status", "bank_account_id", "status"),
         {"schema": "banking"},
@@ -183,12 +182,24 @@ class BankReconciliation(Base):
     )
 
     # Approval workflow
-    prepared_by: Mapped[Optional[UUID]] = mapped_column(SAUUID(as_uuid=True), nullable=True)
-    prepared_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
-    reviewed_by: Mapped[Optional[UUID]] = mapped_column(SAUUID(as_uuid=True), nullable=True)
-    reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
-    approved_by: Mapped[Optional[UUID]] = mapped_column(SAUUID(as_uuid=True), nullable=True)
-    approved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    prepared_by: Mapped[Optional[UUID]] = mapped_column(
+        SAUUID(as_uuid=True), nullable=True
+    )
+    prepared_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    reviewed_by: Mapped[Optional[UUID]] = mapped_column(
+        SAUUID(as_uuid=True), nullable=True
+    )
+    reviewed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    approved_by: Mapped[Optional[UUID]] = mapped_column(
+        SAUUID(as_uuid=True), nullable=True
+    )
+    approved_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Notes
     notes: Mapped[str] = mapped_column(Text, nullable=True)
@@ -211,7 +222,7 @@ class BankReconciliation(Base):
     bank_account: Mapped["BankAccount"] = relationship(
         "BankAccount",
         foreign_keys=[bank_account_id],
-        lazy="joined",
+        lazy="select",
     )
     lines: Mapped[List["BankReconciliationLine"]] = relationship(
         "BankReconciliationLine",
@@ -268,13 +279,17 @@ class BankReconciliationLine(Base):
     # Reconciliation reference
     reconciliation_id: Mapped[UUID] = mapped_column(
         SAUUID(as_uuid=True),
-        ForeignKey("banking.bank_reconciliations.reconciliation_id", ondelete="CASCADE"),
+        ForeignKey(
+            "banking.bank_reconciliations.reconciliation_id", ondelete="CASCADE"
+        ),
         nullable=False,
     )
 
     # Match type
     match_type: Mapped[ReconciliationMatchType] = mapped_column(
-        Enum(ReconciliationMatchType, name="reconciliation_match_type", schema="banking"),
+        Enum(
+            ReconciliationMatchType, name="reconciliation_match_type", schema="banking"
+        ),
         nullable=False,
     )
 
@@ -286,7 +301,9 @@ class BankReconciliationLine(Base):
     )
 
     # GL journal entry line reference
-    journal_line_id: Mapped[Optional[UUID]] = mapped_column(SAUUID(as_uuid=True), nullable=True)
+    journal_line_id: Mapped[Optional[UUID]] = mapped_column(
+        SAUUID(as_uuid=True), nullable=True
+    )
 
     # Transaction details (for display/audit)
     transaction_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -309,7 +326,9 @@ class BankReconciliationLine(Base):
 
     # For adjustments
     is_adjustment: Mapped[bool] = mapped_column(Boolean, default=False)
-    adjustment_type: Mapped[str] = mapped_column(String(50), nullable=True)  # e.g., "bank_fee", "interest", "error"
+    adjustment_type: Mapped[str] = mapped_column(
+        String(50), nullable=True
+    )  # e.g., "bank_fee", "interest", "error"
     adjustment_account_id: Mapped[Optional[UUID]] = mapped_column(
         SAUUID(as_uuid=True),
         nullable=True,
@@ -317,7 +336,9 @@ class BankReconciliationLine(Base):
 
     # Outstanding item tracking
     is_outstanding: Mapped[bool] = mapped_column(Boolean, default=False)
-    outstanding_type: Mapped[str] = mapped_column(String(20), nullable=True)  # "deposit" or "payment"
+    outstanding_type: Mapped[str] = mapped_column(
+        String(20), nullable=True
+    )  # "deposit" or "payment"
 
     # Match confidence (for auto-matching)
     match_confidence: Mapped[Decimal] = mapped_column(
@@ -341,7 +362,9 @@ class BankReconciliationLine(Base):
         nullable=False,
         default=datetime.utcnow,
     )
-    created_by: Mapped[Optional[UUID]] = mapped_column(SAUUID(as_uuid=True), nullable=True)
+    created_by: Mapped[Optional[UUID]] = mapped_column(
+        SAUUID(as_uuid=True), nullable=True
+    )
 
     # Relationships
     reconciliation: Mapped["BankReconciliation"] = relationship(
@@ -351,7 +374,7 @@ class BankReconciliationLine(Base):
     statement_line: Mapped["BankStatementLine"] = relationship(
         "BankStatementLine",
         foreign_keys=[statement_line_id],
-        lazy="joined",
+        lazy="select",
     )
 
     def __repr__(self) -> str:

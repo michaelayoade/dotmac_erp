@@ -213,6 +213,7 @@ def _workflow_entity_type_label(entity_type: WorkflowEntityType) -> str:
         WorkflowEntityType.FLEET_RESERVATION: "Fleet Reservation",
         WorkflowEntityType.FLEET_MAINTENANCE: "Fleet Maintenance",
         WorkflowEntityType.FLEET_INCIDENT: "Fleet Incident",
+        WorkflowEntityType.MATERIAL_REQUEST: "Material Request",
     }
     return labels.get(entity_type, entity_type.value)
 

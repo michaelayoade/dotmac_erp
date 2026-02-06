@@ -7,14 +7,16 @@ Adapted from DotMac People for the unified ERP platform.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+import secrets
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
-from sqlalchemy import Integer, func, or_, select
+from sqlalchemy import Integer, delete, func, or_, select, update
 from sqlalchemy.orm import Session, joinedload
 
+from app.models.people.hr import EmployeeOnboarding
 from app.models.people.recruit import (
     ApplicantStatus,
     Interview,
@@ -28,8 +30,13 @@ from app.models.people.recruit import (
 )
 from app.models.person import Gender, Person, PersonStatus
 from app.models.finance.audit.audit_log import AuditAction
+from app.models.finance.core_org.organization import Organization
 from app.services.audit_dispatcher import fire_audit_event
-from app.services.common import PaginatedResult, PaginationParams
+from app.services.common import PaginatedResult, PaginationParams, ValidationError
+from app.services.people.recruit.notifications import send_new_applicant_notification
+from app.services.state_machine import StateMachine
+from app.services.careers.candidate_notifications import CandidateNotificationService
+from app.config import settings
 from app.services.people.hr import EmployeeCreateData
 
 logger = logging.getLogger(__name__)
@@ -138,6 +145,7 @@ PIPELINE_TRANSITIONS = {
         ApplicantStatus.WITHDRAWN,
     },
 }
+_STATE_MACHINE = StateMachine(PIPELINE_TRANSITIONS)
 
 
 class RecruitmentService:
@@ -158,6 +166,20 @@ class RecruitmentService:
     ) -> None:
         self.db = db
         self.ctx = ctx
+
+    def _validate_pipeline_transition(
+        self,
+        current_status: ApplicantStatus,
+        new_status: ApplicantStatus,
+    ) -> None:
+        try:
+            _STATE_MACHINE.validate(current_status, new_status)
+        except ValidationError:
+            raise ApplicantPipelineError(
+                current_status.value,
+                new_status.value,
+                "Invalid pipeline transition",
+            ) from None
 
     # =========================================================================
     # Job Openings
@@ -529,6 +551,8 @@ class RecruitmentService:
                 "email": email,
             },
         )
+        opening = self.get_job_opening(org_id, job_opening_id)
+        send_new_applicant_notification(self.db, org_id, applicant, opening)
         return applicant
 
     def update_applicant(
@@ -550,6 +574,38 @@ class RecruitmentService:
     def delete_applicant(self, org_id: UUID, applicant_id: UUID) -> None:
         """Delete a job applicant."""
         applicant = self.get_applicant(org_id, applicant_id)
+
+        offer_ids = [
+            row[0]
+            for row in self.db.execute(
+                select(JobOffer.offer_id).where(JobOffer.applicant_id == applicant_id)
+            ).all()
+        ]
+
+        if offer_ids:
+            self.db.execute(
+                update(EmployeeOnboarding)
+                .where(EmployeeOnboarding.job_offer_id.in_(offer_ids))
+                .values(job_offer_id=None)
+            )
+
+        self.db.execute(
+            update(EmployeeOnboarding)
+            .where(EmployeeOnboarding.job_applicant_id == applicant_id)
+            .values(job_applicant_id=None)
+        )
+
+        self.db.execute(
+            delete(Interview).where(
+                Interview.applicant_id == applicant_id,
+            )
+        )
+        self.db.execute(
+            delete(JobOffer).where(
+                JobOffer.applicant_id == applicant_id,
+            )
+        )
+
         self.db.delete(applicant)
         self.db.flush()
 
@@ -564,13 +620,7 @@ class RecruitmentService:
         """Move an applicant through the hiring pipeline."""
         applicant = self.get_applicant(org_id, applicant_id)
 
-        valid_transitions = PIPELINE_TRANSITIONS.get(applicant.status, set())
-        if to_status not in valid_transitions:
-            raise ApplicantPipelineError(
-                applicant.status.value,
-                to_status.value,
-                "Invalid pipeline transition",
-            )
+        self._validate_pipeline_transition(applicant.status, to_status)
 
         old_status = applicant.status
         applicant.status = to_status
@@ -1001,6 +1051,17 @@ class RecruitmentService:
         offer.status = OfferStatus.EXTENDED
         offer.extended_on = date.today()
 
+        # Ensure candidate portal token is available
+        if (
+            not offer.candidate_access_token
+            or not offer.candidate_access_expires
+            or offer.candidate_access_expires < datetime.now(timezone.utc)
+        ):
+            offer.candidate_access_token = secrets.token_urlsafe(32)
+            offer.candidate_access_expires = datetime.now(timezone.utc) + timedelta(
+                days=30
+            )
+
         # Update applicant status
         if offer.applicant_id:
             applicant = self.db.get(JobApplicant, offer.applicant_id)
@@ -1008,6 +1069,40 @@ class RecruitmentService:
                 applicant.status = ApplicantStatus.OFFER_EXTENDED
 
         self.db.flush()
+
+        # Send offer portal email to candidate
+        if offer.applicant_id:
+            applicant = self.db.get(JobApplicant, offer.applicant_id)
+            if applicant and applicant.email:
+                org = self.db.get(Organization, org_id)
+                org_name = org.legal_name or org.trading_name if org else "Our Company"
+                org_slug = (
+                    (org.slug if org and org.slug else str(org_id))
+                    if org
+                    else str(org_id)
+                )
+                portal_url = (
+                    f"{settings.app_url.rstrip('/')}/careers/{org_slug}/offer/"
+                    f"{offer.candidate_access_token}"
+                )
+                pdf_url = f"{portal_url}/pdf"
+                accept_url = f"{portal_url}/accept"
+                decline_url = f"{portal_url}/decline"
+
+                job_opening = self.db.get(JobOpening, offer.job_opening_id)
+                candidate_notifications = CandidateNotificationService()
+                candidate_notifications.send_offer_portal_email(
+                    db=self.db,
+                    applicant_email=applicant.email,
+                    applicant_name=applicant.first_name,
+                    job_title=job_opening.job_title if job_opening else "Position",
+                    org_name=org_name or "Our Company",
+                    portal_url=portal_url,
+                    pdf_url=pdf_url,
+                    accept_url=accept_url,
+                    decline_url=decline_url,
+                    organization_id=org_id,
+                )
         return offer
 
     def accept_offer(self, org_id: UUID, offer_id: UUID) -> JobOffer:
@@ -1051,6 +1146,20 @@ class RecruitmentService:
             applicant = self.db.get(JobApplicant, offer.applicant_id)
             if applicant:
                 applicant.status = ApplicantStatus.OFFER_DECLINED
+
+        self.db.flush()
+        return offer
+
+    def withdraw_offer(self, org_id: UUID, offer_id: UUID) -> JobOffer:
+        """Withdraw an offer."""
+        offer = self.get_job_offer(org_id, offer_id)
+        offer.status = OfferStatus.WITHDRAWN
+
+        # Update applicant status
+        if offer.applicant_id:
+            applicant = self.db.get(JobApplicant, offer.applicant_id)
+            if applicant:
+                applicant.status = ApplicantStatus.WITHDRAWN
 
         self.db.flush()
         return offer

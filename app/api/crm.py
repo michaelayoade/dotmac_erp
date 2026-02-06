@@ -231,7 +231,9 @@ def check_crm_health(
             return HealthResponse(
                 healthy=is_healthy,
                 crm_url=settings.crm_api_url,
-                message="CRM API accessible" if is_healthy else "CRM API not responding",
+                message="CRM API accessible"
+                if is_healthy
+                else "CRM API not responding",
             )
 
     except Exception as e:

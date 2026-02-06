@@ -3,6 +3,7 @@ Time Entry Model - PM Schema.
 
 Time entries for project time tracking and billing.
 """
+
 import enum
 import uuid
 from datetime import date, datetime

@@ -3,6 +3,7 @@ Gantt Chart Pydantic Schemas.
 
 Schemas for Gantt chart data used in project visualization.
 """
+
 from datetime import date
 from typing import List, Optional
 from uuid import UUID

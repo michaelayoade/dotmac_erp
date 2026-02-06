@@ -3,6 +3,7 @@ HR API Router.
 
 Thin API wrapper for HR Core endpoints. All business logic is in services.
 """
+
 import json
 from typing import Optional
 from uuid import UUID
@@ -102,7 +103,9 @@ def parse_enum(value: Optional[str], enum_type, field_name: str):
     try:
         return enum_type(value)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid {field_name}: {value}") from exc
+        raise HTTPException(
+            status_code=400, detail=f"Invalid {field_name}: {value}"
+        ) from exc
 
 
 # =============================================================================
@@ -131,7 +134,9 @@ def list_departments(
     )
 
 
-@router.post("/departments", response_model=DepartmentRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/departments", response_model=DepartmentRead, status_code=status.HTTP_201_CREATED
+)
 def create_department(
     payload: DepartmentCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -213,7 +218,9 @@ def list_designations(
     """List designations."""
     svc = OrganizationService(db, organization_id)
     filters = DesignationFilters(search=search)
-    result = svc.list_designations(filters, PaginationParams(offset=offset, limit=limit))
+    result = svc.list_designations(
+        filters, PaginationParams(offset=offset, limit=limit)
+    )
     return {
         "items": [DesignationRead.model_validate(d) for d in result.items],
         "total": result.total,
@@ -250,7 +257,9 @@ def list_locations(
     )
 
 
-@router.post("/locations", response_model=LocationRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/locations", response_model=LocationRead, status_code=status.HTTP_201_CREATED
+)
 def create_location(
     payload: LocationCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -358,7 +367,11 @@ def list_checklist_templates(
     )
 
 
-@router.post("/checklist-templates", response_model=ChecklistTemplateRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/checklist-templates",
+    response_model=ChecklistTemplateRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_checklist_template(
     payload: ChecklistTemplateCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -385,10 +398,14 @@ def get_checklist_template(
     db: Session = Depends(get_db),
 ):
     svc = ChecklistTemplateService(db)
-    return ChecklistTemplateRead.model_validate(svc.get_template(organization_id, template_id))
+    return ChecklistTemplateRead.model_validate(
+        svc.get_template(organization_id, template_id)
+    )
 
 
-@router.patch("/checklist-templates/{template_id}", response_model=ChecklistTemplateRead)
+@router.patch(
+    "/checklist-templates/{template_id}", response_model=ChecklistTemplateRead
+)
 def update_checklist_template(
     template_id: UUID,
     payload: ChecklistTemplateUpdate,
@@ -404,7 +421,9 @@ def update_checklist_template(
     return ChecklistTemplateRead.model_validate(template)
 
 
-@router.delete("/checklist-templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/checklist-templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 def delete_checklist_template(
     template_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
@@ -415,7 +434,9 @@ def delete_checklist_template(
     db.commit()
 
 
-@router.post("/designations", response_model=DesignationRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/designations", response_model=DesignationRead, status_code=status.HTTP_201_CREATED
+)
 def create_designation(
     payload: DesignationCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -494,7 +515,9 @@ def list_employment_types(
     """List employment types."""
     svc = OrganizationService(db, organization_id)
     filters = EmploymentTypeFilters(search=search, is_active=is_active)
-    result = svc.list_employment_types(filters, PaginationParams(offset=offset, limit=limit))
+    result = svc.list_employment_types(
+        filters, PaginationParams(offset=offset, limit=limit)
+    )
     return {
         "items": [EmploymentTypeRead.model_validate(t) for t in result.items],
         "total": result.total,
@@ -503,7 +526,11 @@ def list_employment_types(
     }
 
 
-@router.post("/employment-types", response_model=EmploymentTypeRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/employment-types",
+    response_model=EmploymentTypeRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_employment_type(
     payload: EmploymentTypeCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -530,10 +557,14 @@ def get_employment_type(
 ):
     """Get an employment type by ID."""
     svc = OrganizationService(db, organization_id)
-    return EmploymentTypeRead.model_validate(svc.get_employment_type(employment_type_id))
+    return EmploymentTypeRead.model_validate(
+        svc.get_employment_type(employment_type_id)
+    )
 
 
-@router.patch("/employment-types/{employment_type_id}", response_model=EmploymentTypeRead)
+@router.patch(
+    "/employment-types/{employment_type_id}", response_model=EmploymentTypeRead
+)
 def update_employment_type(
     employment_type_id: UUID,
     payload: EmploymentTypeUpdate,
@@ -553,7 +584,9 @@ def update_employment_type(
     return EmploymentTypeRead.model_validate(emp_type)
 
 
-@router.delete("/employment-types/{employment_type_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/employment-types/{employment_type_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 def delete_employment_type(
     employment_type_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
@@ -582,7 +615,9 @@ def list_employee_grades(
     """List employee grades."""
     svc = OrganizationService(db, organization_id)
     filters = EmployeeGradeFilters(search=search, is_active=is_active)
-    result = svc.list_employee_grades(filters, PaginationParams(offset=offset, limit=limit))
+    result = svc.list_employee_grades(
+        filters, PaginationParams(offset=offset, limit=limit)
+    )
     return {
         "items": [EmployeeGradeRead.model_validate(g) for g in result.items],
         "total": result.total,
@@ -591,7 +626,9 @@ def list_employee_grades(
     }
 
 
-@router.post("/grades", response_model=EmployeeGradeRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/grades", response_model=EmployeeGradeRead, status_code=status.HTTP_201_CREATED
+)
 def create_employee_grade(
     payload: EmployeeGradeCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -706,7 +743,9 @@ def get_employee_stats(
     return svc.get_employee_stats()
 
 
-@router.post("/employees", response_model=EmployeeRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/employees", response_model=EmployeeRead, status_code=status.HTTP_201_CREATED
+)
 def create_employee(
     payload: EmployeeCreate,
     organization_id: UUID = Depends(require_organization_id),

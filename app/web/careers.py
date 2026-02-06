@@ -5,22 +5,28 @@ These routes serve HTML pages for the public careers portal.
 No authentication required.
 """
 
+import logging
 import secrets
 import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
 from app.middleware.rate_limit import check_rate_limit
 from app.services.careers.captcha import get_captcha_site_key, is_captcha_enabled
 from app.services.careers.web import CareersWebService
+from app.services.people.recruit.offer_letter_service import OfferLetterService
+from app.models.person import Person, PersonStatus
+from app.models.rbac import PersonRole, Role
 from app.templates import templates
 from app.web.csrf import CSRF_COOKIE_NAME, _is_secure_request
 
 router = APIRouter(prefix="/careers", tags=["careers-web"])
+logger = logging.getLogger(__name__)
 
 
 def get_db():
@@ -76,6 +82,42 @@ def _require_org_ctx(slug: str, db: Session) -> tuple:
     return ctx, service
 
 
+def _resolve_offer_letter_user_id(db: Session, org_id: uuid.UUID) -> uuid.UUID:
+    """Best-effort user id for offer letter generation."""
+    stmt = (
+        select(Person.id)
+        .join(PersonRole, PersonRole.person_id == Person.id)
+        .join(Role, PersonRole.role_id == Role.id)
+        .where(Person.organization_id == org_id)
+        .where(Person.status == PersonStatus.active)
+        .where(Person.is_active.is_(True))
+        .where(Role.name == "admin")
+        .limit(1)
+    )
+    person_id = db.scalar(stmt)
+    return person_id or org_id
+
+
+def _parse_department_ids(request: Request) -> list[uuid.UUID]:
+    raw_values = request.query_params.getlist("department_id")
+    if not raw_values:
+        return []
+
+    department_ids: list[uuid.UUID] = []
+    for raw in raw_values:
+        for value in raw.split(","):
+            value = value.strip()
+            if not value:
+                continue
+            try:
+                department_ids.append(uuid.UUID(value))
+            except ValueError:
+                logger.warning(
+                    "Invalid department_id ignored on careers page: %s", value
+                )
+    return department_ids
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Job Listings
 # ═══════════════════════════════════════════════════════════════════════════
@@ -87,22 +129,26 @@ def job_list_page(
     request: Request,
     org_slug: str,
     search: Optional[str] = None,
-    department_id: Optional[uuid.UUID] = None,
+    department_id: Optional[str] = None,
     location: Optional[str] = None,
     employment_type: Optional[str] = None,
     is_remote: Optional[bool] = None,
     page: int = 1,
     db: Session = Depends(get_db),
 ):
+    department_ids = _parse_department_ids(request)
     ctx, service = _require_org_ctx(org_slug, db)
     result = service.list_jobs(
         ctx.org_id,
         search=search,
-        department_id=department_id,
+        department_id=department_ids or None,
         location=location,
         employment_type=employment_type,
         is_remote=is_remote,
         page=page,
+    )
+    department_query = "".join(
+        f"&department_id={department_id}" for department_id in department_ids
     )
 
     return templates.TemplateResponse(
@@ -120,7 +166,8 @@ def job_list_page(
             "page_size": result.page_size,
             "total_pages": result.total_pages,
             "search": search or "",
-            "department_id": department_id,
+            "selected_department_ids": department_ids,
+            "department_query": department_query,
             "location": location or "",
             "employment_type": employment_type or "",
             "is_remote": is_remote,
@@ -219,7 +266,7 @@ async def submit_application(
     captcha_token: Optional[str] = Form(None, alias="cf-turnstile-response"),
     db: Session = Depends(get_db),
 ):
-    check_rate_limit(request, max_requests=3, window_seconds=300)
+    check_rate_limit(request, max_requests=10, window_seconds=300, key_suffix=email)
     ctx, service = _require_org_ctx(org_slug, db)
 
     job = service.get_job_by_code(ctx.org_id, job_code)
@@ -231,7 +278,9 @@ async def submit_application(
     error = None
     if resume and resume.filename:
         content = await resume.read()
-        resume_file_id, error = await service.upload_resume(ctx.org_id, resume.filename, content)
+        resume_file_id, error = await service.upload_resume(
+            ctx.org_id, resume.filename, content
+        )
 
     # Submit if no upload error
     if not error:
@@ -411,4 +460,156 @@ def status_detail_page(
             "brand": ctx.brand,
             "status": status_info,
         },
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Offer Portal
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@router.get("/{org_slug}/offer/{token}", response_class=HTMLResponse)
+def offer_portal_page(
+    request: Request,
+    org_slug: str,
+    token: str,
+    db: Session = Depends(get_db),
+):
+    ctx, service = _require_org_ctx(org_slug, db)
+    offer = service._careers_service.get_offer_by_token(ctx.org_id, token)
+    if not offer:
+        return templates.TemplateResponse(
+            "careers/offer_expired.html",
+            {
+                "request": request,
+                "org": ctx.org,
+                "org_slug": ctx.org_slug,
+                "org_name": ctx.org_name,
+                "org_logo": ctx.org_logo,
+                "brand": ctx.brand,
+            },
+        )
+
+    status_message = request.query_params.get("message")
+    return _render_with_csrf(
+        request,
+        "careers/offer_portal.html",
+        {
+            "request": request,
+            "org": ctx.org,
+            "org_slug": ctx.org_slug,
+            "org_name": ctx.org_name,
+            "org_logo": ctx.org_logo,
+            "brand": ctx.brand,
+            "offer": offer,
+            "message": status_message,
+        },
+    )
+
+
+@router.get("/{org_slug}/offer/{token}/pdf")
+def offer_portal_pdf(
+    request: Request,
+    org_slug: str,
+    token: str,
+    db: Session = Depends(get_db),
+):
+    ctx, service = _require_org_ctx(org_slug, db)
+    offer = service._careers_service.get_offer_by_token(ctx.org_id, token)
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found or expired")
+
+    user_id = offer.created_by_id or _resolve_offer_letter_user_id(db, ctx.org_id)
+    letter_service = OfferLetterService(db)
+    try:
+        letter_service._ensure_default_template(ctx.org_id, user_id)
+        db.commit()
+    except Exception:
+        db.rollback()
+    pdf_bytes, doc = letter_service.generate_offer_letter(offer.offer_id, user_id)
+    filename = doc.document_number or f"OFFER-{offer.offer_number}"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}.pdf"',
+        },
+    )
+
+
+@router.post("/{org_slug}/offer/{token}/accept", response_class=HTMLResponse)
+def offer_portal_accept(
+    request: Request,
+    org_slug: str,
+    token: str,
+    db: Session = Depends(get_db),
+):
+    check_rate_limit(request, max_requests=5, window_seconds=300, key_suffix=token)
+    ctx, service = _require_org_ctx(org_slug, db)
+    existing = service._careers_service.get_offer_by_token(ctx.org_id, token)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Offer not found or expired")
+    if existing.status.value == "WITHDRAWN":
+        return RedirectResponse(
+            url=(
+                f"/careers/{org_slug}/offer/{token}"
+                "?message=This+offer+has+been+withdrawn+by+the+company"
+            ),
+            status_code=303,
+        )
+    try:
+        offer = service._careers_service.accept_offer_by_token(ctx.org_id, token)
+    except Exception as exc:
+        db.rollback()
+        error_msg = str(exc).lower()
+        if "expired" in error_msg:
+            return RedirectResponse(
+                url=(f"/careers/{org_slug}/offer/{token}?message=Offer+has+expired"),
+                status_code=303,
+            )
+        raise
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found or expired")
+    db.commit()
+    return RedirectResponse(
+        url=(
+            f"/careers/{org_slug}/offer/{token}?message=Your+response+has+been+recorded"
+        ),
+        status_code=303,
+    )
+
+
+@router.post("/{org_slug}/offer/{token}/decline", response_class=HTMLResponse)
+def offer_portal_decline(
+    request: Request,
+    org_slug: str,
+    token: str,
+    reason: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    check_rate_limit(request, max_requests=5, window_seconds=300, key_suffix=token)
+    ctx, service = _require_org_ctx(org_slug, db)
+    existing = service._careers_service.get_offer_by_token(ctx.org_id, token)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Offer not found or expired")
+    if existing.status.value == "WITHDRAWN":
+        return RedirectResponse(
+            url=(
+                f"/careers/{org_slug}/offer/{token}"
+                "?message=This+offer+has+been+withdrawn+by+the+company"
+            ),
+            status_code=303,
+        )
+    offer = service._careers_service.decline_offer_by_token(
+        ctx.org_id, token, reason=reason
+    )
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found or expired")
+    db.commit()
+    return RedirectResponse(
+        url=(
+            f"/careers/{org_slug}/offer/{token}?message=Your+response+has+been+recorded"
+        ),
+        status_code=303,
     )

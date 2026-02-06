@@ -253,6 +253,13 @@ class FileUploadService:
                     raise InvalidMagicBytesError(
                         "File content does not match the expected format"
                     )
+            elif content_type in {"text/plain", "text/csv"}:
+                try:
+                    file_data.decode("utf-8")
+                except UnicodeDecodeError as exc:
+                    raise InvalidMagicBytesError(
+                        "Text file contains invalid UTF-8 content"
+                    ) from exc
 
     def _generate_filename(
         self,

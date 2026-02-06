@@ -3,6 +3,7 @@ Department Model - HR Schema.
 
 Organizational departments for employee grouping and reporting.
 """
+
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional

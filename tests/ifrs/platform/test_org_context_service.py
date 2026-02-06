@@ -435,7 +435,9 @@ class TestEdgeCases:
 
     @patch("app.services.finance.platform.org_context.request_cache")
     @patch("app.services.finance.platform.org_context.cache_service")
-    def test_various_currency_codes(self, mock_cache_svc, mock_req_cache, mock_db, org_id):
+    def test_various_currency_codes(
+        self, mock_cache_svc, mock_req_cache, mock_db, org_id
+    ):
         """Test various ISO 4217 currency codes."""
         mock_req_cache.get.return_value = None
         mock_cache_svc.get.return_value = None

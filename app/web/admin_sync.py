@@ -3,9 +3,10 @@ Admin Sync Management web routes.
 
 Provides UI for managing ERPNext sync operations.
 """
+
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 

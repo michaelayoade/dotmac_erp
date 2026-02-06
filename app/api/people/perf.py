@@ -3,8 +3,9 @@ Performance Management API Router.
 
 Thin API wrapper for Performance Management endpoints. All business logic is in services.
 """
+
 from datetime import date
-from typing import List, Optional
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -70,7 +71,9 @@ def parse_enum(value: Optional[str], enum_type, field_name: str):
     try:
         return enum_type(value)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid {field_name}: {value}") from exc
+        raise HTTPException(
+            status_code=400, detail=f"Invalid {field_name}: {value}"
+        ) from exc
 
 
 # =============================================================================
@@ -106,7 +109,9 @@ def list_appraisal_cycles(
     )
 
 
-@router.post("/cycles", response_model=AppraisalCycleRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/cycles", response_model=AppraisalCycleRead, status_code=status.HTTP_201_CREATED
+)
 def create_appraisal_cycle(
     payload: AppraisalCycleCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -232,7 +237,11 @@ def list_appraisal_templates(
     )
 
 
-@router.post("/templates", response_model=AppraisalTemplateRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/templates",
+    response_model=AppraisalTemplateRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_appraisal_template(
     payload: AppraisalTemplateCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -263,7 +272,9 @@ def get_appraisal_template(
 ):
     """Get an appraisal template by ID."""
     svc = PerformanceService(db)
-    return AppraisalTemplateRead.model_validate(svc.get_template(organization_id, template_id))
+    return AppraisalTemplateRead.model_validate(
+        svc.get_template(organization_id, template_id)
+    )
 
 
 @router.patch("/templates/{template_id}", response_model=AppraisalTemplateRead)
@@ -534,7 +545,9 @@ def list_appraisals(
     )
 
 
-@router.post("/appraisals", response_model=AppraisalRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/appraisals", response_model=AppraisalRead, status_code=status.HTTP_201_CREATED
+)
 def create_appraisal(
     payload: AppraisalCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -562,7 +575,9 @@ def get_appraisal(
 ):
     """Get an appraisal by ID."""
     svc = PerformanceService(db)
-    return AppraisalRead.model_validate(svc.get_appraisal(organization_id, appraisal_id))
+    return AppraisalRead.model_validate(
+        svc.get_appraisal(organization_id, appraisal_id)
+    )
 
 
 @router.patch("/appraisals/{appraisal_id}", response_model=AppraisalRead)
@@ -701,10 +716,14 @@ def get_scorecard(
 ):
     """Get a scorecard by ID."""
     svc = PerformanceService(db)
-    return ScorecardRead.model_validate(svc.get_scorecard(organization_id, scorecard_id))
+    return ScorecardRead.model_validate(
+        svc.get_scorecard(organization_id, scorecard_id)
+    )
 
 
-@router.post("/appraisals/{appraisal_id}/finalize-scorecard", response_model=ScorecardRead)
+@router.post(
+    "/appraisals/{appraisal_id}/finalize-scorecard", response_model=ScorecardRead
+)
 def finalize_scorecard(
     appraisal_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
