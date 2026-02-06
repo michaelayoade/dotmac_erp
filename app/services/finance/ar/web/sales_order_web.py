@@ -24,11 +24,11 @@ from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.models.finance.tax.tax_code import TaxCode
 from app.services.common import coerce_uuid
 from app.services.finance.ar.sales_order import sales_order_service
-from app.services.finance.common import format_date, format_currency
+from app.services.finance.common import format_currency, format_date
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.platform.org_context import org_context_service
 from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
+from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,9 @@ class SalesOrderWebService:
         # Payment terms
         payment_terms = (
             db.query(PaymentTerms)
-            .filter(PaymentTerms.organization_id == org_id, PaymentTerms.is_active.is_(True))
+            .filter(
+                PaymentTerms.organization_id == org_id, PaymentTerms.is_active.is_(True)
+            )
             .order_by(PaymentTerms.terms_name)
             .all()
         )
@@ -145,7 +147,9 @@ class SalesOrderWebService:
         """Get context for sales order listing page."""
         logger.debug(
             "list_context: org=%s status=%s customer=%s",
-            organization_id, status, customer_id
+            organization_id,
+            status,
+            customer_id,
         )
         org_id = coerce_uuid(organization_id)
 
@@ -177,25 +181,31 @@ class SalesOrderWebService:
         # Format for template
         items = []
         for so in orders:
-            items.append({
-                "so_id": str(so.so_id),
-                "so_number": so.so_number,
-                "order_date": format_date(so.order_date),
-                "customer_name": _customer_display_name(so.customer),
-                "customer_po": so.customer_po_number or "-",
-                "total_amount": format_currency(so.total_amount, so.currency_code),
-                "status": so.status.value,
-                "is_fully_shipped": so.is_fully_shipped,
-                "is_fully_invoiced": so.is_fully_invoiced,
-            })
+            items.append(
+                {
+                    "so_id": str(so.so_id),
+                    "so_number": so.so_number,
+                    "order_date": format_date(so.order_date),
+                    "customer_name": _customer_display_name(so.customer),
+                    "customer_po": so.customer_po_number or "-",
+                    "total_amount": format_currency(so.total_amount, so.currency_code),
+                    "status": so.status.value,
+                    "is_fully_shipped": so.is_fully_shipped,
+                    "is_fully_invoiced": so.is_fully_invoiced,
+                }
+            )
 
         # Status counts
         status_counts = {}
         for s in SOStatus:
-            count = db.query(SalesOrder).filter(
-                SalesOrder.organization_id == org_id,
-                SalesOrder.status == s,
-            ).count()
+            count = (
+                db.query(SalesOrder)
+                .filter(
+                    SalesOrder.organization_id == org_id,
+                    SalesOrder.status == s,
+                )
+                .count()
+            )
             status_counts[s.value] = count
 
         # Customers for filter dropdown
@@ -245,7 +255,9 @@ class SalesOrderWebService:
             "customer_name": _customer_display_name(so.customer),
             "customer_po": so.customer_po_number or "-",
             "reference": so.reference or "-",
-            "requested_date": format_date(so.requested_date) if so.requested_date else "-",
+            "requested_date": format_date(so.requested_date)
+            if so.requested_date
+            else "-",
             "promised_date": format_date(so.promised_date) if so.promised_date else "-",
             "subtotal": format_currency(so.subtotal, so.currency_code),
             "discount_amount": format_currency(so.discount_amount, so.currency_code),
@@ -270,55 +282,78 @@ class SalesOrderWebService:
             "shipping_method": so.shipping_method or "-",
             "allow_partial": so.allow_partial_shipment,
             # Timestamps
-            "submitted_at": so.submitted_at.strftime("%Y-%m-%d %H:%M") if so.submitted_at else None,
-            "approved_at": so.approved_at.strftime("%Y-%m-%d %H:%M") if so.approved_at else None,
-            "confirmed_at": so.confirmed_at.strftime("%Y-%m-%d %H:%M") if so.confirmed_at else None,
-            "completed_at": so.completed_at.strftime("%Y-%m-%d %H:%M") if so.completed_at else None,
-            "cancelled_at": so.cancelled_at.strftime("%Y-%m-%d %H:%M") if so.cancelled_at else None,
+            "submitted_at": so.submitted_at.strftime("%Y-%m-%d %H:%M")
+            if so.submitted_at
+            else None,
+            "approved_at": so.approved_at.strftime("%Y-%m-%d %H:%M")
+            if so.approved_at
+            else None,
+            "confirmed_at": so.confirmed_at.strftime("%Y-%m-%d %H:%M")
+            if so.confirmed_at
+            else None,
+            "completed_at": so.completed_at.strftime("%Y-%m-%d %H:%M")
+            if so.completed_at
+            else None,
+            "cancelled_at": so.cancelled_at.strftime("%Y-%m-%d %H:%M")
+            if so.cancelled_at
+            else None,
             "cancellation_reason": so.cancellation_reason,
-            "created_at": so.created_at.strftime("%Y-%m-%d %H:%M") if so.created_at else "",
+            "created_at": so.created_at.strftime("%Y-%m-%d %H:%M")
+            if so.created_at
+            else "",
             # Actions
             "can_submit": so.status == SOStatus.DRAFT,
             "can_approve": so.status == SOStatus.SUBMITTED,
             "can_confirm": so.status == SOStatus.APPROVED,
-            "can_ship": so.status in [SOStatus.CONFIRMED, SOStatus.IN_PROGRESS] and not so.is_fully_shipped,
-            "can_invoice": so.status in [SOStatus.IN_PROGRESS, SOStatus.SHIPPED] and not so.is_fully_invoiced,
-            "can_cancel": so.status not in [SOStatus.SHIPPED, SOStatus.COMPLETED, SOStatus.CANCELLED],
-            "can_hold": so.status not in [SOStatus.COMPLETED, SOStatus.CANCELLED, SOStatus.ON_HOLD],
+            "can_ship": so.status in [SOStatus.CONFIRMED, SOStatus.IN_PROGRESS]
+            and not so.is_fully_shipped,
+            "can_invoice": so.status in [SOStatus.IN_PROGRESS, SOStatus.SHIPPED]
+            and not so.is_fully_invoiced,
+            "can_cancel": so.status
+            not in [SOStatus.SHIPPED, SOStatus.COMPLETED, SOStatus.CANCELLED],
+            "can_hold": so.status
+            not in [SOStatus.COMPLETED, SOStatus.CANCELLED, SOStatus.ON_HOLD],
             "can_release": so.status == SOStatus.ON_HOLD,
         }
 
         # Format lines
         lines = []
         for line in so.lines:
-            lines.append({
-                "line_id": str(line.line_id),
-                "line_number": line.line_number,
-                "item_code": line.item_code or "-",
-                "description": line.description,
-                "quantity_ordered": str(line.quantity_ordered),
-                "quantity_shipped": str(line.quantity_shipped),
-                "quantity_invoiced": str(line.quantity_invoiced),
-                "unit_price": format_currency(line.unit_price, so.currency_code),
-                "discount": format_currency(line.discount_amount, so.currency_code),
-                "tax": format_currency(line.tax_amount, so.currency_code),
-                "line_total": format_currency(line.line_total, so.currency_code),
-                "fulfillment_status": line.fulfillment_status.value,
-                "can_ship": line.quantity_shipped < line.quantity_ordered and so.status in [SOStatus.CONFIRMED, SOStatus.IN_PROGRESS],
-            })
+            lines.append(
+                {
+                    "line_id": str(line.line_id),
+                    "line_number": line.line_number,
+                    "item_code": line.item_code or "-",
+                    "description": line.description,
+                    "quantity_ordered": str(line.quantity_ordered),
+                    "quantity_shipped": str(line.quantity_shipped),
+                    "quantity_invoiced": str(line.quantity_invoiced),
+                    "unit_price": format_currency(line.unit_price, so.currency_code),
+                    "discount": format_currency(line.discount_amount, so.currency_code),
+                    "tax": format_currency(line.tax_amount, so.currency_code),
+                    "line_total": format_currency(line.line_total, so.currency_code),
+                    "fulfillment_status": line.fulfillment_status.value,
+                    "can_ship": line.quantity_shipped < line.quantity_ordered
+                    and so.status in [SOStatus.CONFIRMED, SOStatus.IN_PROGRESS],
+                }
+            )
 
         # Format shipments
         shipments = []
         for ship in so.shipments:
-            shipments.append({
-                "shipment_id": str(ship.shipment_id),
-                "shipment_number": ship.shipment_number,
-                "shipment_date": format_date(ship.shipment_date),
-                "carrier": ship.carrier or "-",
-                "tracking_number": ship.tracking_number or "-",
-                "is_delivered": ship.is_delivered,
-                "delivered_at": ship.delivered_at.strftime("%Y-%m-%d %H:%M") if ship.delivered_at else None,
-            })
+            shipments.append(
+                {
+                    "shipment_id": str(ship.shipment_id),
+                    "shipment_number": ship.shipment_number,
+                    "shipment_date": format_date(ship.shipment_date),
+                    "carrier": ship.carrier or "-",
+                    "tracking_number": ship.tracking_number or "-",
+                    "is_delivered": ship.is_delivered,
+                    "delivered_at": ship.delivered_at.strftime("%Y-%m-%d %H:%M")
+                    if ship.delivered_at
+                    else None,
+                }
+            )
 
         return {"order": order_data, "lines": lines, "shipments": shipments}
 
@@ -341,15 +376,17 @@ class SalesOrderWebService:
         for line in so.lines:
             remaining = line.quantity_ordered - line.quantity_shipped
             if remaining > 0:
-                lines.append({
-                    "line_id": str(line.line_id),
-                    "line_number": line.line_number,
-                    "item_code": line.item_code or "-",
-                    "description": line.description,
-                    "quantity_ordered": str(line.quantity_ordered),
-                    "quantity_shipped": str(line.quantity_shipped),
-                    "remaining": str(remaining),
-                })
+                lines.append(
+                    {
+                        "line_id": str(line.line_id),
+                        "line_number": line.line_number,
+                        "item_code": line.item_code or "-",
+                        "description": line.description,
+                        "quantity_ordered": str(line.quantity_ordered),
+                        "quantity_shipped": str(line.quantity_shipped),
+                        "remaining": str(remaining),
+                    }
+                )
 
         order_data = {
             "so_id": str(so.so_id),
@@ -396,8 +433,7 @@ class SalesOrderWebService:
     ) -> tuple[Optional[SalesOrder], Optional[str]]:
         """Create a new sales order. Returns (order, error)."""
         logger.debug(
-            "create_sales_order: org=%s customer=%s",
-            organization_id, customer_id
+            "create_sales_order: org=%s customer=%s", organization_id, customer_id
         )
         try:
             lines = json.loads(lines_json) if lines_json else []
@@ -411,8 +447,16 @@ class SalesOrderWebService:
 
             # Parse dates
             order_dt = datetime.strptime(order_date, "%Y-%m-%d").date()
-            requested_dt = datetime.strptime(requested_date, "%Y-%m-%d").date() if requested_date else None
-            promised_dt = datetime.strptime(promised_date, "%Y-%m-%d").date() if promised_date else None
+            requested_dt = (
+                datetime.strptime(requested_date, "%Y-%m-%d").date()
+                if requested_date
+                else None
+            )
+            promised_dt = (
+                datetime.strptime(promised_date, "%Y-%m-%d").date()
+                if promised_date
+                else None
+            )
 
             so = sales_order_service.create(
                 db,
@@ -438,7 +482,11 @@ class SalesOrderWebService:
                 lines=lines,
             )
             db.commit()
-            logger.info("create_sales_order: created %s for org %s", so.so_number, organization_id)
+            logger.info(
+                "create_sales_order: created %s for org %s",
+                so.so_number,
+                organization_id,
+            )
             return so, None
 
         except Exception as e:
@@ -462,10 +510,14 @@ class SalesOrderWebService:
         """Create a shipment for a sales order. Returns (shipment, error)."""
         logger.debug("create_shipment: org=%s so=%s", organization_id, so_id)
         try:
-            line_quantities = json.loads(line_quantities_json) if line_quantities_json else []
+            line_quantities = (
+                json.loads(line_quantities_json) if line_quantities_json else []
+            )
 
             # Filter out zero quantities
-            line_quantities = [lq for lq in line_quantities if Decimal(str(lq.get("quantity", 0))) > 0]
+            line_quantities = [
+                lq for lq in line_quantities if Decimal(str(lq.get("quantity", 0))) > 0
+            ]
 
             if not line_quantities:
                 return None, "No items to ship"
@@ -518,7 +570,9 @@ class SalesOrderWebService:
                 end_date=end_date,
             )
         )
-        return templates.TemplateResponse(request, "finance/ar/sales_orders.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/sales_orders.html", context
+        )
 
     def new_form_response(
         self,
@@ -534,7 +588,9 @@ class SalesOrderWebService:
         context["order"] = None
         context["selected_customer_id"] = customer_id
         context["quote_id"] = quote_id
-        return templates.TemplateResponse(request, "finance/ar/sales_order_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/sales_order_form.html", context
+        )
 
     def create_response(
         self,
@@ -590,7 +646,9 @@ class SalesOrderWebService:
             context.update(self.form_context(db, auth.organization_id))
             context["order"] = None
             context["error"] = error or "Sales order creation failed"
-            return templates.TemplateResponse(request, "finance/ar/sales_order_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/sales_order_form.html", context
+            )
 
         return RedirectResponse(url=f"/sales-orders/{so.so_id}", status_code=303)
 
@@ -605,16 +663,24 @@ class SalesOrderWebService:
         detail_ctx = self.detail_context(db, str(auth.organization_id), so_id)
 
         if detail_ctx["order"] is None:
-            context = base_context(request, auth, "Sales Order Not Found", "sales-orders")
+            context = base_context(
+                request, auth, "Sales Order Not Found", "sales-orders"
+            )
             context["order"] = None
-            return templates.TemplateResponse(request, "finance/ar/sales_order_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/sales_order_detail.html", context
+            )
 
         so_number = detail_ctx["order"]["so_number"]
         context = base_context(request, auth, f"SO {so_number}", "sales-orders")
         context.update(detail_ctx)
-        return templates.TemplateResponse(request, "finance/ar/sales_order_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/sales_order_detail.html", context
+        )
 
-    def submit_response(self, request: Request, auth: WebAuthContext, db: Session, so_id: str) -> RedirectResponse:
+    def submit_response(
+        self, request: Request, auth: WebAuthContext, db: Session, so_id: str
+    ) -> RedirectResponse:
         """Handle submit sales order action."""
         try:
             sales_order_service.submit(db, so_id, str(auth.user_id))
@@ -623,7 +689,9 @@ class SalesOrderWebService:
             db.rollback()
         return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
 
-    def approve_response(self, request: Request, auth: WebAuthContext, db: Session, so_id: str) -> RedirectResponse:
+    def approve_response(
+        self, request: Request, auth: WebAuthContext, db: Session, so_id: str
+    ) -> RedirectResponse:
         """Handle approve sales order action."""
         try:
             sales_order_service.approve(db, so_id, str(auth.user_id))
@@ -632,7 +700,9 @@ class SalesOrderWebService:
             db.rollback()
         return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
 
-    def confirm_response(self, request: Request, auth: WebAuthContext, db: Session, so_id: str) -> RedirectResponse:
+    def confirm_response(
+        self, request: Request, auth: WebAuthContext, db: Session, so_id: str
+    ) -> RedirectResponse:
         """Handle confirm sales order action."""
         try:
             sales_order_service.confirm(db, so_id)
@@ -642,7 +712,12 @@ class SalesOrderWebService:
         return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
 
     def cancel_response(
-        self, request: Request, auth: WebAuthContext, db: Session, so_id: str, reason: Optional[str] = None
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        so_id: str,
+        reason: Optional[str] = None,
     ) -> RedirectResponse:
         """Handle cancel sales order action."""
         try:
@@ -652,7 +727,9 @@ class SalesOrderWebService:
             db.rollback()
         return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
 
-    def hold_response(self, request: Request, auth: WebAuthContext, db: Session, so_id: str) -> RedirectResponse:
+    def hold_response(
+        self, request: Request, auth: WebAuthContext, db: Session, so_id: str
+    ) -> RedirectResponse:
         """Handle hold sales order action."""
         try:
             sales_order_service.hold(db, so_id, str(auth.user_id))
@@ -661,7 +738,9 @@ class SalesOrderWebService:
             db.rollback()
         return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
 
-    def release_response(self, request: Request, auth: WebAuthContext, db: Session, so_id: str) -> RedirectResponse:
+    def release_response(
+        self, request: Request, auth: WebAuthContext, db: Session, so_id: str
+    ) -> RedirectResponse:
         """Handle release sales order from hold action."""
         try:
             sales_order_service.release_hold(db, so_id, str(auth.user_id))
@@ -675,9 +754,13 @@ class SalesOrderWebService:
     ) -> RedirectResponse:
         """Handle create invoice from sales order action."""
         try:
-            invoice = sales_order_service.create_invoice_from_so(db, so_id, str(auth.user_id))
+            invoice = sales_order_service.create_invoice_from_so(
+                db, so_id, str(auth.user_id)
+            )
             db.commit()
-            return RedirectResponse(url=f"/ar/invoices/{invoice.invoice_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/ar/invoices/{invoice.invoice_id}", status_code=303
+            )
         except Exception:
             db.rollback()
             return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
@@ -694,7 +777,9 @@ class SalesOrderWebService:
         so_number = shipment_ctx["order"]["so_number"]
         context = base_context(request, auth, f"Ship SO {so_number}", "sales-orders")
         context.update(shipment_ctx)
-        return templates.TemplateResponse(request, "finance/ar/shipment_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/shipment_form.html", context
+        )
 
     def create_shipment_response(
         self,
@@ -724,7 +809,9 @@ class SalesOrderWebService:
         )
 
         if error:
-            return RedirectResponse(url=f"/sales-orders/{so_id}/ship?error={error}", status_code=303)
+            return RedirectResponse(
+                url=f"/sales-orders/{so_id}/ship?error={error}", status_code=303
+            )
 
         return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
 
@@ -735,7 +822,9 @@ class SalesOrderWebService:
         try:
             shipment = sales_order_service.mark_delivered(db, shipment_id)
             db.commit()
-            return RedirectResponse(url=f"/sales-orders/{shipment.so_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/sales-orders/{shipment.so_id}", status_code=303
+            )
         except Exception:
             db.rollback()
             return RedirectResponse(url="/sales-orders", status_code=303)

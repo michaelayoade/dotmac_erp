@@ -5,6 +5,7 @@ Revises:
 Create Date: 2026-01-28
 
 """
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -19,8 +20,12 @@ depends_on = None
 def upgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
-    columns = {col["name"] for col in inspector.get_columns("organization", schema="core_org")}
-    indexes = {idx["name"] for idx in inspector.get_indexes("organization", schema="core_org")}
+    columns = {
+        col["name"] for col in inspector.get_columns("organization", schema="core_org")
+    }
+    indexes = {
+        idx["name"] for idx in inspector.get_indexes("organization", schema="core_org")
+    }
 
     # Add slug column to organization table
     if "slug" not in columns:

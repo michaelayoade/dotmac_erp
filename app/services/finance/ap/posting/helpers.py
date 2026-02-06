@@ -66,6 +66,7 @@ def determine_debit_account(
     if line.goods_receipt_line_id:
         # Get GRNI account from organization settings
         from app.models.core_org.organization import Organization
+
         org = db.get(Organization, organization_id)
         if org and hasattr(org, "grni_account_id"):
             acc_id: Optional[UUID] = getattr(org, "grni_account_id", None)
@@ -275,8 +276,7 @@ def create_assets_for_capitalizable_lines(
 
     # Check if any lines are capitalizable
     capitalizable_lines = [
-        line for line in lines
-        if line.capitalize_flag and line.asset_category_id
+        line for line in lines if line.capitalize_flag and line.asset_category_id
     ]
 
     if not capitalizable_lines:

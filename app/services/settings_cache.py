@@ -14,7 +14,7 @@ from typing import Any, Dict, Optional, cast
 from sqlalchemy.orm import Session
 
 from app.models.domain_settings import DomainSetting, SettingDomain, SettingValueType
-from app.services.cache import cache_service, CacheService
+from app.services.cache import CacheService, cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -37,37 +37,30 @@ DOMAIN_TTL_CONFIG: Dict[SettingDomain, int] = {
     # Feature flags: Checked on every API request to gated modules (inventory,
     # fixed assets, leases). A 60s TTL means disabling a feature takes effect
     # within 1 minute across all workers.
-
     SettingDomain.auth: 60,
     # Auth settings: JWT TTLs, cookie config, TOTP settings. Security-critical
     # so changes must propagate quickly. A misconfigured auth setting could
     # lock users out, so we want fast correction.
-
     # === MODERATE FREQUENCY (300s / 5 minutes) ===
     # These are read periodically but not on every request. Changes are
     # typically administrative and can tolerate a few minutes delay.
     SettingDomain.email: 300,
     # Email/SMTP: Only read when sending emails. Config changes (new SMTP
     # server, credentials) can wait 5 minutes to take effect.
-
     SettingDomain.scheduler: 300,
     # Celery/scheduler: Read at task scheduling time. Changing broker URLs
     # or beat intervals typically requires worker restart anyway.
-
     SettingDomain.automation: 300,
     # Workflow/recurring: Read when processing automations. Webhook timeouts,
     # max actions per event - operational tuning that doesn't need instant updates.
-
     SettingDomain.reporting: 300,
     # Report settings: Page size, export format. Only read when generating
     # reports, which is infrequent.
-
     # === LOW FREQUENCY (600s / 10 minutes) ===
     # These rarely change and are not time-sensitive.
     SettingDomain.audit: 600,
     # Audit settings: Which methods to audit, skip paths. Changes are rare
     # and typically part of compliance reviews, not urgent operations.
-
     SettingDomain.payments: 600,
     # Payment gateway config: Paystack keys, webhook secrets. Changed during
     # initial setup or key rotation - both are planned activities where a
@@ -162,10 +155,7 @@ class InMemoryCache:
             Number of entries removed
         """
         now = time.time()
-        expired_keys = [
-            key for key, (_, expiry) in self._cache.items()
-            if now > expiry
-        ]
+        expired_keys = [key for key, (_, expiry) in self._cache.items() if now > expiry]
         for key in expired_keys:
             self._cache.pop(key, None)
 
@@ -197,7 +187,7 @@ class InMemoryCache:
         # Sort by expiry time (soonest first) and evict
         sorted_items = sorted(
             self._cache.items(),
-            key=lambda item: item[1][1]  # Sort by expiry time
+            key=lambda item: item[1][1],  # Sort by expiry time
         )
 
         evicted = 0
@@ -206,7 +196,11 @@ class InMemoryCache:
             evicted += 1
 
         if evicted:
-            logger.debug("Cache eviction: removed %d entries (max_size=%d)", evicted, self._max_size)
+            logger.debug(
+                "Cache eviction: removed %d entries (max_size=%d)",
+                evicted,
+                self._max_size,
+            )
 
         return evicted
 

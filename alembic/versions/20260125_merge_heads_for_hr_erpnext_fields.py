@@ -5,9 +5,6 @@ Revises: 20260124_department_head, 20260124_setting_history, 20260124_expense_ta
 Create Date: 2026-01-25
 """
 
-from alembic import op
-
-
 # revision identifiers, used by Alembic.
 revision = "20260125_merge_heads_for_hr_erpnext_fields"
 down_revision = (

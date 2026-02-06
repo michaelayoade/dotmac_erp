@@ -1,10 +1,14 @@
 """
 Base mapping utilities for ERPNext to DotMac ERP transformations.
 """
+
+import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Optional
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

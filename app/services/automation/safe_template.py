@@ -18,7 +18,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Optional
 
-from jinja2.sandbox import SandboxedEnvironment, ImmutableSandboxedEnvironment
+from jinja2.sandbox import SandboxedEnvironment
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,10 @@ _sandboxed_env: Optional["SecureSandboxedEnvironment"] = None
 # Safe Built-in Functions
 # ============================================================================
 
-def _safe_format_currency(value: Decimal | float | int | None, decimals: int = 2) -> str:
+
+def _safe_format_currency(
+    value: Decimal | float | int | None, decimals: int = 2
+) -> str:
     """Format a number as currency with thousands separator."""
     if value is None:
         return "0.00"
@@ -193,6 +196,7 @@ SAFE_FILTERS: dict[str, Any] = {
 # Sandboxed Environment
 # ============================================================================
 
+
 class SecureSandboxedEnvironment(SandboxedEnvironment):
     """
     Custom sandboxed environment with additional security restrictions.
@@ -227,20 +231,35 @@ class SecureSandboxedEnvironment(SandboxedEnvironment):
         if attr.startswith("_"):
             logger.warning(
                 "Blocked access to private attribute '%s' on %s",
-                attr, type(obj).__name__
+                attr,
+                type(obj).__name__,
             )
             return False
 
         # Block known dangerous attributes
         dangerous_attrs = {
-            "mro", "subclasses", "bases", "class", "init", "globals",
-            "code", "func", "gi_frame", "gi_code", "cr_frame", "cr_code",
-            "tb_frame", "f_locals", "f_globals", "f_builtins",
+            "mro",
+            "subclasses",
+            "bases",
+            "class",
+            "init",
+            "globals",
+            "code",
+            "func",
+            "gi_frame",
+            "gi_code",
+            "cr_frame",
+            "cr_code",
+            "tb_frame",
+            "f_locals",
+            "f_globals",
+            "f_builtins",
         }
         if attr.lower() in dangerous_attrs:
             logger.warning(
                 "Blocked access to dangerous attribute '%s' on %s",
-                attr, type(obj).__name__
+                attr,
+                type(obj).__name__,
             )
             return False
 
@@ -254,8 +273,15 @@ class SecureSandboxedEnvironment(SandboxedEnvironment):
 
         # Block dangerous built-ins
         dangerous_callables = {
-            eval, exec, compile, open, __import__,
-            globals, locals, vars, dir,
+            eval,
+            exec,
+            compile,
+            open,
+            __import__,
+            globals,
+            locals,
+            vars,
+            dir,
         }
         if obj in dangerous_callables:
             logger.warning("Blocked call to dangerous function: %s", obj)

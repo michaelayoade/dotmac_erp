@@ -38,6 +38,16 @@ const Charts = {
     return this.formatCurrency(value, currency);
   },
 
+  resolveFormat(currency, format) {
+    if (format) {
+      return format;
+    }
+    if (currency === false || currency === null || currency === 'none' || currency === 'false') {
+      return 'number';
+    }
+    return undefined;
+  },
+
   // Default color palettes
   colors: {
     primary: ['rgba(20, 184, 166, 0.85)', 'rgba(13, 148, 136, 0.85)'],
@@ -262,6 +272,7 @@ const Charts = {
   // Create trend line chart (revenue vs expenses style)
   trendLine(canvas, { labels, datasets, currency, format }) {
     const theme = this.getThemeColors();
+    const resolvedFormat = this.resolveFormat(currency, format);
     const defaultColors = [
       { border: 'rgba(13, 148, 136, 1)', bg: 'rgba(13, 148, 136, 0.1)' },
       { border: 'rgba(244, 63, 94, 1)', bg: 'rgba(244, 63, 94, 0.1)' },
@@ -297,7 +308,7 @@ const Charts = {
             ticks: {
               color: theme.text,
               font: { size: 11 },
-              callback: (v) => Charts.formatValue(v, currency, format)
+              callback: (v) => Charts.formatValue(v, currency, resolvedFormat)
             }
           }
         },
@@ -306,7 +317,7 @@ const Charts = {
           tooltip: {
             ...this.getTooltipConfig(),
             callbacks: {
-              label: (ctx) => `${ctx.dataset.label}: ${Charts.formatValue(ctx.raw, currency, format)}`
+              label: (ctx) => `${ctx.dataset.label}: ${Charts.formatValue(ctx.raw, currency, resolvedFormat)}`
             }
           }
         }
@@ -361,6 +372,7 @@ const Charts = {
   horizontalBar(canvas, { labels, data, color, currency, format }) {
     const theme = this.getThemeColors();
     const barColor = color || 'rgba(20, 184, 166, 0.85)';
+    const resolvedFormat = this.resolveFormat(currency, format);
 
     return new Chart(canvas, {
       type: 'bar',
@@ -382,7 +394,7 @@ const Charts = {
             grid: { color: theme.grid },
             ticks: {
               color: theme.text,
-              callback: (v) => Charts.formatValue(v, currency, format)
+              callback: (v) => Charts.formatValue(v, currency, resolvedFormat)
             }
           },
           y: {
@@ -395,7 +407,7 @@ const Charts = {
           tooltip: {
             ...this.getTooltipConfig(),
             callbacks: {
-              label: (ctx) => Charts.formatValue(ctx.raw, currency, format)
+              label: (ctx) => Charts.formatValue(ctx.raw, currency, resolvedFormat)
             }
           }
         }

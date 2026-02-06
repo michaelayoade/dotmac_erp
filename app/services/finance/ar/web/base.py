@@ -19,9 +19,9 @@ from uuid import UUID
 from sqlalchemy import func
 from sqlalchemy.orm import Session, load_only
 
-from app.models.finance.ar.customer import Customer, CustomerType, RiskCategory
+from app.models.finance.ar.customer import Customer, CustomerType
 from app.models.finance.ar.customer_payment import CustomerPayment, PaymentStatus
-from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
+from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 from app.models.finance.ar.invoice_line import InvoiceLine
 from app.models.finance.ar.payment_allocation import PaymentAllocation
 from app.models.finance.core_org.cost_center import CostCenter
@@ -29,10 +29,10 @@ from app.models.finance.core_org.project import Project
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.services.finance.common import (
-    parse_date,
-    format_date,
     format_currency,
+    format_date,
     format_file_size,
+    parse_date,
     parse_enum_safe,
 )
 
@@ -42,6 +42,7 @@ logger = logging.getLogger(__name__)
 # ==============================================================================
 # Parsing Utilities
 # ==============================================================================
+
 
 def parse_customer_type(value: Optional[str]) -> CustomerType:
     """Parse customer type from string value."""
@@ -77,6 +78,7 @@ def parse_receipt_status(value: Optional[str]) -> Optional[PaymentStatus]:
 # Display/Label Utilities
 # ==============================================================================
 
+
 def customer_display_name(customer: Customer) -> str:
     """Get display name for a customer."""
     return customer.trading_name or customer.legal_name
@@ -103,6 +105,7 @@ def receipt_status_label(status: PaymentStatus) -> str:
 # ==============================================================================
 # View Transformers - Customers
 # ==============================================================================
+
 
 def customer_option_view(customer: Customer) -> dict:
     """Transform customer to option/select view."""
@@ -155,7 +158,9 @@ def customer_list_view(
             customer.currency_code,
         ),
         "balance": format_currency(balance, customer.currency_code),
-        "balance_trend": balance_trend if balance_trend and any(v > 0 for v in balance_trend) else None,
+        "balance_trend": balance_trend
+        if balance_trend and any(v > 0 for v in balance_trend)
+        else None,
         "is_active": customer.is_active,
         "created_at": customer.created_at,
         "created_by_user_id": customer.created_by_user_id,
@@ -192,6 +197,7 @@ def customer_detail_view(customer: Customer, balance: Decimal) -> dict:
 # ==============================================================================
 # View Transformers - Invoices
 # ==============================================================================
+
 
 def invoice_line_view(line: InvoiceLine, currency_code: str) -> dict:
     """Transform invoice line to view."""
@@ -243,6 +249,7 @@ def invoice_detail_view(invoice: Invoice, customer: Optional[Customer]) -> dict:
 # View Transformers - Receipts/Payments
 # ==============================================================================
 
+
 def receipt_detail_view(payment: CustomerPayment, customer: Optional[Customer]) -> dict:
     """Transform receipt/payment to detail view."""
     return {
@@ -256,7 +263,9 @@ def receipt_detail_view(payment: CustomerPayment, customer: Optional[Customer]) 
         "description": payment.description,
         "amount": format_currency(payment.amount, payment.currency_code),
         "gross_amount": format_currency(payment.gross_amount, payment.currency_code),
-        "wht_amount": format_currency(payment.wht_amount, payment.currency_code) if payment.wht_amount else None,
+        "wht_amount": format_currency(payment.wht_amount, payment.currency_code)
+        if payment.wht_amount
+        else None,
         "wht_code_id": payment.wht_code_id,
         "wht_certificate_number": payment.wht_certificate_number,
         "has_wht": payment.wht_amount and payment.wht_amount > 0,
@@ -290,6 +299,7 @@ def allocation_view(
 # ==============================================================================
 # Reference Data Queries
 # ==============================================================================
+
 
 def get_accounts(
     db: Session,
@@ -365,7 +375,7 @@ def calculate_customer_balance_trends(
         if i == 0:
             as_of_date = today
         else:
-            month_start = (today.replace(day=1) - relativedelta(months=i))
+            month_start = today.replace(day=1) - relativedelta(months=i)
             next_month = month_start + relativedelta(months=1)
             as_of_date = next_month - timedelta(days=1)
 
@@ -380,12 +390,14 @@ def calculate_customer_balance_trends(
                 Invoice.organization_id == organization_id,
                 Invoice.customer_id.in_(customer_ids),
                 Invoice.invoice_date <= as_of_date,
-                Invoice.status.in_([
-                    InvoiceStatus.POSTED,
-                    InvoiceStatus.PARTIALLY_PAID,
-                    InvoiceStatus.PAID,
-                    InvoiceStatus.OVERDUE,
-                ]),
+                Invoice.status.in_(
+                    [
+                        InvoiceStatus.POSTED,
+                        InvoiceStatus.PARTIALLY_PAID,
+                        InvoiceStatus.PAID,
+                        InvoiceStatus.OVERDUE,
+                    ]
+                ),
             )
             .group_by(Invoice.customer_id)
             .all()
@@ -403,9 +415,11 @@ def calculate_customer_balance_trends(
 # Data Classes
 # ==============================================================================
 
+
 @dataclass
 class InvoiceStats:
     """Statistics for invoice list view."""
+
     total_outstanding: str
     past_due: str
     due_this_week: str

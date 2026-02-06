@@ -6,9 +6,10 @@ Provides view-focused data for AR web routes.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
-from datetime import date, datetime, timedelta
+import logging
+from dataclasses import dataclass
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
@@ -18,41 +19,50 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, load_only
 
+from app.config import settings
 from app.models.finance.ar.customer import Customer, CustomerType, RiskCategory
-from app.models.finance.ar.customer_payment import CustomerPayment, PaymentStatus
+from app.models.finance.ar.customer_payment import (
+    CustomerPayment,
+    PaymentMethod,
+    PaymentStatus,
+)
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.models.finance.ar.invoice_line import InvoiceLine
 from app.models.finance.ar.invoice_line_tax import InvoiceLineTax
 from app.models.finance.ar.payment_allocation import PaymentAllocation
+from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.core_org.cost_center import CostCenter
 from app.models.finance.core_org.project import Project
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
-from app.config import settings
 from app.services.audit_info import get_audit_service
 from app.services.common import coerce_uuid
 from app.services.finance.ar.ar_aging import ar_aging_service
 from app.services.finance.ar.customer import CustomerInput, customer_service
 from app.services.finance.ar.customer_payment import (
-    customer_payment_service,
     CustomerPaymentInput,
     PaymentAllocationInput,
+    customer_payment_service,
 )
-from app.models.finance.ar.customer_payment import PaymentMethod, PaymentStatus
-from app.services.finance.ar.invoice import ARInvoiceInput, ARInvoiceLineInput, ar_invoice_service
-from app.services.finance.common.attachment import attachment_service, AttachmentInput
-from app.services.finance.platform.currency_context import get_currency_context
-from app.models.finance.common.attachment import AttachmentCategory
-from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
-from app.services.finance.tax.tax_master import tax_code_service
+from app.services.finance.ar.invoice import (
+    ARInvoiceInput,
+    ARInvoiceLineInput,
+    ar_invoice_service,
+)
 from app.services.finance.common import (
-    parse_date,
-    format_date,
     format_currency,
+    format_date,
     format_file_size,
+    parse_date,
     parse_enum_safe,
 )
+from app.services.finance.common.attachment import AttachmentInput, attachment_service
+from app.services.finance.platform.currency_context import get_currency_context
+from app.services.finance.tax.tax_master import tax_code_service
+from app.templates import templates
+from app.web.deps import WebAuthContext, base_context
+
+logger = logging.getLogger(__name__)
 
 # Keep aliases for backward compatibility with existing code
 _parse_date = parse_date
@@ -93,7 +103,7 @@ def _calculate_customer_balance_trends(
         if i == 0:
             as_of_date = today
         else:
-            month_start = (today.replace(day=1) - relativedelta(months=i))
+            month_start = today.replace(day=1) - relativedelta(months=i)
             # Last day of that month
             next_month = month_start + relativedelta(months=1)
             as_of_date = next_month - timedelta(days=1)
@@ -110,12 +120,14 @@ def _calculate_customer_balance_trends(
                 Invoice.organization_id == organization_id,
                 Invoice.customer_id.in_(customer_ids),
                 Invoice.invoice_date <= as_of_date,
-                Invoice.status.in_([
-                    InvoiceStatus.POSTED,
-                    InvoiceStatus.PARTIALLY_PAID,
-                    InvoiceStatus.PAID,
-                    InvoiceStatus.OVERDUE,
-                ]),
+                Invoice.status.in_(
+                    [
+                        InvoiceStatus.POSTED,
+                        InvoiceStatus.PARTIALLY_PAID,
+                        InvoiceStatus.PAID,
+                        InvoiceStatus.OVERDUE,
+                    ]
+                ),
             )
             .group_by(Invoice.customer_id)
             .all()
@@ -177,7 +189,9 @@ def _customer_list_view(
             customer.currency_code,
         ),
         "balance": _format_currency(balance, customer.currency_code),
-        "balance_trend": balance_trend if balance_trend and any(v > 0 for v in balance_trend) else None,
+        "balance_trend": balance_trend
+        if balance_trend and any(v > 0 for v in balance_trend)
+        else None,
         "is_active": customer.is_active,
         # Audit info
         "created_at": customer.created_at,
@@ -255,7 +269,9 @@ def _invoice_detail_view(invoice: Invoice, customer: Optional[Customer]) -> dict
     }
 
 
-def _receipt_detail_view(payment: CustomerPayment, customer: Optional[Customer]) -> dict:
+def _receipt_detail_view(
+    payment: CustomerPayment, customer: Optional[Customer]
+) -> dict:
     return {
         "receipt_id": payment.payment_id,
         "receipt_number": payment.payment_number,
@@ -269,7 +285,9 @@ def _receipt_detail_view(payment: CustomerPayment, customer: Optional[Customer])
         "amount": _format_currency(payment.amount, payment.currency_code),
         # WHT breakdown
         "gross_amount": _format_currency(payment.gross_amount, payment.currency_code),
-        "wht_amount": _format_currency(payment.wht_amount, payment.currency_code) if payment.wht_amount else None,
+        "wht_amount": _format_currency(payment.wht_amount, payment.currency_code)
+        if payment.wht_amount
+        else None,
         "wht_code_id": payment.wht_code_id,
         "wht_certificate_number": payment.wht_certificate_number,
         "has_wht": payment.wht_amount and payment.wht_amount > 0,
@@ -288,9 +306,13 @@ def _allocation_view(
         "allocation_id": allocation.allocation_id,
         "invoice_id": allocation.invoice_id,
         "invoice_number": invoice.invoice_number if invoice else "",
-        "allocated_amount": _format_currency(allocation.allocated_amount, currency_code),
+        "allocated_amount": _format_currency(
+            allocation.allocated_amount, currency_code
+        ),
         "discount_taken": _format_currency(allocation.discount_taken, currency_code),
-        "write_off_amount": _format_currency(allocation.write_off_amount, currency_code),
+        "write_off_amount": _format_currency(
+            allocation.write_off_amount, currency_code
+        ),
         "exchange_difference": _format_currency(
             allocation.exchange_difference,
             currency_code,
@@ -454,8 +476,12 @@ class ARWebService:
                 # Handle both new tax_code_ids array and legacy tax_code_id field
                 tax_code_ids = []
                 if line.get("tax_code_ids"):
-                    tax_code_ids = [UUID(tc_id) for tc_id in line["tax_code_ids"] if tc_id]
-                legacy_tax_code_id = UUID(line["tax_code_id"]) if line.get("tax_code_id") else None
+                    tax_code_ids = [
+                        UUID(tc_id) for tc_id in line["tax_code_ids"] if tc_id
+                    ]
+                legacy_tax_code_id = (
+                    UUID(line["tax_code_id"]) if line.get("tax_code_id") else None
+                )
 
                 lines.append(
                     ARInvoiceLineInput(
@@ -470,7 +496,9 @@ class ARWebService:
                         cost_center_id=UUID(line["cost_center_id"])
                         if line.get("cost_center_id")
                         else None,
-                        project_id=UUID(line["project_id"]) if line.get("project_id") else None,
+                        project_id=UUID(line["project_id"])
+                        if line.get("project_id")
+                        else None,
                     )
                 )
 
@@ -521,12 +549,11 @@ class ARWebService:
                 | (Customer.tax_identification_number.ilike(search_pattern))
             )
 
-        total_count = query.with_entities(func.count(Customer.customer_id)).scalar() or 0
+        total_count = (
+            query.with_entities(func.count(Customer.customer_id)).scalar() or 0
+        )
         customers = (
-            query.order_by(Customer.legal_name)
-            .limit(limit)
-            .offset(offset)
-            .all()
+            query.order_by(Customer.legal_name).limit(limit).offset(offset).all()
         )
 
         open_statuses = [
@@ -629,21 +656,16 @@ class ARWebService:
             InvoiceStatus.OVERDUE,
         ]
 
-        balance = (
-            db.query(
-                func.coalesce(
-                    func.sum(Invoice.total_amount - Invoice.amount_paid),
-                    0,
-                )
+        balance = db.query(
+            func.coalesce(
+                func.sum(Invoice.total_amount - Invoice.amount_paid),
+                0,
             )
-            .filter(
-                Invoice.organization_id == org_id,
-                Invoice.customer_id == customer.customer_id,
-                Invoice.status.in_(open_statuses),
-            )
-            .scalar()
-            or Decimal("0")
-        )
+        ).filter(
+            Invoice.organization_id == org_id,
+            Invoice.customer_id == customer.customer_id,
+            Invoice.status.in_(open_statuses),
+        ).scalar() or Decimal("0")
 
         invoices = (
             db.query(Invoice)
@@ -769,40 +791,21 @@ class ARWebService:
         stats_base = query.with_entities(Invoice)
         outstanding_filter = stats_base.filter(Invoice.status.in_(open_statuses))
 
-        total_outstanding = (
-            outstanding_filter.with_entities(
-                func.coalesce(
-                    func.sum(Invoice.total_amount - Invoice.amount_paid), 0
-                )
-            ).scalar()
-            or Decimal("0")
-        )
+        total_outstanding = outstanding_filter.with_entities(
+            func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
+        ).scalar() or Decimal("0")
 
-        past_due = (
-            outstanding_filter.filter(Invoice.due_date < today)
-            .with_entities(
-                func.coalesce(
-                    func.sum(Invoice.total_amount - Invoice.amount_paid), 0
-                )
-            )
-            .scalar()
-            or Decimal("0")
-        )
+        past_due = outstanding_filter.filter(Invoice.due_date < today).with_entities(
+            func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
+        ).scalar() or Decimal("0")
 
         due_this_week_end = today + timedelta(days=7)
-        due_this_week = (
-            outstanding_filter.filter(
-                Invoice.due_date >= today,
-                Invoice.due_date <= due_this_week_end,
-            )
-            .with_entities(
-                func.coalesce(
-                    func.sum(Invoice.total_amount - Invoice.amount_paid), 0
-                )
-            )
-            .scalar()
-            or Decimal("0")
-        )
+        due_this_week = outstanding_filter.filter(
+            Invoice.due_date >= today,
+            Invoice.due_date <= due_this_week_end,
+        ).with_entities(
+            func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
+        ).scalar() or Decimal("0")
 
         month_start = date(today.year, today.month, 1)
         if today.month == 12:
@@ -810,19 +813,12 @@ class ARWebService:
         else:
             month_end = date(today.year, today.month + 1, 1) - timedelta(days=1)
 
-        this_month = (
-            outstanding_filter.filter(
-                Invoice.due_date >= month_start,
-                Invoice.due_date <= month_end,
-            )
-            .with_entities(
-                func.coalesce(
-                    func.sum(Invoice.total_amount - Invoice.amount_paid), 0
-                )
-            )
-            .scalar()
-            or Decimal("0")
-        )
+        this_month = outstanding_filter.filter(
+            Invoice.due_date >= month_start,
+            Invoice.due_date <= month_end,
+        ).with_entities(
+            func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
+        ).scalar() or Decimal("0")
 
         invoices_view = []
         for invoice, customer in invoices:
@@ -841,7 +837,8 @@ class ARWebService:
                     "status": _invoice_status_label(invoice.status),
                     "is_overdue": (
                         invoice.due_date < today
-                        and invoice.status not in {InvoiceStatus.PAID, InvoiceStatus.VOID}
+                        and invoice.status
+                        not in {InvoiceStatus.PAID, InvoiceStatus.VOID}
                     ),
                 }
             )
@@ -905,7 +902,9 @@ class ARWebService:
                 "tax_code": tax.tax_code,
                 "tax_name": tax.tax_name,
                 "tax_rate": tax.tax_rate,  # Raw rate (e.g., 0.075 or 50.00 for fixed)
-                "rate": (tax.tax_rate * 100).quantize(Decimal("0.01")) if tax.tax_rate < 1 else tax.tax_rate,  # Display rate
+                "rate": (tax.tax_rate * 100).quantize(Decimal("0.01"))
+                if tax.tax_rate < 1
+                else tax.tax_rate,  # Display rate
                 "is_inclusive": tax.is_inclusive,
                 "is_compound": tax.is_compound,
             }
@@ -957,9 +956,7 @@ class ARWebService:
             organization_id=org_id,
             invoice_id=invoice.invoice_id,
         )
-        lines_view = [
-            _invoice_line_view(line, invoice.currency_code) for line in lines
-        ]
+        lines_view = [_invoice_line_view(line, invoice.currency_code) for line in lines]
 
         # Get attachments
         attachments = attachment_service.list_for_entity(
@@ -1016,7 +1013,9 @@ class ARWebService:
         )
 
         if customer_id:
-            query = query.filter(CustomerPayment.customer_id == coerce_uuid(customer_id))
+            query = query.filter(
+                CustomerPayment.customer_id == coerce_uuid(customer_id)
+            )
         if status_value:
             query = query.filter(CustomerPayment.status == status_value)
         if from_date:
@@ -1033,7 +1032,9 @@ class ARWebService:
                 )
             )
 
-        total_count = query.with_entities(func.count(CustomerPayment.payment_id)).scalar() or 0
+        total_count = (
+            query.with_entities(func.count(CustomerPayment.payment_id)).scalar() or 0
+        )
         receipts = (
             query.order_by(CustomerPayment.payment_date.desc())
             .limit(limit)
@@ -1107,14 +1108,26 @@ class ARWebService:
                         "payment_id": str(receipt.payment_id),
                         "payment_number": receipt.payment_number,
                         "customer_id": str(receipt.customer_id),
-                        "payment_date": receipt.payment_date.isoformat() if receipt.payment_date else None,
-                        "payment_method": receipt.payment_method.value if receipt.payment_method else None,
-                        "bank_account_id": str(receipt.bank_account_id) if receipt.bank_account_id else None,
+                        "payment_date": receipt.payment_date.isoformat()
+                        if receipt.payment_date
+                        else None,
+                        "payment_method": receipt.payment_method.value
+                        if receipt.payment_method
+                        else None,
+                        "bank_account_id": str(receipt.bank_account_id)
+                        if receipt.bank_account_id
+                        else None,
                         "currency_code": receipt.currency_code,
                         "amount": float(receipt.amount),
-                        "gross_amount": float(receipt.gross_amount) if receipt.gross_amount else None,
-                        "wht_amount": float(receipt.wht_amount) if receipt.wht_amount else 0,
-                        "wht_code_id": str(receipt.wht_code_id) if receipt.wht_code_id else None,
+                        "gross_amount": float(receipt.gross_amount)
+                        if receipt.gross_amount
+                        else None,
+                        "wht_amount": float(receipt.wht_amount)
+                        if receipt.wht_amount
+                        else 0,
+                        "wht_code_id": str(receipt.wht_code_id)
+                        if receipt.wht_code_id
+                        else None,
                         "wht_certificate_number": receipt.wht_certificate_number,
                         "reference": receipt.reference,
                         "description": receipt.description,
@@ -1127,11 +1140,15 @@ class ARWebService:
                     )
                     for alloc in allocations:
                         inv = db.get(Invoice, alloc.invoice_id)
-                        existing_allocations.append({
-                            "invoice_id": str(alloc.invoice_id),
-                            "invoice_number": inv.invoice_number if inv else "Unknown",
-                            "amount": float(alloc.allocated_amount),
-                        })
+                        existing_allocations.append(
+                            {
+                                "invoice_id": str(alloc.invoice_id),
+                                "invoice_number": inv.invoice_number
+                                if inv
+                                else "Unknown",
+                                "amount": float(alloc.allocated_amount),
+                            }
+                        )
             except Exception:
                 pass
 
@@ -1145,8 +1162,14 @@ class ARWebService:
         ):
             customer_view = _customer_option_view(customer)
             # Add WHT fields
-            customer_view["is_wht_applicable"] = getattr(customer, "is_wht_applicable", False)
-            customer_view["default_wht_code_id"] = str(customer.default_wht_code_id) if getattr(customer, "default_wht_code_id", None) else None
+            customer_view["is_wht_applicable"] = getattr(
+                customer, "is_wht_applicable", False
+            )
+            customer_view["default_wht_code_id"] = (
+                str(customer.default_wht_code_id)
+                if getattr(customer, "default_wht_code_id", None)
+                else None
+            )
             customers_list.append(customer_view)
 
         # Get WHT tax codes for dropdown
@@ -1157,11 +1180,13 @@ class ARWebService:
                 "tax_name": tc.tax_name,
                 "tax_rate": tc.tax_rate,
             }
-            for tc in db.query(TaxCode).filter(
+            for tc in db.query(TaxCode)
+            .filter(
                 TaxCode.organization_id == org_id,
                 TaxCode.is_active == True,
                 TaxCode.tax_type == TaxType.WITHHOLDING,
-            ).all()
+            )
+            .all()
         ]
 
         # Get bank accounts
@@ -1255,9 +1280,7 @@ class ARWebService:
         if allocations:
             invoice_ids = [allocation.invoice_id for allocation in allocations]
             invoices = (
-                db.query(Invoice)
-                .filter(Invoice.invoice_id.in_(invoice_ids))
-                .all()
+                db.query(Invoice).filter(Invoice.invoice_id.in_(invoice_ids)).all()
             )
             invoice_map = {invoice.invoice_id: invoice for invoice in invoices}
 
@@ -1307,10 +1330,16 @@ class ARWebService:
         customer_id: Optional[str],
     ) -> dict:
         import logging as _log
+
         _logger = _log.getLogger("ar.aging_context")
         org_id = coerce_uuid(organization_id)
         ref_date = _parse_date(as_of_date)
-        _logger.warning("aging_context called: org=%s ref_date=%s cust=%s", org_id, ref_date, customer_id)
+        _logger.warning(
+            "aging_context called: org=%s ref_date=%s cust=%s",
+            org_id,
+            ref_date,
+            customer_id,
+        )
 
         if customer_id:
             summary = ar_aging_service.calculate_customer_aging(
@@ -1318,12 +1347,15 @@ class ARWebService:
             )
             aging_data = [summary]
         else:
-            aging_data = ar_aging_service.get_aging_by_customer(
-                db, org_id, ref_date
-            )
+            aging_data = ar_aging_service.get_aging_by_customer(db, org_id, ref_date)
         _logger.warning("aging_data returned %d rows", len(aging_data))
         if aging_data:
-            _logger.warning("first row: current=%s, over_90=%s, total=%s", aging_data[0].current, aging_data[0].over_90, aging_data[0].total_outstanding)
+            _logger.warning(
+                "first row: current=%s, over_90=%s, total=%s",
+                aging_data[0].current,
+                aging_data[0].over_90,
+                aging_data[0].total_outstanding,
+            )
 
         customers_list = [
             _customer_option_view(customer)
@@ -1359,54 +1391,66 @@ class ARWebService:
         else:
             dso = 0
 
-        aging_summary = {
-            "total": fmt(grand_total),
-            "invoice_count": total_invoices,
-            "current": fmt(total_current),
-            "current_pct": _pct(total_current, grand_total),
-            "days_30": fmt(total_30),
-            "days_30_pct": _pct(total_30, grand_total),
-            "days_60": fmt(total_60),
-            "days_60_pct": _pct(total_60, grand_total),
-            "days_90": fmt(total_90),
-            "days_90_pct": _pct(total_90, grand_total),
-            "days_90_raw": float(total_90),
-            "dso": dso,
-        } if aging_data else None
+        aging_summary = (
+            {
+                "total": fmt(grand_total),
+                "invoice_count": total_invoices,
+                "current": fmt(total_current),
+                "current_pct": _pct(total_current, grand_total),
+                "days_30": fmt(total_30),
+                "days_30_pct": _pct(total_30, grand_total),
+                "days_60": fmt(total_60),
+                "days_60_pct": _pct(total_60, grand_total),
+                "days_90": fmt(total_90),
+                "days_90_pct": _pct(total_90, grand_total),
+                "days_90_raw": float(total_90),
+                "dso": dso,
+            }
+            if aging_data
+            else None
+        )
 
         # Per-customer rows for the table
         customer_aging = []
         for r in aging_data:
             row_total = r.current + r.days_31_60 + r.days_61_90 + r.over_90
-            customer_aging.append({
-                "customer_id": r.customer_id,
-                "customer_name": r.customer_name,
-                "customer_code": r.customer_code,
-                "current": fmt(r.current),
-                "current_raw": float(r.current),
-                "days_30": fmt(r.days_31_60),
-                "days_30_raw": float(r.days_31_60),
-                "days_60": fmt(r.days_61_90),
-                "days_60_raw": float(r.days_61_90),
-                "days_90": fmt(r.over_90),
-                "days_90_raw": float(r.over_90),
-                "total": fmt(row_total),
-                "current_pct": _pct(r.current, row_total),
-                "days_30_pct": _pct(r.days_31_60, row_total),
-                "days_60_pct": _pct(r.days_61_90, row_total),
-                "days_90_pct": _pct(r.over_90, row_total),
-            })
+            customer_aging.append(
+                {
+                    "customer_id": r.customer_id,
+                    "customer_name": r.customer_name,
+                    "customer_code": r.customer_code,
+                    "current": fmt(r.current),
+                    "current_raw": float(r.current),
+                    "days_30": fmt(r.days_31_60),
+                    "days_30_raw": float(r.days_31_60),
+                    "days_60": fmt(r.days_61_90),
+                    "days_60_raw": float(r.days_61_90),
+                    "days_90": fmt(r.over_90),
+                    "days_90_raw": float(r.over_90),
+                    "total": fmt(row_total),
+                    "current_pct": _pct(r.current, row_total),
+                    "days_30_pct": _pct(r.days_31_60, row_total),
+                    "days_60_pct": _pct(r.days_61_90, row_total),
+                    "days_90_pct": _pct(r.over_90, row_total),
+                }
+            )
 
         # Chart data JSON for the <script> tag
-        aging_chart_data = json.dumps({
-            "buckets": {
-                "current": float(total_current),
-                "days_30": float(total_30),
-                "days_60": float(total_60),
-                "days_90": float(total_90),
-            },
-            "currency": currency,
-        }) if aging_data else "{}"
+        aging_chart_data = (
+            json.dumps(
+                {
+                    "buckets": {
+                        "current": float(total_current),
+                        "days_30": float(total_30),
+                        "days_60": float(total_60),
+                        "days_90": float(total_90),
+                    },
+                    "currency": currency,
+                }
+            )
+            if aging_data
+            else "{}"
+        )
 
         return {
             "aging_summary": aging_summary,
@@ -1416,7 +1460,6 @@ class ARWebService:
             "as_of_date": as_of_date or _format_date(ref_date or date.today()),
             "aging_chart_data": aging_chart_data,
         }
-
 
     @staticmethod
     def delete_customer(
@@ -1495,13 +1538,13 @@ class ARWebService:
         )
 
         if allocation_count > 0:
-            return f"Cannot delete invoice with {allocation_count} payment allocation(s)."
+            return (
+                f"Cannot delete invoice with {allocation_count} payment allocation(s)."
+            )
 
         try:
             # Delete invoice lines first
-            db.query(InvoiceLine).filter(
-                InvoiceLine.invoice_id == inv_id
-            ).delete()
+            db.query(InvoiceLine).filter(InvoiceLine.invoice_id == inv_id).delete()
             db.delete(invoice)
             db.commit()
             return None
@@ -1526,6 +1569,7 @@ class ARWebService:
         allocations_data = data.get("allocations", [])
         if isinstance(allocations_data, str):
             import json
+
             try:
                 allocations_data = json.loads(allocations_data)
             except json.JSONDecodeError:
@@ -1566,7 +1610,9 @@ class ARWebService:
                 settings.default_functional_currency_code,
             ),
             amount=Decimal(str(data.get("amount", 0))),
-            bank_account_id=UUID(data["bank_account_id"]) if data.get("bank_account_id") else None,
+            bank_account_id=UUID(data["bank_account_id"])
+            if data.get("bank_account_id")
+            else None,
             reference=data.get("reference"),
             description=data.get("description"),
             allocations=allocations,
@@ -1606,7 +1652,6 @@ class ARWebService:
         except Exception as e:
             db.rollback()
             return f"Failed to delete receipt: {str(e)}"
-
 
     # =========================================================================
     # Credit Notes
@@ -1668,41 +1713,32 @@ class ARWebService:
         )
 
         # Calculate stats
-        stats_query = (
-            db.query(Invoice)
-            .filter(
-                Invoice.organization_id == org_id,
-                Invoice.invoice_type == InvoiceType.CREDIT_NOTE,
-            )
+        stats_query = db.query(Invoice).filter(
+            Invoice.organization_id == org_id,
+            Invoice.invoice_type == InvoiceType.CREDIT_NOTE,
         )
 
-        total_credit_notes = (
-            stats_query.with_entities(
-                func.coalesce(func.sum(Invoice.total_amount), 0)
-            ).scalar()
-            or Decimal("0")
-        )
+        total_credit_notes = stats_query.with_entities(
+            func.coalesce(func.sum(Invoice.total_amount), 0)
+        ).scalar() or Decimal("0")
 
-        draft_total = (
-            stats_query.filter(Invoice.status == InvoiceStatus.DRAFT)
-            .with_entities(func.coalesce(func.sum(Invoice.total_amount), 0))
-            .scalar()
-            or Decimal("0")
-        )
+        draft_total = stats_query.filter(
+            Invoice.status == InvoiceStatus.DRAFT
+        ).with_entities(
+            func.coalesce(func.sum(Invoice.total_amount), 0)
+        ).scalar() or Decimal("0")
 
-        posted_total = (
-            stats_query.filter(Invoice.status == InvoiceStatus.POSTED)
-            .with_entities(func.coalesce(func.sum(Invoice.total_amount), 0))
-            .scalar()
-            or Decimal("0")
-        )
+        posted_total = stats_query.filter(
+            Invoice.status == InvoiceStatus.POSTED
+        ).with_entities(
+            func.coalesce(func.sum(Invoice.total_amount), 0)
+        ).scalar() or Decimal("0")
 
-        applied_total = (
-            stats_query.filter(Invoice.status == InvoiceStatus.PAID)
-            .with_entities(func.coalesce(func.sum(Invoice.total_amount), 0))
-            .scalar()
-            or Decimal("0")
-        )
+        applied_total = stats_query.filter(
+            Invoice.status == InvoiceStatus.PAID
+        ).with_entities(
+            func.coalesce(func.sum(Invoice.total_amount), 0)
+        ).scalar() or Decimal("0")
 
         credit_notes_view = []
         for credit_note, customer in credit_notes:
@@ -1822,7 +1858,9 @@ class ARWebService:
                 "customer_id": invoice.customer_id,
                 "customer_name": _customer_display_name(customer),
                 "invoice_date": _format_date(invoice.invoice_date),
-                "total_amount": _format_currency(invoice.total_amount, invoice.currency_code),
+                "total_amount": _format_currency(
+                    invoice.total_amount, invoice.currency_code
+                ),
                 "balance": _format_currency(balance, invoice.currency_code),
                 "currency_code": invoice.currency_code,
             }
@@ -1887,10 +1925,18 @@ class ARWebService:
             "customer_name": _customer_display_name(customer) if customer else "",
             "credit_note_date": _format_date(credit_note.invoice_date),
             "currency_code": credit_note.currency_code,
-            "subtotal": _format_currency(credit_note.subtotal, credit_note.currency_code),
-            "tax_amount": _format_currency(credit_note.tax_amount, credit_note.currency_code),
-            "total_amount": _format_currency(credit_note.total_amount, credit_note.currency_code),
-            "amount_applied": _format_currency(credit_note.amount_paid, credit_note.currency_code),
+            "subtotal": _format_currency(
+                credit_note.subtotal, credit_note.currency_code
+            ),
+            "tax_amount": _format_currency(
+                credit_note.tax_amount, credit_note.currency_code
+            ),
+            "total_amount": _format_currency(
+                credit_note.total_amount, credit_note.currency_code
+            ),
+            "amount_applied": _format_currency(
+                credit_note.amount_paid, credit_note.currency_code
+            ),
             "balance": _format_currency(balance, credit_note.currency_code),
             "status": _invoice_status_label(credit_note.status),
             "notes": credit_note.notes,
@@ -1939,8 +1985,12 @@ class ARWebService:
                 # Handle both new tax_code_ids array and legacy tax_code_id field
                 tax_code_ids = []
                 if line.get("tax_code_ids"):
-                    tax_code_ids = [UUID(tc_id) for tc_id in line["tax_code_ids"] if tc_id]
-                legacy_tax_code_id = UUID(line["tax_code_id"]) if line.get("tax_code_id") else None
+                    tax_code_ids = [
+                        UUID(tc_id) for tc_id in line["tax_code_ids"] if tc_id
+                    ]
+                legacy_tax_code_id = (
+                    UUID(line["tax_code_id"]) if line.get("tax_code_id") else None
+                )
 
                 lines.append(
                     ARInvoiceLineInput(
@@ -1955,7 +2005,9 @@ class ARWebService:
                         cost_center_id=UUID(line["cost_center_id"])
                         if line.get("cost_center_id")
                         else None,
-                        project_id=UUID(line["project_id"]) if line.get("project_id") else None,
+                        project_id=UUID(line["project_id"])
+                        if line.get("project_id")
+                        else None,
                     )
                 )
 
@@ -2009,9 +2061,7 @@ class ARWebService:
 
         try:
             # Delete lines first
-            db.query(InvoiceLine).filter(
-                InvoiceLine.invoice_id == cn_id
-            ).delete()
+            db.query(InvoiceLine).filter(InvoiceLine.invoice_id == cn_id).delete()
             db.delete(credit_note)
             db.commit()
             return None
@@ -2048,7 +2098,9 @@ class ARWebService:
     ) -> HTMLResponse:
         context = base_context(request, auth, "New Customer", "ar")
         context.update(self.customer_form_context(db, str(auth.organization_id)))
-        return templates.TemplateResponse(request, "finance/ar/customer_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/customer_form.html", context
+        )
 
     def customer_detail_response(
         self,
@@ -2065,7 +2117,9 @@ class ARWebService:
                 customer_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ar/customer_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/customer_detail.html", context
+        )
 
     def customer_edit_form_response(
         self,
@@ -2075,8 +2129,12 @@ class ARWebService:
         customer_id: str,
     ) -> HTMLResponse:
         context = base_context(request, auth, "Edit Customer", "ar")
-        context.update(self.customer_form_context(db, str(auth.organization_id), customer_id))
-        return templates.TemplateResponse(request, "finance/ar/customer_form.html", context)
+        context.update(
+            self.customer_form_context(db, str(auth.organization_id), customer_id)
+        )
+        return templates.TemplateResponse(
+            request, "finance/ar/customer_form.html", context
+        )
 
     async def create_customer_response(
         self,
@@ -2105,7 +2163,9 @@ class ARWebService:
             context.update(self.customer_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
             context["form_data"] = dict(form_data)
-            return templates.TemplateResponse(request, "finance/ar/customer_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/customer_form.html", context
+            )
 
     async def update_customer_response(
         self,
@@ -2133,10 +2193,14 @@ class ARWebService:
 
         except Exception as e:
             context = base_context(request, auth, "Edit Customer", "ar")
-            context.update(self.customer_form_context(db, str(auth.organization_id), customer_id))
+            context.update(
+                self.customer_form_context(db, str(auth.organization_id), customer_id)
+            )
             context["error"] = str(e)
             context["form_data"] = dict(form_data)
-            return templates.TemplateResponse(request, "finance/ar/customer_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/customer_form.html", context
+            )
 
     def delete_customer_response(
         self,
@@ -2157,7 +2221,9 @@ class ARWebService:
                 )
             )
             context["error"] = error
-            return templates.TemplateResponse(request, "finance/ar/customer_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/customer_detail.html", context
+            )
 
         return RedirectResponse(url="/finance/ar/customers", status_code=303)
 
@@ -2196,7 +2262,9 @@ class ARWebService:
     ) -> HTMLResponse:
         context = base_context(request, auth, "New AR Invoice", "ar")
         context.update(self.invoice_form_context(db, str(auth.organization_id)))
-        return templates.TemplateResponse(request, "finance/ar/invoice_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/invoice_form.html", context
+        )
 
     async def create_invoice_response(
         self,
@@ -2241,7 +2309,9 @@ class ARWebService:
             context.update(self.invoice_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
             context["form_data"] = data
-            return templates.TemplateResponse(request, "finance/ar/invoice_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/invoice_form.html", context
+            )
 
     def invoice_detail_response(
         self,
@@ -2258,7 +2328,9 @@ class ARWebService:
                 invoice_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ar/invoice_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/invoice_detail.html", context
+        )
 
     def delete_invoice_response(
         self,
@@ -2279,7 +2351,9 @@ class ARWebService:
                 )
             )
             context["error"] = error
-            return templates.TemplateResponse(request, "finance/ar/invoice_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/invoice_detail.html", context
+            )
 
         return RedirectResponse(url="/finance/ar/invoices", status_code=303)
 
@@ -2350,7 +2424,9 @@ class ARWebService:
             ],
         }
 
-        return templates.TemplateResponse(request, "finance/ar/invoice_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/invoice_form.html", context
+        )
 
     async def update_invoice_response(
         self,
@@ -2400,7 +2476,9 @@ class ARWebService:
             context.update(self.invoice_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
             context["form_data"] = data
-            return templates.TemplateResponse(request, "finance/ar/invoice_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/invoice_form.html", context
+            )
 
     def submit_invoice_response(
         self,
@@ -2570,7 +2648,9 @@ class ARWebService:
                 invoice_id=invoice_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ar/receipt_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/receipt_form.html", context
+        )
 
     def receipt_detail_response(
         self,
@@ -2587,7 +2667,9 @@ class ARWebService:
                 receipt_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ar/receipt_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/receipt_detail.html", context
+        )
 
     async def create_receipt_response(
         self,
@@ -2632,7 +2714,9 @@ class ARWebService:
             context.update(self.receipt_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
             context["form_data"] = data
-            return templates.TemplateResponse(request, "finance/ar/receipt_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/receipt_form.html", context
+            )
 
     def delete_receipt_response(
         self,
@@ -2653,7 +2737,9 @@ class ARWebService:
                 )
             )
             context["error"] = error
-            return templates.TemplateResponse(request, "finance/ar/receipt_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/receipt_detail.html", context
+            )
 
         return RedirectResponse(url="/finance/ar/receipts", status_code=303)
 
@@ -2673,7 +2759,9 @@ class ARWebService:
                 receipt_id=receipt_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ar/receipt_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/receipt_form.html", context
+        )
 
     async def update_receipt_response(
         self,
@@ -2727,7 +2815,9 @@ class ARWebService:
             )
             context["error"] = str(e)
             context["form_data"] = data
-            return templates.TemplateResponse(request, "finance/ar/receipt_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/receipt_form.html", context
+            )
 
     def list_credit_notes_response(
         self,
@@ -2754,7 +2844,9 @@ class ARWebService:
                 page=page,
             )
         )
-        return templates.TemplateResponse(request, "finance/ar/credit_notes.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/credit_notes.html", context
+        )
 
     def credit_note_new_form_response(
         self,
@@ -2771,7 +2863,9 @@ class ARWebService:
                 invoice_id=invoice_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ar/credit_note_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/credit_note_form.html", context
+        )
 
     async def create_credit_note_response(
         self,
@@ -2816,7 +2910,9 @@ class ARWebService:
             context.update(self.credit_note_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
             context["form_data"] = data
-            return templates.TemplateResponse(request, "finance/ar/credit_note_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/credit_note_form.html", context
+            )
 
     def credit_note_detail_response(
         self,
@@ -2833,7 +2929,9 @@ class ARWebService:
                 credit_note_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ar/credit_note_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/credit_note_detail.html", context
+        )
 
     def delete_credit_note_response(
         self,
@@ -2854,7 +2952,9 @@ class ARWebService:
                 )
             )
             context["error"] = error
-            return templates.TemplateResponse(request, "finance/ar/credit_note_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/credit_note_detail.html", context
+            )
 
         return RedirectResponse(url="/finance/ar/credit-notes", status_code=303)
 
@@ -2883,7 +2983,9 @@ class ARWebService:
         context.update(self.credit_note_form_context(db, str(auth.organization_id)))
         context["credit_note"] = credit_note
 
-        return templates.TemplateResponse(request, "finance/ar/credit_note_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/credit_note_form.html", context
+        )
 
     async def update_credit_note_response(
         self,
@@ -2914,7 +3016,10 @@ class ARWebService:
 
             if "application/json" in content_type:
                 return JSONResponse(
-                    content={"success": True, "credit_note_id": str(credit_note.invoice_id)}
+                    content={
+                        "success": True,
+                        "credit_note_id": str(credit_note.invoice_id),
+                    }
                 )
 
             return RedirectResponse(
@@ -2933,7 +3038,9 @@ class ARWebService:
             context.update(self.credit_note_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
             context["form_data"] = data
-            return templates.TemplateResponse(request, "finance/ar/credit_note_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/credit_note_form.html", context
+            )
 
     def submit_credit_note_response(
         self,
@@ -3162,7 +3269,9 @@ class ARWebService:
         db: Session,
     ) -> RedirectResponse:
         try:
-            credit_note = ar_invoice_service.get(db, auth.organization_id, credit_note_id)
+            credit_note = ar_invoice_service.get(
+                db, auth.organization_id, credit_note_id
+            )
             if not credit_note or credit_note.organization_id != auth.organization_id:
                 return RedirectResponse(
                     url=f"/ar/credit-notes/{credit_note_id}?error=Credit+note+not+found",
@@ -3260,12 +3369,16 @@ class ARWebService:
         attachment = attachment_service.get(db, auth.organization_id, attachment_id)
 
         if not attachment or attachment.organization_id != auth.organization_id:
-            return RedirectResponse(url="/finance/ar/invoices?error=Attachment+not+found", status_code=303)
+            return RedirectResponse(
+                url="/finance/ar/invoices?error=Attachment+not+found", status_code=303
+            )
 
         file_path = attachment_service.get_file_path(attachment)
 
         if not file_path.exists():
-            return RedirectResponse(url="/finance/ar/invoices?error=File+not+found", status_code=303)
+            return RedirectResponse(
+                url="/finance/ar/invoices?error=File+not+found", status_code=303
+            )
 
         return FileResponse(
             path=str(file_path),
@@ -3282,7 +3395,9 @@ class ARWebService:
         attachment = attachment_service.get(db, auth.organization_id, attachment_id)
 
         if not attachment or attachment.organization_id != auth.organization_id:
-            return RedirectResponse(url="/finance/ar/invoices?error=Attachment+not+found", status_code=303)
+            return RedirectResponse(
+                url="/finance/ar/invoices?error=Attachment+not+found", status_code=303
+            )
 
         entity_type = attachment.entity_type
         entity_id = attachment.entity_id

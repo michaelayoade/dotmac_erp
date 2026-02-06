@@ -3,17 +3,25 @@ Sync Management Web Service.
 
 Provides data and operations for the sync management UI.
 """
+
+import logging
 import uuid
 from typing import Optional
 from urllib.parse import quote_plus
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func, select, desc
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
-from app.models.sync import SyncHistory, SyncEntity, SyncStatus, IntegrationConfig, IntegrationType
 from app.models.finance.core_org import Organization
+from app.models.sync import (
+    IntegrationConfig,
+    IntegrationType,
+    SyncEntity,
+    SyncHistory,
+    SyncStatus,
+)
 from app.services.erpnext.sync.orchestrator import SUPPORTED_ENTITIES, SYNC_PHASES
 from app.tasks.sync import (
     run_full_erpnext_sync,
@@ -22,6 +30,8 @@ from app.tasks.sync import (
 )
 from app.templates import templates
 from app.web.deps import WebAuthContext, brand_context, org_brand_context
+
+logger = logging.getLogger(__name__)
 
 
 class SyncWebService:
@@ -98,25 +108,27 @@ class SyncWebService:
 
         # Get sync stats by entity type
         if org_id:
-            entity_stats = (
-                db.execute(
-                    select(
-                        SyncEntity.source_doctype,
-                        SyncEntity.sync_status,
-                        func.count().label("count"),
-                    )
-                    .where(SyncEntity.organization_id == org_id)
-                    .group_by(SyncEntity.source_doctype, SyncEntity.sync_status)
+            entity_stats = db.execute(
+                select(
+                    SyncEntity.source_doctype,
+                    SyncEntity.sync_status,
+                    func.count().label("count"),
                 )
-                .all()
-            )
+                .where(SyncEntity.organization_id == org_id)
+                .group_by(SyncEntity.source_doctype, SyncEntity.sync_status)
+            ).all()
 
             # Aggregate by doctype
             stats_by_doctype = {}
             for row in entity_stats:
                 doctype = row.source_doctype
                 if doctype not in stats_by_doctype:
-                    stats_by_doctype[doctype] = {"total": 0, "synced": 0, "failed": 0, "skipped": 0}
+                    stats_by_doctype[doctype] = {
+                        "total": 0,
+                        "synced": 0,
+                        "failed": 0,
+                        "skipped": 0,
+                    }
                 count = int(getattr(row, "count"))
                 stats_by_doctype[doctype]["total"] += count
                 if row.sync_status == SyncStatus.SYNCED:
@@ -141,46 +153,50 @@ class SyncWebService:
             .limit(1)
         )
         if org_id:
-            last_sync_query = last_sync_query.where(SyncHistory.organization_id == org_id)
+            last_sync_query = last_sync_query.where(
+                SyncHistory.organization_id == org_id
+            )
         last_sync = db.execute(last_sync_query).scalar_one_or_none()
         context["last_sync"] = last_sync
 
         # Check integration config status
         if org_id:
-            config = (
-                db.execute(
-                    select(IntegrationConfig)
-                    .where(
-                        IntegrationConfig.organization_id == org_id,
-                        IntegrationConfig.integration_type == IntegrationType.ERPNEXT,
-                        IntegrationConfig.is_active.is_(True),
-                    )
+            config = db.execute(
+                select(IntegrationConfig).where(
+                    IntegrationConfig.organization_id == org_id,
+                    IntegrationConfig.integration_type == IntegrationType.ERPNEXT,
+                    IntegrationConfig.is_active.is_(True),
                 )
-                .scalar_one_or_none()
-            )
+            ).scalar_one_or_none()
             context["integration_configured"] = config is not None
         else:
             context["integration_configured"] = False
 
         # Summary stats
         if org_id:
-            total_synced = db.execute(
-                select(func.count())
-                .select_from(SyncEntity)
-                .where(
-                    SyncEntity.organization_id == org_id,
-                    SyncEntity.sync_status == SyncStatus.SYNCED,
-                )
-            ).scalar() or 0
+            total_synced = (
+                db.execute(
+                    select(func.count())
+                    .select_from(SyncEntity)
+                    .where(
+                        SyncEntity.organization_id == org_id,
+                        SyncEntity.sync_status == SyncStatus.SYNCED,
+                    )
+                ).scalar()
+                or 0
+            )
 
-            total_failed = db.execute(
-                select(func.count())
-                .select_from(SyncEntity)
-                .where(
-                    SyncEntity.organization_id == org_id,
-                    SyncEntity.sync_status == SyncStatus.FAILED,
-                )
-            ).scalar() or 0
+            total_failed = (
+                db.execute(
+                    select(func.count())
+                    .select_from(SyncEntity)
+                    .where(
+                        SyncEntity.organization_id == org_id,
+                        SyncEntity.sync_status == SyncStatus.FAILED,
+                    )
+                ).scalar()
+                or 0
+            )
 
             context["total_synced"] = total_synced
             context["total_failed"] = total_failed
@@ -221,7 +237,11 @@ class SyncWebService:
             query = query.where(SyncHistory.status == status)
 
         # Get total count
-        count_query = select(func.count()).select_from(SyncHistory).where(SyncHistory.source_system == "erpnext")
+        count_query = (
+            select(func.count())
+            .select_from(SyncHistory)
+            .where(SyncHistory.source_system == "erpnext")
+        )
         if org_id:
             count_query = count_query.where(SyncHistory.organization_id == org_id)
         if status:
@@ -265,7 +285,9 @@ class SyncWebService:
         # Security: Verify user has access to this history's organization
         if not history or (org_id and history.organization_id != org_id):
             context["error"] = "Sync history not found"
-            return templates.TemplateResponse(request, "admin/sync/history_detail.html", context)
+            return templates.TemplateResponse(
+                request, "admin/sync/history_detail.html", context
+            )
 
         context["history"] = history
 
@@ -287,7 +309,9 @@ class SyncWebService:
             )
             context["sync_entities"] = entities
 
-        return templates.TemplateResponse(request, "admin/sync/history_detail.html", context)
+        return templates.TemplateResponse(
+            request, "admin/sync/history_detail.html", context
+        )
 
     def trigger_sync_response(
         self,
@@ -324,14 +348,22 @@ class SyncWebService:
             elif sync_type == "entity" and entity_types:
                 # Sync single entity type(s)
                 for entity_type in entity_types:
-                    task = sync_single_entity_type.delay(org_id, user_id, entity_type, True)
+                    task = sync_single_entity_type.delay(
+                        org_id, user_id, entity_type, True
+                    )
                     task_ids.append(task.id)
             else:
                 # Default to incremental if sync_type is invalid
                 task = run_incremental_erpnext_sync.delay(org_id, user_id, entity_types)
                 task_ids.append(task.id)
 
-            task_id_str = ", ".join(task_ids) if len(task_ids) > 1 else task_ids[0] if task_ids else "unknown"
+            task_id_str = (
+                ", ".join(task_ids)
+                if len(task_ids) > 1
+                else task_ids[0]
+                if task_ids
+                else "unknown"
+            )
             return RedirectResponse(
                 url=f"/admin/sync?success=Sync+started+(Task+ID:+{quote_plus(task_id_str)})",
                 status_code=302,
@@ -358,16 +390,12 @@ class SyncWebService:
         org_id = auth.organization_id if auth else None
 
         if org_id:
-            config = (
-                db.execute(
-                    select(IntegrationConfig)
-                    .where(
-                        IntegrationConfig.organization_id == org_id,
-                        IntegrationConfig.integration_type == IntegrationType.ERPNEXT,
-                    )
+            config = db.execute(
+                select(IntegrationConfig).where(
+                    IntegrationConfig.organization_id == org_id,
+                    IntegrationConfig.integration_type == IntegrationType.ERPNEXT,
                 )
-                .scalar_one_or_none()
-            )
+            ).scalar_one_or_none()
             context["config"] = config
 
             # Get organization list for dropdown
@@ -407,7 +435,9 @@ class SyncWebService:
             service = IntegrationConfigService(db)
 
             # Check if config exists
-            existing = service.get_config(org_id, IntegrationType.ERPNEXT, active_only=False)
+            existing = service.get_config(
+                org_id, IntegrationType.ERPNEXT, active_only=False
+            )
 
             if existing:
                 # Update existing config - only update credentials if provided
@@ -416,7 +446,9 @@ class SyncWebService:
                     integration_type=IntegrationType.ERPNEXT,
                     base_url=base_url if base_url else None,
                     api_key=api_key if api_key else None,  # None = keep existing
-                    api_secret=api_secret if api_secret else None,  # None = keep existing
+                    api_secret=api_secret
+                    if api_secret
+                    else None,  # None = keep existing
                     company=company if company else None,
                 )
                 # Update is_active separately
@@ -552,7 +584,9 @@ class SyncWebService:
             from app.services.integration_config import IntegrationConfigService
 
             service = IntegrationConfigService(db)
-            success, error_message = service.verify_connection(org_id, IntegrationType.ERPNEXT)
+            success, error_message = service.verify_connection(
+                org_id, IntegrationType.ERPNEXT
+            )
 
             if success:
                 service.mark_verified(org_id, IntegrationType.ERPNEXT)

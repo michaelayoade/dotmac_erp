@@ -27,27 +27,31 @@ from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
 from app.services.common import coerce_uuid
 from app.services.finance.ar.customer import customer_service
-from app.services.finance.ar.invoice import ARInvoiceInput, ARInvoiceLineInput, ar_invoice_service
-from app.services.finance.common.attachment import attachment_service, AttachmentInput
-from app.services.finance.platform.currency_context import get_currency_context
-from app.services.finance.tax.tax_master import tax_code_service
-from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
+from app.services.finance.ar.invoice import (
+    ARInvoiceInput,
+    ARInvoiceLineInput,
+    ar_invoice_service,
+)
 from app.services.finance.ar.web.base import (
-    parse_date,
-    parse_invoice_status,
-    format_date,
-    format_currency,
-    format_file_size,
     customer_display_name,
-    customer_option_view,
     customer_form_view,
-    invoice_status_label,
-    invoice_line_view,
+    customer_option_view,
+    format_currency,
+    format_date,
+    format_file_size,
     get_accounts,
     get_cost_centers,
     get_projects,
+    invoice_line_view,
+    invoice_status_label,
+    parse_date,
+    parse_invoice_status,
 )
+from app.services.finance.common.attachment import AttachmentInput, attachment_service
+from app.services.finance.platform.currency_context import get_currency_context
+from app.services.finance.tax.tax_master import tax_code_service
+from app.templates import templates
+from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +72,12 @@ class CreditNoteWebService:
                 # Handle both new tax_code_ids array and legacy tax_code_id field
                 tax_code_ids = []
                 if line.get("tax_code_ids"):
-                    tax_code_ids = [UUID(tc_id) for tc_id in line["tax_code_ids"] if tc_id]
-                legacy_tax_code_id = UUID(line["tax_code_id"]) if line.get("tax_code_id") else None
+                    tax_code_ids = [
+                        UUID(tc_id) for tc_id in line["tax_code_ids"] if tc_id
+                    ]
+                legacy_tax_code_id = (
+                    UUID(line["tax_code_id"]) if line.get("tax_code_id") else None
+                )
 
                 lines.append(
                     ARInvoiceLineInput(
@@ -84,7 +92,9 @@ class CreditNoteWebService:
                         cost_center_id=UUID(line["cost_center_id"])
                         if line.get("cost_center_id")
                         else None,
-                        project_id=UUID(line["project_id"]) if line.get("project_id") else None,
+                        project_id=UUID(line["project_id"])
+                        if line.get("project_id")
+                        else None,
                     )
                 )
 
@@ -119,7 +129,11 @@ class CreditNoteWebService:
         """Get context for credit note listing page."""
         logger.debug(
             "list_credit_notes_context: org=%s search=%r customer_id=%s status=%s page=%d",
-            organization_id, search, customer_id, status, page
+            organization_id,
+            search,
+            customer_id,
+            status,
+            page,
         )
         org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
@@ -164,41 +178,32 @@ class CreditNoteWebService:
         )
 
         # Calculate stats
-        stats_query = (
-            db.query(Invoice)
-            .filter(
-                Invoice.organization_id == org_id,
-                Invoice.invoice_type == InvoiceType.CREDIT_NOTE,
-            )
+        stats_query = db.query(Invoice).filter(
+            Invoice.organization_id == org_id,
+            Invoice.invoice_type == InvoiceType.CREDIT_NOTE,
         )
 
-        total_credit_notes = (
-            stats_query.with_entities(
-                func.coalesce(func.sum(Invoice.total_amount), 0)
-            ).scalar()
-            or Decimal("0")
-        )
+        total_credit_notes = stats_query.with_entities(
+            func.coalesce(func.sum(Invoice.total_amount), 0)
+        ).scalar() or Decimal("0")
 
-        draft_total = (
-            stats_query.filter(Invoice.status == InvoiceStatus.DRAFT)
-            .with_entities(func.coalesce(func.sum(Invoice.total_amount), 0))
-            .scalar()
-            or Decimal("0")
-        )
+        draft_total = stats_query.filter(
+            Invoice.status == InvoiceStatus.DRAFT
+        ).with_entities(
+            func.coalesce(func.sum(Invoice.total_amount), 0)
+        ).scalar() or Decimal("0")
 
-        posted_total = (
-            stats_query.filter(Invoice.status == InvoiceStatus.POSTED)
-            .with_entities(func.coalesce(func.sum(Invoice.total_amount), 0))
-            .scalar()
-            or Decimal("0")
-        )
+        posted_total = stats_query.filter(
+            Invoice.status == InvoiceStatus.POSTED
+        ).with_entities(
+            func.coalesce(func.sum(Invoice.total_amount), 0)
+        ).scalar() or Decimal("0")
 
-        applied_total = (
-            stats_query.filter(Invoice.status == InvoiceStatus.PAID)
-            .with_entities(func.coalesce(func.sum(Invoice.total_amount), 0))
-            .scalar()
-            or Decimal("0")
-        )
+        applied_total = stats_query.filter(
+            Invoice.status == InvoiceStatus.PAID
+        ).with_entities(
+            func.coalesce(func.sum(Invoice.total_amount), 0)
+        ).scalar() or Decimal("0")
 
         credit_notes_view = []
         for credit_note, customer in credit_notes:
@@ -266,7 +271,8 @@ class CreditNoteWebService:
         """Get context for credit note create form."""
         logger.debug(
             "credit_note_form_context: org=%s invoice_id=%s",
-            organization_id, invoice_id
+            organization_id,
+            invoice_id,
         )
         org_id = coerce_uuid(organization_id)
         customers_list = [
@@ -324,7 +330,9 @@ class CreditNoteWebService:
                 "customer_id": invoice.customer_id,
                 "customer_name": customer_display_name(customer),
                 "invoice_date": format_date(invoice.invoice_date),
-                "total_amount": format_currency(invoice.total_amount, invoice.currency_code),
+                "total_amount": format_currency(
+                    invoice.total_amount, invoice.currency_code
+                ),
                 "balance": format_currency(balance, invoice.currency_code),
                 "currency_code": invoice.currency_code,
             }
@@ -355,7 +363,8 @@ class CreditNoteWebService:
         """Get context for credit note detail page."""
         logger.debug(
             "credit_note_detail_context: org=%s credit_note_id=%s",
-            organization_id, credit_note_id
+            organization_id,
+            credit_note_id,
         )
         org_id = coerce_uuid(organization_id)
         credit_note = None
@@ -393,10 +402,18 @@ class CreditNoteWebService:
             "customer_name": customer_display_name(customer) if customer else "",
             "credit_note_date": format_date(credit_note.invoice_date),
             "currency_code": credit_note.currency_code,
-            "subtotal": format_currency(credit_note.subtotal, credit_note.currency_code),
-            "tax_amount": format_currency(credit_note.tax_amount, credit_note.currency_code),
-            "total_amount": format_currency(credit_note.total_amount, credit_note.currency_code),
-            "amount_applied": format_currency(credit_note.amount_paid, credit_note.currency_code),
+            "subtotal": format_currency(
+                credit_note.subtotal, credit_note.currency_code
+            ),
+            "tax_amount": format_currency(
+                credit_note.tax_amount, credit_note.currency_code
+            ),
+            "total_amount": format_currency(
+                credit_note.total_amount, credit_note.currency_code
+            ),
+            "amount_applied": format_currency(
+                credit_note.amount_paid, credit_note.currency_code
+            ),
             "balance": format_currency(balance, credit_note.currency_code),
             "status": invoice_status_label(credit_note.status),
             "notes": credit_note.notes,
@@ -443,7 +460,8 @@ class CreditNoteWebService:
         """Delete a credit note. Returns error message or None on success."""
         logger.debug(
             "delete_credit_note: org=%s credit_note_id=%s",
-            organization_id, credit_note_id
+            organization_id,
+            credit_note_id,
         )
         org_id = coerce_uuid(organization_id)
         cn_id = coerce_uuid(credit_note_id)
@@ -472,12 +490,12 @@ class CreditNoteWebService:
 
         try:
             # Delete lines first
-            db.query(InvoiceLine).filter(
-                InvoiceLine.invoice_id == cn_id
-            ).delete()
+            db.query(InvoiceLine).filter(InvoiceLine.invoice_id == cn_id).delete()
             db.delete(credit_note)
             db.commit()
-            logger.info("delete_credit_note: deleted credit note %s for org %s", cn_id, org_id)
+            logger.info(
+                "delete_credit_note: deleted credit note %s for org %s", cn_id, org_id
+            )
             return None
         except Exception as e:
             db.rollback()
@@ -514,7 +532,9 @@ class CreditNoteWebService:
                 page=page,
             )
         )
-        return templates.TemplateResponse(request, "finance/ar/credit_notes.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/credit_notes.html", context
+        )
 
     def credit_note_new_form_response(
         self,
@@ -532,7 +552,9 @@ class CreditNoteWebService:
                 invoice_id=invoice_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ar/credit_note_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/credit_note_form.html", context
+        )
 
     async def create_credit_note_response(
         self,
@@ -583,7 +605,9 @@ class CreditNoteWebService:
             context.update(self.credit_note_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
             context["form_data"] = data
-            return templates.TemplateResponse(request, "finance/ar/credit_note_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/credit_note_form.html", context
+            )
 
     def credit_note_detail_response(
         self,
@@ -601,7 +625,9 @@ class CreditNoteWebService:
                 credit_note_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ar/credit_note_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/credit_note_detail.html", context
+        )
 
     def delete_credit_note_response(
         self,
@@ -623,7 +649,9 @@ class CreditNoteWebService:
                 )
             )
             context["error"] = error
-            return templates.TemplateResponse(request, "finance/ar/credit_note_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/credit_note_detail.html", context
+            )
 
         return RedirectResponse(url="/finance/ar/credit-notes", status_code=303)
 

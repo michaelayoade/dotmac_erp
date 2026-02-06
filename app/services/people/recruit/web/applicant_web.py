@@ -22,10 +22,10 @@ from app.web.deps import WebAuthContext, base_context
 
 from .base import (
     logger,
-    parse_uuid,
     parse_date_only,
     parse_int,
     parse_status,
+    parse_uuid,
 )
 
 logger = logging.getLogger(__name__)
@@ -115,7 +115,9 @@ class ApplicantWebService:
         applicant = None
         if applicant_id:
             try:
-                applicant = svc.get_applicant(organization_id, coerce_uuid(applicant_id))
+                applicant = svc.get_applicant(
+                    organization_id, coerce_uuid(applicant_id)
+                )
             except Exception:
                 applicant = None
 
@@ -176,7 +178,9 @@ class ApplicantWebService:
             "country_code": form_data.get("country_code") or None,
             "current_employer": form_data.get("current_employer") or None,
             "current_job_title": form_data.get("current_job_title") or None,
-            "years_of_experience": parse_int(_get_form_str(form_data, "years_of_experience") or None),
+            "years_of_experience": parse_int(
+                _get_form_str(form_data, "years_of_experience") or None
+            ),
             "highest_qualification": form_data.get("highest_qualification") or None,
             "skills": form_data.get("skills") or None,
             "source": form_data.get("source") or None,
@@ -213,7 +217,9 @@ class ApplicantWebService:
                 page=page,
             )
         )
-        return templates.TemplateResponse(request, "people/recruit/applicants.html", context)
+        return templates.TemplateResponse(
+            request, "people/recruit/applicants.html", context
+        )
 
     def applicant_new_form_response(
         self,
@@ -232,7 +238,9 @@ class ApplicantWebService:
                 job_opening_id=job_opening_id,
             )
         )
-        return templates.TemplateResponse(request, "people/recruit/applicant_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/recruit/applicant_form.html", context
+        )
 
     def applicant_detail_response(
         self,
@@ -249,10 +257,14 @@ class ApplicantWebService:
         if not ctx.get("applicant"):
             return RedirectResponse(url="/people/recruit/applicants", status_code=303)
 
-        context = base_context(request, auth, ctx["applicant"].full_name, "recruit", db=db)
+        context = base_context(
+            request, auth, ctx["applicant"].full_name, "recruit", db=db
+        )
         context["request"] = request
         context.update(ctx)
-        return templates.TemplateResponse(request, "people/recruit/applicant_detail.html", context)
+        return templates.TemplateResponse(
+            request, "people/recruit/applicant_detail.html", context
+        )
 
     def applicant_edit_form_response(
         self,
@@ -272,7 +284,9 @@ class ApplicantWebService:
         context = base_context(request, auth, "Edit Applicant", "recruit", db=db)
         context["request"] = request
         context.update(ctx)
-        return templates.TemplateResponse(request, "people/recruit/applicant_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/recruit/applicant_form.html", context
+        )
 
     async def create_applicant_response(
         self,
@@ -306,7 +320,9 @@ class ApplicantWebService:
             context.update(self.applicant_form_context(db, org_id))
             context["form_data"] = dict(form_data)
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "people/recruit/applicant_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/recruit/applicant_form.html", context
+            )
 
     async def update_applicant_response(
         self,
@@ -324,7 +340,9 @@ class ApplicantWebService:
             input_kwargs = self.build_applicant_input(dict(form_data))
             # Include additional fields for update
             input_kwargs["notes"] = _get_form_str(form_data, "notes") or None
-            input_kwargs["overall_rating"] = parse_int(_get_form_str(form_data, "overall_rating") or None)
+            input_kwargs["overall_rating"] = parse_int(
+                _get_form_str(form_data, "overall_rating") or None
+            )
 
             svc.update_applicant(org_id, coerce_uuid(applicant_id), **input_kwargs)
             db.commit()
@@ -339,7 +357,9 @@ class ApplicantWebService:
             context["request"] = request
             context.update(self.applicant_form_context(db, org_id, applicant_id))
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "people/recruit/applicant_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/recruit/applicant_form.html", context
+            )
 
     async def advance_applicant_response(
         self,
@@ -357,12 +377,16 @@ class ApplicantWebService:
             to_status = _get_form_str(form_data, "to_status") or None
             notes = _get_form_str(form_data, "notes") or None
             status_enum = ApplicantStatus(to_status)
-            svc.advance_applicant(org_id, coerce_uuid(applicant_id), status_enum, notes=notes)
+            svc.advance_applicant(
+                org_id, coerce_uuid(applicant_id), status_enum, notes=notes
+            )
             db.commit()
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url=f"/people/recruit/applicants/{applicant_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/recruit/applicants/{applicant_id}", status_code=303
+        )
 
     async def reject_applicant_response(
         self,
@@ -383,7 +407,9 @@ class ApplicantWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url=f"/people/recruit/applicants/{applicant_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/recruit/applicants/{applicant_id}", status_code=303
+        )
 
     def delete_applicant_response(
         self,
@@ -401,4 +427,6 @@ class ApplicantWebService:
             return RedirectResponse(url="/people/recruit/applicants", status_code=303)
         except Exception:
             db.rollback()
-            return RedirectResponse(url=f"/people/recruit/applicants/{applicant_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/recruit/applicants/{applicant_id}", status_code=303
+            )

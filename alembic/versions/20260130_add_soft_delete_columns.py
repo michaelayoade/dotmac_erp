@@ -5,13 +5,12 @@ Revises: 20260130_fix_columns
 Create Date: 2026-01-30
 
 """
+
 from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = '20260130_soft_delete'
-down_revision = '20260130_fix_columns'
+revision = "20260130_soft_delete"
+down_revision = "20260130_fix_columns"
 branch_labels = None
 depends_on = None
 

@@ -4,6 +4,7 @@ ERPNext API Client.
 Client for fetching and writing data to ERPNext via Frappe REST API.
 Supports bidirectional sync for migration scenarios.
 """
+
 import logging
 import time
 from dataclasses import dataclass
@@ -77,9 +78,7 @@ class ERPNextClient:
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close()
 
-    def _request(
-        self, method: str, path: str, **kwargs
-    ) -> dict[str, Any]:
+    def _request(self, method: str, path: str, **kwargs) -> dict[str, Any]:
         """
         Make HTTP request with retry logic.
 
@@ -260,6 +259,7 @@ class ERPNextClient:
         params: dict[str, Any] = {"doctype": doctype}
         if filters:
             import json
+
             params["filters"] = json.dumps(filters)
 
         result = self._request(
@@ -1348,6 +1348,7 @@ class ERPNextClient:
             except ERPNextError as e:
                 # Permission denied or other error - continue without items
                 import logging
+
                 logging.getLogger(__name__).warning(
                     "Could not fetch expense items for %s: %s", claim["name"], e.message
                 )

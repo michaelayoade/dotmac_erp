@@ -3,25 +3,29 @@
 Handles training programs, events, and attendees.
 Adapted from DotMac People for the unified ERP platform.
 """
+
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, List, Optional, Sequence, TypedDict
+from typing import TYPE_CHECKING, Any, List, Optional, TypedDict
 from uuid import UUID
 
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.training import (
-    TrainingAttendee,
     AttendeeStatus,
+    TrainingAttendee,
     TrainingEvent,
     TrainingEventStatus,
     TrainingProgram,
     TrainingProgramStatus,
 )
 from app.services.common import PaginatedResult, PaginationParams
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
@@ -144,7 +148,11 @@ class TrainingService:
 
         status_value = status
         if status_value is None and is_active is not None:
-            status_value = TrainingProgramStatus.ACTIVE if is_active else TrainingProgramStatus.ARCHIVED
+            status_value = (
+                TrainingProgramStatus.ACTIVE
+                if is_active
+                else TrainingProgramStatus.ARCHIVED
+            )
 
         if status_value:
             query = query.where(TrainingProgram.status == status_value)
@@ -440,7 +448,10 @@ class TrainingService:
         """Complete a training event."""
         event = self.get_event(org_id, event_id)
 
-        valid_statuses = {TrainingEventStatus.SCHEDULED, TrainingEventStatus.IN_PROGRESS}
+        valid_statuses = {
+            TrainingEventStatus.SCHEDULED,
+            TrainingEventStatus.IN_PROGRESS,
+        }
         if event.status not in valid_statuses:
             raise TrainingEventStatusError(
                 event.status.value, TrainingEventStatus.COMPLETED.value
@@ -469,7 +480,10 @@ class TrainingService:
         """Cancel a training event."""
         event = self.get_event(org_id, event_id)
 
-        if event.status in {TrainingEventStatus.COMPLETED, TrainingEventStatus.CANCELLED}:
+        if event.status in {
+            TrainingEventStatus.COMPLETED,
+            TrainingEventStatus.CANCELLED,
+        }:
             raise TrainingEventStatusError(
                 event.status.value, TrainingEventStatus.CANCELLED.value
             )
@@ -492,7 +506,9 @@ class TrainingService:
         pagination: Optional[PaginationParams] = None,
     ) -> PaginatedResult[TrainingAttendee]:
         """List training attendees."""
-        query = select(TrainingAttendee).where(TrainingAttendee.organization_id == org_id)
+        query = select(TrainingAttendee).where(
+            TrainingAttendee.organization_id == org_id
+        )
 
         if event_id:
             query = query.where(TrainingAttendee.event_id == event_id)
@@ -563,17 +579,18 @@ class TrainingService:
             )
         )
         if existing:
-            raise TrainingServiceError(
-                f"Employee already invited to event {event_id}"
-            )
+            raise TrainingServiceError(f"Employee already invited to event {event_id}")
 
         # Check max attendees
         if event.max_attendees:
-            current_count = self.db.scalar(
-                select(func.count(TrainingAttendee.attendee_id)).where(
-                    TrainingAttendee.event_id == event_id
+            current_count = (
+                self.db.scalar(
+                    select(func.count(TrainingAttendee.attendee_id)).where(
+                        TrainingAttendee.event_id == event_id
+                    )
                 )
-            ) or 0
+                or 0
+            )
             if current_count >= event.max_attendees:
                 raise TrainingServiceError(
                     f"Event has reached maximum attendees ({event.max_attendees})"
@@ -676,9 +693,8 @@ class TrainingService:
         program_id: Optional[UUID] = None,
     ) -> dict:
         """Get training event summary by status."""
-        query = (
-            select(TrainingEvent.status, func.count(TrainingEvent.event_id))
-            .where(TrainingEvent.organization_id == org_id)
+        query = select(TrainingEvent.status, func.count(TrainingEvent.event_id)).where(
+            TrainingEvent.organization_id == org_id
         )
         if program_id:
             query = query.where(TrainingEvent.program_id == program_id)
@@ -693,48 +709,63 @@ class TrainingService:
     def get_training_stats(self, org_id: UUID) -> dict:
         """Get training statistics for dashboard."""
         # Total programs
-        total_programs = self.db.scalar(
-            select(func.count(TrainingProgram.program_id)).where(
-                TrainingProgram.organization_id == org_id
+        total_programs = (
+            self.db.scalar(
+                select(func.count(TrainingProgram.program_id)).where(
+                    TrainingProgram.organization_id == org_id
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Active programs
-        active_programs = self.db.scalar(
-            select(func.count(TrainingProgram.program_id)).where(
-                TrainingProgram.organization_id == org_id,
-                TrainingProgram.status == TrainingProgramStatus.ACTIVE,
+        active_programs = (
+            self.db.scalar(
+                select(func.count(TrainingProgram.program_id)).where(
+                    TrainingProgram.organization_id == org_id,
+                    TrainingProgram.status == TrainingProgramStatus.ACTIVE,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Upcoming events
         today = date.today()
-        upcoming_events = self.db.scalar(
-            select(func.count(TrainingEvent.event_id)).where(
-                TrainingEvent.organization_id == org_id,
-                TrainingEvent.status == TrainingEventStatus.SCHEDULED,
-                TrainingEvent.start_date >= today,
+        upcoming_events = (
+            self.db.scalar(
+                select(func.count(TrainingEvent.event_id)).where(
+                    TrainingEvent.organization_id == org_id,
+                    TrainingEvent.status == TrainingEventStatus.SCHEDULED,
+                    TrainingEvent.start_date >= today,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Completed events (this year)
         year_start = date(today.year, 1, 1)
-        completed_events = self.db.scalar(
-            select(func.count(TrainingEvent.event_id)).where(
-                TrainingEvent.organization_id == org_id,
-                TrainingEvent.status == TrainingEventStatus.COMPLETED,
-                TrainingEvent.end_date >= year_start,
+        completed_events = (
+            self.db.scalar(
+                select(func.count(TrainingEvent.event_id)).where(
+                    TrainingEvent.organization_id == org_id,
+                    TrainingEvent.status == TrainingEventStatus.COMPLETED,
+                    TrainingEvent.end_date >= year_start,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Total attendees (this year)
-        total_attendees = self.db.scalar(
-            select(func.count(TrainingAttendee.attendee_id)).where(
-                TrainingAttendee.organization_id == org_id,
-                TrainingAttendee.status == AttendeeStatus.ATTENDED,
-                TrainingAttendee.attended_on >= year_start,
+        total_attendees = (
+            self.db.scalar(
+                select(func.count(TrainingAttendee.attendee_id)).where(
+                    TrainingAttendee.organization_id == org_id,
+                    TrainingAttendee.status == AttendeeStatus.ATTENDED,
+                    TrainingAttendee.attended_on >= year_start,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Average rating
         avg_rating = self.db.scalar(
@@ -750,7 +781,9 @@ class TrainingService:
             "upcoming_events": upcoming_events,
             "completed_events": completed_events,
             "total_attendees": total_attendees,
-            "average_rating": Decimal(str(avg_rating)).quantize(Decimal("0.1")) if avg_rating else None,
+            "average_rating": Decimal(str(avg_rating)).quantize(Decimal("0.1"))
+            if avg_rating
+            else None,
         }
 
     def get_employee_training_history(
@@ -759,14 +792,18 @@ class TrainingService:
         employee_id: UUID,
     ) -> dict:
         """Get training history for an employee."""
-        attendances = self.db.scalars(
-            select(TrainingAttendee)
-            .options(joinedload(TrainingAttendee.event))
-            .where(
-                TrainingAttendee.organization_id == org_id,
-                TrainingAttendee.employee_id == employee_id,
+        attendances = (
+            self.db.scalars(
+                select(TrainingAttendee)
+                .options(joinedload(TrainingAttendee.event))
+                .where(
+                    TrainingAttendee.organization_id == org_id,
+                    TrainingAttendee.employee_id == employee_id,
+                )
             )
-        ).unique().all()
+            .unique()
+            .all()
+        )
 
         total_trainings = len(attendances)
         attended = [a for a in attendances if a.status == AttendeeStatus.ATTENDED]
@@ -814,7 +851,9 @@ class TrainingService:
         # Build date filter for events
         date_filters = [
             TrainingEvent.organization_id == org_id,
-            TrainingEvent.status.in_([TrainingEventStatus.COMPLETED, TrainingEventStatus.IN_PROGRESS]),
+            TrainingEvent.status.in_(
+                [TrainingEventStatus.COMPLETED, TrainingEventStatus.IN_PROGRESS]
+            ),
         ]
         if start_date:
             date_filters.append(TrainingEvent.start_date >= start_date)
@@ -822,14 +861,20 @@ class TrainingService:
             date_filters.append(TrainingEvent.end_date <= end_date)
 
         # Get programs with their events and attendees
-        programs = self.db.scalars(
-            select(TrainingProgram)
-            .options(
-                joinedload(TrainingProgram.events).joinedload(TrainingEvent.attendees)
+        programs = (
+            self.db.scalars(
+                select(TrainingProgram)
+                .options(
+                    joinedload(TrainingProgram.events).joinedload(
+                        TrainingEvent.attendees
+                    )
+                )
+                .where(TrainingProgram.organization_id == org_id)
+                .order_by(TrainingProgram.program_name)
             )
-            .where(TrainingProgram.organization_id == org_id)
-            .order_by(TrainingProgram.program_name)
-        ).unique().all()
+            .unique()
+            .all()
+        )
 
         program_stats = []
         total_invited = 0
@@ -839,8 +884,10 @@ class TrainingService:
         for program in programs:
             # Filter events by date range
             events = [
-                e for e in program.events
-                if e.status in [TrainingEventStatus.COMPLETED, TrainingEventStatus.IN_PROGRESS]
+                e
+                for e in program.events
+                if e.status
+                in [TrainingEventStatus.COMPLETED, TrainingEventStatus.IN_PROGRESS]
                 and (not start_date or e.start_date >= start_date)
                 and (not end_date or e.end_date <= end_date)
             ]
@@ -855,7 +902,11 @@ class TrainingService:
 
             for event in events:
                 for attendee in event.attendees:
-                    if attendee.status in [AttendeeStatus.INVITED, AttendeeStatus.CONFIRMED, AttendeeStatus.ATTENDED]:
+                    if attendee.status in [
+                        AttendeeStatus.INVITED,
+                        AttendeeStatus.CONFIRMED,
+                        AttendeeStatus.ATTENDED,
+                    ]:
                         invited += 1
                     if attendee.status == AttendeeStatus.ATTENDED:
                         attended += 1
@@ -871,24 +922,28 @@ class TrainingService:
 
             avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else None
 
-            program_stats.append({
-                "program_id": program.program_id,
-                "program_code": program.program_code,
-                "program_name": program.program_name,
-                "category": program.category,
-                "event_count": len(events),
-                "invited": invited,
-                "attended": attended,
-                "completion_rate": completion_rate,
-                "certificates_issued": certificates,
-                "average_rating": avg_rating,
-            })
+            program_stats.append(
+                {
+                    "program_id": program.program_id,
+                    "program_code": program.program_code,
+                    "program_name": program.program_name,
+                    "category": program.category,
+                    "event_count": len(events),
+                    "invited": invited,
+                    "attended": attended,
+                    "completion_rate": completion_rate,
+                    "certificates_issued": certificates,
+                    "average_rating": avg_rating,
+                }
+            )
 
             total_invited += invited
             total_attended += attended
             total_certificates += certificates
 
-        overall_completion = round(total_attended / total_invited * 100, 1) if total_invited > 0 else 0
+        overall_completion = (
+            round(total_attended / total_invited * 100, 1) if total_invited > 0 else 0
+        )
 
         return {
             "programs": program_stats,
@@ -920,7 +975,9 @@ class TrainingService:
                 Department.department_name,
                 func.count(TrainingAttendee.attendee_id).label("total_enrolled"),
                 func.sum(
-                    case((TrainingAttendee.status == AttendeeStatus.ATTENDED, 1), else_=0)
+                    case(
+                        (TrainingAttendee.status == AttendeeStatus.ATTENDED, 1), else_=0
+                    )
                 ).label("total_attended"),
                 func.sum(
                     case((TrainingAttendee.certificate_issued == True, 1), else_=0)  # noqa: E712
@@ -933,10 +990,18 @@ class TrainingService:
             .join(Department, Employee.department_id == Department.department_id)
             .where(
                 TrainingAttendee.organization_id == org_id,
-                TrainingEvent.status.in_([TrainingEventStatus.COMPLETED, TrainingEventStatus.IN_PROGRESS]),
+                TrainingEvent.status.in_(
+                    [TrainingEventStatus.COMPLETED, TrainingEventStatus.IN_PROGRESS]
+                ),
             )
             .group_by(Department.department_id, Department.department_name)
-            .order_by(func.sum(case((TrainingAttendee.status == AttendeeStatus.ATTENDED, 1), else_=0)).desc())
+            .order_by(
+                func.sum(
+                    case(
+                        (TrainingAttendee.status == AttendeeStatus.ATTENDED, 1), else_=0
+                    )
+                ).desc()
+            )
         )
 
         if start_date:
@@ -956,26 +1021,38 @@ class TrainingService:
             total_enrolled += enrolled
             total_attended += attended
 
-            departments.append({
-                "department_id": row.department_id,
-                "department_name": row.department_name,
-                "total_enrolled": enrolled,
-                "total_attended": attended,
-                "attendance_rate": round(attended / enrolled * 100, 1) if enrolled > 0 else 0,
-                "certificates_issued": row.certificates_issued or 0,
-                "average_rating": round(float(row.avg_rating), 1) if row.avg_rating else None,
-            })
+            departments.append(
+                {
+                    "department_id": row.department_id,
+                    "department_name": row.department_name,
+                    "total_enrolled": enrolled,
+                    "total_attended": attended,
+                    "attendance_rate": round(attended / enrolled * 100, 1)
+                    if enrolled > 0
+                    else 0,
+                    "certificates_issued": row.certificates_issued or 0,
+                    "average_rating": round(float(row.avg_rating), 1)
+                    if row.avg_rating
+                    else None,
+                }
+            )
 
         # Calculate percentages
         for dept in departments:
-            dept["percentage"] = round(dept["total_attended"] / total_attended * 100, 1) if total_attended > 0 else 0
+            dept["percentage"] = (
+                round(dept["total_attended"] / total_attended * 100, 1)
+                if total_attended > 0
+                else 0
+            )
 
         return {
             "departments": departments,
             "total_departments": len(departments),
             "total_enrolled": total_enrolled,
             "total_attended": total_attended,
-            "overall_attendance_rate": round(total_attended / total_enrolled * 100, 1) if total_enrolled > 0 else 0,
+            "overall_attendance_rate": round(total_attended / total_enrolled * 100, 1)
+            if total_enrolled > 0
+            else 0,
         }
 
     def get_training_cost_report(
@@ -993,7 +1070,9 @@ class TrainingService:
         # Build date filter
         date_filters = [
             TrainingEvent.organization_id == org_id,
-            TrainingEvent.status.in_([TrainingEventStatus.COMPLETED, TrainingEventStatus.IN_PROGRESS]),
+            TrainingEvent.status.in_(
+                [TrainingEventStatus.COMPLETED, TrainingEventStatus.IN_PROGRESS]
+            ),
         ]
         if start_date:
             date_filters.append(TrainingEvent.start_date >= start_date)
@@ -1001,12 +1080,19 @@ class TrainingService:
             date_filters.append(TrainingEvent.end_date <= end_date)
 
         # Get events with programs
-        events = self.db.scalars(
-            select(TrainingEvent)
-            .options(joinedload(TrainingEvent.program), joinedload(TrainingEvent.attendees))
-            .where(*date_filters)
-            .order_by(TrainingEvent.start_date.desc())
-        ).unique().all()
+        events = (
+            self.db.scalars(
+                select(TrainingEvent)
+                .options(
+                    joinedload(TrainingEvent.program),
+                    joinedload(TrainingEvent.attendees),
+                )
+                .where(*date_filters)
+                .order_by(TrainingEvent.start_date.desc())
+            )
+            .unique()
+            .all()
+        )
 
         # Aggregate by program
         program_costs: dict[UUID, dict[str, Any]] = {}
@@ -1017,7 +1103,9 @@ class TrainingService:
 
         for event in events:
             cost = event.total_cost or Decimal("0")
-            attended_count = sum(1 for a in event.attendees if a.status == AttendeeStatus.ATTENDED)
+            attended_count = sum(
+                1 for a in event.attendees if a.status == AttendeeStatus.ATTENDED
+            )
 
             program = event.program
             if program:
@@ -1036,7 +1124,9 @@ class TrainingService:
                 program_costs[program_key]["event_count"] += 1
                 program_costs[program_key]["total_cost"] += cost
                 program_costs[program_key]["attendee_count"] += attended_count
-                program_costs[program_key]["total_hours"] += (program.duration_hours or 0) * attended_count
+                program_costs[program_key]["total_hours"] += (
+                    program.duration_hours or 0
+                ) * attended_count
 
                 # Category aggregation
                 category = program.category or "Uncategorized"
@@ -1057,8 +1147,14 @@ class TrainingService:
         # Calculate cost per attendee for programs
         programs_list = list(program_costs.values())
         for p in programs_list:
-            p["cost_per_attendee"] = float(p["total_cost"] / p["attendee_count"]) if p["attendee_count"] > 0 else 0
-            p["cost_per_hour"] = float(p["total_cost"] / p["total_hours"]) if p["total_hours"] > 0 else 0
+            p["cost_per_attendee"] = (
+                float(p["total_cost"] / p["attendee_count"])
+                if p["attendee_count"] > 0
+                else 0
+            )
+            p["cost_per_hour"] = (
+                float(p["total_cost"] / p["total_hours"]) if p["total_hours"] > 0 else 0
+            )
             p["total_cost"] = float(p["total_cost"])
 
         programs_list.sort(key=lambda x: x["total_cost"], reverse=True)
@@ -1066,7 +1162,11 @@ class TrainingService:
         # Calculate percentages for categories
         categories_list = list(category_costs.values())
         for c in categories_list:
-            c["percentage"] = round(float(c["total_cost"]) / float(total_cost) * 100, 1) if total_cost > 0 else 0
+            c["percentage"] = (
+                round(float(c["total_cost"]) / float(total_cost) * 100, 1)
+                if total_cost > 0
+                else 0
+            )
             c["total_cost"] = float(c["total_cost"])
 
         categories_list.sort(key=lambda x: x["total_cost"], reverse=True)
@@ -1078,7 +1178,9 @@ class TrainingService:
             "total_events": len(events),
             "total_attendees": total_attendees,
             "total_training_hours": total_hours,
-            "cost_per_attendee": float(total_cost / total_attendees) if total_attendees > 0 else 0,
+            "cost_per_attendee": float(total_cost / total_attendees)
+            if total_attendees > 0
+            else 0,
             "cost_per_hour": float(total_cost / total_hours) if total_hours > 0 else 0,
         }
 
@@ -1105,12 +1207,19 @@ class TrainingService:
             date_filters.append(TrainingEvent.end_date <= end_date)
 
         # Get completed events with ratings
-        events = self.db.scalars(
-            select(TrainingEvent)
-            .options(joinedload(TrainingEvent.program), joinedload(TrainingEvent.attendees))
-            .where(*date_filters)
-            .order_by(TrainingEvent.end_date.desc())
-        ).unique().all()
+        events = (
+            self.db.scalars(
+                select(TrainingEvent)
+                .options(
+                    joinedload(TrainingEvent.program),
+                    joinedload(TrainingEvent.attendees),
+                )
+                .where(*date_filters)
+                .order_by(TrainingEvent.end_date.desc())
+            )
+            .unique()
+            .all()
+        )
 
         # Rating distribution (1-5 scale)
         rating_distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
@@ -1131,14 +1240,18 @@ class TrainingService:
 
             if event_ratings:
                 avg_event_rating = round(sum(event_ratings) / len(event_ratings), 1)
-                event_list.append({
-                    "event_id": event.event_id,
-                    "event_name": event.event_name,
-                    "program_name": event.program.program_name if event.program else "N/A",
-                    "end_date": event.end_date,
-                    "response_count": len(event_ratings),
-                    "average_rating": avg_event_rating,
-                })
+                event_list.append(
+                    {
+                        "event_id": event.event_id,
+                        "event_name": event.event_name,
+                        "program_name": event.program.program_name
+                        if event.program
+                        else "N/A",
+                        "end_date": event.end_date,
+                        "response_count": len(event_ratings),
+                        "average_rating": avg_event_rating,
+                    }
+                )
 
                 # Aggregate by program
                 if event.program:
@@ -1157,37 +1270,47 @@ class TrainingService:
         for p in program_ratings.values():
             if p["ratings"]:
                 avg = round(sum(p["ratings"]) / len(p["ratings"]), 1)
-                programs_list.append({
-                    "program_id": p["program_id"],
-                    "program_code": p["program_code"],
-                    "program_name": p["program_name"],
-                    "response_count": len(p["ratings"]),
-                    "average_rating": avg,
-                })
+                programs_list.append(
+                    {
+                        "program_id": p["program_id"],
+                        "program_code": p["program_code"],
+                        "program_name": p["program_name"],
+                        "response_count": len(p["ratings"]),
+                        "average_rating": avg,
+                    }
+                )
 
         programs_list.sort(key=lambda x: x["average_rating"], reverse=True)
 
         # Top and bottom performers
         top_programs = programs_list[:5]
-        bottom_programs = list(reversed(programs_list[-5:])) if len(programs_list) > 5 else []
+        bottom_programs = (
+            list(reversed(programs_list[-5:])) if len(programs_list) > 5 else []
+        )
 
         # Recent events sorted by rating
         event_list.sort(key=lambda x: x["average_rating"], reverse=True)
 
         # Overall stats
         total_responses = len(all_ratings)
-        overall_average = round(sum(all_ratings) / total_responses, 1) if total_responses > 0 else None
+        overall_average = (
+            round(sum(all_ratings) / total_responses, 1)
+            if total_responses > 0
+            else None
+        )
 
         # Calculate distribution percentages
         distribution_list = []
         for rating in range(5, 0, -1):  # 5 to 1
             count = rating_distribution[rating]
             pct = round(count / total_responses * 100, 1) if total_responses > 0 else 0
-            distribution_list.append({
-                "rating": rating,
-                "count": count,
-                "percentage": pct,
-            })
+            distribution_list.append(
+                {
+                    "rating": rating,
+                    "count": count,
+                    "percentage": pct,
+                }
+            )
 
         return {
             "rating_distribution": distribution_list,

@@ -32,18 +32,20 @@ Example Calculation:
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
-from app.models.people.payroll.tax_band import TaxBand
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
+from app.models.people.payroll.tax_band import TaxBand
 from app.services.common import coerce_uuid
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -216,11 +218,41 @@ class PAYECalculator:
     # NTA 2025 Default Tax Bands
     NTA_2025_BANDS = [
         {"name": "NTA 2025 - 0%", "min": 0, "max": 800000, "rate": "0.00", "seq": 1},
-        {"name": "NTA 2025 - 15%", "min": 800000, "max": 3000000, "rate": "0.15", "seq": 2},
-        {"name": "NTA 2025 - 18%", "min": 3000000, "max": 12000000, "rate": "0.18", "seq": 3},
-        {"name": "NTA 2025 - 21%", "min": 12000000, "max": 25000000, "rate": "0.21", "seq": 4},
-        {"name": "NTA 2025 - 23%", "min": 25000000, "max": 50000000, "rate": "0.23", "seq": 5},
-        {"name": "NTA 2025 - 25%", "min": 50000000, "max": None, "rate": "0.25", "seq": 6},
+        {
+            "name": "NTA 2025 - 15%",
+            "min": 800000,
+            "max": 3000000,
+            "rate": "0.15",
+            "seq": 2,
+        },
+        {
+            "name": "NTA 2025 - 18%",
+            "min": 3000000,
+            "max": 12000000,
+            "rate": "0.18",
+            "seq": 3,
+        },
+        {
+            "name": "NTA 2025 - 21%",
+            "min": 12000000,
+            "max": 25000000,
+            "rate": "0.21",
+            "seq": 4,
+        },
+        {
+            "name": "NTA 2025 - 23%",
+            "min": 25000000,
+            "max": 50000000,
+            "rate": "0.23",
+            "seq": 5,
+        },
+        {
+            "name": "NTA 2025 - 25%",
+            "min": 50000000,
+            "max": None,
+            "rate": "0.25",
+            "seq": 6,
+        },
     ]
 
     def __init__(self, db: Session):
@@ -243,9 +275,7 @@ class PAYECalculator:
             organization_id=organization_id,
             name=band_def["name"],
             min_amount=Decimal(str(band_def["min"])),
-            max_amount=(
-                Decimal(str(band_def["max"])) if band_def["max"] else None
-            ),
+            max_amount=(Decimal(str(band_def["max"])) if band_def["max"] else None),
             rate=Decimal(band_def["rate"]),
             sequence=band_def["seq"],
             effective_from=effective_from,
@@ -386,9 +416,9 @@ class PAYECalculator:
         monthly_pension = (pension_amount / self.MONTHS_PER_YEAR).quantize(
             Decimal("0.01"), rounding=ROUND_HALF_UP
         )
-        monthly_employer_pension = (employer_pension_amount / self.MONTHS_PER_YEAR).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP
-        )
+        monthly_employer_pension = (
+            employer_pension_amount / self.MONTHS_PER_YEAR
+        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         monthly_nhf = (nhf_amount / self.MONTHS_PER_YEAR).quantize(
             Decimal("0.01"), rounding=ROUND_HALF_UP
         )
@@ -524,9 +554,7 @@ class PAYECalculator:
 
         created_bands = []
         for band_def in self.NTA_2025_BANDS:
-            band = self._create_band_from_def(
-                band_def, org_id, eff_date, created_by_id
-            )
+            band = self._create_band_from_def(band_def, org_id, eff_date, created_by_id)
             self.db.add(band)
             created_bands.append(band)
 

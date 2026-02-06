@@ -18,32 +18,34 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models.finance.ap.supplier import Supplier, SupplierType
-from app.models.finance.ap.supplier_invoice import SupplierInvoice, SupplierInvoiceStatus
+from app.models.finance.ap.supplier import Supplier
+from app.models.finance.ap.supplier_invoice import (
+    SupplierInvoice,
+    SupplierInvoiceStatus,
+)
 from app.models.finance.ap.supplier_payment import SupplierPayment
 from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
 from app.services.audit_info import get_audit_service
 from app.services.common import coerce_uuid
 from app.services.finance.ap.supplier import SupplierInput, supplier_service
-from app.services.finance.common.attachment import attachment_service, AttachmentInput
-from app.services.finance.platform.currency_context import get_currency_context
-from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
 from app.services.finance.ap.web.base import (
-    parse_supplier_type,
-    format_date,
+    calculate_supplier_balance_trends,
     format_currency,
+    format_date,
     format_file_size,
-    supplier_option_view,
+    get_accounts,
+    invoice_status_label,
+    logger,
+    parse_supplier_type,
+    supplier_detail_view,
     supplier_form_view,
     supplier_list_view,
-    supplier_detail_view,
-    invoice_status_label,
-    get_accounts,
-    calculate_supplier_balance_trends,
-    logger,
 )
+from app.services.finance.common.attachment import AttachmentInput, attachment_service
+from app.services.finance.platform.currency_context import get_currency_context
+from app.templates import templates
+from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +102,10 @@ class SupplierWebService:
         """Get context for supplier listing page."""
         logger.debug(
             "list_suppliers_context: org=%s search=%r status=%s page=%d",
-            organization_id, search, status, page
+            organization_id,
+            search,
+            status,
+            page,
         )
         org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
@@ -123,12 +128,11 @@ class SupplierWebService:
                 | (Supplier.tax_identification_number.ilike(search_pattern))
             )
 
-        total_count = query.with_entities(func.count(Supplier.supplier_id)).scalar() or 0
+        total_count = (
+            query.with_entities(func.count(Supplier.supplier_id)).scalar() or 0
+        )
         suppliers = (
-            query.order_by(Supplier.legal_name)
-            .limit(limit)
-            .offset(offset)
-            .all()
+            query.order_by(Supplier.legal_name).limit(limit).offset(offset).all()
         )
 
         open_statuses = [
@@ -139,7 +143,10 @@ class SupplierWebService:
             db.query(
                 SupplierInvoice.supplier_id,
                 func.coalesce(
-                    func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
+                    func.sum(
+                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
+                    ),
+                    0,
                 ).label("balance"),
             )
             .filter(
@@ -153,7 +160,11 @@ class SupplierWebService:
 
         # Use shared audit service for user names
         audit_service = get_audit_service(db)
-        creator_ids = [supplier.created_by_user_id for supplier in suppliers if supplier.created_by_user_id]
+        creator_ids = [
+            supplier.created_by_user_id
+            for supplier in suppliers
+            if supplier.created_by_user_id
+        ]
         creator_names = audit_service.get_user_names_batch(creator_ids)
 
         # Calculate balance trends for sparkline charts
@@ -178,21 +189,23 @@ class SupplierWebService:
         total_suppliers = (
             db.query(func.count(Supplier.supplier_id))
             .filter(Supplier.organization_id == org_id)
-            .scalar() or 0
+            .scalar()
+            or 0
         )
         active_count = (
             db.query(func.count(Supplier.supplier_id))
             .filter(Supplier.organization_id == org_id, Supplier.is_active == True)
-            .scalar() or 0
+            .scalar()
+            or 0
         )
-        total_payables_raw = (
-            db.query(func.coalesce(func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0))
-            .filter(
-                SupplierInvoice.organization_id == org_id,
-                SupplierInvoice.status.in_(open_statuses),
+        total_payables_raw = db.query(
+            func.coalesce(
+                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
             )
-            .scalar() or Decimal("0")
-        )
+        ).filter(
+            SupplierInvoice.organization_id == org_id,
+            SupplierInvoice.status.in_(open_statuses),
+        ).scalar() or Decimal("0")
         overdue_count = (
             db.query(func.count(SupplierInvoice.invoice_id))
             .filter(
@@ -200,7 +213,8 @@ class SupplierWebService:
                 SupplierInvoice.status.in_(open_statuses),
                 SupplierInvoice.due_date < date.today(),
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
 
         logger.debug("list_suppliers_context: found %d suppliers", total_count)
@@ -230,8 +244,7 @@ class SupplierWebService:
     ) -> dict:
         """Get context for supplier create/edit form."""
         logger.debug(
-            "supplier_form_context: org=%s supplier_id=%s",
-            organization_id, supplier_id
+            "supplier_form_context: org=%s supplier_id=%s", organization_id, supplier_id
         )
         org_id = coerce_uuid(organization_id)
         supplier = None
@@ -263,7 +276,8 @@ class SupplierWebService:
         """Get context for supplier detail page."""
         logger.debug(
             "supplier_detail_context: org=%s supplier_id=%s",
-            organization_id, supplier_id
+            organization_id,
+            supplier_id,
         )
         org_id = coerce_uuid(organization_id)
         supplier = None
@@ -280,21 +294,16 @@ class SupplierWebService:
             SupplierInvoiceStatus.PARTIALLY_PAID,
         ]
 
-        balance = (
-            db.query(
-                func.coalesce(
-                    func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid),
-                    0,
-                )
+        balance = db.query(
+            func.coalesce(
+                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid),
+                0,
             )
-            .filter(
-                SupplierInvoice.organization_id == org_id,
-                SupplierInvoice.supplier_id == supplier.supplier_id,
-                SupplierInvoice.status.in_(open_statuses),
-            )
-            .scalar()
-            or Decimal("0")
-        )
+        ).filter(
+            SupplierInvoice.organization_id == org_id,
+            SupplierInvoice.supplier_id == supplier.supplier_id,
+            SupplierInvoice.status.in_(open_statuses),
+        ).scalar() or Decimal("0")
 
         invoices = (
             db.query(SupplierInvoice)
@@ -354,7 +363,9 @@ class SupplierWebService:
             for att in attachments
         ]
 
-        logger.debug("supplier_detail_context: found %d open invoices", len(open_invoices))
+        logger.debug(
+            "supplier_detail_context: found %d open invoices", len(open_invoices)
+        )
 
         return {
             "supplier": supplier_detail_view(supplier, balance),
@@ -370,8 +381,7 @@ class SupplierWebService:
     ) -> Optional[str]:
         """Delete a supplier. Returns error message or None on success."""
         logger.debug(
-            "delete_supplier: org=%s supplier_id=%s",
-            organization_id, supplier_id
+            "delete_supplier: org=%s supplier_id=%s", organization_id, supplier_id
         )
         org_id = coerce_uuid(organization_id)
         sup_id = coerce_uuid(supplier_id)
@@ -411,7 +421,9 @@ class SupplierWebService:
         try:
             db.delete(supplier)
             db.commit()
-            logger.info("delete_supplier: deleted supplier %s for org %s", sup_id, org_id)
+            logger.info(
+                "delete_supplier: deleted supplier %s for org %s", sup_id, org_id
+            )
             return None
         except Exception as e:
             db.rollback()
@@ -455,7 +467,9 @@ class SupplierWebService:
         """Render new supplier form."""
         context = base_context(request, auth, "New Supplier", "ap")
         context.update(self.supplier_form_context(db, str(auth.organization_id)))
-        return templates.TemplateResponse(request, "finance/ap/supplier_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/supplier_form.html", context
+        )
 
     def supplier_detail_response(
         self,
@@ -473,7 +487,9 @@ class SupplierWebService:
                 supplier_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ap/supplier_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/supplier_detail.html", context
+        )
 
     def supplier_edit_form_response(
         self,
@@ -484,8 +500,12 @@ class SupplierWebService:
     ) -> HTMLResponse:
         """Render supplier edit form."""
         context = base_context(request, auth, "Edit Supplier", "ap")
-        context.update(self.supplier_form_context(db, str(auth.organization_id), supplier_id))
-        return templates.TemplateResponse(request, "finance/ap/supplier_form.html", context)
+        context.update(
+            self.supplier_form_context(db, str(auth.organization_id), supplier_id)
+        )
+        return templates.TemplateResponse(
+            request, "finance/ap/supplier_form.html", context
+        )
 
     async def create_supplier_response(
         self,
@@ -518,7 +538,9 @@ class SupplierWebService:
             context.update(self.supplier_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
             context["form_data"] = dict(form_data)
-            return templates.TemplateResponse(request, "finance/ap/supplier_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/supplier_form.html", context
+            )
 
     async def update_supplier_response(
         self,
@@ -550,10 +572,14 @@ class SupplierWebService:
         except Exception as e:
             logger.exception("update_supplier_response: failed")
             context = base_context(request, auth, "Edit Supplier", "ap")
-            context.update(self.supplier_form_context(db, str(auth.organization_id), supplier_id))
+            context.update(
+                self.supplier_form_context(db, str(auth.organization_id), supplier_id)
+            )
             context["error"] = str(e)
             context["form_data"] = dict(form_data)
-            return templates.TemplateResponse(request, "finance/ap/supplier_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/supplier_form.html", context
+            )
 
     def delete_supplier_response(
         self,
@@ -575,7 +601,9 @@ class SupplierWebService:
                 )
             )
             context["error"] = error
-            return templates.TemplateResponse(request, "finance/ap/supplier_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/supplier_detail.html", context
+            )
 
         return RedirectResponse(url="/finance/ap/suppliers", status_code=303)
 

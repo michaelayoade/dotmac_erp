@@ -6,21 +6,22 @@ Manages inventory lots, batches, and serial number tracking.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
-from typing import List, Optional
+from typing import Optional
 from uuid import UUID
-import uuid as uuid_lib
 
 from fastapi import HTTPException
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models.inventory.item import Item
 from app.models.inventory.inventory_lot import InventoryLot
+from app.models.inventory.item import Item
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -104,30 +105,37 @@ class LotSerialService(ListResponseMixin):
         item_id = coerce_uuid(input.item_id)
 
         # Validate item
-        item = db.query(Item).filter(
-            Item.item_id == item_id,
-            Item.organization_id == org_id,
-        ).first()
+        item = (
+            db.query(Item)
+            .filter(
+                Item.item_id == item_id,
+                Item.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not item:
             raise HTTPException(status_code=404, detail="Item not found")
 
         if not item.track_lots:
             raise HTTPException(
-                status_code=400,
-                detail="Item is not configured for lot tracking"
+                status_code=400, detail="Item is not configured for lot tracking"
             )
 
         # Check for duplicate lot number
-        existing = db.query(InventoryLot).filter(
-            InventoryLot.item_id == item_id,
-            InventoryLot.lot_number == input.lot_number,
-        ).first()
+        existing = (
+            db.query(InventoryLot)
+            .filter(
+                InventoryLot.item_id == item_id,
+                InventoryLot.lot_number == input.lot_number,
+            )
+            .first()
+        )
 
         if existing:
             raise HTTPException(
                 status_code=400,
-                detail=f"Lot number {input.lot_number} already exists for this item"
+                detail=f"Lot number {input.lot_number} already exists for this item",
             )
 
         lot = InventoryLot(
@@ -139,7 +147,9 @@ class LotSerialService(ListResponseMixin):
             received_date=input.received_date,
             supplier_id=coerce_uuid(input.supplier_id) if input.supplier_id else None,
             supplier_lot_number=input.supplier_lot_number,
-            purchase_order_id=coerce_uuid(input.purchase_order_id) if input.purchase_order_id else None,
+            purchase_order_id=coerce_uuid(input.purchase_order_id)
+            if input.purchase_order_id
+            else None,
             unit_cost=input.unit_cost,
             initial_quantity=input.initial_quantity,
             quantity_on_hand=input.initial_quantity,
@@ -175,23 +185,20 @@ class LotSerialService(ListResponseMixin):
         """
         lot_id = coerce_uuid(lot_id)
 
-        lot = db.query(InventoryLot).filter(
-            InventoryLot.lot_id == lot_id
-        ).first()
+        lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
 
         if lot.is_quarantined:
             raise HTTPException(
-                status_code=400,
-                detail=f"Lot {lot.lot_number} is quarantined"
+                status_code=400, detail=f"Lot {lot.lot_number} is quarantined"
             )
 
         if quantity > lot.quantity_available:
             raise HTTPException(
                 status_code=400,
-                detail=f"Insufficient available quantity. Available: {lot.quantity_available}"
+                detail=f"Insufficient available quantity. Available: {lot.quantity_available}",
             )
 
         lot.quantity_allocated += quantity
@@ -223,9 +230,7 @@ class LotSerialService(ListResponseMixin):
         """
         lot_id = coerce_uuid(lot_id)
 
-        lot = db.query(InventoryLot).filter(
-            InventoryLot.lot_id == lot_id
-        ).first()
+        lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
@@ -260,9 +265,7 @@ class LotSerialService(ListResponseMixin):
         """
         lot_id = coerce_uuid(lot_id)
 
-        lot = db.query(InventoryLot).filter(
-            InventoryLot.lot_id == lot_id
-        ).first()
+        lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
@@ -270,7 +273,7 @@ class LotSerialService(ListResponseMixin):
         if quantity > lot.quantity_on_hand:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot consume {quantity}. On hand: {lot.quantity_on_hand}"
+                detail=f"Cannot consume {quantity}. On hand: {lot.quantity_on_hand}",
             )
 
         lot.quantity_on_hand -= quantity
@@ -309,9 +312,7 @@ class LotSerialService(ListResponseMixin):
         """
         lot_id = coerce_uuid(lot_id)
 
-        lot = db.query(InventoryLot).filter(
-            InventoryLot.lot_id == lot_id
-        ).first()
+        lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
@@ -344,9 +345,7 @@ class LotSerialService(ListResponseMixin):
         """
         lot_id = coerce_uuid(lot_id)
 
-        lot = db.query(InventoryLot).filter(
-            InventoryLot.lot_id == lot_id
-        ).first()
+        lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
@@ -380,6 +379,7 @@ class LotSerialService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
         from datetime import timedelta
+
         cutoff_date = date.today() + timedelta(days=days_ahead)
 
         return (
@@ -443,16 +443,12 @@ class LotSerialService(ListResponseMixin):
         """
         lot_id = coerce_uuid(lot_id)
 
-        lot = db.query(InventoryLot).filter(
-            InventoryLot.lot_id == lot_id
-        ).first()
+        lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
 
-        item = db.query(Item).filter(
-            Item.item_id == lot.item_id
-        ).first()
+        item = db.query(Item).filter(Item.item_id == lot.item_id).first()
 
         return LotTraceability(
             lot_id=lot.lot_id,
@@ -470,9 +466,11 @@ class LotSerialService(ListResponseMixin):
     @staticmethod
     def get(db: Session, lot_id: str) -> Optional[InventoryLot]:
         """Get a lot by ID."""
-        return db.query(InventoryLot).filter(
-            InventoryLot.lot_id == coerce_uuid(lot_id)
-        ).first()
+        return (
+            db.query(InventoryLot)
+            .filter(InventoryLot.lot_id == coerce_uuid(lot_id))
+            .first()
+        )
 
     @staticmethod
     def get_by_number(
@@ -481,10 +479,14 @@ class LotSerialService(ListResponseMixin):
         lot_number: str,
     ) -> Optional[InventoryLot]:
         """Get a lot by number."""
-        return db.query(InventoryLot).filter(
-            InventoryLot.item_id == coerce_uuid(item_id),
-            InventoryLot.lot_number == lot_number,
-        ).first()
+        return (
+            db.query(InventoryLot)
+            .filter(
+                InventoryLot.item_id == coerce_uuid(item_id),
+                InventoryLot.lot_number == lot_number,
+            )
+            .first()
+        )
 
     @staticmethod
     def list_by_item(
@@ -535,9 +537,9 @@ class LotSerialService(ListResponseMixin):
             query = query.filter(InventoryLot.item_id == coerce_uuid(item_id))
 
         if organization_id:
-            query = query.join(
-                Item, InventoryLot.item_id == Item.item_id
-            ).filter(Item.organization_id == coerce_uuid(organization_id))
+            query = query.join(Item, InventoryLot.item_id == Item.item_id).filter(
+                Item.organization_id == coerce_uuid(organization_id)
+            )
 
         if is_quarantined is not None:
             query = query.filter(InventoryLot.is_quarantined == is_quarantined)

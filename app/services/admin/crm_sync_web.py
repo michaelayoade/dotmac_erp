@@ -3,6 +3,7 @@ DotMac CRM Sync Web Service.
 
 Provides data and operations for the CRM sync management UI.
 """
+
 import logging
 import secrets
 import uuid
@@ -12,7 +13,7 @@ from urllib.parse import quote_plus
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from sqlalchemy import func, select, desc
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.models.auth import ApiKey
@@ -74,7 +75,9 @@ class CRMSyncWebService:
             return RedirectResponse(url="/login?next=/admin/sync/crm", status_code=302)
         return None
 
-    def _get_crm_config(self, db: Session, org_id: uuid.UUID) -> Optional[IntegrationConfig]:
+    def _get_crm_config(
+        self, db: Session, org_id: uuid.UUID
+    ) -> Optional[IntegrationConfig]:
         """Get CRM integration config for organization."""
         stmt = select(IntegrationConfig).where(
             IntegrationConfig.organization_id == org_id,
@@ -124,7 +127,9 @@ class CRMSyncWebService:
             }
         return stats
 
-    def _get_recent_syncs(self, db: Session, org_id: uuid.UUID, limit: int = 10) -> list:
+    def _get_recent_syncs(
+        self, db: Session, org_id: uuid.UUID, limit: int = 10
+    ) -> list:
         """Get recently synced entities."""
         stmt = (
             select(CRMSyncMapping)
@@ -157,11 +162,15 @@ class CRMSyncWebService:
 
             context["config"] = config
             context["api_key"] = api_key
-            context["integration_configured"] = bool(config and config.is_active and api_key)
+            context["integration_configured"] = bool(
+                config and config.is_active and api_key
+            )
 
             # Get stats
             context["sync_stats"] = self._get_sync_stats(db, org_id)
-            context["total_synced"] = sum(s["total"] for s in context["sync_stats"].values())
+            context["total_synced"] = sum(
+                s["total"] for s in context["sync_stats"].values()
+            )
 
             # Get recent activity
             context["recent_syncs"] = self._get_recent_syncs(db, org_id)
@@ -177,7 +186,9 @@ class CRMSyncWebService:
             context["total_synced"] = 0
             context["recent_syncs"] = []
 
-        return templates.TemplateResponse(request, "admin/sync/crm/dashboard.html", context)
+        return templates.TemplateResponse(
+            request, "admin/sync/crm/dashboard.html", context
+        )
 
     # ============ Configuration ============
 
@@ -192,7 +203,9 @@ class CRMSyncWebService:
         if error_response:
             return error_response
 
-        context = self._base_context(request, auth, "CRM Integration Settings", "config", db)
+        context = self._base_context(
+            request, auth, "CRM Integration Settings", "config", db
+        )
         org_id = auth.organization_id if auth else None
 
         if org_id:
@@ -209,7 +222,9 @@ class CRMSyncWebService:
                 context["api_key_created_at"] = api_key.created_at
                 context["api_key_last_used"] = api_key.last_used_at
 
-        return templates.TemplateResponse(request, "admin/sync/crm/config.html", context)
+        return templates.TemplateResponse(
+            request, "admin/sync/crm/config.html", context
+        )
 
     def config_save_response(
         self,
@@ -282,7 +297,8 @@ class CRMSyncWebService:
 
         if not org_id or not person_id:
             return RedirectResponse(
-                url="/admin/sync/crm/config?error=" + quote_plus("Authentication required"),
+                url="/admin/sync/crm/config?error="
+                + quote_plus("Authentication required"),
                 status_code=302,
             )
 
@@ -372,7 +388,9 @@ class CRMSyncWebService:
         if error_response:
             return error_response
 
-        context = self._base_context(request, auth, "Synced CRM Entities", "entities", db)
+        context = self._base_context(
+            request, auth, "Synced CRM Entities", "entities", db
+        )
         org_id = auth.organization_id if auth else None
 
         per_page = 25
@@ -386,7 +404,9 @@ class CRMSyncWebService:
 
             # Filters
             if entity_type and entity_type in [e.value for e in CRMEntityType]:
-                stmt = stmt.where(CRMSyncMapping.crm_entity_type == CRMEntityType(entity_type))
+                stmt = stmt.where(
+                    CRMSyncMapping.crm_entity_type == CRMEntityType(entity_type)
+                )
 
             if status and status in [s.value for s in CRMSyncStatus]:
                 stmt = stmt.where(CRMSyncMapping.crm_status == CRMSyncStatus(status))
@@ -404,7 +424,11 @@ class CRMSyncWebService:
             total_count = db.scalar(count_stmt) or 0
 
             # Paginate
-            stmt = stmt.order_by(desc(CRMSyncMapping.synced_at)).offset(offset).limit(per_page)
+            stmt = (
+                stmt.order_by(desc(CRMSyncMapping.synced_at))
+                .offset(offset)
+                .limit(per_page)
+            )
             entities = list(db.scalars(stmt).all())
 
             context["entities"] = entities
@@ -415,13 +439,19 @@ class CRMSyncWebService:
             context["filter_entity_type"] = entity_type
             context["filter_status"] = status
             context["filter_search"] = search
-            context["entity_type_choices"] = [(e.value, CRM_ENTITY_TYPES[e]) for e in CRMEntityType]
-            context["status_choices"] = [(s.value, s.value.title()) for s in CRMSyncStatus]
+            context["entity_type_choices"] = [
+                (e.value, CRM_ENTITY_TYPES[e]) for e in CRMEntityType
+            ]
+            context["status_choices"] = [
+                (s.value, s.value.title()) for s in CRMSyncStatus
+            ]
         else:
             context["entities"] = []
             context["total_count"] = 0
 
-        return templates.TemplateResponse(request, "admin/sync/crm/entities.html", context)
+        return templates.TemplateResponse(
+            request, "admin/sync/crm/entities.html", context
+        )
 
     # ============ Inventory Push ============
 
@@ -438,7 +468,9 @@ class CRMSyncWebService:
         if error_response:
             return error_response
 
-        context = self._base_context(request, auth, "Inventory Push to CRM", "inventory", db)
+        context = self._base_context(
+            request, auth, "Inventory Push to CRM", "inventory", db
+        )
         org_id = auth.organization_id if auth else None
 
         # Check if push is configured
@@ -454,13 +486,16 @@ class CRMSyncWebService:
             from app.services.inventory.balance import InventoryBalanceService
 
             # Total items
-            total_items = db.scalar(
-                select(func.count(Item.item_id)).where(
-                    Item.organization_id == org_id,
-                    Item.is_active.is_(True),
-                    Item.track_inventory.is_(True),
+            total_items = (
+                db.scalar(
+                    select(func.count(Item.item_id)).where(
+                        Item.organization_id == org_id,
+                        Item.is_active.is_(True),
+                        Item.track_inventory.is_(True),
+                    )
                 )
-            ) or 0
+                or 0
+            )
 
             # Low stock items
             low_stock_items = InventoryBalanceService.get_low_stock_items(db, org_id)
@@ -471,7 +506,9 @@ class CRMSyncWebService:
             context["total_items"] = 0
             context["low_stock_count"] = 0
 
-        return templates.TemplateResponse(request, "admin/sync/crm/inventory.html", context)
+        return templates.TemplateResponse(
+            request, "admin/sync/crm/inventory.html", context
+        )
 
     def trigger_inventory_push_response(
         self,
@@ -540,12 +577,14 @@ class CRMSyncWebService:
 
         if result.get("healthy"):
             return RedirectResponse(
-                url="/admin/sync/crm/inventory?success=" + quote_plus("CRM webhook is healthy"),
+                url="/admin/sync/crm/inventory?success="
+                + quote_plus("CRM webhook is healthy"),
                 status_code=302,
             )
         else:
             return RedirectResponse(
-                url="/admin/sync/crm/inventory?error=" + quote_plus(result.get("message", "Unknown error")),
+                url="/admin/sync/crm/inventory?error="
+                + quote_plus(result.get("message", "Unknown error")),
                 status_code=302,
             )
 

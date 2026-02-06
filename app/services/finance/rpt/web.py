@@ -6,60 +6,46 @@ Provides view-focused data for reports web routes.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Dict, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 from uuid import UUID
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
+
+import logging
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.models.finance.ap.supplier import Supplier
+from app.models.finance.ap.supplier_invoice import (
+    SupplierInvoice,
+    SupplierInvoiceStatus,
+)
+from app.models.finance.ar.customer import Customer
+from app.models.finance.ar.invoice import Invoice as ARInvoice
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
+from app.models.finance.gl.fiscal_period import FiscalPeriod
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
-from app.models.finance.gl.fiscal_period import FiscalPeriod
-from app.models.finance.ap.supplier_invoice import SupplierInvoice, SupplierInvoiceStatus
-from app.models.finance.ap.supplier import Supplier
-from app.models.finance.ar.invoice import Invoice as ARInvoice
-from app.models.finance.ar.customer import Customer
 from app.models.finance.rpt.report_definition import ReportDefinition, ReportType
-from app.models.finance.rpt.report_instance import ReportInstance, ReportStatus
-from app.config import settings
+from app.models.finance.rpt.report_instance import ReportInstance
 from app.services.common import coerce_uuid
 from app.services.finance.platform.org_context import org_context_service
+from app.services.formatters import format_currency as _format_currency
+from app.services.formatters import format_date as _format_date
+from app.services.formatters import parse_date as _parse_date
 from app.templates import templates
+
+logger = logging.getLogger(__name__)
 
 # NOTE: WebAuthContext and base_context are imported lazily inside response methods
 # to avoid circular imports with app.web.deps
-
-
-def _parse_date(value: Optional[str]) -> Optional[date]:
-    if not value:
-        return None
-    try:
-        return datetime.strptime(value, "%Y-%m-%d").date()
-    except ValueError:
-        return None
-
-
-def _format_date(value: Optional[date]) -> str:
-    return value.strftime("%Y-%m-%d") if value else ""
-
-
-def _format_currency(
-    amount: Optional[Decimal],
-    currency: str = settings.default_presentation_currency_code,
-) -> str:
-    if amount is None:
-        return f"{currency} 0.00"
-    value = Decimal(str(amount))
-    return f"{currency} {value:,.2f}"
 
 
 def _ifrs_label(category: IFRSCategory) -> str:
@@ -119,12 +105,19 @@ class ReportsWebService:
             db.query(
                 AccountCategory.category_code,
                 AccountCategory.ifrs_category,
-                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
-                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+                func.coalesce(
+                    func.sum(JournalEntryLine.debit_amount_functional), 0
+                ).label("debit"),
+                func.coalesce(
+                    func.sum(JournalEntryLine.credit_amount_functional), 0
+                ).label("credit"),
             )
             .join(Account, Account.category_id == AccountCategory.category_id)
             .join(JournalEntryLine, JournalEntryLine.account_id == Account.account_id)
-            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(
+                JournalEntry,
+                JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
+            )
             .filter(
                 JournalEntry.organization_id == org_id,
                 JournalEntry.status == JournalStatus.POSTED,
@@ -150,7 +143,9 @@ class ReportsWebService:
             credit = Decimal(str(credit or 0))
             balances[code] = {
                 "ifrs_category": ifrs_category,
-                "amount": ReportsWebService._amount_from_category(ifrs_category, debit, credit),
+                "amount": ReportsWebService._amount_from_category(
+                    ifrs_category, debit, credit
+                ),
             }
 
         return balances
@@ -167,12 +162,19 @@ class ReportsWebService:
         rows = (
             db.query(
                 AccountCategory.category_code,
-                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
-                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+                func.coalesce(
+                    func.sum(JournalEntryLine.debit_amount_functional), 0
+                ).label("debit"),
+                func.coalesce(
+                    func.sum(JournalEntryLine.credit_amount_functional), 0
+                ).label("credit"),
             )
             .join(Account, Account.category_id == AccountCategory.category_id)
             .join(JournalEntryLine, JournalEntryLine.account_id == Account.account_id)
-            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(
+                JournalEntry,
+                JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
+            )
             .filter(
                 JournalEntry.organization_id == org_id,
                 JournalEntry.status == JournalStatus.POSTED,
@@ -184,7 +186,11 @@ class ReportsWebService:
             .all()
         )
 
-        totals = {"CAT016": Decimal("0"), "CAT017": Decimal("0"), "CAT019": Decimal("0")}
+        totals = {
+            "CAT016": Decimal("0"),
+            "CAT017": Decimal("0"),
+            "CAT019": Decimal("0"),
+        }
         for code, debit, credit in rows:
             debit = Decimal(str(debit or 0))
             credit = Decimal(str(credit or 0))
@@ -243,21 +249,30 @@ class ReportsWebService:
         bs_rows = (
             db.query(
                 AccountCategory.ifrs_category,
-                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
-                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+                func.coalesce(
+                    func.sum(JournalEntryLine.debit_amount_functional), 0
+                ).label("debit"),
+                func.coalesce(
+                    func.sum(JournalEntryLine.credit_amount_functional), 0
+                ).label("credit"),
             )
-            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(
+                JournalEntry,
+                JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
+            )
             .join(Account, Account.account_id == JournalEntryLine.account_id)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
             .filter(
                 JournalEntry.organization_id == org_id,
                 JournalEntry.status == JournalStatus.POSTED,
                 JournalEntry.posting_date <= to_date,
-                AccountCategory.ifrs_category.in_([
-                    IFRSCategory.ASSETS,
-                    IFRSCategory.LIABILITIES,
-                    IFRSCategory.EQUITY,
-                ]),
+                AccountCategory.ifrs_category.in_(
+                    [
+                        IFRSCategory.ASSETS,
+                        IFRSCategory.LIABILITIES,
+                        IFRSCategory.EQUITY,
+                    ]
+                ),
             )
             .group_by(AccountCategory.ifrs_category)
             .all()
@@ -285,7 +300,10 @@ class ReportsWebService:
                     0,
                 )
             )
-            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(
+                JournalEntry,
+                JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
+            )
             .join(Account, Account.account_id == JournalEntryLine.account_id)
             .filter(
                 JournalEntry.organization_id == org_id,
@@ -307,7 +325,10 @@ class ReportsWebService:
                     0,
                 )
             )
-            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(
+                JournalEntry,
+                JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
+            )
             .join(Account, Account.account_id == JournalEntryLine.account_id)
             .filter(
                 JournalEntry.organization_id == org_id,
@@ -344,10 +365,17 @@ class ReportsWebService:
         pl_rows = (
             db.query(
                 AccountCategory.ifrs_category,
-                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
-                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+                func.coalesce(
+                    func.sum(JournalEntryLine.debit_amount_functional), 0
+                ).label("debit"),
+                func.coalesce(
+                    func.sum(JournalEntryLine.credit_amount_functional), 0
+                ).label("credit"),
             )
-            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(
+                JournalEntry,
+                JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
+            )
             .join(Account, Account.account_id == JournalEntryLine.account_id)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
             .filter(
@@ -355,10 +383,12 @@ class ReportsWebService:
                 JournalEntry.status == JournalStatus.POSTED,
                 JournalEntry.posting_date >= from_date,
                 JournalEntry.posting_date <= to_date,
-                AccountCategory.ifrs_category.in_([
-                    IFRSCategory.REVENUE,
-                    IFRSCategory.EXPENSES,
-                ]),
+                AccountCategory.ifrs_category.in_(
+                    [
+                        IFRSCategory.REVENUE,
+                        IFRSCategory.EXPENSES,
+                    ]
+                ),
             )
             .group_by(AccountCategory.ifrs_category)
             .all()
@@ -423,7 +453,10 @@ class ReportsWebService:
         # Recent report instances
         recent_instances = (
             db.query(ReportInstance, ReportDefinition)
-            .join(ReportDefinition, ReportInstance.report_def_id == ReportDefinition.report_def_id)
+            .join(
+                ReportDefinition,
+                ReportInstance.report_def_id == ReportDefinition.report_def_id,
+            )
             .filter(ReportInstance.organization_id == org_id)
             .order_by(ReportInstance.queued_at.desc())
             .limit(10)
@@ -461,14 +494,18 @@ class ReportsWebService:
 
         recent_view = []
         for instance, defn in recent_instances:
-            recent_view.append({
-                "instance_id": str(instance.instance_id),
-                "report_name": defn.report_name,
-                "report_type": defn.report_type.value,
-                "status": instance.status.value,
-                "queued_at": instance.queued_at.strftime("%Y-%m-%d %H:%M") if instance.queued_at else "",
-                "output_format": instance.output_format,
-            })
+            recent_view.append(
+                {
+                    "instance_id": str(instance.instance_id),
+                    "report_name": defn.report_name,
+                    "report_type": defn.report_type.value,
+                    "status": instance.status.value,
+                    "queued_at": instance.queued_at.strftime("%Y-%m-%d %H:%M")
+                    if instance.queued_at
+                    else "",
+                    "output_format": instance.output_format,
+                }
+            )
 
         # Standard reports always available (using IFRS terminology)
         standard_reports = [
@@ -595,10 +632,17 @@ class ReportsWebService:
                 Account.account_code,
                 Account.account_name,
                 AccountCategory.ifrs_category,
-                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
-                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+                func.coalesce(
+                    func.sum(JournalEntryLine.debit_amount_functional), 0
+                ).label("debit"),
+                func.coalesce(
+                    func.sum(JournalEntryLine.credit_amount_functional), 0
+                ).label("credit"),
             )
-            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(
+                JournalEntry,
+                JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
+            )
             .join(Account, Account.account_id == JournalEntryLine.account_id)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
             .filter(
@@ -703,13 +747,41 @@ class ReportsWebService:
         total_comprehensive_income = profit_for_period + oci
 
         income_statement_lines = [
-            {"name": "Revenue", "amount": _format_currency(revenue), "amount_raw": float(revenue)},
-            {"name": "Other Income", "amount": _format_currency(other_income), "amount_raw": float(other_income)},
-            {"name": "Cost of Sales", "amount": _format_currency(cogs), "amount_raw": float(cogs)},
-            {"name": "Operating Expenses", "amount": _format_currency(operating_expenses), "amount_raw": float(operating_expenses)},
-            {"name": "Profit for the Period", "amount": _format_currency(profit_for_period), "amount_raw": float(profit_for_period)},
-            {"name": "Other Comprehensive Income", "amount": _format_currency(oci), "amount_raw": float(oci)},
-            {"name": "Total Comprehensive Income", "amount": _format_currency(total_comprehensive_income), "amount_raw": float(total_comprehensive_income)},
+            {
+                "name": "Revenue",
+                "amount": _format_currency(revenue),
+                "amount_raw": float(revenue),
+            },
+            {
+                "name": "Other Income",
+                "amount": _format_currency(other_income),
+                "amount_raw": float(other_income),
+            },
+            {
+                "name": "Cost of Sales",
+                "amount": _format_currency(cogs),
+                "amount_raw": float(cogs),
+            },
+            {
+                "name": "Operating Expenses",
+                "amount": _format_currency(operating_expenses),
+                "amount_raw": float(operating_expenses),
+            },
+            {
+                "name": "Profit for the Period",
+                "amount": _format_currency(profit_for_period),
+                "amount_raw": float(profit_for_period),
+            },
+            {
+                "name": "Other Comprehensive Income",
+                "amount": _format_currency(oci),
+                "amount_raw": float(oci),
+            },
+            {
+                "name": "Total Comprehensive Income",
+                "amount": _format_currency(total_comprehensive_income),
+                "amount_raw": float(total_comprehensive_income),
+            },
         ]
 
         return {
@@ -787,34 +859,54 @@ class ReportsWebService:
             ("Equity", cat_amount("EQT")),
         ]
 
-        total_assets = sum((amount for _, amount in current_assets), Decimal("0")) + sum(
-            (amount for _, amount in non_current_assets), Decimal("0")
-        )
-        total_liabilities = sum((amount for _, amount in current_liabilities), Decimal("0")) + sum(
-            (amount for _, amount in non_current_liabilities), Decimal("0")
-        )
+        total_assets = sum(
+            (amount for _, amount in current_assets), Decimal("0")
+        ) + sum((amount for _, amount in non_current_assets), Decimal("0"))
+        total_liabilities = sum(
+            (amount for _, amount in current_liabilities), Decimal("0")
+        ) + sum((amount for _, amount in non_current_liabilities), Decimal("0"))
         total_equity = sum((amount for _, amount in equity_lines), Decimal("0"))
         total_liabilities_equity = total_liabilities + total_equity
 
         balance_sheet_lines = {
             "current_assets": [
-                {"name": name, "amount": _format_currency(amount), "amount_raw": float(amount)}
+                {
+                    "name": name,
+                    "amount": _format_currency(amount),
+                    "amount_raw": float(amount),
+                }
                 for name, amount in current_assets
             ],
             "non_current_assets": [
-                {"name": name, "amount": _format_currency(amount), "amount_raw": float(amount)}
+                {
+                    "name": name,
+                    "amount": _format_currency(amount),
+                    "amount_raw": float(amount),
+                }
                 for name, amount in non_current_assets
             ],
             "current_liabilities": [
-                {"name": name, "amount": _format_currency(amount), "amount_raw": float(amount)}
+                {
+                    "name": name,
+                    "amount": _format_currency(amount),
+                    "amount_raw": float(amount),
+                }
                 for name, amount in current_liabilities
             ],
             "non_current_liabilities": [
-                {"name": name, "amount": _format_currency(amount), "amount_raw": float(amount)}
+                {
+                    "name": name,
+                    "amount": _format_currency(amount),
+                    "amount_raw": float(amount),
+                }
                 for name, amount in non_current_liabilities
             ],
             "equity": [
-                {"name": name, "amount": _format_currency(amount), "amount_raw": float(amount)}
+                {
+                    "name": name,
+                    "amount": _format_currency(amount),
+                    "amount_raw": float(amount),
+                }
                 for name, amount in equity_lines
             ],
         }
@@ -846,10 +938,12 @@ class ReportsWebService:
             .join(Supplier, SupplierInvoice.supplier_id == Supplier.supplier_id)
             .filter(
                 SupplierInvoice.organization_id == org_id,
-                SupplierInvoice.status.in_([
-                    SupplierInvoiceStatus.POSTED,
-                    SupplierInvoiceStatus.PARTIALLY_PAID,
-                ]),
+                SupplierInvoice.status.in_(
+                    [
+                        SupplierInvoiceStatus.POSTED,
+                        SupplierInvoiceStatus.PARTIALLY_PAID,
+                    ]
+                ),
                 SupplierInvoice.invoice_date <= ref_date,
             )
             .order_by(SupplierInvoice.due_date)
@@ -904,7 +998,9 @@ class ReportsWebService:
                 over_90.append(entry)
                 total_over_90 += balance
 
-        grand_total = total_current + total_1_30 + total_31_60 + total_61_90 + total_over_90
+        grand_total = (
+            total_current + total_1_30 + total_31_60 + total_61_90 + total_over_90
+        )
 
         return {
             "as_of_date": as_of_date or _format_date(ref_date),
@@ -920,11 +1016,31 @@ class ReportsWebService:
             "total_over_90": _format_currency(total_over_90),
             "grand_total": _format_currency(grand_total),
             "summary": [
-                {"bucket": "Current", "amount": _format_currency(total_current), "amount_raw": float(total_current)},
-                {"bucket": "1-30 Days", "amount": _format_currency(total_1_30), "amount_raw": float(total_1_30)},
-                {"bucket": "31-60 Days", "amount": _format_currency(total_31_60), "amount_raw": float(total_31_60)},
-                {"bucket": "61-90 Days", "amount": _format_currency(total_61_90), "amount_raw": float(total_61_90)},
-                {"bucket": "Over 90 Days", "amount": _format_currency(total_over_90), "amount_raw": float(total_over_90)},
+                {
+                    "bucket": "Current",
+                    "amount": _format_currency(total_current),
+                    "amount_raw": float(total_current),
+                },
+                {
+                    "bucket": "1-30 Days",
+                    "amount": _format_currency(total_1_30),
+                    "amount_raw": float(total_1_30),
+                },
+                {
+                    "bucket": "31-60 Days",
+                    "amount": _format_currency(total_31_60),
+                    "amount_raw": float(total_31_60),
+                },
+                {
+                    "bucket": "61-90 Days",
+                    "amount": _format_currency(total_61_90),
+                    "amount_raw": float(total_61_90),
+                },
+                {
+                    "bucket": "Over 90 Days",
+                    "amount": _format_currency(total_over_90),
+                    "amount_raw": float(total_over_90),
+                },
             ],
         }
 
@@ -946,10 +1062,12 @@ class ReportsWebService:
             .join(Customer, ARInvoice.customer_id == Customer.customer_id)
             .filter(
                 ARInvoice.organization_id == org_id,
-                ARInvoice.status.in_([
-                    ARInvoiceStatus.POSTED,
-                    ARInvoiceStatus.PARTIALLY_PAID,
-                ]),
+                ARInvoice.status.in_(
+                    [
+                        ARInvoiceStatus.POSTED,
+                        ARInvoiceStatus.PARTIALLY_PAID,
+                    ]
+                ),
                 ARInvoice.invoice_date <= ref_date,
             )
             .order_by(ARInvoice.due_date)
@@ -1004,7 +1122,9 @@ class ReportsWebService:
                 over_90.append(entry)
                 total_over_90 += balance
 
-        grand_total = total_current + total_1_30 + total_31_60 + total_61_90 + total_over_90
+        grand_total = (
+            total_current + total_1_30 + total_31_60 + total_61_90 + total_over_90
+        )
 
         return {
             "as_of_date": as_of_date or _format_date(ref_date),
@@ -1020,11 +1140,31 @@ class ReportsWebService:
             "total_over_90": _format_currency(total_over_90),
             "grand_total": _format_currency(grand_total),
             "summary": [
-                {"bucket": "Current", "amount": _format_currency(total_current), "amount_raw": float(total_current)},
-                {"bucket": "1-30 Days", "amount": _format_currency(total_1_30), "amount_raw": float(total_1_30)},
-                {"bucket": "31-60 Days", "amount": _format_currency(total_31_60), "amount_raw": float(total_31_60)},
-                {"bucket": "61-90 Days", "amount": _format_currency(total_61_90), "amount_raw": float(total_61_90)},
-                {"bucket": "Over 90 Days", "amount": _format_currency(total_over_90), "amount_raw": float(total_over_90)},
+                {
+                    "bucket": "Current",
+                    "amount": _format_currency(total_current),
+                    "amount_raw": float(total_current),
+                },
+                {
+                    "bucket": "1-30 Days",
+                    "amount": _format_currency(total_1_30),
+                    "amount_raw": float(total_1_30),
+                },
+                {
+                    "bucket": "31-60 Days",
+                    "amount": _format_currency(total_31_60),
+                    "amount_raw": float(total_31_60),
+                },
+                {
+                    "bucket": "61-90 Days",
+                    "amount": _format_currency(total_61_90),
+                    "amount_raw": float(total_61_90),
+                },
+                {
+                    "bucket": "Over 90 Days",
+                    "amount": _format_currency(total_over_90),
+                    "amount_raw": float(total_over_90),
+                },
             ],
         }
 
@@ -1078,7 +1218,11 @@ class ReportsWebService:
                 # Get journal lines for this account
                 lines = (
                     db.query(JournalEntryLine, JournalEntry)
-                    .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+                    .join(
+                        JournalEntry,
+                        JournalEntry.journal_entry_id
+                        == JournalEntryLine.journal_entry_id,
+                    )
                     .filter(
                         JournalEntryLine.account_id == acct_id,
                         JournalEntry.organization_id == org_id,
@@ -1100,15 +1244,17 @@ class ReportsWebService:
                     else:
                         running_balance += credit - debit
 
-                    transactions.append({
-                        "date": _format_date(entry.posting_date),
-                        "journal_number": entry.journal_number,
-                        "description": line.description or entry.description,
-                        "reference": entry.reference or "",
-                        "debit": _format_currency(debit) if debit else "",
-                        "credit": _format_currency(credit) if credit else "",
-                        "balance": _format_currency(running_balance),
-                    })
+                    transactions.append(
+                        {
+                            "date": _format_date(entry.posting_date),
+                            "journal_number": entry.journal_number,
+                            "description": line.description or entry.description,
+                            "reference": entry.reference or "",
+                            "debit": _format_currency(debit) if debit else "",
+                            "credit": _format_currency(credit) if credit else "",
+                            "balance": _format_currency(running_balance),
+                        }
+                    )
 
         return {
             "start_date": start_date or _format_date(from_date),
@@ -1118,11 +1264,12 @@ class ReportsWebService:
             "selected_account": {
                 "account_code": selected_account.account_code,
                 "account_name": selected_account.account_name,
-            } if selected_account else None,
+            }
+            if selected_account
+            else None,
             "transactions": transactions,
             "ending_balance": _format_currency(running_balance),
         }
-
 
     @staticmethod
     def tax_summary_context(
@@ -1217,10 +1364,17 @@ class ReportsWebService:
                 Account.account_code,
                 Account.account_name,
                 AccountCategory.category_name,
-                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
-                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+                func.coalesce(
+                    func.sum(JournalEntryLine.debit_amount_functional), 0
+                ).label("debit"),
+                func.coalesce(
+                    func.sum(JournalEntryLine.credit_amount_functional), 0
+                ).label("credit"),
             )
-            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(
+                JournalEntry,
+                JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
+            )
             .join(Account, JournalEntryLine.account_id == Account.account_id)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
             .filter(
@@ -1244,13 +1398,15 @@ class ReportsWebService:
             credit = Decimal(str(credit or 0))
             amount = debit - credit
             total_expenses += amount
-            expense_items.append({
-                "account_code": account_code,
-                "account_name": account_name,
-                "category": category_name,
-                "amount": _format_currency(amount),
-                "amount_raw": float(amount),
-            })
+            expense_items.append(
+                {
+                    "account_code": account_code,
+                    "account_name": account_name,
+                    "category": category_name,
+                    "amount": _format_currency(amount),
+                    "amount_raw": float(amount),
+                }
+            )
 
         # Sort by amount descending
         expense_items.sort(key=lambda x: x["amount_raw"], reverse=True)
@@ -1312,10 +1468,17 @@ class ReportsWebService:
             rows = (
                 db.query(
                     Account.account_id,
-                    func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
-                    func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+                    func.coalesce(
+                        func.sum(JournalEntryLine.debit_amount_functional), 0
+                    ).label("debit"),
+                    func.coalesce(
+                        func.sum(JournalEntryLine.credit_amount_functional), 0
+                    ).label("credit"),
                 )
-                .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+                .join(
+                    JournalEntry,
+                    JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
+                )
                 .join(Account, Account.account_id == JournalEntryLine.account_id)
                 .filter(
                     JournalEntry.organization_id == org_id,
@@ -1338,14 +1501,16 @@ class ReportsWebService:
                 total_outflow += outflow
 
                 account = acct_map.get(account_id)
-                movements.append({
-                    "account_code": account.account_code if account else "",
-                    "account_name": account.account_name if account else "",
-                    "inflow": _format_currency(inflow),
-                    "outflow": _format_currency(outflow),
-                    "net": _format_currency(inflow - outflow),
-                    "net_raw": float(inflow - outflow),
-                })
+                movements.append(
+                    {
+                        "account_code": account.account_code if account else "",
+                        "account_name": account.account_name if account else "",
+                        "inflow": _format_currency(inflow),
+                        "outflow": _format_currency(outflow),
+                        "net": _format_currency(inflow - outflow),
+                        "net_raw": float(inflow - outflow),
+                    }
+                )
 
         net_cash = total_inflow - total_outflow
 
@@ -1377,10 +1542,17 @@ class ReportsWebService:
                 Account.account_id,
                 Account.account_code,
                 Account.account_name,
-                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
-                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+                func.coalesce(
+                    func.sum(JournalEntryLine.debit_amount_functional), 0
+                ).label("debit"),
+                func.coalesce(
+                    func.sum(JournalEntryLine.credit_amount_functional), 0
+                ).label("credit"),
             )
-            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(
+                JournalEntry,
+                JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
+            )
             .join(Account, Account.account_id == JournalEntryLine.account_id)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
             .filter(
@@ -1398,10 +1570,17 @@ class ReportsWebService:
         opening_rows = (
             db.query(
                 Account.account_id,
-                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
-                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+                func.coalesce(
+                    func.sum(JournalEntryLine.debit_amount_functional), 0
+                ).label("debit"),
+                func.coalesce(
+                    func.sum(JournalEntryLine.credit_amount_functional), 0
+                ).label("credit"),
             )
-            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(
+                JournalEntry,
+                JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
+            )
             .join(Account, Account.account_id == JournalEntryLine.account_id)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
             .filter(
@@ -1424,7 +1603,9 @@ class ReportsWebService:
             debit = Decimal(str(debit or 0))
             credit = Decimal(str(credit or 0))
             opening_debit, opening_credit = opening_map.get(account_id, (0, 0))
-            opening = Decimal(str(opening_credit or 0)) - Decimal(str(opening_debit or 0))
+            opening = Decimal(str(opening_credit or 0)) - Decimal(
+                str(opening_debit or 0)
+            )
             change = credit - debit
             closing = opening + change
 
@@ -1432,23 +1613,32 @@ class ReportsWebService:
             total_change += change
             total_closing += closing
 
-            line_items.append({
-                "account_code": code,
-                "account_name": name,
-                "opening_balance": _format_currency(opening),
-                "change": _format_currency(change),
-                "closing_balance": _format_currency(closing),
-                "closing_balance_raw": float(closing),
-            })
+            line_items.append(
+                {
+                    "account_code": code,
+                    "account_name": name,
+                    "opening_balance": _format_currency(opening),
+                    "change": _format_currency(change),
+                    "closing_balance": _format_currency(closing),
+                    "closing_balance_raw": float(closing),
+                }
+            )
 
         # Net income for the period
         revenue_expense = (
             db.query(
                 AccountCategory.ifrs_category,
-                func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
-                func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+                func.coalesce(
+                    func.sum(JournalEntryLine.debit_amount_functional), 0
+                ).label("debit"),
+                func.coalesce(
+                    func.sum(JournalEntryLine.credit_amount_functional), 0
+                ).label("credit"),
             )
-            .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+            .join(
+                JournalEntry,
+                JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
+            )
             .join(Account, Account.account_id == JournalEntryLine.account_id)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
             .filter(
@@ -1456,10 +1646,12 @@ class ReportsWebService:
                 JournalEntry.status == JournalStatus.POSTED,
                 JournalEntry.posting_date >= from_date,
                 JournalEntry.posting_date <= to_date,
-                AccountCategory.ifrs_category.in_([
-                    IFRSCategory.REVENUE,
-                    IFRSCategory.EXPENSES,
-                ]),
+                AccountCategory.ifrs_category.in_(
+                    [
+                        IFRSCategory.REVENUE,
+                        IFRSCategory.EXPENSES,
+                    ]
+                ),
             )
             .group_by(AccountCategory.ifrs_category)
             .all()
@@ -1528,7 +1720,9 @@ class ReportsWebService:
         )
 
         if budget_id:
-            budget_query = budget_query.filter(Budget.budget_id == coerce_uuid(budget_id))
+            budget_query = budget_query.filter(
+                Budget.budget_id == coerce_uuid(budget_id)
+            )
         if budget_code:
             budget_query = budget_query.filter(Budget.budget_code == budget_code)
 
@@ -1536,13 +1730,18 @@ class ReportsWebService:
 
         budget_totals: dict[UUID, dict[str, Any]] = {}
         for line, budget, account in budget_lines:
-            budget_totals.setdefault(account.account_id, {
-                "account_code": account.account_code,
-                "account_name": account.account_name,
-                "budget": Decimal("0"),
-                "normal_balance": account.normal_balance.value,
-            })
-            budget_totals[account.account_id]["budget"] += Decimal(str(line.budget_amount or 0))
+            budget_totals.setdefault(
+                account.account_id,
+                {
+                    "account_code": account.account_code,
+                    "account_name": account.account_name,
+                    "budget": Decimal("0"),
+                    "normal_balance": account.normal_balance.value,
+                },
+            )
+            budget_totals[account.account_id]["budget"] += Decimal(
+                str(line.budget_amount or 0)
+            )
 
         account_ids = list(budget_totals.keys())
         actual_rows = []
@@ -1550,10 +1749,17 @@ class ReportsWebService:
             actual_rows = (
                 db.query(
                     JournalEntryLine.account_id,
-                    func.coalesce(func.sum(JournalEntryLine.debit_amount_functional), 0).label("debit"),
-                    func.coalesce(func.sum(JournalEntryLine.credit_amount_functional), 0).label("credit"),
+                    func.coalesce(
+                        func.sum(JournalEntryLine.debit_amount_functional), 0
+                    ).label("debit"),
+                    func.coalesce(
+                        func.sum(JournalEntryLine.credit_amount_functional), 0
+                    ).label("credit"),
                 )
-                .join(JournalEntry, JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id)
+                .join(
+                    JournalEntry,
+                    JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
+                )
                 .filter(
                     JournalEntry.organization_id == org_id,
                     JournalEntry.status == JournalStatus.POSTED,
@@ -1574,7 +1780,9 @@ class ReportsWebService:
         for account_id, data in budget_totals.items():
             actual_row = actual_map.get(account_id)
             debit = Decimal(str(actual_row.debit or 0)) if actual_row else Decimal("0")
-            credit = Decimal(str(actual_row.credit or 0)) if actual_row else Decimal("0")
+            credit = (
+                Decimal(str(actual_row.credit or 0)) if actual_row else Decimal("0")
+            )
             if data["normal_balance"] == "DEBIT":
                 actual = debit - credit
             else:
@@ -1582,20 +1790,24 @@ class ReportsWebService:
 
             budget = data["budget"]
             variance = actual - budget
-            variance_pct = (variance / budget * Decimal("100")) if budget else Decimal("0")
+            variance_pct = (
+                (variance / budget * Decimal("100")) if budget else Decimal("0")
+            )
 
             total_budget += budget
             total_actual += actual
 
-            rows.append({
-                "account_code": data["account_code"],
-                "account_name": data["account_name"],
-                "budget": _format_currency(budget),
-                "actual": _format_currency(actual),
-                "variance": _format_currency(variance),
-                "variance_percent": f"{variance_pct:.2f}%",
-                "variance_raw": float(variance),
-            })
+            rows.append(
+                {
+                    "account_code": data["account_code"],
+                    "account_name": data["account_name"],
+                    "budget": _format_currency(budget),
+                    "actual": _format_currency(actual),
+                    "variance": _format_currency(variance),
+                    "variance_percent": f"{variance_pct:.2f}%",
+                    "variance_raw": float(variance),
+                }
+            )
 
         rows.sort(key=lambda x: x["account_code"])
         total_variance = total_actual - total_budget
@@ -1621,6 +1833,7 @@ class ReportsWebService:
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
+
         context = base_context(request, auth, "Reports", "reports")
         context.update(
             self.dashboard_context(
@@ -1630,7 +1843,9 @@ class ReportsWebService:
                 end_date=end_date,
             )
         )
-        return templates.TemplateResponse(request, "finance/reports/dashboard.html", context)
+        return templates.TemplateResponse(
+            request, "finance/reports/dashboard.html", context
+        )
 
     def trial_balance_response(
         self,
@@ -1640,6 +1855,7 @@ class ReportsWebService:
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
+
         context = base_context(request, auth, "Trial Balance", "reports")
         context.update(
             self.trial_balance_context(
@@ -1648,7 +1864,9 @@ class ReportsWebService:
                 as_of_date=as_of_date,
             )
         )
-        return templates.TemplateResponse(request, "finance/reports/trial_balance.html", context)
+        return templates.TemplateResponse(
+            request, "finance/reports/trial_balance.html", context
+        )
 
     def income_statement_response(
         self,
@@ -1659,6 +1877,7 @@ class ReportsWebService:
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
+
         context = base_context(request, auth, "Statement of Profit or Loss", "reports")
         context.update(
             self.income_statement_context(
@@ -1668,7 +1887,9 @@ class ReportsWebService:
                 end_date=end_date,
             )
         )
-        return templates.TemplateResponse(request, "finance/reports/income_statement.html", context)
+        return templates.TemplateResponse(
+            request, "finance/reports/income_statement.html", context
+        )
 
     def balance_sheet_response(
         self,
@@ -1678,7 +1899,10 @@ class ReportsWebService:
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
-        context = base_context(request, auth, "Statement of Financial Position", "reports")
+
+        context = base_context(
+            request, auth, "Statement of Financial Position", "reports"
+        )
         context.update(
             self.balance_sheet_context(
                 db,
@@ -1686,7 +1910,9 @@ class ReportsWebService:
                 as_of_date=as_of_date,
             )
         )
-        return templates.TemplateResponse(request, "finance/reports/balance_sheet.html", context)
+        return templates.TemplateResponse(
+            request, "finance/reports/balance_sheet.html", context
+        )
 
     def ap_aging_response(
         self,
@@ -1696,6 +1922,7 @@ class ReportsWebService:
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
+
         context = base_context(request, auth, "AP Aging Report", "reports")
         context.update(
             self.ap_aging_context(
@@ -1704,7 +1931,9 @@ class ReportsWebService:
                 as_of_date=as_of_date,
             )
         )
-        return templates.TemplateResponse(request, "finance/reports/ap_aging.html", context)
+        return templates.TemplateResponse(
+            request, "finance/reports/ap_aging.html", context
+        )
 
     def ar_aging_response(
         self,
@@ -1714,6 +1943,7 @@ class ReportsWebService:
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
+
         context = base_context(request, auth, "AR Aging Report", "reports")
         context.update(
             self.ar_aging_context(
@@ -1722,7 +1952,9 @@ class ReportsWebService:
                 as_of_date=as_of_date,
             )
         )
-        return templates.TemplateResponse(request, "finance/reports/ar_aging.html", context)
+        return templates.TemplateResponse(
+            request, "finance/reports/ar_aging.html", context
+        )
 
     def general_ledger_response(
         self,
@@ -1734,6 +1966,7 @@ class ReportsWebService:
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
+
         context = base_context(request, auth, "General Ledger", "reports")
         context.update(
             self.general_ledger_context(
@@ -1744,7 +1977,9 @@ class ReportsWebService:
                 end_date=end_date,
             )
         )
-        return templates.TemplateResponse(request, "finance/reports/general_ledger.html", context)
+        return templates.TemplateResponse(
+            request, "finance/reports/general_ledger.html", context
+        )
 
     def tax_summary_response(
         self,
@@ -1755,6 +1990,7 @@ class ReportsWebService:
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
+
         context = base_context(request, auth, "Tax Summary", "reports")
         context.update(
             self.tax_summary_context(
@@ -1764,7 +2000,9 @@ class ReportsWebService:
                 end_date=end_date,
             )
         )
-        return templates.TemplateResponse(request, "finance/reports/tax_summary.html", context)
+        return templates.TemplateResponse(
+            request, "finance/reports/tax_summary.html", context
+        )
 
     def expense_summary_response(
         self,
@@ -1775,6 +2013,7 @@ class ReportsWebService:
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
+
         context = base_context(request, auth, "Expense Summary", "reports")
         context.update(
             self.expense_summary_context(
@@ -1784,7 +2023,9 @@ class ReportsWebService:
                 end_date=end_date,
             )
         )
-        return templates.TemplateResponse(request, "finance/reports/expense_summary.html", context)
+        return templates.TemplateResponse(
+            request, "finance/reports/expense_summary.html", context
+        )
 
     def cash_flow_response(
         self,
@@ -1795,6 +2036,7 @@ class ReportsWebService:
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
+
         context = base_context(request, auth, "Cash Flow Statement", "reports")
         context.update(
             self.cash_flow_context(
@@ -1804,7 +2046,9 @@ class ReportsWebService:
                 end_date=end_date,
             )
         )
-        return templates.TemplateResponse(request, "finance/reports/cash_flow.html", context)
+        return templates.TemplateResponse(
+            request, "finance/reports/cash_flow.html", context
+        )
 
     def changes_in_equity_response(
         self,
@@ -1815,6 +2059,7 @@ class ReportsWebService:
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
+
         context = base_context(request, auth, "Changes in Equity", "reports")
         context.update(
             self.changes_in_equity_context(
@@ -1839,6 +2084,7 @@ class ReportsWebService:
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
+
         context = base_context(request, auth, "Budget vs Actual", "reports")
         context.update(
             self.budget_vs_actual_context(

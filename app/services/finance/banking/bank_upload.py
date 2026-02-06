@@ -5,6 +5,7 @@ Generates bank upload files for bulk payments.
 Supports multiple bank formats (Zenith, Access, GTBank, etc.).
 Reusable across payroll, AP bills, and any bulk payment scenarios.
 """
+
 from __future__ import annotations
 
 import csv
@@ -166,16 +167,18 @@ class BankUploadService:
         writer = csv.writer(output)
 
         # Header row
-        writer.writerow([
-            "Transaction Ref",
-            "Beneficiary Name",
-            "Amount",
-            "Date",
-            "Beneficiary Code",
-            "Account Number",
-            "Sort Code",
-            "Debit Account",
-        ])
+        writer.writerow(
+            [
+                "Transaction Ref",
+                "Beneficiary Name",
+                "Amount",
+                "Date",
+                "Beneficiary Code",
+                "Account Number",
+                "Sort Code",
+                "Debit Account",
+            ]
+        )
 
         errors: list[str] = []
         total_amount = Decimal("0")
@@ -188,20 +191,24 @@ class BankUploadService:
         for item in items:
             bank_code = self._resolve_bank_code(item)
             if not bank_code:
-                errors.append(f"Bank code not found for: {item.beneficiary_name} ({item.bank_name})")
+                errors.append(
+                    f"Bank code not found for: {item.beneficiary_name} ({item.bank_name})"
+                )
 
             account_number = self._format_account_number(item.account_number)
 
-            writer.writerow([
-                item.reference,
-                item.beneficiary_name,
-                str(item.amount),
-                date_str,
-                item.beneficiary_code or "",
-                account_number,
-                bank_code,
-                formatted_source_account,
-            ])
+            writer.writerow(
+                [
+                    item.reference,
+                    item.beneficiary_name,
+                    str(item.amount),
+                    date_str,
+                    item.beneficiary_code or "",
+                    account_number,
+                    bank_code,
+                    formatted_source_account,
+                ]
+            )
             total_amount += item.amount
             row_count += 1
 
@@ -233,14 +240,16 @@ class BankUploadService:
         writer = csv.writer(output)
 
         # Header row
-        writer.writerow([
-            "Serial No",
-            "Beneficiary Account Number",
-            "Beneficiary Bank Code",
-            "Beneficiary Name",
-            "Amount",
-            "Narration",
-        ])
+        writer.writerow(
+            [
+                "Serial No",
+                "Beneficiary Account Number",
+                "Beneficiary Bank Code",
+                "Beneficiary Name",
+                "Amount",
+                "Narration",
+            ]
+        )
 
         errors: list[str] = []
         total_amount = Decimal("0")
@@ -249,18 +258,22 @@ class BankUploadService:
         for idx, item in enumerate(items, start=1):
             bank_code = self._resolve_bank_code(item)
             if not bank_code:
-                errors.append(f"Bank code not found for: {item.beneficiary_name} ({item.bank_name})")
+                errors.append(
+                    f"Bank code not found for: {item.beneficiary_name} ({item.bank_name})"
+                )
 
             narration = item.narration or f"Payment to {item.beneficiary_name}"
 
-            writer.writerow([
-                idx,
-                self._format_account_number(item.account_number),
-                bank_code,
-                item.beneficiary_name,
-                str(item.amount),
-                narration,
-            ])
+            writer.writerow(
+                [
+                    idx,
+                    self._format_account_number(item.account_number),
+                    bank_code,
+                    item.beneficiary_name,
+                    str(item.amount),
+                    narration,
+                ]
+            )
             total_amount += item.amount
             row_count += 1
 
@@ -290,13 +303,15 @@ class BankUploadService:
         writer = csv.writer(output)
 
         # Header row
-        writer.writerow([
-            "Account Number",
-            "Bank Code",
-            "Amount",
-            "Beneficiary Name",
-            "Remarks",
-        ])
+        writer.writerow(
+            [
+                "Account Number",
+                "Bank Code",
+                "Amount",
+                "Beneficiary Name",
+                "Remarks",
+            ]
+        )
 
         errors: list[str] = []
         total_amount = Decimal("0")
@@ -305,17 +320,21 @@ class BankUploadService:
         for item in items:
             bank_code = self._resolve_bank_code(item)
             if not bank_code:
-                errors.append(f"Bank code not found for: {item.beneficiary_name} ({item.bank_name})")
+                errors.append(
+                    f"Bank code not found for: {item.beneficiary_name} ({item.bank_name})"
+                )
 
             remarks = item.narration or item.reference
 
-            writer.writerow([
-                self._format_account_number(item.account_number),
-                bank_code,
-                str(item.amount),
-                item.beneficiary_name,
-                remarks,
-            ])
+            writer.writerow(
+                [
+                    self._format_account_number(item.account_number),
+                    bank_code,
+                    str(item.amount),
+                    item.beneficiary_name,
+                    remarks,
+                ]
+            )
             total_amount += item.amount
             row_count += 1
 
@@ -347,16 +366,18 @@ class BankUploadService:
         writer = csv.writer(output)
 
         # Header row
-        writer.writerow([
-            "Reference",
-            "Beneficiary Name",
-            "Account Number",
-            "Bank Code",
-            "Bank Name",
-            "Amount",
-            "Date",
-            "Narration",
-        ])
+        writer.writerow(
+            [
+                "Reference",
+                "Beneficiary Name",
+                "Account Number",
+                "Bank Code",
+                "Bank Name",
+                "Amount",
+                "Date",
+                "Narration",
+            ]
+        )
 
         errors: list[str] = []
         total_amount = Decimal("0")
@@ -366,20 +387,24 @@ class BankUploadService:
         for item in items:
             bank_code = self._resolve_bank_code(item)
             if not bank_code:
-                errors.append(f"Bank code not found for: {item.beneficiary_name} ({item.bank_name})")
+                errors.append(
+                    f"Bank code not found for: {item.beneficiary_name} ({item.bank_name})"
+                )
 
             narration = item.narration or f"Payment - {item.reference}"
 
-            writer.writerow([
-                item.reference,
-                item.beneficiary_name,
-                self._format_account_number(item.account_number),
-                bank_code,
-                item.bank_name,
-                str(item.amount),
-                date_str,
-                narration,
-            ])
+            writer.writerow(
+                [
+                    item.reference,
+                    item.beneficiary_name,
+                    self._format_account_number(item.account_number),
+                    bank_code,
+                    item.bank_name,
+                    str(item.amount),
+                    date_str,
+                    narration,
+                ]
+            )
             total_amount += item.amount
             row_count += 1
 

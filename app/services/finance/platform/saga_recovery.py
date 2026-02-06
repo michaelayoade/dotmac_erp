@@ -65,10 +65,12 @@ class SagaRecoveryService:
 
         query = db.query(SagaExecution).filter(
             and_(
-                SagaExecution.status.in_([
-                    SagaStatus.EXECUTING,
-                    SagaStatus.COMPENSATING,
-                ]),
+                SagaExecution.status.in_(
+                    [
+                        SagaStatus.EXECUTING,
+                        SagaStatus.COMPENSATING,
+                    ]
+                ),
                 SagaExecution.started_at < cutoff_time,
             )
         )
@@ -82,8 +84,7 @@ class SagaRecoveryService:
 
         if stuck:
             logger.warning(
-                "Found %d stuck sagas older than %d minutes",
-                len(stuck), threshold
+                "Found %d stuck sagas older than %d minutes", len(stuck), threshold
             )
 
         return stuck
@@ -115,22 +116,28 @@ class SagaRecoveryService:
             logger.error("Saga %s not found for recovery", saga_id)
             return False
 
-        if saga.status in {SagaStatus.COMPLETED, SagaStatus.COMPENSATED, SagaStatus.FAILED}:
-            logger.info("Saga %s already in terminal state: %s", saga_id, saga.status.value)
+        if saga.status in {
+            SagaStatus.COMPLETED,
+            SagaStatus.COMPENSATED,
+            SagaStatus.FAILED,
+        }:
+            logger.info(
+                "Saga %s already in terminal state: %s", saga_id, saga.status.value
+            )
             return True
 
         logger.info(
             "Recovering saga %s type=%s status=%s current_step=%d",
-            saga_id, saga.saga_type, saga.status.value, saga.current_step
+            saga_id,
+            saga.saga_type,
+            saga.status.value,
+            saga.current_step,
         )
 
         # Get the orchestrator for this saga type
         orchestrator = saga_factory.get_orchestrator(saga.saga_type)
         if not orchestrator:
-            logger.error(
-                "No orchestrator registered for saga type: %s",
-                saga.saga_type
-            )
+            logger.error("No orchestrator registered for saga type: %s", saga.saga_type)
             return False
 
         if force_compensate or saga.status == SagaStatus.COMPENSATING:
@@ -173,10 +180,7 @@ class SagaRecoveryService:
         db.commit()
         db.refresh(saga)
 
-        logger.warning(
-            "Manually marked saga %s as FAILED: %s",
-            saga_id, reason
-        )
+        logger.warning("Manually marked saga %s as FAILED: %s", saga_id, reason)
 
         return saga
 
@@ -252,8 +256,7 @@ class SagaRecoveryService:
 
         if saga.status != SagaStatus.FAILED:
             logger.info(
-                "Saga %s is not in FAILED status, cannot retry compensation",
-                saga_id
+                "Saga %s is not in FAILED status, cannot retry compensation", saga_id
             )
             return False
 
@@ -309,11 +312,13 @@ class SagaRecoveryService:
         saga_ids = (
             db.query(SagaExecution.saga_id)
             .filter(
-                SagaExecution.status.in_([
-                    SagaStatus.COMPLETED,
-                    SagaStatus.COMPENSATED,
-                    SagaStatus.FAILED,
-                ]),
+                SagaExecution.status.in_(
+                    [
+                        SagaStatus.COMPLETED,
+                        SagaStatus.COMPENSATED,
+                        SagaStatus.FAILED,
+                    ]
+                ),
                 SagaExecution.completed_at < cutoff_date,
             )
             .limit(batch_size)

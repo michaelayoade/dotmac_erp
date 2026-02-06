@@ -4,6 +4,7 @@ Revision ID: 20250212_add_assets_checklists_workflow_tasks
 Revises: 20250212_add_hr_lifecycle_tables
 Create Date: 2025-02-12 00:00:00.000000
 """
+
 from alembic import op
 from app.alembic_utils import ensure_enum
 import sqlalchemy as sa
@@ -141,7 +142,9 @@ def upgrade() -> None:
             sa.ForeignKey("hr.asset_assignment.assignment_id"),
             nullable=True,
         ),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
         sa.Column(
             "created_by_id",
@@ -204,8 +207,12 @@ def upgrade() -> None:
             ),
             nullable=False,
         ),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")
+        ),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
         sa.Column(
             "created_by_id",
@@ -243,7 +250,9 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("item_name", sa.String(length=500), nullable=False),
-        sa.Column("is_required", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+        sa.Column(
+            "is_required", sa.Boolean(), nullable=False, server_default=sa.text("true")
+        ),
         sa.Column("sequence", sa.Integer(), nullable=True),
         schema="hr",
     )
@@ -308,7 +317,12 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("due_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
     )
     op.create_index(
@@ -334,14 +348,26 @@ def downgrade() -> None:
     op.drop_index("idx_workflow_task_assignee", table_name="workflow_task")
     op.drop_table("workflow_task")
 
-    op.drop_index("idx_checklist_template_item_template", table_name="checklist_template_item", schema="hr")
+    op.drop_index(
+        "idx_checklist_template_item_template",
+        table_name="checklist_template_item",
+        schema="hr",
+    )
     op.drop_table("checklist_template_item", schema="hr")
-    op.drop_index("idx_checklist_template_type", table_name="checklist_template", schema="hr")
+    op.drop_index(
+        "idx_checklist_template_type", table_name="checklist_template", schema="hr"
+    )
     op.drop_table("checklist_template", schema="hr")
 
-    op.drop_index("idx_asset_assignment_status", table_name="asset_assignment", schema="hr")
-    op.drop_index("idx_asset_assignment_employee", table_name="asset_assignment", schema="hr")
-    op.drop_index("idx_asset_assignment_asset", table_name="asset_assignment", schema="hr")
+    op.drop_index(
+        "idx_asset_assignment_status", table_name="asset_assignment", schema="hr"
+    )
+    op.drop_index(
+        "idx_asset_assignment_employee", table_name="asset_assignment", schema="hr"
+    )
+    op.drop_index(
+        "idx_asset_assignment_asset", table_name="asset_assignment", schema="hr"
+    )
     op.drop_table("asset_assignment", schema="hr")
 
     op.execute("DROP TYPE IF EXISTS hr.workflow_task_priority")

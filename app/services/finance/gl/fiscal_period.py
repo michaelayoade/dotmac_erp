@@ -6,6 +6,7 @@ Manages fiscal periods including creation, status changes, and queries.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from typing import List, Optional
@@ -17,6 +18,8 @@ from sqlalchemy.orm import Session
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -74,7 +77,7 @@ class FiscalPeriodService(ListResponseMixin):
         if existing:
             raise HTTPException(
                 status_code=400,
-                detail=f"Period number {input.period_number} already exists for this fiscal year"
+                detail=f"Period number {input.period_number} already exists for this fiscal year",
             )
 
         period = FiscalPeriod(
@@ -128,7 +131,7 @@ class FiscalPeriodService(ListResponseMixin):
         if period.status not in {PeriodStatus.FUTURE, PeriodStatus.SOFT_CLOSED}:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot open period with status '{period.status.value}'"
+                detail=f"Cannot open period with status '{period.status.value}'",
             )
 
         period.status = PeriodStatus.OPEN
@@ -195,7 +198,7 @@ class FiscalPeriodService(ListResponseMixin):
         if period.status not in {PeriodStatus.OPEN, PeriodStatus.REOPENED}:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot soft close period with status '{period.status.value}'"
+                detail=f"Cannot soft close period with status '{period.status.value}'",
             )
 
         period.status = PeriodStatus.SOFT_CLOSED
@@ -240,8 +243,7 @@ class FiscalPeriodService(ListResponseMixin):
 
         if period.status != PeriodStatus.SOFT_CLOSED:
             raise HTTPException(
-                status_code=400,
-                detail="Period must be soft closed before hard closing"
+                status_code=400, detail="Period must be soft closed before hard closing"
             )
 
         period.status = PeriodStatus.HARD_CLOSED
@@ -288,14 +290,13 @@ class FiscalPeriodService(ListResponseMixin):
 
         if period.status == PeriodStatus.HARD_CLOSED:
             raise HTTPException(
-                status_code=400,
-                detail="Cannot reopen a hard-closed period"
+                status_code=400, detail="Cannot reopen a hard-closed period"
             )
 
         if period.status not in {PeriodStatus.SOFT_CLOSED}:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot reopen period with status '{period.status.value}'"
+                detail=f"Cannot reopen period with status '{period.status.value}'",
             )
 
         period.status = PeriodStatus.REOPENED

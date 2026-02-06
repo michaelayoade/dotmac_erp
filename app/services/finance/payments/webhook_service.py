@@ -3,6 +3,7 @@ Webhook Service.
 
 Handles Paystack webhook events with idempotency and audit logging.
 """
+
 import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -115,7 +116,9 @@ class WebhookService:
             if not intent:
                 logger.warning(f"No payment intent found for reference: {reference}")
                 webhook.status = WebhookStatus.FAILED
-                webhook.error_message = f"Payment intent not found for reference: {reference}"
+                webhook.error_message = (
+                    f"Payment intent not found for reference: {reference}"
+                )
                 self.db.flush()
                 return webhook
 
@@ -180,7 +183,7 @@ class WebhookService:
         Raises:
             ValueError: If amount or currency doesn't match
         """
-        from decimal import Decimal, ROUND_HALF_UP
+        from decimal import ROUND_HALF_UP, Decimal
 
         # Paystack sends amount in kobo (smallest unit), we store in currency units
         raw_amount = data.get("amount", 0)
@@ -310,7 +313,9 @@ class WebhookService:
         completed_at_str = data.get("completed_at") or data.get("updated_at")
         if completed_at_str:
             try:
-                completed_at = datetime.fromisoformat(completed_at_str.replace("Z", "+00:00"))
+                completed_at = datetime.fromisoformat(
+                    completed_at_str.replace("Z", "+00:00")
+                )
             except ValueError:
                 completed_at = datetime.now(timezone.utc)
         else:
@@ -372,7 +377,9 @@ class WebhookService:
         reversed_at_str = data.get("reversed_at") or data.get("updated_at")
         if reversed_at_str:
             try:
-                reversed_at = datetime.fromisoformat(reversed_at_str.replace("Z", "+00:00"))
+                reversed_at = datetime.fromisoformat(
+                    reversed_at_str.replace("Z", "+00:00")
+                )
             except ValueError:
                 reversed_at = datetime.now(timezone.utc)
         else:

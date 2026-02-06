@@ -3,14 +3,16 @@
 Handles expense categories, claims, cash advances, and corporate cards.
 Adapted from DotMac People for the unified ERP platform.
 """
+
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, joinedload
 
@@ -22,13 +24,15 @@ from app.models.people.exp import (
     CorporateCard,
     ExpenseCategory,
     ExpenseClaim,
+    ExpenseClaimAction,
+    ExpenseClaimActionStatus,
+    ExpenseClaimActionType,
     ExpenseClaimItem,
     ExpenseClaimStatus,
-    ExpenseClaimAction,
-    ExpenseClaimActionType,
-    ExpenseClaimActionStatus,
 )
 from app.services.common import PaginatedResult, PaginationParams
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
@@ -201,11 +205,11 @@ class ExpenseService:
 
     def _next_claim_number(self) -> str:
         if self.db.bind and self.db.bind.dialect.name == "postgresql":
-            seq = self.db.scalar(text("select nextval('expense.expense_claim_number_seq')"))
+            seq = self.db.scalar(
+                text("select nextval('expense.expense_claim_number_seq')")
+            )
             return f"EXP-{date.today().year}-{int(seq):05d}"
-        count = self.db.scalar(
-            select(func.count(ExpenseClaim.claim_id))
-        ) or 0
+        count = self.db.scalar(select(func.count(ExpenseClaim.claim_id))) or 0
         return f"EXP-{date.today().year}-{count + 1:05d}"
 
     # =========================================================================
@@ -462,9 +466,7 @@ class ExpenseService:
                     category.max_amount_per_claim is not None
                     and item_data["claimed_amount"] > category.max_amount_per_claim
                 ):
-                    raise ExpenseServiceError(
-                        "Claimed amount exceeds category limit"
-                    )
+                    raise ExpenseServiceError("Claimed amount exceeds category limit")
                 item = ExpenseClaimItem(
                     organization_id=org_id,
                     claim_id=claim.claim_id,
@@ -572,7 +574,9 @@ class ExpenseService:
         if not claim.items:
             raise ExpenseServiceError("Cannot submit claim with no items")
 
-        action_started = self._begin_action(org_id, claim_id, ExpenseClaimActionType.SUBMIT)
+        action_started = self._begin_action(
+            org_id, claim_id, ExpenseClaimActionType.SUBMIT
+        )
         if not action_started:
             if claim.status != ExpenseClaimStatus.DRAFT:
                 return claim
@@ -767,7 +771,9 @@ class ExpenseService:
             )
             if not category:
                 raise ExpenseCategoryNotFoundError(category_id)
-            amount_to_check = claimed_amount if claimed_amount is not None else item.claimed_amount
+            amount_to_check = (
+                claimed_amount if claimed_amount is not None else item.claimed_amount
+            )
             if (
                 category.max_amount_per_claim is not None
                 and amount_to_check > category.max_amount_per_claim
@@ -887,7 +893,9 @@ class ExpenseService:
         if claim.status not in {ExpenseClaimStatus.DRAFT, ExpenseClaimStatus.SUBMITTED}:
             raise ExpenseClaimStatusError(claim.status.value, "link advance")
 
-        if not self._begin_action(org_id, claim_id, ExpenseClaimActionType.LINK_ADVANCE):
+        if not self._begin_action(
+            org_id, claim_id, ExpenseClaimActionType.LINK_ADVANCE
+        ):
             return claim
 
         try:
@@ -895,7 +903,9 @@ class ExpenseService:
             claim.advance_adjusted = amount_to_adjust
 
             if claim.total_approved_amount:
-                claim.net_payable_amount = claim.total_approved_amount - amount_to_adjust
+                claim.net_payable_amount = (
+                    claim.total_approved_amount - amount_to_adjust
+                )
 
             self.db.flush()
             self._set_action_status(
@@ -990,11 +1000,14 @@ class ExpenseService:
     ) -> CashAdvance:
         """Create a new cash advance request."""
         # Generate advance number
-        count = self.db.scalar(
-            select(func.count(CashAdvance.advance_id)).where(
-                CashAdvance.organization_id == org_id
+        count = (
+            self.db.scalar(
+                select(func.count(CashAdvance.advance_id)).where(
+                    CashAdvance.organization_id == org_id
+                )
             )
-        ) or 0
+            or 0
+        )
         advance_number = f"ADV-{date.today().year}-{count + 1:05d}"
 
         advance = CashAdvance(
@@ -1339,9 +1352,9 @@ class ExpenseService:
             query = query.where(CardTransaction.card_id == card_id)
 
         if employee_id:
-            query = query.join(CorporateCard, CorporateCard.card_id == CardTransaction.card_id).where(
-                CorporateCard.employee_id == employee_id
-            )
+            query = query.join(
+                CorporateCard, CorporateCard.card_id == CardTransaction.card_id
+            ).where(CorporateCard.employee_id == employee_id)
 
         if status:
             status_value: Optional[CardTransactionStatus] = (
@@ -1499,12 +1512,15 @@ class ExpenseService:
         month_start = today.replace(day=1)
 
         # Pending claims
-        pending_claims = self.db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                ExpenseClaim.organization_id == org_id,
-                ExpenseClaim.status == ExpenseClaimStatus.SUBMITTED,
+        pending_claims = (
+            self.db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(
+                    ExpenseClaim.organization_id == org_id,
+                    ExpenseClaim.status == ExpenseClaimStatus.SUBMITTED,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Total pending amount
         total_pending = self.db.scalar(
@@ -1515,12 +1531,15 @@ class ExpenseService:
         ) or Decimal("0")
 
         # Claims this month
-        claims_this_month = self.db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                ExpenseClaim.organization_id == org_id,
-                ExpenseClaim.claim_date >= month_start,
+        claims_this_month = (
+            self.db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(
+                    ExpenseClaim.organization_id == org_id,
+                    ExpenseClaim.claim_date >= month_start,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Amount this month
         amount_this_month = self.db.scalar(
@@ -1531,18 +1550,23 @@ class ExpenseService:
         ) or Decimal("0")
 
         # Outstanding advances
-        outstanding_advances = self.db.scalar(
-            select(func.count(CashAdvance.advance_id)).where(
-                CashAdvance.organization_id == org_id,
-                CashAdvance.status == CashAdvanceStatus.DISBURSED,
+        outstanding_advances = (
+            self.db.scalar(
+                select(func.count(CashAdvance.advance_id)).where(
+                    CashAdvance.organization_id == org_id,
+                    CashAdvance.status == CashAdvanceStatus.DISBURSED,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Outstanding advance amount
         advance_amount = self.db.scalar(
             select(
                 func.sum(
-                    CashAdvance.approved_amount - CashAdvance.amount_settled - CashAdvance.amount_refunded
+                    CashAdvance.approved_amount
+                    - CashAdvance.amount_settled
+                    - CashAdvance.amount_refunded
                 )
             ).where(
                 CashAdvance.organization_id == org_id,
@@ -1580,14 +1604,17 @@ class ExpenseService:
             period_end = date(target_year, target_month + 1, 1)
 
         # Claims in period
-        claims_in_period = self.db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                ExpenseClaim.organization_id == org_id,
-                ExpenseClaim.employee_id == employee_id,
-                ExpenseClaim.claim_date >= period_start,
-                ExpenseClaim.claim_date < period_end,
+        claims_in_period = (
+            self.db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(
+                    ExpenseClaim.organization_id == org_id,
+                    ExpenseClaim.employee_id == employee_id,
+                    ExpenseClaim.claim_date >= period_start,
+                    ExpenseClaim.claim_date < period_end,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Total claimed in period
         total_claimed = self.db.scalar(
@@ -1611,19 +1638,24 @@ class ExpenseService:
         ) or Decimal("0")
 
         # Pending claims
-        pending_claims = self.db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                ExpenseClaim.organization_id == org_id,
-                ExpenseClaim.employee_id == employee_id,
-                ExpenseClaim.status == ExpenseClaimStatus.SUBMITTED,
+        pending_claims = (
+            self.db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(
+                    ExpenseClaim.organization_id == org_id,
+                    ExpenseClaim.employee_id == employee_id,
+                    ExpenseClaim.status == ExpenseClaimStatus.SUBMITTED,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Outstanding advances
         outstanding_advances = self.db.scalar(
             select(
                 func.sum(
-                    CashAdvance.approved_amount - CashAdvance.amount_settled - CashAdvance.amount_refunded
+                    CashAdvance.approved_amount
+                    - CashAdvance.amount_settled
+                    - CashAdvance.amount_refunded
                 )
             ).where(
                 CashAdvance.organization_id == org_id,

@@ -7,10 +7,9 @@ Template response helpers for the support/helpdesk module.
 from __future__ import annotations
 
 import logging
-from urllib.parse import quote
 from datetime import date
-from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import HTTPException, Request, UploadFile
@@ -19,25 +18,24 @@ from sqlalchemy import select
 from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models.support.ticket import Ticket, TicketPriority, TicketStatus
-from app.models.people.hr import Employee
-from app.models.person import Person
 from app.models.expense.expense_claim import ExpenseClaim
+from app.models.person import Person
+from app.models.support.ticket import Ticket, TicketPriority, TicketStatus
 from app.services.common import coerce_uuid
-from app.services.support.ticket import ticket_service
-from app.services.support.comment import comment_service
+from app.services.dropdown import dropdown_service
 from app.services.support.attachment import attachment_service
 from app.services.support.category import category_service
-from app.services.support.team import team_service
+from app.services.support.comment import comment_service
 from app.services.support.sla import sla_service
-from app.services.dropdown import dropdown_service
-from app.templates import templates
+from app.services.support.team import team_service
+from app.services.support.ticket import ticket_service
+from app.services.support.web_attachments import attachment_web_service
+from app.services.support.web_categories import category_web_service
 
 # Import delegated web services
 from app.services.support.web_comments import comment_web_service
-from app.services.support.web_attachments import attachment_web_service
 from app.services.support.web_teams import team_web_service
-from app.services.support.web_categories import category_web_service
+from app.templates import templates
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
@@ -96,18 +94,19 @@ PRIORITY_STYLES = {
 
 import re
 
+
 def _strip_html(html: str) -> str:
     """Strip HTML tags and decode entities from text."""
     if not html:
         return ""
     # Remove HTML tags
-    text = re.sub(r'<[^>]+>', ' ', html)
+    text = re.sub(r"<[^>]+>", " ", html)
     # Decode common HTML entities
-    text = text.replace('&nbsp;', ' ').replace('&amp;', '&')
-    text = text.replace('&lt;', '<').replace('&gt;', '>')
-    text = text.replace('&quot;', '"').replace('&#39;', "'")
+    text = text.replace("&nbsp;", " ").replace("&amp;", "&")
+    text = text.replace("&lt;", "<").replace("&gt;", ">")
+    text = text.replace("&quot;", '"').replace("&#39;", "'")
     # Collapse whitespace
-    text = re.sub(r'\s+', ' ', text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
     return text
 
 
@@ -123,7 +122,9 @@ def _is_numeric_subject(subject: str) -> bool:
 def _format_ticket_for_list(ticket: Ticket) -> Dict[str, Any]:
     """Format a ticket for list view display."""
     status_style = STATUS_STYLES.get(ticket.status, STATUS_STYLES[TicketStatus.OPEN])
-    priority_style = PRIORITY_STYLES.get(ticket.priority, PRIORITY_STYLES[TicketPriority.MEDIUM])
+    priority_style = PRIORITY_STYLES.get(
+        ticket.priority, PRIORITY_STYLES[TicketPriority.MEDIUM]
+    )
 
     # Get assigned employee name
     assigned_name = None
@@ -158,7 +159,9 @@ def _format_ticket_for_list(ticket: Ticket) -> Dict[str, Any]:
         "ticket_edit_url": f"/support/tickets/{ticket.ticket_number or ticket.ticket_id}/edit",
         "subject": ticket.subject,
         "display_subject": display_subject,
-        "description_preview": (ticket.description[:100] + "...") if ticket.description and len(ticket.description) > 100 else ticket.description,
+        "description_preview": (ticket.description[:100] + "...")
+        if ticket.description and len(ticket.description) > 100
+        else ticket.description,
         "status": ticket.status.value,
         "status_label": status_style["label"],
         "status_badge": status_style["badge"],
@@ -166,7 +169,9 @@ def _format_ticket_for_list(ticket: Ticket) -> Dict[str, Any]:
         "priority_label": priority_style["label"],
         "priority_badge": priority_style["badge"],
         "opening_date": ticket.opening_date,
-        "opening_date_formatted": ticket.opening_date.strftime("%b %d, %Y") if ticket.opening_date else "",
+        "opening_date_formatted": ticket.opening_date.strftime("%b %d, %Y")
+        if ticket.opening_date
+        else "",
         "resolution_date": ticket.resolution_date,
         "assigned_to_id": str(ticket.assigned_to_id) if ticket.assigned_to_id else None,
         "assigned_to_name": assigned_name,
@@ -175,81 +180,117 @@ def _format_ticket_for_list(ticket: Ticket) -> Dict[str, Any]:
     }
 
 
-def _format_ticket_for_detail(ticket: Ticket, linked_expenses: List[ExpenseClaim], db: Session = None) -> Dict[str, Any]:
+def _format_ticket_for_detail(
+    ticket: Ticket, linked_expenses: List[ExpenseClaim], db: Session = None
+) -> Dict[str, Any]:
     """Format a ticket for detail view display."""
     base = _format_ticket_for_list(ticket)
     status_style = STATUS_STYLES.get(ticket.status, STATUS_STYLES[TicketStatus.OPEN])
 
     customer_contact = ticket.customer.primary_contact if ticket.customer else None
-    customer_billing_address = (ticket.customer.billing_address or {}).get("address", "") if ticket.customer else ""
-    customer_shipping_address = (ticket.customer.shipping_address or {}).get("address", "") if ticket.customer else ""
+    customer_billing_address = (
+        (ticket.customer.billing_address or {}).get("address", "")
+        if ticket.customer
+        else ""
+    )
+    customer_shipping_address = (
+        (ticket.customer.shipping_address or {}).get("address", "")
+        if ticket.customer
+        else ""
+    )
 
     # Add full details
-    base.update({
-        "description": ticket.description,
-        "resolution": ticket.resolution,
-        "resolution_date_formatted": ticket.resolution_date.strftime("%b %d, %Y") if ticket.resolution_date else None,
-        "project_name": ticket.project.project_name if ticket.project else None,
-        "project_code": ticket.project.project_code if ticket.project else None,
-        "project_id": str(ticket.project_id) if ticket.project_id else None,
-        "created_at": ticket.created_at.strftime("%b %d, %Y %H:%M") if ticket.created_at else "",
-        "updated_at": ticket.updated_at.strftime("%b %d, %Y %H:%M") if ticket.updated_at else None,
-        "status_icon_bg": status_style["icon_bg"],
-        "erpnext_id": ticket.erpnext_id,
-        "last_synced_at": ticket.last_synced_at.strftime("%b %d, %Y %H:%M") if ticket.last_synced_at else None,
-        # Customer info
-        "customer_id": str(ticket.customer_id) if ticket.customer_id else None,
-        "customer_name": ticket.customer.trading_name or ticket.customer.legal_name if ticket.customer else None,
-        "customer_code": ticket.customer.customer_code if ticket.customer else None,
-        "customer_email": (customer_contact or {}).get("email"),
-        "customer_phone": (customer_contact or {}).get("phone"),
-        "customer_billing_address": customer_billing_address,
-        "customer_shipping_address": customer_shipping_address,
-        # Category info
-        "category_id": str(ticket.category_id) if ticket.category_id else None,
-        "category_name": ticket.category.category_name if ticket.category else None,
-        "category_icon": ticket.category.icon if ticket.category else None,
-        "category_color": ticket.category.color if ticket.category else None,
-        # Team info
-        "team_id": str(ticket.team_id) if ticket.team_id else None,
-        "team_name": ticket.team.team_name if ticket.team else None,
-        "team_code": ticket.team.team_code if ticket.team else None,
-        # Available status transitions
-        "can_transition_to": [
-            {"value": s.value, "label": STATUS_STYLES[s]["label"]}
-            for s in ticket_service.STATUS_TRANSITIONS.get(ticket.status, [])
-        ],
-        # Linked expenses
-        "linked_expenses": [
-            {
-                "claim_id": str(e.claim_id),
-                "claim_number": e.claim_number,
-                "purpose": e.purpose,
-                "status": e.status.value if e.status else "Draft",
-                "total_amount": f"{e.currency_code} {e.total_claimed_amount:,.2f}" if e.total_claimed_amount else "",
-                "claim_date": e.claim_date.strftime("%b %d, %Y") if e.claim_date else "",
-            }
-            for e in linked_expenses
-        ],
-        "linked_expense_count": len(linked_expenses),
-        # Audit trail
-        "created_by_id": str(ticket.created_by_id) if ticket.created_by_id else None,
-        "updated_by_id": str(ticket.updated_by_id) if ticket.updated_by_id else None,
-    })
+    base.update(
+        {
+            "description": ticket.description,
+            "resolution": ticket.resolution,
+            "resolution_date_formatted": ticket.resolution_date.strftime("%b %d, %Y")
+            if ticket.resolution_date
+            else None,
+            "project_name": ticket.project.project_name if ticket.project else None,
+            "project_code": ticket.project.project_code if ticket.project else None,
+            "project_id": str(ticket.project_id) if ticket.project_id else None,
+            "created_at": ticket.created_at.strftime("%b %d, %Y %H:%M")
+            if ticket.created_at
+            else "",
+            "updated_at": ticket.updated_at.strftime("%b %d, %Y %H:%M")
+            if ticket.updated_at
+            else None,
+            "status_icon_bg": status_style["icon_bg"],
+            "erpnext_id": ticket.erpnext_id,
+            "last_synced_at": ticket.last_synced_at.strftime("%b %d, %Y %H:%M")
+            if ticket.last_synced_at
+            else None,
+            # Customer info
+            "customer_id": str(ticket.customer_id) if ticket.customer_id else None,
+            "customer_name": ticket.customer.trading_name or ticket.customer.legal_name
+            if ticket.customer
+            else None,
+            "customer_code": ticket.customer.customer_code if ticket.customer else None,
+            "customer_email": (customer_contact or {}).get("email"),
+            "customer_phone": (customer_contact or {}).get("phone"),
+            "customer_billing_address": customer_billing_address,
+            "customer_shipping_address": customer_shipping_address,
+            # Category info
+            "category_id": str(ticket.category_id) if ticket.category_id else None,
+            "category_name": ticket.category.category_name if ticket.category else None,
+            "category_icon": ticket.category.icon if ticket.category else None,
+            "category_color": ticket.category.color if ticket.category else None,
+            # Team info
+            "team_id": str(ticket.team_id) if ticket.team_id else None,
+            "team_name": ticket.team.team_name if ticket.team else None,
+            "team_code": ticket.team.team_code if ticket.team else None,
+            # Available status transitions
+            "can_transition_to": [
+                {"value": s.value, "label": STATUS_STYLES[s]["label"]}
+                for s in ticket_service.STATUS_TRANSITIONS.get(ticket.status, [])
+            ],
+            # Linked expenses
+            "linked_expenses": [
+                {
+                    "claim_id": str(e.claim_id),
+                    "claim_number": e.claim_number,
+                    "purpose": e.purpose,
+                    "status": e.status.value if e.status else "Draft",
+                    "total_amount": f"{e.currency_code} {e.total_claimed_amount:,.2f}"
+                    if e.total_claimed_amount
+                    else "",
+                    "claim_date": e.claim_date.strftime("%b %d, %Y")
+                    if e.claim_date
+                    else "",
+                }
+                for e in linked_expenses
+            ],
+            "linked_expense_count": len(linked_expenses),
+            # Audit trail
+            "created_by_id": str(ticket.created_by_id)
+            if ticket.created_by_id
+            else None,
+            "updated_by_id": str(ticket.updated_by_id)
+            if ticket.updated_by_id
+            else None,
+        }
+    )
 
     # Look up creator and updater names from Person
     if db and ticket.created_by_id:
         try:
             creator = db.get(Person, ticket.created_by_id)
             if creator:
-                base["created_by_name"] = f"{creator.first_name or ''} {creator.last_name or ''}".strip() or "Unknown"
+                base["created_by_name"] = (
+                    f"{creator.first_name or ''} {creator.last_name or ''}".strip()
+                    or "Unknown"
+                )
         except Exception:
             pass
     if db and ticket.updated_by_id:
         try:
             updater = db.get(Person, ticket.updated_by_id)
             if updater:
-                base["updated_by_name"] = f"{updater.first_name or ''} {updater.last_name or ''}".strip() or "Unknown"
+                base["updated_by_name"] = (
+                    f"{updater.first_name or ''} {updater.last_name or ''}".strip()
+                    or "Unknown"
+                )
         except Exception:
             pass
 
@@ -322,7 +363,8 @@ class SupportWebService:
                 pass
 
         tickets, total = ticket_service.list_tickets(
-            db, org_id,
+            db,
+            org_id,
             status=status,
             priority=priority,
             assigned_to_id=assigned_to_id,
@@ -360,10 +402,7 @@ class SupportWebService:
                 {"value": str(c.category_id), "label": c.category_name}
                 for c in categories
             ],
-            "teams": [
-                {"value": str(t.team_id), "label": t.team_name}
-                for t in teams
-            ],
+            "teams": [{"value": str(t.team_id), "label": t.team_name} for t in teams],
             "statuses": [
                 {"value": s.value, "label": STATUS_STYLES[s]["label"]}
                 for s in TicketStatus
@@ -390,9 +429,7 @@ class SupportWebService:
             "has_next": page < total_pages,
         }
 
-        return templates.TemplateResponse(
-            request, "support/tickets.html", context
-        )
+        return templates.TemplateResponse(request, "support/tickets.html", context)
 
     def ticket_detail_response(
         self,
@@ -420,7 +457,9 @@ class SupportWebService:
             )
 
         # Get linked expenses
-        linked_expenses = ticket_service.get_linked_expenses(db, org_id, ticket.ticket_id)
+        linked_expenses = ticket_service.get_linked_expenses(
+            db, org_id, ticket.ticket_id
+        )
 
         # Get linked tasks (tasks that have this ticket_id)
         linked_tasks = self._get_linked_tasks(db, org_id, ticket.ticket_id)
@@ -449,7 +488,9 @@ class SupportWebService:
         formatted = _format_ticket_for_detail(ticket, linked_expenses, db)
 
         context = {
-            **base_context(request, auth, f"Ticket {ticket.ticket_number}", "support", db=db),
+            **base_context(
+                request, auth, f"Ticket {ticket.ticket_number}", "support", db=db
+            ),
             "ticket": formatted,
             "employees": employees,
             "linked_tasks": linked_tasks,
@@ -507,10 +548,7 @@ class SupportWebService:
                 {"value": str(c.category_id), "label": c.category_name}
                 for c in categories
             ],
-            "teams": [
-                {"value": str(t.team_id), "label": t.team_name}
-                for t in teams
-            ],
+            "teams": [{"value": str(t.team_id), "label": t.team_name} for t in teams],
             "priorities": [
                 {"value": p.value, "label": PRIORITY_STYLES[p]["label"]}
                 for p in TicketPriority
@@ -519,9 +557,7 @@ class SupportWebService:
             "error": error,
         }
 
-        return templates.TemplateResponse(
-            request, "support/ticket_form.html", context
-        )
+        return templates.TemplateResponse(request, "support/ticket_form.html", context)
 
     def create_ticket_response(
         self,
@@ -558,7 +594,9 @@ class SupportWebService:
                     pass
 
             ticket = ticket_service.create_ticket(
-                db, org_id, user_id,
+                db,
+                org_id,
+                user_id,
                 subject=subject,
                 description=description,
                 priority=priority,
@@ -613,7 +651,9 @@ class SupportWebService:
                 return "Ticket number already exists. Please try again."
             if "foreign key" in message.lower():
                 return "Some selected references are invalid. Please reselect and try again."
-            return "Ticket could not be created due to a data conflict. Please try again."
+            return (
+                "Ticket could not be created due to a data conflict. Please try again."
+            )
         if isinstance(exc, DataError):
             return "Some fields have invalid values or are too long. Please review and try again."
         return "Ticket could not be created. Please check your input and try again."
@@ -651,7 +691,10 @@ class SupportWebService:
 
         try:
             ticket = ticket_service.update_ticket(
-                db, org_id, ticket_ref.ticket_id, user_id,
+                db,
+                org_id,
+                ticket_ref.ticket_id,
+                user_id,
                 subject=subject,
                 description=description,
                 priority=priority,
@@ -751,8 +794,7 @@ class SupportWebService:
             )
 
         ticket = ticket_service.assign_ticket(
-            db, org_id, ticket_ref.ticket_id, user_id,
-            coerce_uuid(assigned_to_id)
+            db, org_id, ticket_ref.ticket_id, user_id, coerce_uuid(assigned_to_id)
         )
 
         if ticket:
@@ -876,7 +918,9 @@ class SupportWebService:
                 status_code=303,
             )
 
-        ticket = ticket_service.restore_ticket(db, org_id, ticket_ref.ticket_id, user_id)
+        ticket = ticket_service.restore_ticket(
+            db, org_id, ticket_ref.ticket_id, user_id
+        )
 
         if ticket:
             db.commit()
@@ -947,7 +991,8 @@ class SupportWebService:
 
         # Get recent open tickets
         tickets, _ = ticket_service.list_tickets(
-            db, org_id,
+            db,
+            org_id,
             status="OPEN",
             page=1,
             per_page=5,
@@ -972,8 +1017,9 @@ class SupportWebService:
         date_to: Optional[str] = None,
     ) -> HTMLResponse:
         """Render the SLA dashboard page."""
-        from app.web.deps import base_context
         from datetime import timedelta
+
+        from app.web.deps import base_context
 
         org_id = coerce_uuid(auth.organization_id)
 
@@ -1000,14 +1046,16 @@ class SupportWebService:
 
         # Get SLA metrics
         metrics = sla_service.get_sla_metrics(
-            db, org_id,
+            db,
+            org_id,
             date_from=parsed_date_from,
             date_to=parsed_date_to,
         )
 
         # Get breached tickets (limited)
         breached = sla_service.get_breached_tickets(
-            db, org_id,
+            db,
+            org_id,
             breach_type="all",
             include_resolved=False,
             limit=10,
@@ -1015,14 +1063,16 @@ class SupportWebService:
 
         # Get team performance
         team_performance = sla_service.get_team_performance(
-            db, org_id,
+            db,
+            org_id,
             date_from=parsed_date_from,
             date_to=parsed_date_to,
         )
 
         # Get category performance
         category_performance = sla_service.get_category_performance(
-            db, org_id,
+            db,
+            org_id,
             date_from=parsed_date_from,
             date_to=parsed_date_to,
         )
@@ -1034,26 +1084,34 @@ class SupportWebService:
         breached_formatted = []
         for b in breached:
             status_style = STATUS_STYLES.get(b.status, STATUS_STYLES[TicketStatus.OPEN])
-            priority_style = PRIORITY_STYLES.get(b.priority, PRIORITY_STYLES[TicketPriority.MEDIUM])
-            breached_formatted.append({
-                "ticket_id": str(b.ticket_id),
-                "ticket_number": b.ticket_number,
-                "subject": b.subject[:60] + "..." if len(b.subject) > 60 else b.subject,
-                "status": b.status.value,
-                "status_label": status_style["label"],
-                "status_badge": status_style["badge"],
-                "priority": b.priority.value,
-                "priority_label": priority_style["label"],
-                "priority_badge": priority_style["badge"],
-                "response_breached": b.response_breached,
-                "response_breach_hours": b.response_breach_hours,
-                "resolution_breached": b.resolution_breached,
-                "resolution_breach_hours": b.resolution_breach_hours,
-                "assigned_to_name": b.assigned_to_name,
-                "team_name": b.team_name,
-                "category_name": b.category_name,
-                "created_at": b.created_at.strftime("%b %d, %Y %H:%M") if b.created_at else "",
-            })
+            priority_style = PRIORITY_STYLES.get(
+                b.priority, PRIORITY_STYLES[TicketPriority.MEDIUM]
+            )
+            breached_formatted.append(
+                {
+                    "ticket_id": str(b.ticket_id),
+                    "ticket_number": b.ticket_number,
+                    "subject": b.subject[:60] + "..."
+                    if len(b.subject) > 60
+                    else b.subject,
+                    "status": b.status.value,
+                    "status_label": status_style["label"],
+                    "status_badge": status_style["badge"],
+                    "priority": b.priority.value,
+                    "priority_label": priority_style["label"],
+                    "priority_badge": priority_style["badge"],
+                    "response_breached": b.response_breached,
+                    "response_breach_hours": b.response_breach_hours,
+                    "resolution_breached": b.resolution_breached,
+                    "resolution_breach_hours": b.resolution_breach_hours,
+                    "assigned_to_name": b.assigned_to_name,
+                    "team_name": b.team_name,
+                    "category_name": b.category_name,
+                    "created_at": b.created_at.strftime("%b %d, %Y %H:%M")
+                    if b.created_at
+                    else "",
+                }
+            )
 
         context = {
             **base_context(request, auth, "SLA Dashboard", "support", db=db),
@@ -1108,7 +1166,8 @@ class SupportWebService:
         org_id = coerce_uuid(auth.organization_id)
 
         breached = sla_service.get_breached_tickets(
-            db, org_id,
+            db,
+            org_id,
             breach_type=breach_type,
             include_resolved=include_resolved,
             limit=100,
@@ -1118,32 +1177,42 @@ class SupportWebService:
         breached_formatted = []
         for b in breached:
             status_style = STATUS_STYLES.get(b.status, STATUS_STYLES[TicketStatus.OPEN])
-            priority_style = PRIORITY_STYLES.get(b.priority, PRIORITY_STYLES[TicketPriority.MEDIUM])
-            breached_formatted.append({
-                "ticket_id": str(b.ticket_id),
-                "ticket_number": b.ticket_number,
-                "subject": b.subject,
-                "status": b.status.value,
-                "status_label": status_style["label"],
-                "status_badge": status_style["badge"],
-                "priority": b.priority.value,
-                "priority_label": priority_style["label"],
-                "priority_badge": priority_style["badge"],
-                "response_target_hours": b.response_target_hours,
-                "response_hours": b.response_hours,
-                "response_breached": b.response_breached,
-                "response_breach_hours": b.response_breach_hours,
-                "resolution_target_hours": b.resolution_target_hours,
-                "resolution_hours": b.resolution_hours,
-                "resolution_breached": b.resolution_breached,
-                "resolution_breach_hours": b.resolution_breach_hours,
-                "assigned_to_name": b.assigned_to_name,
-                "team_name": b.team_name,
-                "category_name": b.category_name,
-                "created_at": b.created_at.strftime("%b %d, %Y %H:%M") if b.created_at else "",
-                "response_due_at": b.response_due_at.strftime("%b %d, %Y %H:%M") if b.response_due_at else "",
-                "resolution_due_at": b.resolution_due_at.strftime("%b %d, %Y %H:%M") if b.resolution_due_at else "",
-            })
+            priority_style = PRIORITY_STYLES.get(
+                b.priority, PRIORITY_STYLES[TicketPriority.MEDIUM]
+            )
+            breached_formatted.append(
+                {
+                    "ticket_id": str(b.ticket_id),
+                    "ticket_number": b.ticket_number,
+                    "subject": b.subject,
+                    "status": b.status.value,
+                    "status_label": status_style["label"],
+                    "status_badge": status_style["badge"],
+                    "priority": b.priority.value,
+                    "priority_label": priority_style["label"],
+                    "priority_badge": priority_style["badge"],
+                    "response_target_hours": b.response_target_hours,
+                    "response_hours": b.response_hours,
+                    "response_breached": b.response_breached,
+                    "response_breach_hours": b.response_breach_hours,
+                    "resolution_target_hours": b.resolution_target_hours,
+                    "resolution_hours": b.resolution_hours,
+                    "resolution_breached": b.resolution_breached,
+                    "resolution_breach_hours": b.resolution_breach_hours,
+                    "assigned_to_name": b.assigned_to_name,
+                    "team_name": b.team_name,
+                    "category_name": b.category_name,
+                    "created_at": b.created_at.strftime("%b %d, %Y %H:%M")
+                    if b.created_at
+                    else "",
+                    "response_due_at": b.response_due_at.strftime("%b %d, %Y %H:%M")
+                    if b.response_due_at
+                    else "",
+                    "resolution_due_at": b.resolution_due_at.strftime("%b %d, %Y %H:%M")
+                    if b.resolution_due_at
+                    else "",
+                }
+            )
 
         context = {
             **base_context(request, auth, "Breached Tickets", "support", db=db),
@@ -1175,7 +1244,8 @@ class SupportWebService:
             status_list = [s.strip() for s in status_filter.split(",")]
 
         aging = sla_service.get_aging_report(
-            db, org_id,
+            db,
+            org_id,
             status_filter=status_list,
         )
 
@@ -1199,13 +1269,10 @@ class SupportWebService:
             ],
         }
 
-        return templates.TemplateResponse(
-            request, "support/aging_report.html", context
-        )
+        return templates.TemplateResponse(request, "support/aging_report.html", context)
 
     def _format_sla_status(self, sla_status) -> Optional[Dict[str, Any]]:
         """Format SLA status for template display."""
-        from app.services.support.sla import TicketSLAStatus
 
         if not sla_status:
             return None
@@ -1215,7 +1282,9 @@ class SupportWebService:
             if sla_status.response_breached:
                 response_status = "breached"
                 response_status_label = "Breached"
-                response_status_class = "text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-900/30"
+                response_status_class = (
+                    "text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-900/30"
+                )
             else:
                 response_status = "met"
                 response_status_label = "Met"
@@ -1223,18 +1292,24 @@ class SupportWebService:
         elif sla_status.response_breached:
             response_status = "overdue"
             response_status_label = "Overdue"
-            response_status_class = "text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-900/30"
+            response_status_class = (
+                "text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-900/30"
+            )
         else:
             response_status = "pending"
             response_status_label = "Pending"
-            response_status_class = "text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/30"
+            response_status_class = (
+                "text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/30"
+            )
 
         # Determine resolution status
         if sla_status.resolved_at:
             if sla_status.resolution_breached:
                 resolution_status = "breached"
                 resolution_status_label = "Breached"
-                resolution_status_class = "text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-900/30"
+                resolution_status_class = (
+                    "text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-900/30"
+                )
             else:
                 resolution_status = "met"
                 resolution_status_label = "Met"
@@ -1242,11 +1317,15 @@ class SupportWebService:
         elif sla_status.resolution_breached:
             resolution_status = "overdue"
             resolution_status_label = "Overdue"
-            resolution_status_class = "text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-900/30"
+            resolution_status_class = (
+                "text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-900/30"
+            )
         else:
             resolution_status = "pending"
             resolution_status_label = "Pending"
-            resolution_status_class = "text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/30"
+            resolution_status_class = (
+                "text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/30"
+            )
 
         # Format hours for display
         def format_hours(hours):
@@ -1264,8 +1343,14 @@ class SupportWebService:
             # Response SLA
             "response_target_hours": sla_status.response_target_hours,
             "response_target_formatted": format_hours(sla_status.response_target_hours),
-            "response_due_at": sla_status.response_due_at.strftime("%b %d, %Y %H:%M") if sla_status.response_due_at else None,
-            "first_response_at": sla_status.first_response_at.strftime("%b %d, %Y %H:%M") if sla_status.first_response_at else None,
+            "response_due_at": sla_status.response_due_at.strftime("%b %d, %Y %H:%M")
+            if sla_status.response_due_at
+            else None,
+            "first_response_at": sla_status.first_response_at.strftime(
+                "%b %d, %Y %H:%M"
+            )
+            if sla_status.first_response_at
+            else None,
             "response_hours": sla_status.response_hours,
             "response_hours_formatted": format_hours(sla_status.response_hours),
             "response_breached": sla_status.response_breached,
@@ -1276,14 +1361,24 @@ class SupportWebService:
             "response_status_class": response_status_class,
             # Resolution SLA
             "resolution_target_hours": sla_status.resolution_target_hours,
-            "resolution_target_formatted": format_hours(sla_status.resolution_target_hours),
-            "resolution_due_at": sla_status.resolution_due_at.strftime("%b %d, %Y %H:%M") if sla_status.resolution_due_at else None,
-            "resolved_at": sla_status.resolved_at.strftime("%b %d, %Y %H:%M") if sla_status.resolved_at else None,
+            "resolution_target_formatted": format_hours(
+                sla_status.resolution_target_hours
+            ),
+            "resolution_due_at": sla_status.resolution_due_at.strftime(
+                "%b %d, %Y %H:%M"
+            )
+            if sla_status.resolution_due_at
+            else None,
+            "resolved_at": sla_status.resolved_at.strftime("%b %d, %Y %H:%M")
+            if sla_status.resolved_at
+            else None,
             "resolution_hours": sla_status.resolution_hours,
             "resolution_hours_formatted": format_hours(sla_status.resolution_hours),
             "resolution_breached": sla_status.resolution_breached,
             "resolution_breach_hours": sla_status.resolution_breach_hours,
-            "resolution_breach_formatted": format_hours(sla_status.resolution_breach_hours),
+            "resolution_breach_formatted": format_hours(
+                sla_status.resolution_breach_hours
+            ),
             "resolution_status": resolution_status,
             "resolution_status_label": resolution_status_label,
             "resolution_status_class": resolution_status_class,
@@ -1296,8 +1391,9 @@ class SupportWebService:
         ticket_id: UUID,
     ) -> List[Any]:
         """Get tasks linked to this ticket."""
-        from app.models.pm.task import Task
         from sqlalchemy.orm import joinedload
+
+        from app.models.pm.task import Task
 
         stmt = (
             select(Task)
@@ -1366,39 +1462,53 @@ class SupportWebService:
                 author_name = f"{activity.author.first_name or ''} {activity.author.last_name or ''}".strip()
 
             if activity.comment_type == CommentType.SYSTEM:
-                config = ACTION_CONFIG.get(activity.action, {
-                    "icon": "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
-                    "icon_bg": "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
-                    "label": "Activity",
-                })
-                formatted.append({
-                    "type": "system",
-                    "action": activity.action,
-                    "content": activity.content,
-                    "old_value": activity.old_value,
-                    "new_value": activity.new_value,
-                    "author_name": author_name,
-                    "created_at": activity.created_at.strftime("%b %d, %Y %H:%M") if activity.created_at else "",
-                    "icon": config["icon"],
-                    "icon_bg": config["icon_bg"],
-                    "label": config["label"],
-                })
+                config = ACTION_CONFIG.get(
+                    activity.action,
+                    {
+                        "icon": "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
+                        "icon_bg": "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
+                        "label": "Activity",
+                    },
+                )
+                formatted.append(
+                    {
+                        "type": "system",
+                        "action": activity.action,
+                        "content": activity.content,
+                        "old_value": activity.old_value,
+                        "new_value": activity.new_value,
+                        "author_name": author_name,
+                        "created_at": activity.created_at.strftime("%b %d, %Y %H:%M")
+                        if activity.created_at
+                        else "",
+                        "icon": config["icon"],
+                        "icon_bg": config["icon_bg"],
+                        "label": config["label"],
+                    }
+                )
             else:
-                config = COMMENT_CONFIG.get(activity.comment_type, COMMENT_CONFIG[CommentType.COMMENT])
-                formatted.append({
-                    "type": "comment" if activity.comment_type == CommentType.COMMENT else "internal_note",
-                    "content": activity.content,
-                    "is_internal": activity.is_internal,
-                    "comment_id": str(activity.comment_id),
-                    "author_name": author_name or "Unknown",
-                    "created_at": activity.created_at.strftime("%b %d, %Y %H:%M") if activity.created_at else "",
-                    "icon": config["icon"],
-                    "icon_bg": config["icon_bg"],
-                    "label": config["label"],
-                })
+                config = COMMENT_CONFIG.get(
+                    activity.comment_type, COMMENT_CONFIG[CommentType.COMMENT]
+                )
+                formatted.append(
+                    {
+                        "type": "comment"
+                        if activity.comment_type == CommentType.COMMENT
+                        else "internal_note",
+                        "content": activity.content,
+                        "is_internal": activity.is_internal,
+                        "comment_id": str(activity.comment_id),
+                        "author_name": author_name or "Unknown",
+                        "created_at": activity.created_at.strftime("%b %d, %Y %H:%M")
+                        if activity.created_at
+                        else "",
+                        "icon": config["icon"],
+                        "icon_bg": config["icon_bg"],
+                        "label": config["label"],
+                    }
+                )
 
         return formatted
-
 
     # ========================================================================
     # Delegated Methods - Comments
@@ -1534,7 +1644,10 @@ class SupportWebService:
 
         try:
             result = ticket_service.bulk_update_status(
-                db, org_id, uuids, user_id,
+                db,
+                org_id,
+                uuids,
+                user_id,
                 new_status=new_status.strip(),
                 notes=notes,
             )
@@ -1544,7 +1657,7 @@ class SupportWebService:
                 url=f"/support/tickets?bulk_status=success&updated={result['success']}&errors={result['error']}",
                 status_code=303,
             )
-        except Exception as e:
+        except Exception:
             db.rollback()
             logger.exception("Bulk status update failed")
             return RedirectResponse(
@@ -1598,7 +1711,10 @@ class SupportWebService:
 
         try:
             result = ticket_service.bulk_assign(
-                db, org_id, uuids, user_id,
+                db,
+                org_id,
+                uuids,
+                user_id,
                 assigned_to_id=assignee_uuid,
             )
             db.commit()
@@ -1607,7 +1723,7 @@ class SupportWebService:
                 url=f"/support/tickets?bulk_assign=success&updated={result['success']}&errors={result['error']}",
                 status_code=303,
             )
-        except Exception as e:
+        except Exception:
             db.rollback()
             logger.exception("Bulk assign failed")
             return RedirectResponse(
@@ -1644,7 +1760,10 @@ class SupportWebService:
 
         try:
             result = ticket_service.bulk_archive(
-                db, org_id, uuids, user_id,
+                db,
+                org_id,
+                uuids,
+                user_id,
             )
             db.commit()
 
@@ -1652,11 +1771,11 @@ class SupportWebService:
                 url=f"/support/tickets?bulk_archive=success&archived={result['success']}&errors={result['error']}",
                 status_code=303,
             )
-        except Exception as e:
+        except Exception:
             db.rollback()
             logger.exception("Bulk archive failed")
             return RedirectResponse(
-                url=f"/support/tickets?error=bulk_failed",
+                url="/support/tickets?error=bulk_failed",
                 status_code=303,
             )
 

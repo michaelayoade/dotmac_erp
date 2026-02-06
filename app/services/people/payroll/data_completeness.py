@@ -5,6 +5,7 @@ Identifies employees with missing data required for statutory exports
 (PAYE, Pension, NHF, Bank Upload). Helps payroll admins ensure compliance
 before generating export files.
 """
+
 from __future__ import annotations
 
 import logging
@@ -14,15 +15,15 @@ from enum import Enum
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import select, and_, or_, func
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.hr.employee import Employee, EmployeeStatus
-from app.models.person import Person
+from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 from app.models.people.payroll.salary_assignment import (
     SalaryStructureAssignment,
 )
-from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
+from app.models.person import Person
 from app.services.finance.banking.bank_directory import BankDirectoryService
 
 logger = logging.getLogger(__name__)
@@ -238,9 +239,7 @@ class DataCompletenessService:
 
         # Filter out complete if not requested
         if not include_complete:
-            results = [
-                e for e in results if e.status != CompletenessStatus.COMPLETE
-            ]
+            results = [e for e in results if e.status != CompletenessStatus.COMPLETE]
 
         return CompletenessReportResult(
             organization_id=organization_id,
@@ -333,9 +332,7 @@ class DataCompletenessService:
         has_tax_profile = tax_profile is not None
 
         # Check bank details
-        has_bank_details = bool(
-            employee.bank_account_number and employee.bank_name
-        )
+        has_bank_details = bool(employee.bank_account_number and employee.bank_name)
         bank_code_resolvable = False
         if employee.bank_name:
             code = self.bank_directory.lookup_bank_code(employee.bank_name)
@@ -443,9 +440,7 @@ class DataCompletenessService:
             bank_code_resolvable=bank_code_resolvable,
         )
 
-    def get_summary_stats(
-        self, organization_id: UUID
-    ) -> dict:
+    def get_summary_stats(self, organization_id: UUID) -> dict:
         """
         Get quick summary statistics for data completeness.
 
@@ -467,15 +462,18 @@ class DataCompletenessService:
             .distinct()
         )
 
-        total_assigned = self.db.scalar(
-            select(func.count())
-            .select_from(Employee)
-            .where(
-                Employee.organization_id == organization_id,
-                Employee.status == EmployeeStatus.ACTIVE,
-                Employee.employee_id.in_(assignment_subq),
+        total_assigned = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(Employee)
+                .where(
+                    Employee.organization_id == organization_id,
+                    Employee.status == EmployeeStatus.ACTIVE,
+                    Employee.employee_id.in_(assignment_subq),
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Count with tax profiles
         profile_subq = (
@@ -491,29 +489,35 @@ class DataCompletenessService:
             .distinct()
         )
 
-        with_profile = self.db.scalar(
-            select(func.count())
-            .select_from(Employee)
-            .where(
-                Employee.organization_id == organization_id,
-                Employee.status == EmployeeStatus.ACTIVE,
-                Employee.employee_id.in_(assignment_subq),
-                Employee.employee_id.in_(profile_subq),
+        with_profile = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(Employee)
+                .where(
+                    Employee.organization_id == organization_id,
+                    Employee.status == EmployeeStatus.ACTIVE,
+                    Employee.employee_id.in_(assignment_subq),
+                    Employee.employee_id.in_(profile_subq),
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Count with bank details
-        with_bank = self.db.scalar(
-            select(func.count())
-            .select_from(Employee)
-            .where(
-                Employee.organization_id == organization_id,
-                Employee.status == EmployeeStatus.ACTIVE,
-                Employee.employee_id.in_(assignment_subq),
-                Employee.bank_account_number.isnot(None),
-                Employee.bank_name.isnot(None),
+        with_bank = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(Employee)
+                .where(
+                    Employee.organization_id == organization_id,
+                    Employee.status == EmployeeStatus.ACTIVE,
+                    Employee.employee_id.in_(assignment_subq),
+                    Employee.bank_account_number.isnot(None),
+                    Employee.bank_name.isnot(None),
+                )
             )
-        ) or 0
+            or 0
+        )
 
         return {
             "total_assigned_employees": total_assigned,
@@ -641,7 +645,6 @@ class PayrollReadinessService:
         Returns:
             PayrollReadinessReport with employee-level details
         """
-        from app.models.people.hr.employee import SalaryMode
 
         # Get eligible employees (active with salary assignment)
         employees = self._get_eligible_employees(
@@ -658,7 +661,10 @@ class PayrollReadinessService:
 
         # Get salary assignments
         assignments = self._get_salary_assignments(
-            organization_id, [e.employee_id for e in employees], period_start, period_end
+            organization_id,
+            [e.employee_id for e in employees],
+            period_start,
+            period_end,
         )
         assignment_by_emp: dict[UUID, SalaryStructureAssignment] = {
             a.employee_id: a for a in assignments
@@ -817,7 +823,8 @@ class PayrollReadinessService:
         # Calculate expected working days (simple: weekdays)
         total_days = (period_end - period_start).days + 1
         expected_days = sum(
-            1 for i in range(total_days)
+            1
+            for i in range(total_days)
             if (period_start + timedelta(days=i)).weekday() < 5
         )
 
@@ -865,38 +872,46 @@ class PayrollReadinessService:
         # Check salary assignment
         has_assignment = assignment is not None
         if not has_assignment:
-            issues.append(PayrollReadinessIssue(
-                issue_type=PayrollIssueType.MISSING_SALARY_ASSIGNMENT,
-                message="No active salary assignment for this period",
-                severity="critical",
-            ))
+            issues.append(
+                PayrollReadinessIssue(
+                    issue_type=PayrollIssueType.MISSING_SALARY_ASSIGNMENT,
+                    message="No active salary assignment for this period",
+                    severity="critical",
+                )
+            )
             is_ready = False
 
         # Check bank details (if bank payment mode)
         has_bank = bool(employee.bank_account_number and employee.bank_name)
         if employee.salary_mode == SalaryMode.BANK and not has_bank:
-            issues.append(PayrollReadinessIssue(
-                issue_type=PayrollIssueType.MISSING_BANK_DETAILS,
-                message="Missing bank account details for bank transfer",
-                severity="critical",
-            ))
+            issues.append(
+                PayrollReadinessIssue(
+                    issue_type=PayrollIssueType.MISSING_BANK_DETAILS,
+                    message="Missing bank account details for bank transfer",
+                    severity="critical",
+                )
+            )
             is_ready = False
 
         # Check tax profile
         has_tax_profile = tax_profile is not None
         if tax_profile is None:
-            issues.append(PayrollReadinessIssue(
-                issue_type=PayrollIssueType.MISSING_TAX_PROFILE,
-                message="No tax profile - PAYE may not calculate accurately",
-                severity="warning",
-            ))
+            issues.append(
+                PayrollReadinessIssue(
+                    issue_type=PayrollIssueType.MISSING_TAX_PROFILE,
+                    message="No tax profile - PAYE may not calculate accurately",
+                    severity="warning",
+                )
+            )
             needs_review = True
         elif not tax_profile.tin:
-            issues.append(PayrollReadinessIssue(
-                issue_type=PayrollIssueType.MISSING_TIN,
-                message="Missing TIN (Tax Identification Number)",
-                severity="warning",
-            ))
+            issues.append(
+                PayrollReadinessIssue(
+                    issue_type=PayrollIssueType.MISSING_TIN,
+                    message="Missing TIN (Tax Identification Number)",
+                    severity="warning",
+                )
+            )
             needs_review = True
 
         # Check attendance
@@ -907,18 +922,22 @@ class PayrollReadinessService:
             attendance_gap_days = attendance.get("gap_days", 0)
 
             if not has_attendance:
-                issues.append(PayrollReadinessIssue(
-                    issue_type=PayrollIssueType.NO_ATTENDANCE_RECORDS,
-                    message="No attendance records - will assume full attendance",
-                    severity="warning",
-                ))
+                issues.append(
+                    PayrollReadinessIssue(
+                        issue_type=PayrollIssueType.NO_ATTENDANCE_RECORDS,
+                        message="No attendance records - will assume full attendance",
+                        severity="warning",
+                    )
+                )
                 needs_review = True
             elif attendance_gap_days > 0:
-                issues.append(PayrollReadinessIssue(
-                    issue_type=PayrollIssueType.ATTENDANCE_GAPS,
-                    message=f"{attendance_gap_days} days without attendance records",
-                    severity="warning",
-                ))
+                issues.append(
+                    PayrollReadinessIssue(
+                        issue_type=PayrollIssueType.ATTENDANCE_GAPS,
+                        message=f"{attendance_gap_days} days without attendance records",
+                        severity="warning",
+                    )
+                )
                 needs_review = True
 
         # Check proration
@@ -928,21 +947,28 @@ class PayrollReadinessService:
         if employee.date_of_joining and employee.date_of_joining > period_start:
             is_prorated = True
             proration_reason = "new_hire"
-            issues.append(PayrollReadinessIssue(
-                issue_type=PayrollIssueType.NEW_HIRE_PRORATION,
-                message=f"New hire - joined {employee.date_of_joining}, salary will be prorated",
-                severity="warning",
-            ))
+            issues.append(
+                PayrollReadinessIssue(
+                    issue_type=PayrollIssueType.NEW_HIRE_PRORATION,
+                    message=f"New hire - joined {employee.date_of_joining}, salary will be prorated",
+                    severity="warning",
+                )
+            )
             needs_review = True
 
-        if employee.date_of_leaving and period_start <= employee.date_of_leaving < period_end:
+        if (
+            employee.date_of_leaving
+            and period_start <= employee.date_of_leaving < period_end
+        ):
             is_prorated = True
             proration_reason = "exit" if not proration_reason else "both"
-            issues.append(PayrollReadinessIssue(
-                issue_type=PayrollIssueType.EXIT_PRORATION,
-                message=f"Exiting employee - leaving {employee.date_of_leaving}, salary will be prorated",
-                severity="warning",
-            ))
+            issues.append(
+                PayrollReadinessIssue(
+                    issue_type=PayrollIssueType.EXIT_PRORATION,
+                    message=f"Exiting employee - leaving {employee.date_of_leaving}, salary will be prorated",
+                    severity="warning",
+                )
+            )
             needs_review = True
 
         dept_name = None

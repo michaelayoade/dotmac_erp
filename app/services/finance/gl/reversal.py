@@ -6,23 +6,25 @@ Creates reversal entries with proper linking and audit trail.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
-from decimal import Decimal
+from datetime import date
 from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
-from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.services.common import coerce_uuid
-from app.services.finance.gl.period_guard import PeriodGuardService
 from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
+from app.services.finance.gl.period_guard import PeriodGuardService
 from app.services.finance.platform.sequence import SequenceService
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -91,13 +93,12 @@ class ReversalService(ListResponseMixin):
         if original.status != JournalStatus.POSTED:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot reverse journal with status '{original.status.value}'"
+                detail=f"Cannot reverse journal with status '{original.status.value}'",
             )
 
         if original.reversal_journal_id:
             raise HTTPException(
-                status_code=400,
-                detail="Journal has already been reversed"
+                status_code=400, detail="Journal has already been reversed"
             )
 
         # 3. Get fiscal period for reversal date
@@ -105,7 +106,7 @@ class ReversalService(ListResponseMixin):
         if not period:
             raise HTTPException(
                 status_code=400,
-                detail=f"No fiscal period found for reversal date {reversal_date}"
+                detail=f"No fiscal period found for reversal date {reversal_date}",
             )
 
         # 4. Check period is open if auto_post
@@ -219,7 +220,8 @@ class ReversalService(ListResponseMixin):
             success=True,
             reversal_journal_id=reversal.journal_entry_id,
             reversal_journal_number=reversal.journal_number,
-            message="Reversal created successfully" + (" and posted" if auto_post else ""),
+            message="Reversal created successfully"
+            + (" and posted" if auto_post else ""),
         )
 
     @staticmethod
@@ -276,7 +278,10 @@ class ReversalService(ListResponseMixin):
             return (False, "Journal not found")
 
         if journal.status != JournalStatus.POSTED:
-            return (False, f"Cannot reverse journal with status '{journal.status.value}'")
+            return (
+                False,
+                f"Cannot reverse journal with status '{journal.status.value}'",
+            )
 
         if journal.reversal_journal_id:
             return (False, "Journal has already been reversed")

@@ -1,4 +1,6 @@
-def list_response(items: list, limit: int, offset: int, total: int | None = None) -> dict:
+def list_response(
+    items: list, limit: int, offset: int, total: int | None = None
+) -> dict:
     """Build a standardized list response dictionary.
 
     Args:
@@ -17,7 +19,7 @@ def list_response(items: list, limit: int, offset: int, total: int | None = None
     return {"items": items, "total": actual_total, "limit": limit, "offset": offset}
 
 
-from typing import Callable, ClassVar, Any
+from typing import Any, Callable, ClassVar
 
 
 class ListResponseMixin:
@@ -53,8 +55,12 @@ class ListResponseMixin:
         if hasattr(cls, "count"):
             try:
                 # Build count kwargs without limit/offset
-                count_kwargs = {k: v for k, v in kwargs.items() if k not in ("limit", "offset")}
-                total = cls.count(db, *args[:-2] if not kwargs.get("limit") else args, **count_kwargs)
+                count_kwargs = {
+                    k: v for k, v in kwargs.items() if k not in ("limit", "offset")
+                }
+                total = cls.count(
+                    db, *args[:-2] if not kwargs.get("limit") else args, **count_kwargs
+                )
             except Exception:
                 # Fall back to len(items) if count fails
                 pass

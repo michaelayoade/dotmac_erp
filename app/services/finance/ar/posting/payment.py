@@ -17,10 +17,13 @@ from sqlalchemy.orm import Session
 from app.models.finance.ar.customer import Customer
 from app.models.finance.gl.journal_entry import JournalType
 from app.services.common import coerce_uuid
-from app.services.finance.gl.journal import JournalService, JournalInput, JournalLineInput
-from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
-
 from app.services.finance.ar.posting.result import ARPostingResult
+from app.services.finance.gl.journal import (
+    JournalInput,
+    JournalLineInput,
+    JournalService,
+)
+from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
 
 
 def post_payment(
@@ -75,7 +78,9 @@ def post_payment(
     functional_amount = payment.amount * exchange_rate
 
     if not payment.bank_account_id:
-        return ARPostingResult(success=False, message="Payment has no bank account linked")
+        return ARPostingResult(
+            success=False, message="Payment has no bank account linked"
+        )
 
     # Build journal lines
     journal_lines = [

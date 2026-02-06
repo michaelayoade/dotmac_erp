@@ -4,8 +4,6 @@ E2E Tests for Search and Filter Functionality.
 Tests for search inputs and filter controls across list pages.
 """
 
-import re
-
 import pytest
 from playwright.sync_api import expect
 
@@ -34,7 +32,9 @@ class TestSearchFunctionality:
 
         if search.count() > 0 and initial_rows > 0:
             # Get text from first row to search for
-            first_row_text = authenticated_page.locator("table tbody tr").first.text_content()
+            first_row_text = authenticated_page.locator(
+                "table tbody tr"
+            ).first.text_content()
             if first_row_text:
                 # Use first few characters as search term
                 search_term = first_row_text[:5].strip()
@@ -44,7 +44,7 @@ class TestSearchFunctionality:
                     authenticated_page.wait_for_load_state("networkidle")
 
                     # Should have results
-                    expect(authenticated_page.locator("body")).to_be_visible()
+                    expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_search_no_results_message(self, authenticated_page, base_url):
         """Test search shows no results message for non-matching query."""
@@ -72,7 +72,7 @@ class TestSearchFunctionality:
                 expect(no_results.first).to_be_visible()
             else:
                 # Table might be empty
-                expect(authenticated_page.locator("body")).to_be_visible()
+                expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_search_clears_on_empty(self, authenticated_page, base_url):
         """Test clearing search shows all results."""
@@ -95,7 +95,7 @@ class TestSearchFunctionality:
             authenticated_page.wait_for_load_state("networkidle")
 
             # Should show all results again
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_search_preserves_filters(self, authenticated_page, base_url):
         """Test search preserves active filters."""
@@ -103,9 +103,7 @@ class TestSearchFunctionality:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Apply a filter first
-        status_filter = authenticated_page.locator(
-            "select[name='status'], #status"
-        )
+        status_filter = authenticated_page.locator("select[name='status'], #status")
         if status_filter.count() > 0:
             status_filter.first.select_option(index=1)
             authenticated_page.wait_for_load_state("networkidle")
@@ -125,7 +123,7 @@ class TestSearchFunctionality:
             if status_filter.count() > 0:
                 current_filter = status_filter.first.input_value()
                 # Filter should be preserved
-                expect(authenticated_page.locator("body")).to_be_visible()
+                expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_search_instant_or_on_enter(self, authenticated_page, base_url):
         """Test search triggers on enter or instantly."""
@@ -148,7 +146,7 @@ class TestSearchFunctionality:
             authenticated_page.wait_for_load_state("networkidle")
 
             # Verify page responded
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
 
 # =============================================================================
@@ -165,9 +163,7 @@ class TestFilterFunctionality:
         authenticated_page.goto(f"{base_url}/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
-        status_filter = authenticated_page.locator(
-            "select[name='status'], #status"
-        )
+        status_filter = authenticated_page.locator("select[name='status'], #status")
 
         if status_filter.count() > 0:
             # Get initial state
@@ -180,7 +176,7 @@ class TestFilterFunctionality:
                 authenticated_page.wait_for_load_state("networkidle")
 
                 # URL or results should change
-                expect(authenticated_page.locator("body")).to_be_visible()
+                expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_date_range_filter(self, authenticated_page, base_url):
         """Test date range filter works."""
@@ -207,7 +203,7 @@ class TestFilterFunctionality:
                 apply_btn.first.click()
                 authenticated_page.wait_for_load_state("networkidle")
 
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_category_filter(self, authenticated_page, base_url):
         """Test category filter works."""
@@ -224,7 +220,7 @@ class TestFilterFunctionality:
                 category_filter.first.select_option(index=1)
                 authenticated_page.wait_for_load_state("networkidle")
 
-                expect(authenticated_page.locator("body")).to_be_visible()
+                expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_combined_filters(self, authenticated_page, base_url):
         """Test multiple filters work together."""
@@ -232,9 +228,7 @@ class TestFilterFunctionality:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Apply status filter
-        status_filter = authenticated_page.locator(
-            "select[name='status'], #status"
-        )
+        status_filter = authenticated_page.locator("select[name='status'], #status")
         if status_filter.count() > 0:
             options = status_filter.first.locator("option")
             if options.count() > 1:
@@ -252,7 +246,7 @@ class TestFilterFunctionality:
                 authenticated_page.wait_for_load_state("networkidle")
 
         # Both filters should be applied
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_filter_reset(self, authenticated_page, base_url):
         """Test filter reset/clear works."""
@@ -260,9 +254,7 @@ class TestFilterFunctionality:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Apply a filter
-        status_filter = authenticated_page.locator(
-            "select[name='status'], #status"
-        )
+        status_filter = authenticated_page.locator("select[name='status'], #status")
         if status_filter.count() > 0:
             options = status_filter.first.locator("option")
             if options.count() > 1:
@@ -279,7 +271,7 @@ class TestFilterFunctionality:
             authenticated_page.wait_for_load_state("networkidle")
 
             # Filters should be cleared
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
 
 # =============================================================================
@@ -297,9 +289,7 @@ class TestSearchFilterIntegration:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Apply filter first
-        status_filter = authenticated_page.locator(
-            "select[name='status'], #status"
-        )
+        status_filter = authenticated_page.locator("select[name='status'], #status")
         if status_filter.count() > 0:
             options = status_filter.first.locator("option")
             if options.count() > 1:
@@ -316,7 +306,7 @@ class TestSearchFilterIntegration:
             authenticated_page.wait_for_load_state("networkidle")
 
         # Both should be applied
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_filter_updates_url(self, authenticated_page, base_url):
         """Test filters update URL parameters."""
@@ -325,9 +315,7 @@ class TestSearchFilterIntegration:
 
         initial_url = authenticated_page.url
 
-        status_filter = authenticated_page.locator(
-            "select[name='status'], #status"
-        )
+        status_filter = authenticated_page.locator("select[name='status'], #status")
         if status_filter.count() > 0:
             options = status_filter.first.locator("option")
             if options.count() > 1:
@@ -337,7 +325,7 @@ class TestSearchFilterIntegration:
                 # URL should have filter parameter
                 current_url = authenticated_page.url
                 # Filter parameter might be in URL
-                expect(authenticated_page.locator("body")).to_be_visible()
+                expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_filters_preserved_on_navigation(self, authenticated_page, base_url):
         """Test filters are preserved when navigating back."""
@@ -345,9 +333,7 @@ class TestSearchFilterIntegration:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Apply filter
-        status_filter = authenticated_page.locator(
-            "select[name='status'], #status"
-        )
+        status_filter = authenticated_page.locator("select[name='status'], #status")
         filter_applied = False
         if status_filter.count() > 0:
             options = status_filter.first.locator("option")
@@ -358,9 +344,7 @@ class TestSearchFilterIntegration:
 
         if filter_applied:
             # Navigate to detail and back
-            supplier_link = authenticated_page.locator(
-                "table tbody tr a"
-            ).first
+            supplier_link = authenticated_page.locator("table tbody tr a").first
             if supplier_link.count() > 0:
                 supplier_link.click()
                 authenticated_page.wait_for_load_state("networkidle")
@@ -370,7 +354,7 @@ class TestSearchFilterIntegration:
                 authenticated_page.wait_for_load_state("networkidle")
 
                 # Filter might be preserved via URL or browser state
-                expect(authenticated_page.locator("body")).to_be_visible()
+                expect(authenticated_page.locator("main")).to_be_visible()
 
 
 # =============================================================================
@@ -398,7 +382,7 @@ class TestQuickFilters:
             authenticated_page.wait_for_load_state("networkidle")
 
             # Should filter results
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_quick_filter_all(self, authenticated_page, base_url):
         """Test 'All' quick filter shows all results."""
@@ -422,4 +406,4 @@ class TestQuickFilters:
             authenticated_page.wait_for_load_state("networkidle")
 
             # Should show all results
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()

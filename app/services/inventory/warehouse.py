@@ -6,21 +6,27 @@ Manages warehouses, locations, and inventory balances.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Optional, List
+from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
+from app.models.inventory.inventory_transaction import (
+    InventoryTransaction,
+    TransactionType,
+)
+from app.models.inventory.item import Item
 from app.models.inventory.warehouse import Warehouse
 from app.models.inventory.warehouse_location import WarehouseLocation
-from app.models.inventory.inventory_transaction import InventoryTransaction, TransactionType
-from app.models.inventory.item import Item
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -235,34 +241,54 @@ class WarehouseService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Item not found")
 
         # Calculate running balance from transactions
-        query = db.query(
-            InventoryTransaction.warehouse_id,
-            func.sum(
-                func.case(
-                    (InventoryTransaction.transaction_type.in_([
-                        TransactionType.RECEIPT,
-                        TransactionType.RETURN,
-                        TransactionType.ASSEMBLY,
-                    ]), InventoryTransaction.quantity),
-                    (InventoryTransaction.transaction_type.in_([
-                        TransactionType.ISSUE,
-                        TransactionType.SALE,
-                        TransactionType.SCRAP,
-                        TransactionType.DISASSEMBLY,
-                    ]), -InventoryTransaction.quantity),
-                    (InventoryTransaction.transaction_type == TransactionType.ADJUSTMENT,
-                     InventoryTransaction.quantity),
-                    (InventoryTransaction.transaction_type == TransactionType.COUNT_ADJUSTMENT,
-                     InventoryTransaction.quantity),
-                    else_=Decimal("0"),
-                )
-            ).label("quantity_on_hand"),
-        ).filter(
-            and_(
-                InventoryTransaction.organization_id == org_id,
-                InventoryTransaction.item_id == itm_id,
+        query = (
+            db.query(
+                InventoryTransaction.warehouse_id,
+                func.sum(
+                    func.case(
+                        (
+                            InventoryTransaction.transaction_type.in_(
+                                [
+                                    TransactionType.RECEIPT,
+                                    TransactionType.RETURN,
+                                    TransactionType.ASSEMBLY,
+                                ]
+                            ),
+                            InventoryTransaction.quantity,
+                        ),
+                        (
+                            InventoryTransaction.transaction_type.in_(
+                                [
+                                    TransactionType.ISSUE,
+                                    TransactionType.SALE,
+                                    TransactionType.SCRAP,
+                                    TransactionType.DISASSEMBLY,
+                                ]
+                            ),
+                            -InventoryTransaction.quantity,
+                        ),
+                        (
+                            InventoryTransaction.transaction_type
+                            == TransactionType.ADJUSTMENT,
+                            InventoryTransaction.quantity,
+                        ),
+                        (
+                            InventoryTransaction.transaction_type
+                            == TransactionType.COUNT_ADJUSTMENT,
+                            InventoryTransaction.quantity,
+                        ),
+                        else_=Decimal("0"),
+                    )
+                ).label("quantity_on_hand"),
             )
-        ).group_by(InventoryTransaction.warehouse_id)
+            .filter(
+                and_(
+                    InventoryTransaction.organization_id == org_id,
+                    InventoryTransaction.item_id == itm_id,
+                )
+            )
+            .group_by(InventoryTransaction.warehouse_id)
+        )
 
         if warehouse_id:
             query = query.filter(

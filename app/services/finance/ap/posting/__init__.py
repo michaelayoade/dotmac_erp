@@ -19,9 +19,9 @@ Usage:
     result = post_invoice(db, org_id, invoice_id, posting_date, user_id)
 """
 
-from app.services.finance.ap.posting.result import APPostingResult
 from app.services.finance.ap.posting.invoice import post_invoice
 from app.services.finance.ap.posting.payment import post_payment
+from app.services.finance.ap.posting.result import APPostingResult
 from app.services.finance.ap.posting.reversal import reverse_invoice_posting
 
 __all__ = [

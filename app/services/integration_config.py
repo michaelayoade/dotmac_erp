@@ -4,6 +4,8 @@ Integration Configuration Service.
 Manages per-organization external system credentials with encryption.
 Supports both encrypted storage and OpenBao/Vault references.
 """
+
+import logging
 import os
 import uuid
 from datetime import datetime, timezone
@@ -16,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.models.sync import IntegrationConfig, IntegrationType
 from app.services.secrets import is_openbao_ref, resolve_secret
 
+logger = logging.getLogger(__name__)
 
 # Prefix for encrypted values to distinguish from plaintext/OpenBao refs
 ENCRYPTED_PREFIX = "enc:"
@@ -88,7 +91,7 @@ def decrypt_credential(value: str | None, db: Session | None = None) -> str | No
 
     # Encrypted value - decrypt
     if value.startswith(ENCRYPTED_PREFIX):
-        encrypted = value[len(ENCRYPTED_PREFIX):]
+        encrypted = value[len(ENCRYPTED_PREFIX) :]
         try:
             fernet = _get_fernet(db)
             decrypted = fernet.decrypt(encrypted.encode())
@@ -180,7 +183,9 @@ class IntegrationConfigService:
 
         # Encrypt credentials if requested and not OpenBao refs
         stored_key = encrypt_credential(api_key, self.db) if encrypt else api_key
-        stored_secret = encrypt_credential(api_secret, self.db) if encrypt else api_secret
+        stored_secret = (
+            encrypt_credential(api_secret, self.db) if encrypt else api_secret
+        )
 
         config = IntegrationConfig(
             organization_id=organization_id,
@@ -247,7 +252,11 @@ class IntegrationConfigService:
 
     def _verify_erpnext(self, creds: dict) -> tuple[bool, Optional[str]]:
         """Verify ERPNext connection."""
-        from app.services.erpnext.client import ERPNextClient, ERPNextConfig, ERPNextError
+        from app.services.erpnext.client import (
+            ERPNextClient,
+            ERPNextConfig,
+            ERPNextError,
+        )
 
         config = ERPNextConfig(
             url=creds["base_url"],

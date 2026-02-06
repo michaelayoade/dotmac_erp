@@ -64,7 +64,7 @@ class TestAdminDashboard:
             "a[href*='/admin/organizations'], a[href*='/admin/settings']"
         )
         # At least some nav items should exist
-        expect(admin_dashboard_page.locator("body")).to_be_visible()
+        expect(admin_dashboard_page.locator("main")).to_be_visible()
 
     @pytest.mark.e2e
     def test_dashboard_has_stats(self, admin_dashboard_page: Page):
@@ -112,10 +112,14 @@ class TestAdminUserWorkflow:
         """Test that new user form loads."""
         admin_authenticated_page.goto(f"{base_url}/admin/users/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
-        expect(admin_authenticated_page).to_have_url(re.compile(r".*/admin/users/new.*"))
+        expect(admin_authenticated_page).to_have_url(
+            re.compile(r".*/admin/users/new.*")
+        )
 
     @pytest.mark.e2e
-    def test_new_user_form_has_required_fields(self, admin_authenticated_page: Page, base_url: str):
+    def test_new_user_form_has_required_fields(
+        self, admin_authenticated_page: Page, base_url: str
+    ):
         """Test that new user form has required fields."""
         admin_authenticated_page.goto(f"{base_url}/admin/users/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
@@ -129,16 +133,22 @@ class TestAdminUserWorkflow:
         expect(form.locator("input[name='password']")).to_be_visible()
 
     @pytest.mark.e2e
-    def test_new_user_form_has_organization_select(self, admin_authenticated_page: Page, base_url: str):
+    def test_new_user_form_has_organization_select(
+        self, admin_authenticated_page: Page, base_url: str
+    ):
         """Test that new user form has organization dropdown."""
         admin_authenticated_page.goto(f"{base_url}/admin/users/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
 
-        org_select = admin_authenticated_page.locator("select[name='organization_id']").first
+        org_select = admin_authenticated_page.locator(
+            "select[name='organization_id']"
+        ).first
         expect(org_select).to_be_visible()
 
     @pytest.mark.e2e
-    def test_new_user_form_has_role_selection(self, admin_authenticated_page: Page, base_url: str):
+    def test_new_user_form_has_role_selection(
+        self, admin_authenticated_page: Page, base_url: str
+    ):
         """Test that new user form has role checkboxes."""
         admin_authenticated_page.goto(f"{base_url}/admin/users/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
@@ -150,7 +160,9 @@ class TestAdminUserWorkflow:
         expect(role_inputs).to_be_visible()
 
     @pytest.mark.e2e
-    def test_create_user_validation_error(self, admin_authenticated_page: Page, base_url: str):
+    def test_create_user_validation_error(
+        self, admin_authenticated_page: Page, base_url: str
+    ):
         """Test that form shows validation errors on empty submit."""
         admin_authenticated_page.goto(f"{base_url}/admin/users/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
@@ -185,7 +197,9 @@ class TestAdminUserWorkflow:
         admin_authenticated_page.fill("input[name='email']", test_email)
         admin_authenticated_page.fill("input[name='username']", test_username)
         admin_authenticated_page.fill("input[name='password']", "TestPassword123!")
-        admin_authenticated_page.fill("input[name='password_confirm']", "TestPassword123!")
+        admin_authenticated_page.fill(
+            "input[name='password_confirm']", "TestPassword123!"
+        )
 
         # Select organization if available
         org_select = admin_authenticated_page.locator("select[name='organization_id']")
@@ -224,7 +238,7 @@ class TestAdminUserWorkflow:
         admin_authenticated_page.wait_for_load_state("networkidle")
 
         # Should show not found or redirect
-        expect(admin_authenticated_page.locator("body")).to_be_visible()
+        expect(admin_authenticated_page.locator("main")).to_be_visible()
 
 
 class TestAdminRolesNavigation:
@@ -253,10 +267,14 @@ class TestAdminRoleWorkflow:
         """Test that new role form loads."""
         admin_authenticated_page.goto(f"{base_url}/admin/roles/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
-        expect(admin_authenticated_page).to_have_url(re.compile(r".*/admin/roles/new.*"))
+        expect(admin_authenticated_page).to_have_url(
+            re.compile(r".*/admin/roles/new.*")
+        )
 
     @pytest.mark.e2e
-    def test_new_role_form_has_fields(self, admin_authenticated_page: Page, base_url: str):
+    def test_new_role_form_has_fields(
+        self, admin_authenticated_page: Page, base_url: str
+    ):
         """Test that new role form has expected fields."""
         admin_authenticated_page.goto(f"{base_url}/admin/roles/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
@@ -316,28 +334,38 @@ class TestAdminRoleWorkflow:
         role_id = str(uuid4())
         admin_authenticated_page.goto(f"{base_url}/admin/roles/{role_id}")
         admin_authenticated_page.wait_for_load_state("networkidle")
-        expect(admin_authenticated_page.locator("body")).to_be_visible()
+        expect(admin_authenticated_page.locator("main")).to_be_visible()
 
 
 class TestAdminPermissions:
     """Test admin permissions page."""
 
     @pytest.mark.e2e
-    def test_permissions_page_loads(self, admin_authenticated_page: Page, base_url: str):
+    def test_permissions_page_loads(
+        self, admin_authenticated_page: Page, base_url: str
+    ):
         """Test that permissions page loads."""
         admin_authenticated_page.goto(f"{base_url}/admin/permissions")
         admin_authenticated_page.wait_for_load_state("networkidle")
-        expect(admin_authenticated_page).to_have_url(re.compile(r".*/admin/permissions.*"))
+        expect(admin_authenticated_page).to_have_url(
+            re.compile(r".*/admin/permissions.*")
+        )
 
     @pytest.mark.e2e
-    def test_new_permission_form_loads(self, admin_authenticated_page: Page, base_url: str):
+    def test_new_permission_form_loads(
+        self, admin_authenticated_page: Page, base_url: str
+    ):
         """Test that new permission form loads."""
         admin_authenticated_page.goto(f"{base_url}/admin/permissions/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
-        expect(admin_authenticated_page).to_have_url(re.compile(r".*/admin/permissions/new.*"))
+        expect(admin_authenticated_page).to_have_url(
+            re.compile(r".*/admin/permissions/new.*")
+        )
 
     @pytest.mark.e2e
-    def test_create_permission_workflow(self, admin_authenticated_page: Page, base_url: str):
+    def test_create_permission_workflow(
+        self, admin_authenticated_page: Page, base_url: str
+    ):
         """Test full create permission workflow."""
         admin_authenticated_page.goto(f"{base_url}/admin/permissions/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
@@ -377,21 +405,31 @@ class TestAdminOrganizations:
     """Test admin organizations page."""
 
     @pytest.mark.e2e
-    def test_organizations_page_loads(self, admin_authenticated_page: Page, base_url: str):
+    def test_organizations_page_loads(
+        self, admin_authenticated_page: Page, base_url: str
+    ):
         """Test that organizations page loads."""
         admin_authenticated_page.goto(f"{base_url}/admin/organizations")
         admin_authenticated_page.wait_for_load_state("networkidle")
-        expect(admin_authenticated_page).to_have_url(re.compile(r".*/admin/organizations.*"))
+        expect(admin_authenticated_page).to_have_url(
+            re.compile(r".*/admin/organizations.*")
+        )
 
     @pytest.mark.e2e
-    def test_new_organization_form_loads(self, admin_authenticated_page: Page, base_url: str):
+    def test_new_organization_form_loads(
+        self, admin_authenticated_page: Page, base_url: str
+    ):
         """Test that new organization form loads."""
         admin_authenticated_page.goto(f"{base_url}/admin/organizations/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
-        expect(admin_authenticated_page).to_have_url(re.compile(r".*/admin/organizations/new.*"))
+        expect(admin_authenticated_page).to_have_url(
+            re.compile(r".*/admin/organizations/new.*")
+        )
 
     @pytest.mark.e2e
-    def test_new_organization_form_has_fields(self, admin_authenticated_page: Page, base_url: str):
+    def test_new_organization_form_has_fields(
+        self, admin_authenticated_page: Page, base_url: str
+    ):
         """Test that new organization form has expected fields."""
         admin_authenticated_page.goto(f"{base_url}/admin/organizations/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
@@ -408,12 +446,14 @@ class TestAdminOrganizations:
             expect(field).to_be_visible()
 
     @pytest.mark.e2e
-    def test_organization_detail_not_found(self, admin_authenticated_page: Page, base_url: str):
+    def test_organization_detail_not_found(
+        self, admin_authenticated_page: Page, base_url: str
+    ):
         """Test that non-existent organization shows appropriate message."""
         org_id = str(uuid4())
         admin_authenticated_page.goto(f"{base_url}/admin/organizations/{org_id}")
         admin_authenticated_page.wait_for_load_state("networkidle")
-        expect(admin_authenticated_page.locator("body")).to_be_visible()
+        expect(admin_authenticated_page.locator("main")).to_be_visible()
 
 
 class TestAdminSettings:
@@ -427,14 +467,20 @@ class TestAdminSettings:
         expect(admin_authenticated_page).to_have_url(re.compile(r".*/admin/settings.*"))
 
     @pytest.mark.e2e
-    def test_new_setting_form_loads(self, admin_authenticated_page: Page, base_url: str):
+    def test_new_setting_form_loads(
+        self, admin_authenticated_page: Page, base_url: str
+    ):
         """Test that new setting form loads."""
         admin_authenticated_page.goto(f"{base_url}/admin/settings/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
-        expect(admin_authenticated_page).to_have_url(re.compile(r".*/admin/settings/new.*"))
+        expect(admin_authenticated_page).to_have_url(
+            re.compile(r".*/admin/settings/new.*")
+        )
 
     @pytest.mark.e2e
-    def test_create_setting_workflow(self, admin_authenticated_page: Page, base_url: str):
+    def test_create_setting_workflow(
+        self, admin_authenticated_page: Page, base_url: str
+    ):
         """Test full create setting workflow."""
         admin_authenticated_page.goto(f"{base_url}/admin/settings/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
@@ -490,10 +536,14 @@ class TestAdminAuditLogs:
         """Test that audit logs page loads."""
         admin_authenticated_page.goto(f"{base_url}/admin/audit-logs")
         admin_authenticated_page.wait_for_load_state("networkidle")
-        expect(admin_authenticated_page).to_have_url(re.compile(r".*/admin/audit-logs.*"))
+        expect(admin_authenticated_page).to_have_url(
+            re.compile(r".*/admin/audit-logs.*")
+        )
 
     @pytest.mark.e2e
-    def test_audit_logs_has_filters(self, admin_authenticated_page: Page, base_url: str):
+    def test_audit_logs_has_filters(
+        self, admin_authenticated_page: Page, base_url: str
+    ):
         """Test that audit logs page has filter options."""
         admin_authenticated_page.goto(f"{base_url}/admin/audit-logs")
         admin_authenticated_page.wait_for_load_state("networkidle")
@@ -527,10 +577,14 @@ class TestAdminTasks:
         """Test that new task form loads."""
         admin_authenticated_page.goto(f"{base_url}/admin/tasks/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
-        expect(admin_authenticated_page).to_have_url(re.compile(r".*/admin/tasks/new.*"))
+        expect(admin_authenticated_page).to_have_url(
+            re.compile(r".*/admin/tasks/new.*")
+        )
 
     @pytest.mark.e2e
-    def test_new_task_form_has_fields(self, admin_authenticated_page: Page, base_url: str):
+    def test_new_task_form_has_fields(
+        self, admin_authenticated_page: Page, base_url: str
+    ):
         """Test that new task form has expected fields."""
         admin_authenticated_page.goto(f"{base_url}/admin/tasks/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
@@ -554,7 +608,7 @@ class TestAdminResponsiveDesign:
         admin_authenticated_page.set_viewport_size({"width": 375, "height": 667})
         admin_authenticated_page.goto(f"{base_url}/admin")
         admin_authenticated_page.wait_for_load_state("networkidle")
-        expect(admin_authenticated_page.locator("body")).to_be_visible()
+        expect(admin_authenticated_page.locator("main")).to_be_visible()
 
     @pytest.mark.e2e
     def test_admin_tablet_viewport(self, admin_authenticated_page: Page, base_url: str):
@@ -562,15 +616,17 @@ class TestAdminResponsiveDesign:
         admin_authenticated_page.set_viewport_size({"width": 768, "height": 1024})
         admin_authenticated_page.goto(f"{base_url}/admin")
         admin_authenticated_page.wait_for_load_state("networkidle")
-        expect(admin_authenticated_page.locator("body")).to_be_visible()
+        expect(admin_authenticated_page.locator("main")).to_be_visible()
 
     @pytest.mark.e2e
-    def test_admin_desktop_viewport(self, admin_authenticated_page: Page, base_url: str):
+    def test_admin_desktop_viewport(
+        self, admin_authenticated_page: Page, base_url: str
+    ):
         """Test admin dashboard on desktop viewport."""
         admin_authenticated_page.set_viewport_size({"width": 1920, "height": 1080})
         admin_authenticated_page.goto(f"{base_url}/admin")
         admin_authenticated_page.wait_for_load_state("networkidle")
-        expect(admin_authenticated_page.locator("body")).to_be_visible()
+        expect(admin_authenticated_page.locator("main")).to_be_visible()
 
 
 class TestAdminAccessControl:

@@ -10,6 +10,7 @@ Creates tables for automated shift scheduling:
 - shift_schedule: Generated monthly shift schedules per employee
 - shift_swap_request: Employee shift swap requests with approval workflow
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql

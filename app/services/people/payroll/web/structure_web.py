@@ -4,25 +4,27 @@ Payroll Web Service - Salary Structure operations.
 
 from __future__ import annotations
 
+import logging
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Optional
-from uuid import UUID
 
-from fastapi import Request, UploadFile, Response
+from fastapi import Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.hr.department import Department
 from app.models.people.hr.designation import Designation
-from app.models.people.payroll.salary_component import SalaryComponent
-from app.models.people.payroll.salary_structure import SalaryStructure, PayrollFrequency
+from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
+from app.models.people.payroll.salary_component import SalaryComponent
 from app.models.people.payroll.salary_slip import SalarySlip
-from app.services.people.payroll.payroll_service import PayrollService
+from app.models.people.payroll.salary_structure import PayrollFrequency, SalaryStructure
 from app.services.common import coerce_uuid
+from app.services.people.payroll.payroll_service import PayrollService
+
+logger = logging.getLogger(__name__)
 
 
 def _safe_form_text(value: object) -> str:
@@ -35,8 +37,9 @@ def _safe_form_text(value: object) -> str:
         return value
     return str(value)
 
+
 from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
+from app.web.deps import WebAuthContext, base_context
 
 
 def _normalize_form(form: Any) -> dict[str, str]:
@@ -44,14 +47,14 @@ def _normalize_form(form: Any) -> dict[str, str]:
         return {}
     return {key: value if isinstance(value, str) else "" for key, value in form.items()}
 
+
 from .base import (
     DEFAULT_PAGE_SIZE,
-    parse_uuid,
+    PAYROLL_FREQUENCIES,
+    parse_bool,
     parse_date,
     parse_decimal,
-    parse_bool,
-    parse_payroll_frequency,
-    PAYROLL_FREQUENCIES,
+    parse_uuid,
 )
 
 
@@ -71,7 +74,9 @@ class StructureWebService:
         per_page = DEFAULT_PAGE_SIZE
         offset = (page - 1) * per_page
 
-        query = db.query(SalaryStructure).filter(SalaryStructure.organization_id == org_id)
+        query = db.query(SalaryStructure).filter(
+            SalaryStructure.organization_id == org_id
+        )
 
         if search:
             query = query.filter(
@@ -80,21 +85,30 @@ class StructureWebService:
             )
 
         total = query.count()
-        structures = query.order_by(SalaryStructure.structure_name).offset(offset).limit(per_page).all()
+        structures = (
+            query.order_by(SalaryStructure.structure_name)
+            .offset(offset)
+            .limit(per_page)
+            .all()
+        )
         total_pages = (total + per_page - 1) // per_page
 
         context = base_context(request, auth, "Salary Structures", "payroll", db=db)
         context["request"] = request
-        context.update({
-            "structures": structures,
-            "search": search,
-            "page": page,
-            "total_pages": total_pages,
-            "total": total,
-            "has_prev": page > 1,
-            "has_next": page < total_pages,
-        })
-        return templates.TemplateResponse(request, "people/payroll/structures.html", context)
+        context.update(
+            {
+                "structures": structures,
+                "search": search,
+                "page": page,
+                "total_pages": total_pages,
+                "total": total,
+                "has_prev": page > 1,
+                "has_next": page < total_pages,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/structures.html", context
+        )
 
     def structure_new_form_response(
         self,
@@ -117,16 +131,20 @@ class StructureWebService:
 
         context = base_context(request, auth, "New Salary Structure", "payroll", db=db)
         context["request"] = request
-        context.update({
-            "structure": None,
-            "components": components,
-            "frequencies": PAYROLL_FREQUENCIES,
-            "earnings_data": [{"component_id": "", "formula": ""}],
-            "deductions_data": [],
-            "form_data": {},
-            "errors": {},
-        })
-        return templates.TemplateResponse(request, "people/payroll/structure_form.html", context)
+        context.update(
+            {
+                "structure": None,
+                "components": components,
+                "frequencies": PAYROLL_FREQUENCIES,
+                "earnings_data": [{"component_id": "", "formula": ""}],
+                "deductions_data": [],
+                "form_data": {},
+                "errors": {},
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/structure_form.html", context
+        )
 
     def structure_edit_form_response(
         self,
@@ -159,7 +177,9 @@ class StructureWebService:
         earnings_data = [
             {
                 "component_id": str(line.component_id),
-                "formula": line.formula if line.amount_based_on_formula else str(line.amount),
+                "formula": line.formula
+                if line.amount_based_on_formula
+                else str(line.amount),
             }
             for line in structure.earnings
         ] or [{"component_id": "", "formula": ""}]
@@ -167,23 +187,29 @@ class StructureWebService:
         deductions_data = [
             {
                 "component_id": str(line.component_id),
-                "formula": line.formula if line.amount_based_on_formula else str(line.amount),
+                "formula": line.formula
+                if line.amount_based_on_formula
+                else str(line.amount),
             }
             for line in structure.deductions
         ]
 
         context = base_context(request, auth, "Edit Salary Structure", "payroll", db=db)
         context["request"] = request
-        context.update({
-            "structure": structure,
-            "components": components,
-            "frequencies": PAYROLL_FREQUENCIES,
-            "earnings_data": earnings_data,
-            "deductions_data": deductions_data,
-            "form_data": {},
-            "errors": {},
-        })
-        return templates.TemplateResponse(request, "people/payroll/structure_form.html", context)
+        context.update(
+            {
+                "structure": structure,
+                "components": components,
+                "frequencies": PAYROLL_FREQUENCIES,
+                "earnings_data": earnings_data,
+                "deductions_data": deductions_data,
+                "form_data": {},
+                "errors": {},
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/structure_form.html", context
+        )
 
     async def create_structure_response(
         self,
@@ -202,19 +228,30 @@ class StructureWebService:
         structure_code = _safe_form_text(form.get("structure_code")).strip()
         structure_name = _safe_form_text(form.get("structure_name")).strip()
         description = _safe_form_text(form.get("description")).strip()
-        frequency = _safe_form_text(form.get("payroll_frequency") or form.get("frequency") or "MONTHLY").strip()
+        frequency = _safe_form_text(
+            form.get("payroll_frequency") or form.get("frequency") or "MONTHLY"
+        ).strip()
         is_active = parse_bool(_safe_form_text(form.get("is_active")), True)
 
         try:
+
             def _get_list(key: str) -> list[str]:
                 if hasattr(form, "getlist"):
                     return [str(v) for v in form.getlist(key)]
                 return []
 
-            earning_components = _get_list("earning_component[]") or _get_list("earning_component")
-            earning_formulas = _get_list("earning_formula[]") or _get_list("earning_formula")
-            deduction_components = _get_list("deduction_component[]") or _get_list("deduction_component")
-            deduction_formulas = _get_list("deduction_formula[]") or _get_list("deduction_formula")
+            earning_components = _get_list("earning_component[]") or _get_list(
+                "earning_component"
+            )
+            earning_formulas = _get_list("earning_formula[]") or _get_list(
+                "earning_formula"
+            )
+            deduction_components = _get_list("deduction_component[]") or _get_list(
+                "deduction_component"
+            )
+            deduction_formulas = _get_list("deduction_formula[]") or _get_list(
+                "deduction_formula"
+            )
 
             def _build_lines(components: list[str], formulas: list[str]) -> list[dict]:
                 lines: list[dict] = []
@@ -223,7 +260,9 @@ class StructureWebService:
                     if not component_id:
                         continue
 
-                    raw_formula = _safe_form_text(formulas[index] if index < len(formulas) else "").strip()
+                    raw_formula = _safe_form_text(
+                        formulas[index] if index < len(formulas) else ""
+                    ).strip()
                     parsed_amount = parse_decimal(raw_formula) if raw_formula else None
 
                     line = {
@@ -232,16 +271,20 @@ class StructureWebService:
                     }
 
                     if raw_formula and parsed_amount is None:
-                        line.update({
-                            "amount_based_on_formula": True,
-                            "formula": raw_formula,
-                        })
+                        line.update(
+                            {
+                                "amount_based_on_formula": True,
+                                "formula": raw_formula,
+                            }
+                        )
                     else:
-                        line.update({
-                            "amount": parsed_amount or Decimal("0"),
-                            "amount_based_on_formula": False,
-                            "formula": None,
-                        })
+                        line.update(
+                            {
+                                "amount": parsed_amount or Decimal("0"),
+                                "amount_based_on_formula": False,
+                                "formula": None,
+                            }
+                        )
 
                     lines.append(line)
                 return lines
@@ -261,7 +304,10 @@ class StructureWebService:
             )
             structure.is_active = is_active
             db.commit()
-            return RedirectResponse(url=f"/people/payroll/structures/{structure.structure_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/payroll/structures/{structure.structure_id}",
+                status_code=303,
+            )
 
         except Exception as e:
             db.rollback()
@@ -276,32 +322,42 @@ class StructureWebService:
                 .all()
             )
 
-            def _form_rows(components_list: list[str], formulas_list: list[str]) -> list[dict]:
+            def _form_rows(
+                components_list: list[str], formulas_list: list[str]
+            ) -> list[dict]:
                 rows: list[dict] = []
                 for index, comp_id in enumerate(components_list):
                     formula = formulas_list[index] if index < len(formulas_list) else ""
                     rows.append({"component_id": comp_id, "formula": formula})
                 return rows or [{"component_id": "", "formula": ""}]
 
-            context = base_context(request, auth, "New Salary Structure", "payroll", db=db)
+            context = base_context(
+                request, auth, "New Salary Structure", "payroll", db=db
+            )
             context["request"] = request
-            context.update({
-                "structure": None,
-                "components": components,
-                "frequencies": PAYROLL_FREQUENCIES,
-                "earnings_data": _form_rows(earning_components, earning_formulas),
-                "deductions_data": _form_rows(deduction_components, deduction_formulas),
-                "form_data": {
-                    "structure_code": structure_code,
-                    "structure_name": structure_name,
-                    "description": description,
-                    "payroll_frequency": frequency,
-                    "is_active": is_active,
-                },
-                "error": str(e),
-                "errors": {},
-            })
-            return templates.TemplateResponse(request, "people/payroll/structure_form.html", context)
+            context.update(
+                {
+                    "structure": None,
+                    "components": components,
+                    "frequencies": PAYROLL_FREQUENCIES,
+                    "earnings_data": _form_rows(earning_components, earning_formulas),
+                    "deductions_data": _form_rows(
+                        deduction_components, deduction_formulas
+                    ),
+                    "form_data": {
+                        "structure_code": structure_code,
+                        "structure_name": structure_name,
+                        "description": description,
+                        "payroll_frequency": frequency,
+                        "is_active": is_active,
+                    },
+                    "error": str(e),
+                    "errors": {},
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/payroll/structure_form.html", context
+            )
 
     def structure_detail_response(
         self,
@@ -321,10 +377,14 @@ class StructureWebService:
         if not structure or structure.organization_id != org_id:
             return RedirectResponse(url="/people/payroll/structures", status_code=303)
 
-        context = base_context(request, auth, structure.structure_name, "payroll", db=db)
+        context = base_context(
+            request, auth, structure.structure_name, "payroll", db=db
+        )
         context["request"] = request
         context.update({"structure": structure})
-        return templates.TemplateResponse(request, "people/payroll/structure_detail.html", context)
+        return templates.TemplateResponse(
+            request, "people/payroll/structure_detail.html", context
+        )
 
     async def update_structure_response(
         self,
@@ -352,19 +412,30 @@ class StructureWebService:
         structure_code = _safe_form_text(form.get("structure_code")).strip()
         structure_name = _safe_form_text(form.get("structure_name")).strip()
         description = _safe_form_text(form.get("description")).strip()
-        frequency = _safe_form_text(form.get("payroll_frequency") or form.get("frequency") or "MONTHLY").strip()
+        frequency = _safe_form_text(
+            form.get("payroll_frequency") or form.get("frequency") or "MONTHLY"
+        ).strip()
         is_active = parse_bool(_safe_form_text(form.get("is_active")), True)
 
         try:
+
             def _get_list(key: str) -> list[str]:
                 if hasattr(form, "getlist"):
                     return [str(v) for v in form.getlist(key)]
                 return []
 
-            earning_components = _get_list("earning_component[]") or _get_list("earning_component")
-            earning_formulas = _get_list("earning_formula[]") or _get_list("earning_formula")
-            deduction_components = _get_list("deduction_component[]") or _get_list("deduction_component")
-            deduction_formulas = _get_list("deduction_formula[]") or _get_list("deduction_formula")
+            earning_components = _get_list("earning_component[]") or _get_list(
+                "earning_component"
+            )
+            earning_formulas = _get_list("earning_formula[]") or _get_list(
+                "earning_formula"
+            )
+            deduction_components = _get_list("deduction_component[]") or _get_list(
+                "deduction_component"
+            )
+            deduction_formulas = _get_list("deduction_formula[]") or _get_list(
+                "deduction_formula"
+            )
 
             def _build_lines(components: list[str], formulas: list[str]) -> list[dict]:
                 lines: list[dict] = []
@@ -373,7 +444,9 @@ class StructureWebService:
                     if not component_id:
                         continue
 
-                    raw_formula = _safe_form_text(formulas[index] if index < len(formulas) else "").strip()
+                    raw_formula = _safe_form_text(
+                        formulas[index] if index < len(formulas) else ""
+                    ).strip()
                     parsed_amount = parse_decimal(raw_formula) if raw_formula else None
 
                     line = {
@@ -382,16 +455,20 @@ class StructureWebService:
                     }
 
                     if raw_formula and parsed_amount is None:
-                        line.update({
-                            "amount_based_on_formula": True,
-                            "formula": raw_formula,
-                        })
+                        line.update(
+                            {
+                                "amount_based_on_formula": True,
+                                "formula": raw_formula,
+                            }
+                        )
                     else:
-                        line.update({
-                            "amount": parsed_amount or Decimal("0"),
-                            "amount_based_on_formula": False,
-                            "formula": None,
-                        })
+                        line.update(
+                            {
+                                "amount": parsed_amount or Decimal("0"),
+                                "amount_based_on_formula": False,
+                                "formula": None,
+                            }
+                        )
 
                     lines.append(line)
                 return lines
@@ -412,7 +489,9 @@ class StructureWebService:
             )
             updated.is_active = is_active
             db.commit()
-            return RedirectResponse(url=f"/people/payroll/structures/{structure_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/payroll/structures/{structure_id}", status_code=303
+            )
 
         except Exception as e:
             db.rollback()
@@ -427,32 +506,42 @@ class StructureWebService:
                 .all()
             )
 
-            def _form_rows(components_list: list[str], formulas_list: list[str]) -> list[dict]:
+            def _form_rows(
+                components_list: list[str], formulas_list: list[str]
+            ) -> list[dict]:
                 rows: list[dict] = []
                 for index, comp_id in enumerate(components_list):
                     formula = formulas_list[index] if index < len(formulas_list) else ""
                     rows.append({"component_id": comp_id, "formula": formula})
                 return rows or [{"component_id": "", "formula": ""}]
 
-            context = base_context(request, auth, "Edit Salary Structure", "payroll", db=db)
+            context = base_context(
+                request, auth, "Edit Salary Structure", "payroll", db=db
+            )
             context["request"] = request
-            context.update({
-                "structure": structure,
-                "components": components,
-                "frequencies": PAYROLL_FREQUENCIES,
-                "earnings_data": _form_rows(earning_components, earning_formulas),
-                "deductions_data": _form_rows(deduction_components, deduction_formulas),
-                "form_data": {
-                    "structure_code": structure_code,
-                    "structure_name": structure_name,
-                    "description": description,
-                    "payroll_frequency": frequency,
-                    "is_active": is_active,
-                },
-                "error": str(e),
-                "errors": {},
-            })
-            return templates.TemplateResponse(request, "people/payroll/structure_form.html", context)
+            context.update(
+                {
+                    "structure": structure,
+                    "components": components,
+                    "frequencies": PAYROLL_FREQUENCIES,
+                    "earnings_data": _form_rows(earning_components, earning_formulas),
+                    "deductions_data": _form_rows(
+                        deduction_components, deduction_formulas
+                    ),
+                    "form_data": {
+                        "structure_code": structure_code,
+                        "structure_name": structure_name,
+                        "description": description,
+                        "payroll_frequency": frequency,
+                        "is_active": is_active,
+                    },
+                    "error": str(e),
+                    "errors": {},
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/payroll/structure_form.html", context
+            )
 
     def delete_structure_response(
         self,
@@ -478,9 +567,7 @@ class StructureWebService:
             is not None
         )
         in_slips = (
-            db.query(SalarySlip)
-            .filter(SalarySlip.structure_id == s_id)
-            .first()
+            db.query(SalarySlip).filter(SalarySlip.structure_id == s_id).first()
             is not None
         )
 
@@ -521,8 +608,13 @@ class StructureWebService:
                 joinedload(SalaryStructureAssignment.salary_structure),
             )
             .filter(SalaryStructureAssignment.organization_id == org_id)
-            .join(Employee, SalaryStructureAssignment.employee_id == Employee.employee_id)
-            .join(SalaryStructure, SalaryStructureAssignment.structure_id == SalaryStructure.structure_id)
+            .join(
+                Employee, SalaryStructureAssignment.employee_id == Employee.employee_id
+            )
+            .join(
+                SalaryStructure,
+                SalaryStructureAssignment.structure_id == SalaryStructure.structure_id,
+            )
         )
 
         if search:
@@ -542,18 +634,22 @@ class StructureWebService:
 
         context = base_context(request, auth, "Salary Assignments", "payroll", db=db)
         context["request"] = request
-        context.update({
-            "assignments": assignments,
-            "search": search,
-            "page": page,
-            "total_pages": total_pages,
-            "total": total,
-            "has_prev": page > 1,
-            "has_next": page < total_pages,
-            "bulk_created": bulk_created,
-            "bulk_skipped": bulk_skipped,
-        })
-        return templates.TemplateResponse(request, "people/payroll/assignments.html", context)
+        context.update(
+            {
+                "assignments": assignments,
+                "search": search,
+                "page": page,
+                "total_pages": total_pages,
+                "total": total,
+                "has_prev": page > 1,
+                "has_next": page < total_pages,
+                "bulk_created": bulk_created,
+                "bulk_skipped": bulk_skipped,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/assignments.html", context
+        )
 
     def assignment_new_form_response(
         self,
@@ -589,19 +685,25 @@ class StructureWebService:
             .all()
         )
 
-        context = base_context(request, auth, "Assign Salary Structure", "payroll", db=db)
+        context = base_context(
+            request, auth, "Assign Salary Structure", "payroll", db=db
+        )
         context["request"] = request
-        context.update({
-            "assignment": None,
-            "employees": employees,
-            "structures": structures,
-            "selected_employee": selected_employee,
-            "selected_employee_id": employee_id,
-            "default_from_date": date.today().isoformat(),
-            "form_data": {},
-            "errors": {},
-        })
-        return templates.TemplateResponse(request, "people/payroll/assignment_form.html", context)
+        context.update(
+            {
+                "assignment": None,
+                "employees": employees,
+                "structures": structures,
+                "selected_employee": selected_employee,
+                "selected_employee_id": employee_id,
+                "default_from_date": date.today().isoformat(),
+                "form_data": {},
+                "errors": {},
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/assignment_form.html", context
+        )
 
     async def create_assignment_response(
         self,
@@ -660,7 +762,11 @@ class StructureWebService:
         except Exception as e:
             db.rollback()
             return self._render_assignment_form_with_error(
-                request, auth, db, str(e), {
+                request,
+                auth,
+                db,
+                str(e),
+                {
                     "employee_id": employee_id,
                     "structure_id": structure_id,
                     "from_date": from_date_str,
@@ -668,7 +774,7 @@ class StructureWebService:
                     "base": base_amount,
                     "variable": variable_amount,
                     "income_tax_slab": income_tax_slab,
-                }
+                },
             )
 
     def assignment_bulk_form_response(
@@ -706,17 +812,23 @@ class StructureWebService:
             .all()
         )
 
-        context = base_context(request, auth, "Bulk Salary Assignment", "payroll", db=db)
+        context = base_context(
+            request, auth, "Bulk Salary Assignment", "payroll", db=db
+        )
         context["request"] = request
-        context.update({
-            "departments": departments,
-            "designations": designations,
-            "structures": structures,
-            "default_from_date": date.today().isoformat(),
-            "form_data": {},
-            "errors": {},
-        })
-        return templates.TemplateResponse(request, "people/payroll/assignment_bulk_form.html", context)
+        context.update(
+            {
+                "departments": departments,
+                "designations": designations,
+                "structures": structures,
+                "default_from_date": date.today().isoformat(),
+                "form_data": {},
+                "errors": {},
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/assignment_bulk_form.html", context
+        )
 
     async def create_assignment_bulk_response(
         self,
@@ -747,17 +859,18 @@ class StructureWebService:
             if not structure_id:
                 raise ValueError("Salary structure is required")
 
-            emp_query = (
-                db.query(Employee.employee_id)
-                .filter(
-                    Employee.organization_id == org_id,
-                    Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]),
-                )
+            emp_query = db.query(Employee.employee_id).filter(
+                Employee.organization_id == org_id,
+                Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]),
             )
             if department_id:
-                emp_query = emp_query.filter(Employee.department_id == parse_uuid(department_id))
+                emp_query = emp_query.filter(
+                    Employee.department_id == parse_uuid(department_id)
+                )
             if designation_id:
-                emp_query = emp_query.filter(Employee.designation_id == parse_uuid(designation_id))
+                emp_query = emp_query.filter(
+                    Employee.designation_id == parse_uuid(designation_id)
+                )
             employee_ids = [row[0] for row in emp_query.all()]
 
             if not employee_ids:
@@ -805,7 +918,11 @@ class StructureWebService:
         except Exception as e:
             db.rollback()
             return self._render_assignment_bulk_form_with_error(
-                request, auth, db, str(e), {
+                request,
+                auth,
+                db,
+                str(e),
+                {
                     "department_id": department_id,
                     "designation_id": designation_id,
                     "structure_id": structure_id,
@@ -813,7 +930,7 @@ class StructureWebService:
                     "base": base_amount,
                     "variable": variable_amount,
                     "income_tax_slab": income_tax_slab,
-                }
+                },
             )
 
     def _render_assignment_bulk_form_with_error(
@@ -852,18 +969,25 @@ class StructureWebService:
             .all()
         )
 
-        context = base_context(request, auth, "Bulk Salary Assignment", "payroll", db=db)
+        context = base_context(
+            request, auth, "Bulk Salary Assignment", "payroll", db=db
+        )
         context["request"] = request
-        context.update({
-            "departments": departments,
-            "designations": designations,
-            "structures": structures,
-            "default_from_date": form_data.get("from_date") or date.today().isoformat(),
-            "form_data": form_data,
-            "error": error,
-            "errors": {},
-        })
-        return templates.TemplateResponse(request, "people/payroll/assignment_bulk_form.html", context)
+        context.update(
+            {
+                "departments": departments,
+                "designations": designations,
+                "structures": structures,
+                "default_from_date": form_data.get("from_date")
+                or date.today().isoformat(),
+                "form_data": form_data,
+                "error": error,
+                "errors": {},
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/assignment_bulk_form.html", context
+        )
 
     def assignment_edit_form_response(
         self,
@@ -909,18 +1033,24 @@ class StructureWebService:
             .all()
         )
 
-        context = base_context(request, auth, "Edit Salary Assignment", "payroll", db=db)
+        context = base_context(
+            request, auth, "Edit Salary Assignment", "payroll", db=db
+        )
         context["request"] = request
-        context.update({
-            "assignment": assignment,
-            "employees": employees,
-            "structures": structures,
-            "selected_employee": assignment.employee,
-            "selected_employee_id": str(assignment.employee_id),
-            "form_data": {},
-            "errors": {},
-        })
-        return templates.TemplateResponse(request, "people/payroll/assignment_form.html", context)
+        context.update(
+            {
+                "assignment": assignment,
+                "employees": employees,
+                "structures": structures,
+                "selected_employee": assignment.employee,
+                "selected_employee_id": str(assignment.employee_id),
+                "form_data": {},
+                "errors": {},
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/assignment_form.html", context
+        )
 
     async def update_assignment_response(
         self,
@@ -955,10 +1085,16 @@ class StructureWebService:
         try:
             new_structure_id = parse_uuid(structure_id)
             if new_structure_id is None:
-                return RedirectResponse(url="/people/payroll/assignments?error=Missing+structure", status_code=303)
+                return RedirectResponse(
+                    url="/people/payroll/assignments?error=Missing+structure",
+                    status_code=303,
+                )
             new_from_date = parse_date(from_date_str)
             if new_from_date is None:
-                return RedirectResponse(url="/people/payroll/assignments?error=Missing+from+date", status_code=303)
+                return RedirectResponse(
+                    url="/people/payroll/assignments?error=Missing+from+date",
+                    status_code=303,
+                )
             assignment.structure_id = new_structure_id
             assignment.from_date = new_from_date
             assignment.to_date = parse_date(to_date_str) if to_date_str else None
@@ -972,7 +1108,11 @@ class StructureWebService:
         except Exception as e:
             db.rollback()
             return self._render_assignment_form_with_error(
-                request, auth, db, str(e), {
+                request,
+                auth,
+                db,
+                str(e),
+                {
                     "structure_id": structure_id,
                     "from_date": from_date_str,
                     "to_date": to_date_str,
@@ -1062,15 +1202,20 @@ class StructureWebService:
         title = "Edit Salary Assignment" if assignment else "Assign Salary Structure"
         context = base_context(request, auth, title, "payroll", db=db)
         context["request"] = request
-        context.update({
-            "assignment": assignment,
-            "employees": employees,
-            "structures": structures,
-            "selected_employee": assignment.employee if assignment else None,
-            "selected_employee_id": form_data.get("employee_id") or (str(assignment.employee_id) if assignment else None),
-            "default_from_date": date.today().isoformat(),
-            "form_data": form_data,
-            "error": error,
-            "errors": {},
-        })
-        return templates.TemplateResponse(request, "people/payroll/assignment_form.html", context)
+        context.update(
+            {
+                "assignment": assignment,
+                "employees": employees,
+                "structures": structures,
+                "selected_employee": assignment.employee if assignment else None,
+                "selected_employee_id": form_data.get("employee_id")
+                or (str(assignment.employee_id) if assignment else None),
+                "default_from_date": date.today().isoformat(),
+                "form_data": form_data,
+                "error": error,
+                "errors": {},
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/assignment_form.html", context
+        )

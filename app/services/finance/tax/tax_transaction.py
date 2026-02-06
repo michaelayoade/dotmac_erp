@@ -7,9 +7,10 @@ and tax payments/refunds.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
@@ -21,6 +22,8 @@ from app.models.finance.tax.tax_code import TaxCode
 from app.models.finance.tax.tax_transaction import TaxTransaction, TaxTransactionType
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -224,7 +227,9 @@ class TaxTransactionService(ListResponseMixin):
             fiscal_period_id=fiscal_period_id,
             tax_code_id=tax_code_id,
             jurisdiction_id=tax_code.jurisdiction_id,
-            transaction_type=TaxTransactionType.INPUT if is_purchase else TaxTransactionType.OUTPUT,
+            transaction_type=TaxTransactionType.INPUT
+            if is_purchase
+            else TaxTransactionType.OUTPUT,
             transaction_date=transaction_date,
             source_document_type="AP_INVOICE" if is_purchase else "AR_INVOICE",
             source_document_id=invoice_id,
@@ -502,15 +507,15 @@ class TaxTransactionService(ListResponseMixin):
             )
 
         if tax_code_id:
-            query = query.filter(
-                TaxTransaction.tax_code_id == coerce_uuid(tax_code_id)
-            )
+            query = query.filter(TaxTransaction.tax_code_id == coerce_uuid(tax_code_id))
 
         if transaction_type:
             query = query.filter(TaxTransaction.transaction_type == transaction_type)
 
         if is_included_in_return is not None:
-            query = query.filter(TaxTransaction.is_included_in_return == is_included_in_return)
+            query = query.filter(
+                TaxTransaction.is_included_in_return == is_included_in_return
+            )
 
         if start_date:
             query = query.filter(TaxTransaction.transaction_date >= start_date)
@@ -602,27 +607,35 @@ class TaxTransactionService(ListResponseMixin):
 
         transactions = []
         for txn, code in results:
-            transactions.append({
-                "transaction_id": str(txn.transaction_id),
-                "transaction_date": txn.transaction_date.isoformat(),
-                "transaction_type": txn.transaction_type.value,
-                "tax_code": code.tax_code,
-                "tax_name": code.tax_name,
-                "tax_rate": str(code.tax_rate),
-                "source_document_type": txn.source_document_type,
-                "source_document_id": str(txn.source_document_id) if txn.source_document_id else None,
-                "source_document_reference": txn.source_document_reference,
-                "counterparty_name": txn.counterparty_name,
-                "counterparty_tax_id": txn.counterparty_tax_id,
-                "base_amount": str(txn.base_amount),
-                "tax_amount": str(txn.tax_amount),
-                "functional_tax_amount": str(txn.functional_tax_amount),
-                "recoverable_amount": str(txn.recoverable_amount) if txn.recoverable_amount else "0",
-                "non_recoverable_amount": str(txn.non_recoverable_amount) if txn.non_recoverable_amount else "0",
-                "currency_code": txn.currency_code,
-                "tax_return_box": txn.tax_return_box,
-                "is_included_in_return": txn.is_included_in_return,
-            })
+            transactions.append(
+                {
+                    "transaction_id": str(txn.transaction_id),
+                    "transaction_date": txn.transaction_date.isoformat(),
+                    "transaction_type": txn.transaction_type.value,
+                    "tax_code": code.tax_code,
+                    "tax_name": code.tax_name,
+                    "tax_rate": str(code.tax_rate),
+                    "source_document_type": txn.source_document_type,
+                    "source_document_id": str(txn.source_document_id)
+                    if txn.source_document_id
+                    else None,
+                    "source_document_reference": txn.source_document_reference,
+                    "counterparty_name": txn.counterparty_name,
+                    "counterparty_tax_id": txn.counterparty_tax_id,
+                    "base_amount": str(txn.base_amount),
+                    "tax_amount": str(txn.tax_amount),
+                    "functional_tax_amount": str(txn.functional_tax_amount),
+                    "recoverable_amount": str(txn.recoverable_amount)
+                    if txn.recoverable_amount
+                    else "0",
+                    "non_recoverable_amount": str(txn.non_recoverable_amount)
+                    if txn.non_recoverable_amount
+                    else "0",
+                    "currency_code": txn.currency_code,
+                    "tax_return_box": txn.tax_return_box,
+                    "is_included_in_return": txn.is_included_in_return,
+                }
+            )
 
         return transactions, total
 
@@ -647,7 +660,6 @@ class TaxTransactionService(ListResponseMixin):
         Returns:
             List of summary dicts with output_tax, input_tax, net_payable
         """
-        from app.models.finance.gl.fiscal_period import FiscalPeriod
 
         org_id = coerce_uuid(organization_id)
 
@@ -688,10 +700,16 @@ class TaxTransactionService(ListResponseMixin):
                     }
 
                 if row.transaction_type == TaxTransactionType.OUTPUT:
-                    period_data[period_key]["output_tax"] += row.tax_amount or Decimal("0")
+                    period_data[period_key]["output_tax"] += row.tax_amount or Decimal(
+                        "0"
+                    )
                 elif row.transaction_type == TaxTransactionType.INPUT:
-                    period_data[period_key]["input_tax"] += row.tax_amount or Decimal("0")
-                    period_data[period_key]["input_tax_recoverable"] += row.recoverable or Decimal("0")
+                    period_data[period_key]["input_tax"] += row.tax_amount or Decimal(
+                        "0"
+                    )
+                    period_data[period_key]["input_tax_recoverable"] += (
+                        row.recoverable or Decimal("0")
+                    )
 
             # Calculate net payable
             for data in period_data.values():
@@ -747,7 +765,9 @@ class TaxTransactionService(ListResponseMixin):
                     code_data[code_key]["output_tax"] += row.tax_amount or Decimal("0")
                 elif row.transaction_type == TaxTransactionType.INPUT:
                     code_data[code_key]["input_tax"] += row.tax_amount or Decimal("0")
-                    code_data[code_key]["input_tax_recoverable"] += row.recoverable or Decimal("0")
+                    code_data[code_key]["input_tax_recoverable"] += (
+                        row.recoverable or Decimal("0")
+                    )
 
             # Calculate net payable and convert to strings
             for data in code_data.values():
@@ -796,13 +816,15 @@ class TaxTransactionService(ListResponseMixin):
 
             net_payable = output_result - recoverable_result
 
-            return [{
-                "period": f"{start_date.isoformat()} to {end_date.isoformat()}",
-                "output_tax": str(output_result),
-                "input_tax": str(input_result),
-                "input_tax_recoverable": str(recoverable_result),
-                "net_payable": str(net_payable),
-            }]
+            return [
+                {
+                    "period": f"{start_date.isoformat()} to {end_date.isoformat()}",
+                    "output_tax": str(output_result),
+                    "input_tax": str(input_result),
+                    "input_tax_recoverable": str(recoverable_result),
+                    "net_payable": str(net_payable),
+                }
+            ]
 
 
 # Module-level singleton instance

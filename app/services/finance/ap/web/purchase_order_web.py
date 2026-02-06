@@ -20,36 +20,36 @@ from sqlalchemy.orm import Session
 
 from app.models.finance.ap.goods_receipt import GoodsReceipt
 from app.models.finance.ap.goods_receipt_line import GoodsReceiptLine
-from app.models.finance.ap.purchase_order import PurchaseOrder, POStatus
+from app.models.finance.ap.purchase_order import POStatus, PurchaseOrder
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
 from app.services.common import coerce_uuid
 from app.services.finance.ap.purchase_order import (
-    purchase_order_service,
-    PurchaseOrderInput,
     POLineInput,
+    PurchaseOrderInput,
+    purchase_order_service,
 )
 from app.services.finance.ap.supplier import supplier_service
-from app.services.finance.common.attachment import attachment_service, AttachmentInput
-from app.services.finance.platform.org_context import org_context_service
-from app.services.finance.platform.currency_context import get_currency_context
-from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
 from app.services.finance.ap.web.base import (
-    parse_date,
-    format_date,
     format_currency,
+    format_date,
     format_file_size,
-    supplier_display_name,
-    supplier_option_view,
-    supplier_form_view,
     get_accounts,
     get_cost_centers,
     get_projects,
     logger,
+    parse_date,
+    supplier_display_name,
+    supplier_form_view,
+    supplier_option_view,
 )
+from app.services.finance.common.attachment import AttachmentInput, attachment_service
+from app.services.finance.platform.currency_context import get_currency_context
+from app.services.finance.platform.org_context import org_context_service
+from app.templates import templates
+from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,11 @@ class PurchaseOrderWebService:
         """Build context for purchase orders list page."""
         logger.debug(
             "list_purchase_orders_context: org=%s search=%r supplier_id=%s status=%s page=%d",
-            organization_id, search, supplier_id, status, page
+            organization_id,
+            search,
+            supplier_id,
+            status,
+            page,
         )
         org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
@@ -131,7 +135,8 @@ class PurchaseOrderWebService:
                 PurchaseOrder.organization_id == org_id,
                 PurchaseOrder.status == POStatus.DRAFT,
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
         pending_count = (
             db.query(func.count(PurchaseOrder.po_id))
@@ -139,38 +144,41 @@ class PurchaseOrderWebService:
                 PurchaseOrder.organization_id == org_id,
                 PurchaseOrder.status == POStatus.PENDING_APPROVAL,
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
-        approved_total = (
-            db.query(func.coalesce(func.sum(PurchaseOrder.total_amount), 0))
-            .filter(
-                PurchaseOrder.organization_id == org_id,
-                PurchaseOrder.status == POStatus.APPROVED,
+        approved_total = db.query(
+            func.coalesce(func.sum(PurchaseOrder.total_amount), 0)
+        ).filter(
+            PurchaseOrder.organization_id == org_id,
+            PurchaseOrder.status == POStatus.APPROVED,
+        ).scalar() or Decimal("0")
+        open_total = db.query(
+            func.coalesce(
+                func.sum(PurchaseOrder.total_amount - PurchaseOrder.amount_received), 0
             )
-            .scalar() or Decimal("0")
-        )
-        open_total = (
-            db.query(func.coalesce(func.sum(PurchaseOrder.total_amount - PurchaseOrder.amount_received), 0))
-            .filter(
-                PurchaseOrder.organization_id == org_id,
-                PurchaseOrder.status.in_([POStatus.APPROVED, POStatus.PARTIALLY_RECEIVED]),
-            )
-            .scalar() or Decimal("0")
-        )
+        ).filter(
+            PurchaseOrder.organization_id == org_id,
+            PurchaseOrder.status.in_([POStatus.APPROVED, POStatus.PARTIALLY_RECEIVED]),
+        ).scalar() or Decimal("0")
 
         orders_view = []
         for po, supplier in orders:
-            orders_view.append({
-                "po_id": po.po_id,
-                "po_number": po.po_number,
-                "supplier_name": supplier_display_name(supplier),
-                "po_date": format_date(po.po_date),
-                "expected_delivery_date": format_date(po.expected_delivery_date),
-                "total_amount": format_currency(po.total_amount, po.currency_code),
-                "amount_received": format_currency(po.amount_received, po.currency_code),
-                "status": po.status.value,
-                "currency_code": po.currency_code,
-            })
+            orders_view.append(
+                {
+                    "po_id": po.po_id,
+                    "po_number": po.po_number,
+                    "supplier_name": supplier_display_name(supplier),
+                    "po_date": format_date(po.po_date),
+                    "expected_delivery_date": format_date(po.expected_delivery_date),
+                    "total_amount": format_currency(po.total_amount, po.currency_code),
+                    "amount_received": format_currency(
+                        po.amount_received, po.currency_code
+                    ),
+                    "status": po.status.value,
+                    "currency_code": po.currency_code,
+                }
+            )
 
         suppliers_list = [
             supplier_option_view(supplier)
@@ -216,8 +224,7 @@ class PurchaseOrderWebService:
     ) -> dict:
         """Build context for purchase order detail page."""
         logger.debug(
-            "purchase_order_detail_context: org=%s po_id=%s",
-            organization_id, po_id
+            "purchase_order_detail_context: org=%s po_id=%s", organization_id, po_id
         )
         org_id = coerce_uuid(organization_id)
         po_uuid = coerce_uuid(po_id)
@@ -237,18 +244,20 @@ class PurchaseOrderWebService:
 
         lines_view = []
         for line in lines:
-            lines_view.append({
-                "line_id": line.line_id,
-                "line_number": line.line_number,
-                "description": line.description,
-                "quantity_ordered": line.quantity_ordered,
-                "quantity_received": line.quantity_received,
-                "quantity_invoiced": line.quantity_invoiced,
-                "unit_price": format_currency(line.unit_price, po.currency_code),
-                "line_amount": format_currency(line.line_amount, po.currency_code),
-                "tax_amount": format_currency(line.tax_amount, po.currency_code),
-                "item_id": line.item_id,
-            })
+            lines_view.append(
+                {
+                    "line_id": line.line_id,
+                    "line_number": line.line_number,
+                    "description": line.description,
+                    "quantity_ordered": line.quantity_ordered,
+                    "quantity_received": line.quantity_received,
+                    "quantity_invoiced": line.quantity_invoiced,
+                    "unit_price": format_currency(line.unit_price, po.currency_code),
+                    "line_amount": format_currency(line.line_amount, po.currency_code),
+                    "tax_amount": format_currency(line.tax_amount, po.currency_code),
+                    "item_id": line.item_id,
+                }
+            )
 
         order_view = {
             "po_id": po.po_id,
@@ -282,16 +291,19 @@ class PurchaseOrderWebService:
             line_count = (
                 db.query(func.count(GoodsReceiptLine.line_id))
                 .filter(GoodsReceiptLine.receipt_id == gr.receipt_id)
-                .scalar() or 0
+                .scalar()
+                or 0
             )
-            receipts_view.append({
-                "receipt_id": gr.receipt_id,
-                "receipt_number": gr.receipt_number,
-                "receipt_date": format_date(gr.receipt_date),
-                "status": gr.status.value,
-                "line_count": line_count,
-                "notes": gr.notes,
-            })
+            receipts_view.append(
+                {
+                    "receipt_id": gr.receipt_id,
+                    "receipt_number": gr.receipt_number,
+                    "receipt_date": format_date(gr.receipt_date),
+                    "status": gr.status.value,
+                    "line_count": line_count,
+                    "notes": gr.notes,
+                }
+            )
 
         # Get attachments
         attachments = attachment_service.list_for_entity(
@@ -333,8 +345,7 @@ class PurchaseOrderWebService:
     ) -> dict:
         """Build context for purchase order form (create/edit)."""
         logger.debug(
-            "purchase_order_form_context: org=%s po_id=%s",
-            organization_id, po_id
+            "purchase_order_form_context: org=%s po_id=%s", organization_id, po_id
         )
         org_id = coerce_uuid(organization_id)
 
@@ -352,6 +363,7 @@ class PurchaseOrderWebService:
 
         # Get inventory items for selection
         from app.models.inventory.item import Item
+
         items = (
             db.query(Item)
             .filter(
@@ -368,7 +380,9 @@ class PurchaseOrderWebService:
                 "item_id": str(item.item_id),
                 "item_code": item.item_code,
                 "item_name": item.item_name,
-                "standard_cost": float(item.standard_cost) if item.standard_cost else None,
+                "standard_cost": float(item.standard_cost)
+                if item.standard_cost
+                else None,
                 "currency_code": item.currency_code,
             }
             for item in items
@@ -397,15 +411,21 @@ class PurchaseOrderWebService:
                     .all()
                 )
                 for line in po_lines:
-                    lines.append({
-                        "line_id": str(line.line_id),
-                        "item_id": str(line.item_id) if line.item_id else "",
-                        "description": line.description,
-                        "quantity": float(line.quantity_ordered),
-                        "unit_price": float(line.unit_price),
-                        "tax_amount": float(line.tax_amount) if line.tax_amount else 0,
-                        "expense_account_id": str(line.expense_account_id) if line.expense_account_id else "",
-                    })
+                    lines.append(
+                        {
+                            "line_id": str(line.line_id),
+                            "item_id": str(line.item_id) if line.item_id else "",
+                            "description": line.description,
+                            "quantity": float(line.quantity_ordered),
+                            "unit_price": float(line.unit_price),
+                            "tax_amount": float(line.tax_amount)
+                            if line.tax_amount
+                            else 0,
+                            "expense_account_id": str(line.expense_account_id)
+                            if line.expense_account_id
+                            else "",
+                        }
+                    )
 
         context = {
             "order": order,
@@ -449,7 +469,9 @@ class PurchaseOrderWebService:
                 page=page,
             )
         )
-        return templates.TemplateResponse(request, "finance/ap/purchase_orders.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/purchase_orders.html", context
+        )
 
     def purchase_order_new_form_response(
         self,
@@ -460,7 +482,9 @@ class PurchaseOrderWebService:
         """Render new purchase order form."""
         context = base_context(request, auth, "New Purchase Order", "ap")
         context.update(self.purchase_order_form_context(db, str(auth.organization_id)))
-        return templates.TemplateResponse(request, "finance/ap/purchase_order_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/purchase_order_form.html", context
+        )
 
     def purchase_order_detail_response(
         self,
@@ -478,7 +502,9 @@ class PurchaseOrderWebService:
                 po_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ap/purchase_order_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/purchase_order_detail.html", context
+        )
 
     def purchase_order_edit_form_response(
         self,
@@ -489,10 +515,14 @@ class PurchaseOrderWebService:
     ) -> HTMLResponse | RedirectResponse:
         """Render purchase order edit form."""
         context = base_context(request, auth, "Edit Purchase Order", "ap")
-        context.update(self.purchase_order_form_context(db, str(auth.organization_id), po_id))
+        context.update(
+            self.purchase_order_form_context(db, str(auth.organization_id), po_id)
+        )
         if not context.get("order"):
             return RedirectResponse(url="/finance/ap/purchase-orders", status_code=303)
-        return templates.TemplateResponse(request, "finance/ap/purchase_order_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/purchase_order_form.html", context
+        )
 
     async def create_purchase_order_response(
         self,
@@ -521,18 +551,34 @@ class PurchaseOrderWebService:
             lines = []
             for line in lines_data:
                 if line.get("description"):
-                    lines.append(POLineInput(
-                        item_id=UUID(line["item_id"]) if line.get("item_id") else None,
-                        description=line.get("description", ""),
-                        quantity_ordered=Decimal(str(line.get("quantity", line.get("quantity_ordered", 1)))),
-                        unit_price=Decimal(str(line.get("unit_price", 0))),
-                        expense_account_id=UUID(line["expense_account_id"])
-                        if line.get("expense_account_id")
-                        else None,
-                        tax_code_id=UUID(line["tax_code_id"]) if line.get("tax_code_id") else None,
-                        cost_center_id=UUID(line["cost_center_id"]) if line.get("cost_center_id") else None,
-                        project_id=UUID(line["project_id"]) if line.get("project_id") else None,
-                    ))
+                    lines.append(
+                        POLineInput(
+                            item_id=UUID(line["item_id"])
+                            if line.get("item_id")
+                            else None,
+                            description=line.get("description", ""),
+                            quantity_ordered=Decimal(
+                                str(
+                                    line.get(
+                                        "quantity", line.get("quantity_ordered", 1)
+                                    )
+                                )
+                            ),
+                            unit_price=Decimal(str(line.get("unit_price", 0))),
+                            expense_account_id=UUID(line["expense_account_id"])
+                            if line.get("expense_account_id")
+                            else None,
+                            tax_code_id=UUID(line["tax_code_id"])
+                            if line.get("tax_code_id")
+                            else None,
+                            cost_center_id=UUID(line["cost_center_id"])
+                            if line.get("cost_center_id")
+                            else None,
+                            project_id=UUID(line["project_id"])
+                            if line.get("project_id")
+                            else None,
+                        )
+                    )
 
             po_date_str = data.get("po_date")
             po_date = (
@@ -548,7 +594,9 @@ class PurchaseOrderWebService:
                 else None
             )
 
-            currency_code = data.get("currency_code") or org_context_service.get_functional_currency(
+            currency_code = data.get(
+                "currency_code"
+            ) or org_context_service.get_functional_currency(
                 db,
                 org_id,
             )
@@ -571,7 +619,8 @@ class PurchaseOrderWebService:
 
             logger.info(
                 "create_purchase_order_response: created PO %s for org %s",
-                po.po_id, auth.organization_id
+                po.po_id,
+                auth.organization_id,
             )
 
             if "application/json" in content_type:
@@ -588,10 +637,14 @@ class PurchaseOrderWebService:
                 return JSONResponse(status_code=400, content={"detail": str(e)})
 
             context = base_context(request, auth, "New Purchase Order", "ap")
-            context.update(self.purchase_order_form_context(db, str(auth.organization_id)))
+            context.update(
+                self.purchase_order_form_context(db, str(auth.organization_id))
+            )
             context["error"] = str(e)
             context["form_data"] = data
-            return templates.TemplateResponse(request, "finance/ap/purchase_order_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/purchase_order_form.html", context
+            )
 
     def submit_purchase_order_response(
         self,
@@ -613,8 +666,7 @@ class PurchaseOrderWebService:
                 submitted_by_user_id=user_id,
             )
             logger.info(
-                "submit_purchase_order_response: submitted PO %s for approval",
-                po_id
+                "submit_purchase_order_response: submitted PO %s for approval", po_id
             )
             return RedirectResponse(
                 url=f"/finance/ap/purchase-orders/{po_id}?success=Submitted+for+approval",
@@ -631,7 +683,9 @@ class PurchaseOrderWebService:
                 )
             )
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "finance/ap/purchase_order_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/purchase_order_detail.html", context
+            )
 
     def approve_purchase_order_response(
         self,
@@ -652,10 +706,7 @@ class PurchaseOrderWebService:
                 po_id=UUID(po_id),
                 approved_by_user_id=user_id,
             )
-            logger.info(
-                "approve_purchase_order_response: approved PO %s",
-                po_id
-            )
+            logger.info("approve_purchase_order_response: approved PO %s", po_id)
             return RedirectResponse(
                 url=f"/finance/ap/purchase-orders/{po_id}?success=Purchase+order+approved",
                 status_code=303,
@@ -671,7 +722,9 @@ class PurchaseOrderWebService:
                 )
             )
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "finance/ap/purchase_order_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/purchase_order_detail.html", context
+            )
 
     def cancel_purchase_order_response(
         self,
@@ -689,10 +742,7 @@ class PurchaseOrderWebService:
                 organization_id=org_id,
                 po_id=UUID(po_id),
             )
-            logger.info(
-                "cancel_purchase_order_response: cancelled PO %s",
-                po_id
-            )
+            logger.info("cancel_purchase_order_response: cancelled PO %s", po_id)
             return RedirectResponse(
                 url=f"/finance/ap/purchase-orders/{po_id}?success=Purchase+order+cancelled",
                 status_code=303,
@@ -708,7 +758,9 @@ class PurchaseOrderWebService:
                 )
             )
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "finance/ap/purchase_order_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/purchase_order_detail.html", context
+            )
 
     async def upload_po_attachment_response(
         self,
@@ -749,8 +801,7 @@ class PurchaseOrderWebService:
             )
 
             logger.info(
-                "upload_po_attachment_response: uploaded attachment for PO %s",
-                po_id
+                "upload_po_attachment_response: uploaded attachment for PO %s", po_id
             )
 
             return RedirectResponse(
@@ -761,7 +812,8 @@ class PurchaseOrderWebService:
         except ValueError as e:
             logger.warning(
                 "upload_po_attachment_response: validation error for PO %s: %s",
-                po_id, str(e)
+                po_id,
+                str(e),
             )
             return RedirectResponse(
                 url=f"/finance/ap/purchase-orders/{po_id}?error={str(e)}",

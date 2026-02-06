@@ -8,10 +8,9 @@ ensuring stale data is never served to users.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 from uuid import UUID
 
-from app.services.cache import cache_service, CacheKeys
+from app.services.cache import CacheKeys, cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +88,9 @@ class CacheInvalidation:
         - Dashboard statistics (all years)
         - Dashboard balances (all years)
         """
-        logger.debug("Cache invalidation: fiscal period changed for org %s", organization_id)
+        logger.debug(
+            "Cache invalidation: fiscal period changed for org %s", organization_id
+        )
         cache_service.delete_pattern(f"org:{organization_id}:dashboard:*")
 
     @staticmethod

@@ -3,7 +3,7 @@
 {% block title %}Sign in - {{ brand.name }}{% endblock %}
 
 {% block body %}
-<div class="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center px-4 py-12 bg-mesh">
+<div class="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center px-4 py-12 login-bg">
     {% set brand_name = brand.name %}
     {% set brand_tagline = brand.tagline %}
     {% set brand_logo_url = brand.logo_url %}
@@ -16,7 +16,7 @@
                 {% if brand_logo_url %}
                     <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo" class="h-16 w-16 rounded-2xl object-cover shadow-lg shadow-primary-500/20" />
                 {% else %}
-                    <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 via-primary-600 to-accent-500 text-xl font-semibold uppercase text-white shadow-lg shadow-primary-500/30">
+                    <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 via-primary-600 to-accent-500 text-xl font-semibold uppercase text-white shadow-xl shadow-primary-500/30 ring-4 ring-white/50 dark:ring-slate-800/50">
                         {{ brand_mark }}
                     </div>
                 {% endif %}
@@ -32,7 +32,7 @@
         </div>
 
         <!-- Login Card -->
-        <div class="stagger-in card p-8" x-data="loginForm()">
+        <div class="stagger-in login-card rounded-2xl p-8" x-data="loginForm()">
             <div class="text-center mb-6">
                 <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Sign in</h1>
                 <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Access your {{ brand_name }} workspace.</p>

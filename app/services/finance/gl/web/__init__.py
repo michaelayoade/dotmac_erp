@@ -22,36 +22,37 @@ from sqlalchemy.orm import Session
 
 from app.schemas.bulk_actions import BulkActionRequest, BulkExportRequest
 from app.services.common import coerce_uuid
-from app.web.deps import WebAuthContext
-
-from app.services.finance.gl.web.base import (
-    # Parsing utilities
-    parse_date,
-    format_date,
-    format_currency,
-    ifrs_label,
-    parse_category,
-    parse_status,
-    # View transformers
-    category_option_view,
-    account_form_view,
-    account_detail_view,
-    journal_entry_view,
-    journal_line_view,
-    period_option_view,
-    fiscal_year_option_view,
-    # Data classes
-    TrialBalanceTotals,
-)
 
 # Import the modular service components
 from app.services.finance.gl.web.account_web import AccountWebService
+from app.services.finance.gl.web.base import (
+    # Data classes
+    TrialBalanceTotals,
+    account_detail_view,
+    account_form_view,
+    # View transformers
+    category_option_view,
+    fiscal_year_option_view,
+    format_currency,
+    format_date,
+    ifrs_label,
+    journal_entry_view,
+    journal_line_view,
+    parse_category,
+    # Parsing utilities
+    parse_date,
+    parse_status,
+    period_option_view,
+)
 from app.services.finance.gl.web.journal_web import JournalWebService
 from app.services.finance.gl.web.ledger_web import LedgerWebService, ledger_web_service
 from app.services.finance.gl.web.period_web import PeriodWebService
+from app.web.deps import WebAuthContext
 
 
-class GLWebService(AccountWebService, JournalWebService, LedgerWebService, PeriodWebService):
+class GLWebService(
+    AccountWebService, JournalWebService, LedgerWebService, PeriodWebService
+):
     """
     Unified GL Web Service facade.
 

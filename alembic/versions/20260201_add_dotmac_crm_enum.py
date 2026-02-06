@@ -5,10 +5,11 @@ Revises:
 Create Date: 2026-02-01
 
 """
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = 'add_dotmac_crm_enum'
+revision = "add_dotmac_crm_enum"
 down_revision = "add_integration_config"
 branch_labels = None
 depends_on = None

@@ -9,10 +9,12 @@ Includes:
 - Currency formatting
 - Employee code generation
 """
-from typing import Optional
-from datetime import date
-from sqlalchemy.orm import Session
+
 import uuid
+from datetime import date
+from typing import Optional
+
+from sqlalchemy.orm import Session
 
 
 def generate_employee_code(

@@ -6,7 +6,6 @@ Create Date: 2026-01-28
 
 Merges the HR handbook migration branch with the main development branch.
 """
-from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260128_merge_handbook"

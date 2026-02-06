@@ -16,6 +16,7 @@ Usage:
     To bypass RLS (for superusers/admin operations):
     SET app.bypass_rls = 'true';
 """
+
 from alembic import op
 from sqlalchemy import text
 
@@ -79,7 +80,8 @@ def upgrade() -> None:
 
     # Find all tables with organization_id column dynamically
     conn = op.get_bind()
-    result = conn.execute(text("""
+    result = conn.execute(
+        text("""
         SELECT t.table_schema, t.table_name
         FROM information_schema.tables t
         JOIN information_schema.columns c
@@ -88,7 +90,9 @@ def upgrade() -> None:
         AND c.column_name = 'organization_id'
         AND t.table_type = 'BASE TABLE'
         ORDER BY t.table_schema, t.table_name
-    """), {"schemas": IFRS_SCHEMAS})
+    """),
+        {"schemas": IFRS_SCHEMAS},
+    )
 
     tenant_tables = [(row[0], row[1]) for row in result]
 
@@ -151,7 +155,8 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Find all tables with organization_id column dynamically
     conn = op.get_bind()
-    result = conn.execute(text("""
+    result = conn.execute(
+        text("""
         SELECT t.table_schema, t.table_name
         FROM information_schema.tables t
         JOIN information_schema.columns c
@@ -160,7 +165,9 @@ def downgrade() -> None:
         AND c.column_name = 'organization_id'
         AND t.table_type = 'BASE TABLE'
         ORDER BY t.table_schema, t.table_name
-    """), {"schemas": IFRS_SCHEMAS})
+    """),
+        {"schemas": IFRS_SCHEMAS},
+    )
 
     tenant_tables = [(row[0], row[1]) for row in result]
 

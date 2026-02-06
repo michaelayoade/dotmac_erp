@@ -1,6 +1,8 @@
 """
 Warehouse mapping from ERPNext to DotMac ERP.
 """
+
+import logging
 from typing import Any
 
 from .base import (
@@ -10,6 +12,8 @@ from .base import (
     invert_bool,
     parse_datetime,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class WarehouseMapping(DocTypeMapping):

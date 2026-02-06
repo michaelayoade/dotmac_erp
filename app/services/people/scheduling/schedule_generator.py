@@ -3,6 +3,7 @@ Schedule Generator Service.
 
 Handles monthly schedule generation from shift patterns.
 """
+
 from __future__ import annotations
 
 import logging
@@ -11,18 +12,18 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional, Set
 from uuid import UUID
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.models.notification import EntityType, NotificationChannel, NotificationType
+from app.models.people.leave import LeaveApplication, LeaveApplicationStatus
 from app.models.people.scheduling import (
+    RotationType,
+    ScheduleStatus,
     ShiftPattern,
     ShiftPatternAssignment,
     ShiftSchedule,
-    RotationType,
-    ScheduleStatus,
 )
-from app.models.people.leave import LeaveApplication, LeaveApplicationStatus
-from app.models.notification import EntityType, NotificationType, NotificationChannel
 from app.services.notification import NotificationService
 
 logger = logging.getLogger(__name__)
@@ -295,7 +296,9 @@ class ScheduleGenerator:
                     action_url=f"/people/self/schedule?year_month={year_month}",
                 )
             except Exception as e:
-                logger.warning("Failed to send schedule notification to %s: %s", emp.employee_id, e)
+                logger.warning(
+                    "Failed to send schedule notification to %s: %s", emp.employee_id, e
+                )
 
     def delete_month_schedules(
         self,
@@ -452,7 +455,9 @@ class ScheduleGenerator:
         cycle_week = week_number % pattern.cycle_weeks
 
         # Apply offset
-        adjusted_week = (cycle_week + assignment.rotation_week_offset) % pattern.cycle_weeks
+        adjusted_week = (
+            cycle_week + assignment.rotation_week_offset
+        ) % pattern.cycle_weeks
 
         # Even cycle weeks = day shift, odd = night shift (for 2-week cycles)
         # For longer cycles, alternate every other week

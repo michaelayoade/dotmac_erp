@@ -17,7 +17,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models.finance.ar.customer import Customer, CustomerType, RiskCategory
+from app.models.finance.ar.customer import Customer, RiskCategory
 from app.models.finance.ar.customer_payment import CustomerPayment
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 from app.models.finance.common.attachment import AttachmentCategory
@@ -25,24 +25,23 @@ from app.models.finance.gl.account_category import IFRSCategory
 from app.services.audit_info import get_audit_service
 from app.services.common import coerce_uuid
 from app.services.finance.ar.customer import CustomerInput, customer_service
-from app.services.finance.common.attachment import attachment_service, AttachmentInput
-from app.services.finance.platform.currency_context import get_currency_context
-from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
 from app.services.finance.ar.web.base import (
-    parse_customer_type,
-    format_date,
-    format_currency,
-    format_file_size,
-    customer_option_view,
+    calculate_customer_balance_trends,
+    customer_detail_view,
     customer_form_view,
     customer_list_view,
-    customer_detail_view,
-    invoice_status_label,
+    format_currency,
+    format_date,
+    format_file_size,
     get_accounts,
-    calculate_customer_balance_trends,
+    invoice_status_label,
     logger,
+    parse_customer_type,
 )
+from app.services.finance.common.attachment import AttachmentInput, attachment_service
+from app.services.finance.platform.currency_context import get_currency_context
+from app.templates import templates
+from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +108,10 @@ class CustomerWebService:
         """Get context for customer listing page."""
         logger.debug(
             "list_customers_context: org=%s search=%r status=%s page=%d",
-            organization_id, search, status, page
+            organization_id,
+            search,
+            status,
+            page,
         )
         org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
@@ -132,12 +134,11 @@ class CustomerWebService:
                 | (Customer.tax_identification_number.ilike(search_pattern))
             )
 
-        total_count = query.with_entities(func.count(Customer.customer_id)).scalar() or 0
+        total_count = (
+            query.with_entities(func.count(Customer.customer_id)).scalar() or 0
+        )
         customers = (
-            query.order_by(Customer.legal_name)
-            .limit(limit)
-            .offset(offset)
-            .all()
+            query.order_by(Customer.legal_name).limit(limit).offset(offset).all()
         )
 
         open_statuses = [
@@ -163,7 +164,11 @@ class CustomerWebService:
 
         # Use shared audit service for user names
         audit_service = get_audit_service(db)
-        creator_ids = [customer.created_by_user_id for customer in customers if customer.created_by_user_id]
+        creator_ids = [
+            customer.created_by_user_id
+            for customer in customers
+            if customer.created_by_user_id
+        ]
         creator_names = audit_service.get_user_names_batch(creator_ids)
 
         # Calculate balance trends for sparkline charts
@@ -205,8 +210,7 @@ class CustomerWebService:
     ) -> dict:
         """Get context for customer create/edit form."""
         logger.debug(
-            "customer_form_context: org=%s customer_id=%s",
-            organization_id, customer_id
+            "customer_form_context: org=%s customer_id=%s", organization_id, customer_id
         )
         org_id = coerce_uuid(organization_id)
         customer = None
@@ -238,7 +242,8 @@ class CustomerWebService:
         """Get context for customer detail page."""
         logger.debug(
             "customer_detail_context: org=%s customer_id=%s",
-            organization_id, customer_id
+            organization_id,
+            customer_id,
         )
         org_id = coerce_uuid(organization_id)
         customer = None
@@ -256,21 +261,16 @@ class CustomerWebService:
             InvoiceStatus.OVERDUE,
         ]
 
-        balance = (
-            db.query(
-                func.coalesce(
-                    func.sum(Invoice.total_amount - Invoice.amount_paid),
-                    0,
-                )
+        balance = db.query(
+            func.coalesce(
+                func.sum(Invoice.total_amount - Invoice.amount_paid),
+                0,
             )
-            .filter(
-                Invoice.organization_id == org_id,
-                Invoice.customer_id == customer.customer_id,
-                Invoice.status.in_(open_statuses),
-            )
-            .scalar()
-            or Decimal("0")
-        )
+        ).filter(
+            Invoice.organization_id == org_id,
+            Invoice.customer_id == customer.customer_id,
+            Invoice.status.in_(open_statuses),
+        ).scalar() or Decimal("0")
 
         invoices = (
             db.query(Invoice)
@@ -285,6 +285,7 @@ class CustomerWebService:
         )
 
         from datetime import date
+
         today = date.today()
         open_invoices = []
         for invoice in invoices:
@@ -331,7 +332,9 @@ class CustomerWebService:
             for att in attachments
         ]
 
-        logger.debug("customer_detail_context: found %d open invoices", len(open_invoices))
+        logger.debug(
+            "customer_detail_context: found %d open invoices", len(open_invoices)
+        )
 
         return {
             "customer": customer_detail_view(customer, balance),
@@ -347,8 +350,7 @@ class CustomerWebService:
     ) -> Optional[str]:
         """Delete a customer. Returns error message or None on success."""
         logger.debug(
-            "delete_customer: org=%s customer_id=%s",
-            organization_id, customer_id
+            "delete_customer: org=%s customer_id=%s", organization_id, customer_id
         )
         org_id = coerce_uuid(organization_id)
         cust_id = coerce_uuid(customer_id)
@@ -388,7 +390,9 @@ class CustomerWebService:
         try:
             db.delete(customer)
             db.commit()
-            logger.info("delete_customer: deleted customer %s for org %s", cust_id, org_id)
+            logger.info(
+                "delete_customer: deleted customer %s for org %s", cust_id, org_id
+            )
             return None
         except Exception as e:
             db.rollback()
@@ -430,7 +434,9 @@ class CustomerWebService:
         """Render new customer form."""
         context = base_context(request, auth, "New Customer", "ar")
         context.update(self.customer_form_context(db, str(auth.organization_id)))
-        return templates.TemplateResponse(request, "finance/ar/customer_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/customer_form.html", context
+        )
 
     def customer_detail_response(
         self,
@@ -448,7 +454,9 @@ class CustomerWebService:
                 customer_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ar/customer_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/customer_detail.html", context
+        )
 
     def customer_edit_form_response(
         self,
@@ -459,8 +467,12 @@ class CustomerWebService:
     ) -> HTMLResponse:
         """Render customer edit form."""
         context = base_context(request, auth, "Edit Customer", "ar")
-        context.update(self.customer_form_context(db, str(auth.organization_id), customer_id))
-        return templates.TemplateResponse(request, "finance/ar/customer_form.html", context)
+        context.update(
+            self.customer_form_context(db, str(auth.organization_id), customer_id)
+        )
+        return templates.TemplateResponse(
+            request, "finance/ar/customer_form.html", context
+        )
 
     async def create_customer_response(
         self,
@@ -493,7 +505,9 @@ class CustomerWebService:
             context.update(self.customer_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
             context["form_data"] = dict(form_data)
-            return templates.TemplateResponse(request, "finance/ar/customer_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/customer_form.html", context
+            )
 
     async def update_customer_response(
         self,
@@ -525,10 +539,14 @@ class CustomerWebService:
         except Exception as e:
             logger.exception("update_customer_response: failed")
             context = base_context(request, auth, "Edit Customer", "ar")
-            context.update(self.customer_form_context(db, str(auth.organization_id), customer_id))
+            context.update(
+                self.customer_form_context(db, str(auth.organization_id), customer_id)
+            )
             context["error"] = str(e)
             context["form_data"] = dict(form_data)
-            return templates.TemplateResponse(request, "finance/ar/customer_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/customer_form.html", context
+            )
 
     def delete_customer_response(
         self,
@@ -550,7 +568,9 @@ class CustomerWebService:
                 )
             )
             context["error"] = error
-            return templates.TemplateResponse(request, "finance/ar/customer_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/customer_detail.html", context
+            )
 
         return RedirectResponse(url="/finance/ar/customers", status_code=303)
 

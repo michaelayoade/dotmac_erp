@@ -4,6 +4,7 @@ Expenses Importer.
 Imports expense entries from CSV data into the expense system.
 """
 
+import logging
 from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
@@ -12,10 +13,16 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.finance.exp.expense_entry import ExpenseEntry, ExpenseStatus, PaymentMethod
+from app.models.finance.exp.expense_entry import (
+    ExpenseEntry,
+    ExpenseStatus,
+    PaymentMethod,
+)
 from app.models.finance.gl.account import Account
 
 from .base import BaseImporter, FieldMapping, ImportConfig
+
+logger = logging.getLogger(__name__)
 
 
 class ExpenseImporter(BaseImporter[ExpenseEntry]):
@@ -63,10 +70,15 @@ class ExpenseImporter(BaseImporter[ExpenseEntry]):
             FieldMapping("Entry Number", "entry_number_alt", required=False),
             FieldMapping("Reference", "reference_alt", required=False),
             # Date
-            FieldMapping("Expense Date", "expense_date", required=False,
-                         transformer=self.parse_date),
-            FieldMapping("Date", "date_alt", required=False,
-                         transformer=self.parse_date),
+            FieldMapping(
+                "Expense Date",
+                "expense_date",
+                required=False,
+                transformer=self.parse_date,
+            ),
+            FieldMapping(
+                "Date", "date_alt", required=False, transformer=self.parse_date
+            ),
             # Description
             FieldMapping("Description", "description", required=False),
             FieldMapping("Expense Description", "description_alt", required=False),
@@ -74,26 +86,45 @@ class ExpenseImporter(BaseImporter[ExpenseEntry]):
             FieldMapping("Expense Account", "expense_account_name", required=False),
             FieldMapping("Account", "account_alt", required=False),
             FieldMapping("Category", "category_alt", required=False),
-            FieldMapping("Expense Account Code", "expense_account_code", required=False),
+            FieldMapping(
+                "Expense Account Code", "expense_account_code", required=False
+            ),
             FieldMapping("Payment Account", "payment_account_name", required=False),
             FieldMapping("Paid Through", "paid_through_alt", required=False),
             FieldMapping("Bank", "bank_alt", required=False),
-            FieldMapping("Payment Account Code", "payment_account_code", required=False),
+            FieldMapping(
+                "Payment Account Code", "payment_account_code", required=False
+            ),
             # Amounts
-            FieldMapping("Amount", "amount", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Expense Amount", "expense_amount_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Total", "total_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Tax Amount", "tax_amount", required=False,
-                         transformer=self.parse_decimal, default=Decimal("0")),
-            FieldMapping("VAT", "vat_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Tax", "tax_alt", required=False,
-                         transformer=self.parse_decimal),
+            FieldMapping(
+                "Amount", "amount", required=False, transformer=self.parse_decimal
+            ),
+            FieldMapping(
+                "Expense Amount",
+                "expense_amount_alt",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Total", "total_alt", required=False, transformer=self.parse_decimal
+            ),
+            FieldMapping(
+                "Tax Amount",
+                "tax_amount",
+                required=False,
+                transformer=self.parse_decimal,
+                default=Decimal("0"),
+            ),
+            FieldMapping(
+                "VAT", "vat_alt", required=False, transformer=self.parse_decimal
+            ),
+            FieldMapping(
+                "Tax", "tax_alt", required=False, transformer=self.parse_decimal
+            ),
             # Currency
-            FieldMapping("Currency Code", "currency_code", required=False, default="NGN"),
+            FieldMapping(
+                "Currency Code", "currency_code", required=False, default="NGN"
+            ),
             FieldMapping("Currency", "currency_alt", required=False),
             # Payment
             FieldMapping("Payment Method", "payment_method_str", required=False),
@@ -115,8 +146,12 @@ class ExpenseImporter(BaseImporter[ExpenseEntry]):
 
     def get_unique_key(self, row: Dict[str, Any]) -> str:
         """Unique key is expense number."""
-        return (row.get("Expense Number") or row.get("Entry Number") or
-                row.get("Reference") or "").strip()
+        return (
+            row.get("Expense Number")
+            or row.get("Entry Number")
+            or row.get("Reference")
+            or ""
+        ).strip()
 
     def check_duplicate(self, row: Dict[str, Any]) -> Optional[ExpenseEntry]:
         """Check if expense already exists."""
@@ -138,10 +173,15 @@ class ExpenseImporter(BaseImporter[ExpenseEntry]):
         is_valid = super().validate_row(row, row_num)
 
         # Amount is required
-        amount = (row.get("Amount") or row.get("Expense Amount") or
-                  row.get("Total") or "").strip() if isinstance(
-            row.get("Amount") or row.get("Expense Amount") or row.get("Total"), str
-        ) else row.get("Amount") or row.get("Expense Amount") or row.get("Total")
+        amount = (
+            (
+                row.get("Amount") or row.get("Expense Amount") or row.get("Total") or ""
+            ).strip()
+            if isinstance(
+                row.get("Amount") or row.get("Expense Amount") or row.get("Total"), str
+            )
+            else row.get("Amount") or row.get("Expense Amount") or row.get("Total")
+        )
 
         if not amount:
             self.result.add_error(row_num, "Amount is required", "Amount")
@@ -152,8 +192,12 @@ class ExpenseImporter(BaseImporter[ExpenseEntry]):
     def create_entity(self, row: Dict[str, Any]) -> ExpenseEntry:
         """Create a new expense entry from transformed row data."""
         # Get expense number
-        expense_number = (row.get("expense_number") or row.get("entry_number_alt") or
-                          row.get("reference_alt") or "").strip()
+        expense_number = (
+            row.get("expense_number")
+            or row.get("entry_number_alt")
+            or row.get("reference_alt")
+            or ""
+        ).strip()
         if not expense_number:
             self._expense_counter += 1
             expense_number = f"EXP{self._expense_counter:06d}"
@@ -162,46 +206,68 @@ class ExpenseImporter(BaseImporter[ExpenseEntry]):
         expense_date = row.get("expense_date") or row.get("date_alt") or date.today()
 
         # Get description
-        description = (row.get("description") or row.get("description_alt") or
-                       "Expense Entry")
+        description = (
+            row.get("description") or row.get("description_alt") or "Expense Entry"
+        )
 
         # Get expense account
         expense_account_id = self._get_account_id(
-            row.get("expense_account_name") or row.get("account_alt") or row.get("category_alt"),
+            row.get("expense_account_name")
+            or row.get("account_alt")
+            or row.get("category_alt"),
             row.get("expense_account_code"),
-            self.default_expense_account_id
+            self.default_expense_account_id,
         )
 
         # Get payment account
         payment_account_id = None
-        if row.get("payment_account_name") or row.get("paid_through_alt") or row.get("bank_alt"):
+        if (
+            row.get("payment_account_name")
+            or row.get("paid_through_alt")
+            or row.get("bank_alt")
+        ):
             payment_account_id = self._get_account_id(
-                row.get("payment_account_name") or row.get("paid_through_alt") or row.get("bank_alt"),
+                row.get("payment_account_name")
+                or row.get("paid_through_alt")
+                or row.get("bank_alt"),
                 row.get("payment_account_code"),
-                self.default_payment_account_id
+                self.default_payment_account_id,
             )
         elif self.default_payment_account_id:
             payment_account_id = self.default_payment_account_id
 
         # Get amounts
-        amount = (row.get("amount") or row.get("expense_amount_alt") or
-                  row.get("total_alt") or Decimal("0"))
-        tax_amount = (row.get("tax_amount") or row.get("vat_alt") or
-                      row.get("tax_alt") or Decimal("0"))
+        amount = (
+            row.get("amount")
+            or row.get("expense_amount_alt")
+            or row.get("total_alt")
+            or Decimal("0")
+        )
+        tax_amount = (
+            row.get("tax_amount")
+            or row.get("vat_alt")
+            or row.get("tax_alt")
+            or Decimal("0")
+        )
 
         # Get currency
-        currency_code = (row.get("currency_code") or row.get("currency_alt") or "NGN")[:3]
+        currency_code = (row.get("currency_code") or row.get("currency_alt") or "NGN")[
+            :3
+        ]
 
         # Get payment method
         method_str = row.get("payment_method_str") or row.get("method_alt") or "CASH"
         payment_method = self._parse_payment_method(method_str)
 
         # Get payee
-        payee = (row.get("payee") or row.get("vendor_alt") or row.get("supplier_alt"))
+        payee = row.get("payee") or row.get("vendor_alt") or row.get("supplier_alt")
 
         # Get receipt reference
-        receipt_reference = (row.get("receipt_reference") or row.get("receipt_alt") or
-                             row.get("reference_hash_alt"))
+        receipt_reference = (
+            row.get("receipt_reference")
+            or row.get("receipt_alt")
+            or row.get("reference_hash_alt")
+        )
 
         # Get status
         status_str = row.get("status_str", "DRAFT")
@@ -232,7 +298,7 @@ class ExpenseImporter(BaseImporter[ExpenseEntry]):
         self,
         account_name: Optional[str],
         account_code: Optional[str],
-        default_id: Optional[UUID]
+        default_id: Optional[UUID],
     ) -> UUID:
         """Get account ID by name or code."""
         if account_code:

@@ -20,12 +20,14 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from typing import Optional, Protocol, runtime_checkable
 from uuid import UUID
 
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Tax Result - Base class for calculation results

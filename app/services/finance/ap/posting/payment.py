@@ -18,11 +18,14 @@ from sqlalchemy.orm import Session
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.gl.journal_entry import JournalType
 from app.services.common import coerce_uuid
-from app.services.finance.gl.journal import JournalService, JournalInput, JournalLineInput
-from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
-
-from app.services.finance.ap.posting.result import APPostingResult
 from app.services.finance.ap.posting.helpers import create_wht_transaction
+from app.services.finance.ap.posting.result import APPostingResult
+from app.services.finance.gl.journal import (
+    JournalInput,
+    JournalLineInput,
+    JournalService,
+)
+from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
 
 
 def post_payment(
@@ -52,8 +55,8 @@ def post_payment(
         APPostingResult with outcome
     """
     from app.models.finance.ap.supplier_payment import (
-        SupplierPayment,
         APPaymentStatus,
+        SupplierPayment,
     )
 
     org_id = coerce_uuid(organization_id)
@@ -150,14 +153,10 @@ def post_payment(
     )
 
     try:
-        journal = JournalService.create_journal(
-            db, org_id, journal_input, user_id
-        )
+        journal = JournalService.create_journal(db, org_id, journal_input, user_id)
 
         JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-        JournalService.approve_journal(
-            db, org_id, journal.journal_entry_id, user_id
-        )
+        JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
 
     except HTTPException as e:
         return APPostingResult(

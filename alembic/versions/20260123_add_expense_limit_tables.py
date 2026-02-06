@@ -10,6 +10,7 @@ This migration creates tables for multi-dimensional expense limit enforcement:
 - expense_limit_evaluation: Audit trail for limit evaluations
 - expense_period_usage: Usage cache for period-based limits
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -248,20 +249,34 @@ def upgrade() -> None:
             comment="Number of times this rule has blocked a claim",
         ),
         # Audit fields
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_by_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("updated_by_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.PrimaryKeyConstraint("rule_id"),
-        sa.ForeignKeyConstraint(["organization_id"], ["core_org.organization.organization_id"]),
+        sa.ForeignKeyConstraint(
+            ["organization_id"], ["core_org.organization.organization_id"]
+        ),
         sa.ForeignKeyConstraint(["created_by_id"], ["people.id"]),
         sa.ForeignKeyConstraint(["updated_by_id"], ["people.id"]),
-        sa.UniqueConstraint("organization_id", "rule_code", name="uq_expense_limit_rule_code"),
+        sa.UniqueConstraint(
+            "organization_id", "rule_code", name="uq_expense_limit_rule_code"
+        ),
         schema="expense",
     )
 
     # Indexes for expense_limit_rule
-    op.create_index("idx_expense_limit_rule_org", "expense_limit_rule", ["organization_id"], schema="expense")
+    op.create_index(
+        "idx_expense_limit_rule_org",
+        "expense_limit_rule",
+        ["organization_id"],
+        schema="expense",
+    )
     op.create_index(
         "idx_expense_limit_rule_scope",
         "expense_limit_rule",
@@ -274,7 +289,12 @@ def upgrade() -> None:
         ["organization_id", "is_active", "effective_from"],
         schema="expense",
     )
-    op.create_index("idx_expense_limit_rule_priority", "expense_limit_rule", ["organization_id", "priority"], schema="expense")
+    op.create_index(
+        "idx_expense_limit_rule_priority",
+        "expense_limit_rule",
+        ["organization_id", "priority"],
+        schema="expense",
+    )
 
     # ========================================
     # expense_approver_limit table
@@ -349,20 +369,34 @@ def upgrade() -> None:
             server_default="true",
         ),
         # Audit fields
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_by_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("updated_by_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.PrimaryKeyConstraint("approver_limit_id"),
-        sa.ForeignKeyConstraint(["organization_id"], ["core_org.organization.organization_id"]),
-        sa.ForeignKeyConstraint(["escalate_to_employee_id"], ["hr.employee.employee_id"]),
+        sa.ForeignKeyConstraint(
+            ["organization_id"], ["core_org.organization.organization_id"]
+        ),
+        sa.ForeignKeyConstraint(
+            ["escalate_to_employee_id"], ["hr.employee.employee_id"]
+        ),
         sa.ForeignKeyConstraint(["created_by_id"], ["people.id"]),
         sa.ForeignKeyConstraint(["updated_by_id"], ["people.id"]),
         schema="expense",
     )
 
     # Indexes for expense_approver_limit
-    op.create_index("idx_expense_approver_limit_org", "expense_approver_limit", ["organization_id"], schema="expense")
+    op.create_index(
+        "idx_expense_approver_limit_org",
+        "expense_approver_limit",
+        ["organization_id"],
+        schema="expense",
+    )
     op.create_index(
         "idx_expense_approver_limit_scope",
         "expense_approver_limit",
@@ -459,10 +493,17 @@ def upgrade() -> None:
             comment="Full evaluation context: {employee_id, grade_id, rules_evaluated, etc.}",
         ),
         # Timestamps
-        sa.Column("evaluated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "evaluated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("evaluated_by_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.PrimaryKeyConstraint("evaluation_id"),
-        sa.ForeignKeyConstraint(["organization_id"], ["core_org.organization.organization_id"]),
+        sa.ForeignKeyConstraint(
+            ["organization_id"], ["core_org.organization.organization_id"]
+        ),
         sa.ForeignKeyConstraint(["claim_id"], ["expense.expense_claim.claim_id"]),
         sa.ForeignKeyConstraint(["rule_id"], ["expense.expense_limit_rule.rule_id"]),
         sa.ForeignKeyConstraint(["evaluated_by_id"], ["people.id"]),
@@ -470,9 +511,24 @@ def upgrade() -> None:
     )
 
     # Indexes for expense_limit_evaluation
-    op.create_index("idx_expense_limit_evaluation_org", "expense_limit_evaluation", ["organization_id"], schema="expense")
-    op.create_index("idx_expense_limit_evaluation_claim", "expense_limit_evaluation", ["claim_id"], schema="expense")
-    op.create_index("idx_expense_limit_evaluation_rule", "expense_limit_evaluation", ["rule_id"], schema="expense")
+    op.create_index(
+        "idx_expense_limit_evaluation_org",
+        "expense_limit_evaluation",
+        ["organization_id"],
+        schema="expense",
+    )
+    op.create_index(
+        "idx_expense_limit_evaluation_claim",
+        "expense_limit_evaluation",
+        ["claim_id"],
+        schema="expense",
+    )
+    op.create_index(
+        "idx_expense_limit_evaluation_rule",
+        "expense_limit_evaluation",
+        ["rule_id"],
+        schema="expense",
+    )
     op.create_index(
         "idx_expense_limit_evaluation_date",
         "expense_limit_evaluation",
@@ -575,7 +631,9 @@ def upgrade() -> None:
             comment="Flag to indicate cache needs refresh",
         ),
         sa.PrimaryKeyConstraint("usage_id"),
-        sa.ForeignKeyConstraint(["organization_id"], ["core_org.organization.organization_id"]),
+        sa.ForeignKeyConstraint(
+            ["organization_id"], ["core_org.organization.organization_id"]
+        ),
         sa.ForeignKeyConstraint(["employee_id"], ["hr.employee.employee_id"]),
         sa.UniqueConstraint(
             "organization_id",
@@ -590,8 +648,18 @@ def upgrade() -> None:
     )
 
     # Indexes for expense_period_usage
-    op.create_index("idx_expense_period_usage_org", "expense_period_usage", ["organization_id"], schema="expense")
-    op.create_index("idx_expense_period_usage_employee", "expense_period_usage", ["employee_id"], schema="expense")
+    op.create_index(
+        "idx_expense_period_usage_org",
+        "expense_period_usage",
+        ["organization_id"],
+        schema="expense",
+    )
+    op.create_index(
+        "idx_expense_period_usage_employee",
+        "expense_period_usage",
+        ["employee_id"],
+        schema="expense",
+    )
     op.create_index(
         "idx_expense_period_usage_period",
         "expense_period_usage",

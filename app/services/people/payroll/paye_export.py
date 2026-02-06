@@ -4,6 +4,7 @@ PAYE Export Service.
 Generates PAYE tax schedules for submission to state tax authorities.
 Supports LIRS (Lagos) and FCTIRS (FCT/Abuja) formats.
 """
+
 from __future__ import annotations
 
 import csv
@@ -11,7 +12,7 @@ import io
 import logging
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal, Optional
 from uuid import UUID
 
@@ -20,9 +21,9 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.payroll.salary_slip import (
     SalarySlip,
-    SalarySlipStatus,
-    SalarySlipEarning,
     SalarySlipDeduction,
+    SalarySlipEarning,
+    SalarySlipStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -106,7 +107,9 @@ class PAYEExportService:
             .options(
                 joinedload(SalarySlip.employee),
                 joinedload(SalarySlip.earnings).joinedload(SalarySlipEarning.component),
-                joinedload(SalarySlip.deductions).joinedload(SalarySlipDeduction.component),
+                joinedload(SalarySlip.deductions).joinedload(
+                    SalarySlipDeduction.component
+                ),
             )
             .where(
                 SalarySlip.organization_id == organization_id,
@@ -141,31 +144,33 @@ class PAYEExportService:
         writer = csv.writer(output)
 
         # Header row
-        writer.writerow([
-            "name",
-            "tax_payer_number",
-            "nationality",
-            "designation",
-            "no_of_months",
-            "1-Basic Salary",
-            "2-Housing",
-            "3-Transport",
-            "4-Furniture",
-            "5-Education",
-            "6-Lunch",
-            "7-Passage",
-            "8-Leave",
-            "9-Bonus",
-            "10-13th Month",
-            "11-Utility",
-            "12-Other Allowances",
-            "13-NHF",
-            "14-NHIS",
-            "15-National Pension Scheme",
-            "16-Life Assurance",
-            "gross_income",
-            "tax_payable",
-        ])
+        writer.writerow(
+            [
+                "name",
+                "tax_payer_number",
+                "nationality",
+                "designation",
+                "no_of_months",
+                "1-Basic Salary",
+                "2-Housing",
+                "3-Transport",
+                "4-Furniture",
+                "5-Education",
+                "6-Lunch",
+                "7-Passage",
+                "8-Leave",
+                "9-Bonus",
+                "10-13th Month",
+                "11-Utility",
+                "12-Other Allowances",
+                "13-NHF",
+                "14-NHIS",
+                "15-National Pension Scheme",
+                "16-Life Assurance",
+                "gross_income",
+                "tax_payable",
+            ]
+        )
 
         errors: list[str] = []
         total_tax = Decimal("0")
@@ -197,31 +202,33 @@ class PAYEExportService:
             if employee.designation:
                 designation = employee.designation.designation_name or ""
 
-            writer.writerow([
-                employee.full_name,
-                tin,
-                "Nigerian",  # Default nationality
-                designation,
-                "1",  # Number of months (1 for monthly payroll)
-                str(_round_currency(earnings.get("basic", Decimal("0")))),
-                str(_round_currency(earnings.get("housing", Decimal("0")))),
-                str(_round_currency(earnings.get("transport", Decimal("0")))),
-                str(_round_currency(earnings.get("furniture", Decimal("0")))),
-                str(_round_currency(earnings.get("education", Decimal("0")))),
-                str(_round_currency(earnings.get("lunch", Decimal("0")))),
-                str(_round_currency(earnings.get("passage", Decimal("0")))),
-                str(_round_currency(earnings.get("leave", Decimal("0")))),
-                str(_round_currency(earnings.get("bonus", Decimal("0")))),
-                str(_round_currency(earnings.get("13th_month", Decimal("0")))),
-                str(_round_currency(earnings.get("utility", Decimal("0")))),
-                str(_round_currency(earnings.get("other", Decimal("0")))),
-                str(_round_currency(nhf)),
-                str(_round_currency(nhis)),
-                str(_round_currency(pension)),
-                "0",  # Life Assurance (not tracked separately)
-                str(_round_currency(slip.gross_pay)),
-                str(_round_currency(paye)),
-            ])
+            writer.writerow(
+                [
+                    employee.full_name,
+                    tin,
+                    "Nigerian",  # Default nationality
+                    designation,
+                    "1",  # Number of months (1 for monthly payroll)
+                    str(_round_currency(earnings.get("basic", Decimal("0")))),
+                    str(_round_currency(earnings.get("housing", Decimal("0")))),
+                    str(_round_currency(earnings.get("transport", Decimal("0")))),
+                    str(_round_currency(earnings.get("furniture", Decimal("0")))),
+                    str(_round_currency(earnings.get("education", Decimal("0")))),
+                    str(_round_currency(earnings.get("lunch", Decimal("0")))),
+                    str(_round_currency(earnings.get("passage", Decimal("0")))),
+                    str(_round_currency(earnings.get("leave", Decimal("0")))),
+                    str(_round_currency(earnings.get("bonus", Decimal("0")))),
+                    str(_round_currency(earnings.get("13th_month", Decimal("0")))),
+                    str(_round_currency(earnings.get("utility", Decimal("0")))),
+                    str(_round_currency(earnings.get("other", Decimal("0")))),
+                    str(_round_currency(nhf)),
+                    str(_round_currency(nhis)),
+                    str(_round_currency(pension)),
+                    "0",  # Life Assurance (not tracked separately)
+                    str(_round_currency(slip.gross_pay)),
+                    str(_round_currency(paye)),
+                ]
+            )
 
             total_tax += paye
             employee_count += 1
@@ -258,31 +265,33 @@ class PAYEExportService:
         writer.writerow([])  # Empty row
 
         # Header row at row 4
-        writer.writerow([
-            "S/N",
-            "Staff ID",
-            "Full Name",
-            "TIN",
-            "Designation",
-            "Basic Salary",
-            "Housing Allowance",
-            "Transport Allowance",
-            "Other Allowances",
-            "Gross Emolument",
-            "Pension (8%)",
-            "NHF (2.5%)",
-            "NHIS",
-            "Total Relief",
-            "Taxable Income",
-            "First 300K (0%)",
-            "Next 300K (15%)",
-            "Next 500K (18%)",
-            "Next 500K (21%)",
-            "Next 1.6M (23%)",
-            "Above 3.2M (25%)",
-            "Total Tax Due",
-            "Monthly Tax",
-        ])
+        writer.writerow(
+            [
+                "S/N",
+                "Staff ID",
+                "Full Name",
+                "TIN",
+                "Designation",
+                "Basic Salary",
+                "Housing Allowance",
+                "Transport Allowance",
+                "Other Allowances",
+                "Gross Emolument",
+                "Pension (8%)",
+                "NHF (2.5%)",
+                "NHIS",
+                "Total Relief",
+                "Taxable Income",
+                "First 300K (0%)",
+                "Next 300K (15%)",
+                "Next 500K (18%)",
+                "Next 500K (21%)",
+                "Next 1.6M (23%)",
+                "Above 3.2M (25%)",
+                "Total Tax Due",
+                "Monthly Tax",
+            ]
+        )
 
         errors: list[str] = []
         total_tax = Decimal("0")
@@ -322,7 +331,10 @@ class PAYEExportService:
             total_relief = annual_pension + annual_nhf + annual_nhis
 
             # Consolidated Relief Allowance (CRA) - NTA 2025
-            cra = max(Decimal("200000"), Decimal("0.01") * annual_gross) + Decimal("0.20") * annual_gross
+            cra = (
+                max(Decimal("200000"), Decimal("0.01") * annual_gross)
+                + Decimal("0.20") * annual_gross
+            )
             total_relief += cra
 
             taxable = max(Decimal("0"), annual_gross - total_relief)
@@ -337,31 +349,33 @@ class PAYEExportService:
 
                 staff_id = employee.employee_code
 
-            writer.writerow([
-                idx,
-                staff_id,
-                employee.full_name,
-                tin,
-                designation,
-                str(_round_currency(basic)),
-                str(_round_currency(housing)),
-                str(_round_currency(transport)),
-                str(_round_currency(other)),
-                str(_round_currency(slip.gross_pay)),
-                str(_round_currency(pension)),
-                str(_round_currency(nhf)),
-                str(_round_currency(nhis)),
-                str(_round_currency(total_relief / 12)),  # Monthly relief
-                str(_round_currency(taxable / 12)),  # Monthly taxable
-                str(_round_currency(bands["band1"])),  # First 300K
-                str(_round_currency(bands["band2"])),  # Next 300K
-                str(_round_currency(bands["band3"])),  # Next 500K
-                str(_round_currency(bands["band4"])),  # Next 500K
-                str(_round_currency(bands["band5"])),  # Next 1.6M
-                str(_round_currency(bands["band6"])),  # Above 3.2M
-                str(_round_currency(annual_tax)),
-                str(_round_currency(paye)),
-            ])
+            writer.writerow(
+                [
+                    idx,
+                    staff_id,
+                    employee.full_name,
+                    tin,
+                    designation,
+                    str(_round_currency(basic)),
+                    str(_round_currency(housing)),
+                    str(_round_currency(transport)),
+                    str(_round_currency(other)),
+                    str(_round_currency(slip.gross_pay)),
+                    str(_round_currency(pension)),
+                    str(_round_currency(nhf)),
+                    str(_round_currency(nhis)),
+                    str(_round_currency(total_relief / 12)),  # Monthly relief
+                    str(_round_currency(taxable / 12)),  # Monthly taxable
+                    str(_round_currency(bands["band1"])),  # First 300K
+                    str(_round_currency(bands["band2"])),  # Next 300K
+                    str(_round_currency(bands["band3"])),  # Next 500K
+                    str(_round_currency(bands["band4"])),  # Next 500K
+                    str(_round_currency(bands["band5"])),  # Next 1.6M
+                    str(_round_currency(bands["band6"])),  # Above 3.2M
+                    str(_round_currency(annual_tax)),
+                    str(_round_currency(paye)),
+                ]
+            )
 
             total_tax += paye
             employee_count += 1
@@ -414,7 +428,9 @@ class PAYEExportService:
         }
 
         for earning in slip.earnings:
-            component_code = (earning.component.component_code if earning.component else "").upper()
+            component_code = (
+                earning.component.component_code if earning.component else ""
+            ).upper()
             key = code_mapping.get(component_code, "other")
             breakdown[key] += earning.amount or Decimal("0")
 
@@ -424,10 +440,14 @@ class PAYEExportService:
         """Map deduction component codes to totals."""
         totals: dict[str, Decimal] = {}
         for deduction in slip.deductions:
-            component_code = (deduction.component.component_code if deduction.component else "").upper()
+            component_code = (
+                deduction.component.component_code if deduction.component else ""
+            ).upper()
             if not component_code:
                 continue
-            totals[component_code] = totals.get(component_code, Decimal("0")) + (deduction.amount or Decimal("0"))
+            totals[component_code] = totals.get(component_code, Decimal("0")) + (
+                deduction.amount or Decimal("0")
+            )
         return totals
 
     def _calculate_tax_bands(self, taxable_income: Decimal) -> dict[str, Decimal]:

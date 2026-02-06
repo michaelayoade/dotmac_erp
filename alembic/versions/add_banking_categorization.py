@@ -64,14 +64,24 @@ def upgrade() -> None:
     if not inspector.has_table("payee", schema="banking"):
         op.create_table(
             "payee",
-            sa.Column("payee_id", UUID(as_uuid=True), primary_key=True,
-                      server_default=sa.text("gen_random_uuid()")),
+            sa.Column(
+                "payee_id",
+                UUID(as_uuid=True),
+                primary_key=True,
+                server_default=sa.text("gen_random_uuid()"),
+            ),
             sa.Column("organization_id", UUID(as_uuid=True), nullable=False),
             sa.Column("payee_name", sa.String(200), nullable=False),
             sa.Column(
                 "payee_type",
                 postgresql.ENUM(
-                    "VENDOR", "CUSTOMER", "EMPLOYEE", "BANK", "TAX", "UTILITY", "OTHER",
+                    "VENDOR",
+                    "CUSTOMER",
+                    "EMPLOYEE",
+                    "BANK",
+                    "TAX",
+                    "UTILITY",
+                    "OTHER",
                     name="payee_type",
                     create_type=False,
                 ),
@@ -91,8 +101,12 @@ def upgrade() -> None:
             sa.Column("last_matched_at", sa.DateTime(timezone=True), nullable=True),
             # Status and metadata
             sa.Column("is_active", sa.Boolean, nullable=False, server_default="true"),
-            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False,
-                      server_default=sa.text("now()")),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                nullable=False,
+                server_default=sa.text("now()"),
+            ),
             sa.Column("created_by", UUID(as_uuid=True), nullable=True),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
             sa.Column("notes", sa.Text, nullable=True),
@@ -140,8 +154,12 @@ def upgrade() -> None:
     if not inspector.has_table("transaction_rule", schema="banking"):
         op.create_table(
             "transaction_rule",
-            sa.Column("rule_id", UUID(as_uuid=True), primary_key=True,
-                      server_default=sa.text("gen_random_uuid()")),
+            sa.Column(
+                "rule_id",
+                UUID(as_uuid=True),
+                primary_key=True,
+                server_default=sa.text("gen_random_uuid()"),
+            ),
             sa.Column("organization_id", UUID(as_uuid=True), nullable=False),
             sa.Column("rule_name", sa.String(200), nullable=False),
             sa.Column("description", sa.Text, nullable=True),
@@ -149,8 +167,12 @@ def upgrade() -> None:
             sa.Column(
                 "rule_type",
                 postgresql.ENUM(
-                    "PAYEE_MATCH", "DESCRIPTION_CONTAINS", "DESCRIPTION_REGEX",
-                    "AMOUNT_RANGE", "REFERENCE_MATCH", "COMBINED",
+                    "PAYEE_MATCH",
+                    "DESCRIPTION_CONTAINS",
+                    "DESCRIPTION_REGEX",
+                    "AMOUNT_RANGE",
+                    "REFERENCE_MATCH",
+                    "COMBINED",
                     name="rule_type",
                     create_type=False,
                 ),
@@ -159,13 +181,20 @@ def upgrade() -> None:
             sa.Column("conditions", JSONB, nullable=False, server_default="{}"),
             # Scope filters
             sa.Column("bank_account_id", UUID(as_uuid=True), nullable=True),
-            sa.Column("applies_to_credits", sa.Boolean, nullable=False, server_default="true"),
-            sa.Column("applies_to_debits", sa.Boolean, nullable=False, server_default="true"),
+            sa.Column(
+                "applies_to_credits", sa.Boolean, nullable=False, server_default="true"
+            ),
+            sa.Column(
+                "applies_to_debits", sa.Boolean, nullable=False, server_default="true"
+            ),
             # Action configuration
             sa.Column(
                 "action",
                 postgresql.ENUM(
-                    "CATEGORIZE", "FLAG_REVIEW", "SPLIT", "IGNORE",
+                    "CATEGORIZE",
+                    "FLAG_REVIEW",
+                    "SPLIT",
+                    "IGNORE",
                     name="rule_action",
                     create_type=False,
                 ),
@@ -178,15 +207,21 @@ def upgrade() -> None:
             # Execution settings
             sa.Column("priority", sa.Integer, nullable=False, server_default="100"),
             sa.Column("auto_apply", sa.Boolean, nullable=False, server_default="false"),
-            sa.Column("min_confidence", sa.Integer, nullable=False, server_default="80"),
+            sa.Column(
+                "min_confidence", sa.Integer, nullable=False, server_default="80"
+            ),
             # Usage tracking
             sa.Column("match_count", sa.Integer, nullable=False, server_default="0"),
             sa.Column("success_count", sa.Integer, nullable=False, server_default="0"),
             sa.Column("reject_count", sa.Integer, nullable=False, server_default="0"),
             # Status and metadata
             sa.Column("is_active", sa.Boolean, nullable=False, server_default="true"),
-            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False,
-                      server_default=sa.text("now()")),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                nullable=False,
+                server_default=sa.text("now()"),
+            ),
             sa.Column("created_by", UUID(as_uuid=True), nullable=True),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
             # Foreign keys

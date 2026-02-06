@@ -1,18 +1,20 @@
 """
 Item mapping from ERPNext to DotMac ERP.
 """
-from typing import Any, Optional
+
+import logging
+from typing import Any
 
 from .base import (
     DocTypeMapping,
     FieldMapping,
     clean_string,
-    default_currency,
     invert_bool,
     parse_datetime,
     parse_decimal,
 )
 
+logger = logging.getLogger(__name__)
 
 # ERPNext valuation_method to DotMac ERP costing_method
 VALUATION_METHOD_MAP = {

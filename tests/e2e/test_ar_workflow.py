@@ -22,7 +22,9 @@ class TestARCustomerCreateWorkflow:
         expect(authenticated_page).to_have_url(re.compile(r".*/ar/customers/new.*"))
 
     @pytest.mark.e2e
-    def test_customer_form_has_all_fields(self, authenticated_page: Page, base_url: str):
+    def test_customer_form_has_all_fields(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that customer form has all required fields."""
         authenticated_page.goto(f"{base_url}/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -34,7 +36,9 @@ class TestARCustomerCreateWorkflow:
         expect(form.locator("select[name='currency_code']")).to_be_visible()
 
     @pytest.mark.e2e
-    def test_customer_form_has_credit_fields(self, authenticated_page: Page, base_url: str):
+    def test_customer_form_has_credit_fields(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that customer form has credit management fields."""
         authenticated_page.goto(f"{base_url}/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -45,18 +49,26 @@ class TestARCustomerCreateWorkflow:
         expect(form.locator("input[name='payment_terms_days']")).to_be_visible()
 
     @pytest.mark.e2e
-    def test_customer_form_has_gl_accounts(self, authenticated_page: Page, base_url: str):
+    def test_customer_form_has_gl_accounts(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that customer form has GL account dropdowns."""
         authenticated_page.goto(f"{base_url}/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
         expect(form).to_be_visible()
-        expect(form.locator("select[name='default_revenue_account_id']")).to_be_visible()
-        expect(form.locator("select[name='default_receivable_account_id']")).to_be_visible()
+        expect(
+            form.locator("select[name='default_revenue_account_id']")
+        ).to_be_visible()
+        expect(
+            form.locator("select[name='default_receivable_account_id']")
+        ).to_be_visible()
 
     @pytest.mark.e2e
-    def test_customer_form_has_contact_fields(self, authenticated_page: Page, base_url: str):
+    def test_customer_form_has_contact_fields(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that customer form has contact information fields."""
         authenticated_page.goto(f"{base_url}/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -81,7 +93,9 @@ class TestARCustomerCreateWorkflow:
 
         # Fill required fields
         authenticated_page.fill("input[name='customer_code']", customer_code)
-        authenticated_page.fill("input[name='customer_name']", f"Test Customer {unique_id}")
+        authenticated_page.fill(
+            "input[name='customer_name']", f"Test Customer {unique_id}"
+        )
 
         # Select currency
         currency_select = authenticated_page.locator("select[name='currency_code']")
@@ -110,7 +124,10 @@ class TestARCustomerCreateWorkflow:
         # Check for success (redirect or success message)
         is_success = (
             "/ar/customers" in authenticated_page.url
-            or authenticated_page.locator(".success, .alert-success, :text('successfully')").count() > 0
+            or authenticated_page.locator(
+                ".success, .alert-success, :text('successfully')"
+            ).count()
+            > 0
         )
         errors = authenticated_page.locator(".error, .alert-error, .alert-danger")
         expect(errors).to_have_count(0)
@@ -128,7 +145,9 @@ class TestARCustomerListWorkflow:
         expect(authenticated_page).to_have_url(re.compile(r".*/ar/customers.*"))
 
     @pytest.mark.e2e
-    def test_customers_list_has_new_button(self, authenticated_page: Page, base_url: str):
+    def test_customers_list_has_new_button(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that customers list has new button."""
         authenticated_page.goto(f"{base_url}/ar/customers")
         authenticated_page.wait_for_load_state("networkidle")
@@ -160,7 +179,9 @@ class TestARInvoiceCreateWorkflow:
         expect(authenticated_page).to_have_url(re.compile(r".*/ar/invoices/new.*"))
 
     @pytest.mark.e2e
-    def test_invoice_form_has_customer_select(self, authenticated_page: Page, base_url: str):
+    def test_invoice_form_has_customer_select(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that invoice form has customer selection."""
         authenticated_page.goto(f"{base_url}/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -224,7 +245,9 @@ class TestARInvoiceListWorkflow:
         expect(authenticated_page).to_have_url(re.compile(r".*/ar/invoices.*"))
 
     @pytest.mark.e2e
-    def test_invoices_list_has_status_filter(self, authenticated_page: Page, base_url: str):
+    def test_invoices_list_has_status_filter(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that invoices list has status filter."""
         authenticated_page.goto(f"{base_url}/ar/invoices")
         authenticated_page.wait_for_load_state("networkidle")
@@ -233,7 +256,9 @@ class TestARInvoiceListWorkflow:
         expect(status_filter).to_be_visible()
 
     @pytest.mark.e2e
-    def test_invoices_list_has_customer_filter(self, authenticated_page: Page, base_url: str):
+    def test_invoices_list_has_customer_filter(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that invoices list has customer filter."""
         authenticated_page.goto(f"{base_url}/ar/invoices")
         authenticated_page.wait_for_load_state("networkidle")
@@ -284,7 +309,9 @@ class TestARReceiptWorkflow:
         expect(form).to_be_visible()
 
     @pytest.mark.e2e
-    def test_receipt_form_has_customer_select(self, authenticated_page: Page, base_url: str):
+    def test_receipt_form_has_customer_select(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that receipt form has customer selection."""
         authenticated_page.goto(f"{base_url}/ar/receipts/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -320,7 +347,9 @@ class TestARAgingReport:
         authenticated_page.goto(f"{base_url}/ar/aging")
         authenticated_page.wait_for_load_state("networkidle")
 
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("AR Aging Report")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "AR Aging Report"
+        )
 
     @pytest.mark.e2e
     def test_aging_report_shows_buckets(self, authenticated_page: Page, base_url: str):
@@ -339,7 +368,9 @@ class TestARCreditNoteWorkflow:
         """Test that credit notes list loads."""
         authenticated_page.goto(f"{base_url}/ar/credit-notes")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("AR Credit Notes")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "AR Credit Notes"
+        )
 
     @pytest.mark.e2e
     def test_new_credit_note_form_loads(self, authenticated_page: Page, base_url: str):
@@ -349,7 +380,9 @@ class TestARCreditNoteWorkflow:
 
         form = authenticated_page.locator("form").first
         expect(form).to_be_visible()
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("New Credit Note")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "New Credit Note"
+        )
 
 
 class TestARResponsiveDesign:
@@ -361,7 +394,7 @@ class TestARResponsiveDesign:
         authenticated_page.set_viewport_size({"width": 375, "height": 667})
         authenticated_page.goto(f"{base_url}/ar/customers")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
     @pytest.mark.e2e
     def test_ar_invoices_mobile(self, authenticated_page: Page, base_url: str):
@@ -369,7 +402,7 @@ class TestARResponsiveDesign:
         authenticated_page.set_viewport_size({"width": 375, "height": 667})
         authenticated_page.goto(f"{base_url}/ar/invoices")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
     @pytest.mark.e2e
     def test_customer_form_tablet(self, authenticated_page: Page, base_url: str):
@@ -377,4 +410,4 @@ class TestARResponsiveDesign:
         authenticated_page.set_viewport_size({"width": 768, "height": 1024})
         authenticated_page.goto(f"{base_url}/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()

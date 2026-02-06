@@ -6,6 +6,7 @@ Provides bulk operations for chart of accounts and journal entries.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from uuid import UUID
 
@@ -17,6 +18,8 @@ from app.models.finance.gl.journal_entry_line import JournalEntryLine
 from app.schemas.bulk_actions import BulkActionResult
 from app.services.bulk_actions import BulkActionService
 from app.services.finance.gl.journal import JournalService
+
+logger = logging.getLogger(__name__)
 
 
 class AccountBulkService(BulkActionService[Account]):
@@ -172,7 +175,9 @@ class JournalBulkService(BulkActionService[JournalEntry]):
 
         entities = self._get_entities(ids)
         if not entities:
-            return BulkActionResult.failure("No journal entries found with provided IDs")
+            return BulkActionResult.failure(
+                "No journal entries found with provided IDs"
+            )
 
         success_count = 0
         failed_count = 0
@@ -197,7 +202,9 @@ class JournalBulkService(BulkActionService[JournalEntry]):
         if failed_count > 0:
             return BulkActionResult.partial(success_count, failed_count, errors)
 
-        return BulkActionResult.success(success_count, f"Posted {success_count} journal entries")
+        return BulkActionResult.success(
+            success_count, f"Posted {success_count} journal entries"
+        )
 
     async def bulk_approve(self, ids: list[UUID]) -> BulkActionResult:
         """
@@ -214,7 +221,9 @@ class JournalBulkService(BulkActionService[JournalEntry]):
 
         entities = self._get_entities(ids)
         if not entities:
-            return BulkActionResult.failure("No journal entries found with provided IDs")
+            return BulkActionResult.failure(
+                "No journal entries found with provided IDs"
+            )
 
         success_count = 0
         failed_count = 0
@@ -239,7 +248,9 @@ class JournalBulkService(BulkActionService[JournalEntry]):
         if failed_count > 0:
             return BulkActionResult.partial(success_count, failed_count, errors)
 
-        return BulkActionResult.success(success_count, f"Approved {success_count} journal entries")
+        return BulkActionResult.success(
+            success_count, f"Approved {success_count} journal entries"
+        )
 
 
 def get_journal_bulk_service(

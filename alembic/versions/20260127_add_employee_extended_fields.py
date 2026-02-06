@@ -72,7 +72,9 @@ def upgrade() -> None:
     if "marital_status" not in columns:
         op.add_column(
             "employee",
-            sa.Column("marital_status", sa.Enum(name="hr_marital_status"), nullable=True),
+            sa.Column(
+                "marital_status", sa.Enum(name="hr_marital_status"), nullable=True
+            ),
             schema="hr",
         )
     if "blood_group" not in columns:

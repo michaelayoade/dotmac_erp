@@ -6,6 +6,7 @@ Provides view-focused data for inventory web routes.
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from decimal import Decimal
 from typing import Optional
@@ -16,36 +17,37 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
-from app.models.finance.core_config.numbering_sequence import NumberingSequence, ResetFrequency, SequenceType
+from app.models.finance.core_config.numbering_sequence import (
+    NumberingSequence,
+    ResetFrequency,
+    SequenceType,
+)
 from app.models.finance.gl.account import Account
-from app.models.inventory.inventory_transaction import InventoryTransaction, TransactionType
-from app.models.inventory.item import Item, ItemType, CostingMethod
+from app.models.inventory.inventory_transaction import (
+    InventoryTransaction,
+    TransactionType,
+)
+from app.models.inventory.item import CostingMethod, Item, ItemType
 from app.models.inventory.item_category import ItemCategory
 from app.models.inventory.warehouse import Warehouse
-from app.config import settings
 from app.services.common import coerce_uuid
 from app.services.finance.common.numbering import SyncNumberingService
-from app.services.inventory.item import item_service, item_category_service, ItemInput, ItemCategoryInput
-from app.services.inventory.transaction import TransactionInput
-from app.services.inventory.warehouse import warehouse_service, WarehouseInput
-from app.services.finance.platform.org_context import org_context_service
+from app.services.formatters import format_currency as _format_currency
+from app.services.formatters import format_date as _format_date
 from app.services.finance.platform.currency_context import get_currency_context
+from app.services.finance.platform.org_context import org_context_service
+from app.services.inventory.item import (
+    ItemCategoryInput,
+    ItemInput,
+    item_category_service,
+    item_service,
+)
+from app.services.inventory.transaction import TransactionInput
+from app.services.inventory.warehouse import WarehouseInput, warehouse_service
 from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
+from app.web.deps import WebAuthContext, base_context
 
-
-def _format_date(value: Optional[date]) -> str:
-    return value.strftime("%Y-%m-%d") if value else ""
-
-
-def _format_currency(
-    amount: Optional[Decimal],
-    currency: str = settings.default_presentation_currency_code,
-) -> str:
-    if amount is None:
-        return ""
-    value = Decimal(str(amount))
-    return f"{currency} {value:,.2f}"
+logger = logging.getLogger(__name__)
 
 
 def _parse_transaction_type(value: Optional[str]) -> Optional[TransactionType]:
@@ -97,20 +99,30 @@ def _get_batch_stock_quantities(
             InventoryTransaction.item_id,
             func.sum(
                 case(
-                    (InventoryTransaction.transaction_type.in_([
-                        TransactionType.RECEIPT,
-                        TransactionType.RETURN,
-                        TransactionType.ASSEMBLY,
-                    ]), InventoryTransaction.quantity),
-                    (InventoryTransaction.transaction_type.in_([
-                        TransactionType.ISSUE,
-                        TransactionType.SALE,
-                        TransactionType.SCRAP,
-                        TransactionType.DISASSEMBLY,
-                    ]), -InventoryTransaction.quantity),
+                    (
+                        InventoryTransaction.transaction_type.in_(
+                            [
+                                TransactionType.RECEIPT,
+                                TransactionType.RETURN,
+                                TransactionType.ASSEMBLY,
+                            ]
+                        ),
+                        InventoryTransaction.quantity,
+                    ),
+                    (
+                        InventoryTransaction.transaction_type.in_(
+                            [
+                                TransactionType.ISSUE,
+                                TransactionType.SALE,
+                                TransactionType.SCRAP,
+                                TransactionType.DISASSEMBLY,
+                            ]
+                        ),
+                        -InventoryTransaction.quantity,
+                    ),
                     else_=InventoryTransaction.quantity,
                 )
-            ).label("on_hand")
+            ).label("on_hand"),
         )
         .filter(
             InventoryTransaction.organization_id == organization_id,
@@ -119,13 +131,15 @@ def _get_batch_stock_quantities(
         .group_by(InventoryTransaction.item_id)
     )
 
-    on_hand_results = {row.item_id: row.on_hand or Decimal("0") for row in on_hand_query.all()}
+    on_hand_results = {
+        row.item_id: row.on_hand or Decimal("0") for row in on_hand_query.all()
+    }
 
     # Get reserved quantities from lots (grouped by item)
     reserved_query = (
         db.query(
             InventoryLot.item_id,
-            func.sum(InventoryLot.quantity_allocated).label("reserved")
+            func.sum(InventoryLot.quantity_allocated).label("reserved"),
         )
         .filter(
             InventoryLot.organization_id == organization_id,
@@ -134,7 +148,9 @@ def _get_batch_stock_quantities(
         .group_by(InventoryLot.item_id)
     )
 
-    reserved_results = {row.item_id: row.reserved or Decimal("0") for row in reserved_query.all()}
+    reserved_results = {
+        row.item_id: row.reserved or Decimal("0") for row in reserved_query.all()
+    }
 
     # Build result dict
     result = {}
@@ -229,11 +245,17 @@ class InventoryWebService:
         )
 
         # Item types and costing methods for dropdowns
-        from app.models.inventory.item import ItemType, CostingMethod
         from app.models.finance.ap.supplier import Supplier
+        from app.models.inventory.item import CostingMethod, ItemType
 
-        item_types = [{"value": t.value, "label": t.value.replace("_", " ").title()} for t in ItemType]
-        costing_methods = [{"value": c.value, "label": c.value.replace("_", " ").title()} for c in CostingMethod]
+        item_types = [
+            {"value": t.value, "label": t.value.replace("_", " ").title()}
+            for t in ItemType
+        ]
+        costing_methods = [
+            {"value": c.value, "label": c.value.replace("_", " ").title()}
+            for c in CostingMethod
+        ]
 
         # Get suppliers list for INV → AP integration (default supplier)
         suppliers = (
@@ -269,10 +291,14 @@ class InventoryWebService:
         # Load existing item for edit
         if item_id:
             item_uuid = coerce_uuid(item_id)
-            item = db.query(Item).filter(
-                Item.item_id == item_uuid,
-                Item.organization_id == org_id,
-            ).first()
+            item = (
+                db.query(Item)
+                .filter(
+                    Item.item_id == item_uuid,
+                    Item.organization_id == org_id,
+                )
+                .first()
+            )
             context["item"] = item
 
         return context
@@ -300,7 +326,12 @@ class InventoryWebService:
         )
 
         if not item:
-            return {"item": None, "category": None, "stock_summary": None, "warehouse_stock": []}
+            return {
+                "item": None,
+                "category": None,
+                "stock_summary": None,
+                "warehouse_stock": [],
+            }
 
         item_obj, category = item
 
@@ -325,17 +356,19 @@ class InventoryWebService:
 
                     # Format warehouse breakdown
                     for wh_balance in stock_summary_data.warehouses:
-                        warehouse_stock.append({
-                            "warehouse_id": wh_balance.warehouse_id,
-                            "warehouse_code": wh_balance.warehouse_code,
-                            "quantity_on_hand": wh_balance.quantity_on_hand,
-                            "quantity_reserved": wh_balance.quantity_reserved,
-                            "quantity_available": wh_balance.quantity_available,
-                            "average_cost": wh_balance.average_cost,
-                            "total_value": _format_currency(
-                                wh_balance.total_value, item_obj.currency_code
-                            ),
-                        })
+                        warehouse_stock.append(
+                            {
+                                "warehouse_id": wh_balance.warehouse_id,
+                                "warehouse_code": wh_balance.warehouse_code,
+                                "quantity_on_hand": wh_balance.quantity_on_hand,
+                                "quantity_reserved": wh_balance.quantity_reserved,
+                                "quantity_available": wh_balance.quantity_available,
+                                "average_cost": wh_balance.average_cost,
+                                "total_value": _format_currency(
+                                    wh_balance.total_value, item_obj.currency_code
+                                ),
+                            }
+                        )
             except Exception:
                 pass
 
@@ -390,16 +423,13 @@ class InventoryWebService:
             )
 
         total_count = query.with_entities(func.count(Item.item_id)).scalar() or 0
-        rows = (
-            query.order_by(Item.item_code)
-            .limit(limit)
-            .offset(offset)
-            .all()
-        )
+        rows = query.order_by(Item.item_code).limit(limit).offset(offset).all()
 
         # Batch load inventory quantities for all items on this page
         item_ids = [item.item_id for item, _ in rows]
-        stock_quantities = _get_batch_stock_quantities(db, org_id, item_ids) if item_ids else {}
+        stock_quantities = (
+            _get_batch_stock_quantities(db, org_id, item_ids) if item_ids else {}
+        )
 
         items_view = []
         for item, category_row in rows:
@@ -416,9 +446,7 @@ class InventoryWebService:
                     "standard_cost": _format_currency(
                         item.standard_cost, item.currency_code
                     ),
-                    "list_price": _format_currency(
-                        item.list_price, item.currency_code
-                    ),
+                    "list_price": _format_currency(item.list_price, item.currency_code),
                     "currency_code": item.currency_code,
                     "is_active": item.is_active,
                     # Stock quantities
@@ -427,7 +455,8 @@ class InventoryWebService:
                     "quantity_available": stock_data.get("available", Decimal("0")),
                     "track_inventory": item.track_inventory,
                     "below_reorder": (
-                        stock_data.get("on_hand", Decimal("0")) < (item.reorder_point or Decimal("0"))
+                        stock_data.get("on_hand", Decimal("0"))
+                        < (item.reorder_point or Decimal("0"))
                         if item.track_inventory and item.reorder_point
                         else False
                     ),
@@ -493,7 +522,9 @@ class InventoryWebService:
         query = (
             db.query(InventoryTransaction, Item, Warehouse)
             .join(Item, InventoryTransaction.item_id == Item.item_id)
-            .join(Warehouse, InventoryTransaction.warehouse_id == Warehouse.warehouse_id)
+            .join(
+                Warehouse, InventoryTransaction.warehouse_id == Warehouse.warehouse_id
+            )
             .filter(InventoryTransaction.organization_id == org_id)
         )
 
@@ -511,7 +542,9 @@ class InventoryWebService:
             )
 
         total_count = (
-            query.with_entities(func.count(InventoryTransaction.transaction_id)).scalar()
+            query.with_entities(
+                func.count(InventoryTransaction.transaction_id)
+            ).scalar()
             or 0
         )
         rows = (
@@ -583,32 +616,48 @@ class InventoryWebService:
         for item in low_stock_items:
             # Get item details for pricing
             db_item = db.get(Item, item.item_id)
-            unit_cost = db_item.average_cost or db_item.last_purchase_cost or Decimal("0") if db_item else Decimal("0")
+            unit_cost = (
+                db_item.average_cost or db_item.last_purchase_cost or Decimal("0")
+                if db_item
+                else Decimal("0")
+            )
             suggested_value = item.suggested_order_qty * unit_cost
             total_suggested_value += suggested_value
 
-            items_view.append({
-                "item_id": str(item.item_id),
-                "item_code": item.item_code,
-                "item_name": item.item_name,
-                "quantity_on_hand": item.quantity_on_hand,
-                "quantity_available": item.quantity_available,
-                "reorder_point": item.reorder_point,
-                "reorder_quantity": item.reorder_quantity,
-                "suggested_order_qty": item.suggested_order_qty,
-                "suggested_value": _format_currency(suggested_value),
-                "suggested_value_raw": suggested_value,
-                "default_supplier_id": str(item.default_supplier_id) if item.default_supplier_id else None,
-                "lead_time_days": item.lead_time_days,
-                "urgency": _calculate_urgency(item.quantity_available, item.reorder_point),
-            })
+            items_view.append(
+                {
+                    "item_id": str(item.item_id),
+                    "item_code": item.item_code,
+                    "item_name": item.item_name,
+                    "quantity_on_hand": item.quantity_on_hand,
+                    "quantity_available": item.quantity_available,
+                    "reorder_point": item.reorder_point,
+                    "reorder_quantity": item.reorder_quantity,
+                    "suggested_order_qty": item.suggested_order_qty,
+                    "suggested_value": _format_currency(suggested_value),
+                    "suggested_value_raw": suggested_value,
+                    "default_supplier_id": str(item.default_supplier_id)
+                    if item.default_supplier_id
+                    else None,
+                    "lead_time_days": item.lead_time_days,
+                    "urgency": _calculate_urgency(
+                        item.quantity_available, item.reorder_point
+                    ),
+                }
+            )
 
         # Sort by urgency (most urgent first)
-        items_view.sort(key=lambda x: (
-            0 if x["urgency"] == "CRITICAL" else
-            1 if x["urgency"] == "LOW" else
-            2 if x["urgency"] == "WARNING" else 3
-        ))
+        items_view.sort(
+            key=lambda x: (
+                0
+                if x["urgency"] == "CRITICAL"
+                else 1
+                if x["urgency"] == "LOW"
+                else 2
+                if x["urgency"] == "WARNING"
+                else 3
+            )
+        )
 
         # Summary statistics
         critical_count = sum(1 for i in items_view if i["urgency"] == "CRITICAL")
@@ -658,17 +707,19 @@ class InventoryWebService:
         for balance in balances:
             total_value += balance.total_value
             total_items += 1
-            balances_view.append({
-                "item_id": str(balance.item_id),
-                "item_code": balance.item_code,
-                "item_name": balance.item_name,
-                "quantity_on_hand": balance.quantity_on_hand,
-                "quantity_reserved": balance.quantity_reserved,
-                "quantity_available": balance.quantity_available,
-                "average_cost": _format_currency(balance.average_cost),
-                "total_value": _format_currency(balance.total_value),
-                "total_value_raw": balance.total_value,
-            })
+            balances_view.append(
+                {
+                    "item_id": str(balance.item_id),
+                    "item_code": balance.item_code,
+                    "item_name": balance.item_name,
+                    "quantity_on_hand": balance.quantity_on_hand,
+                    "quantity_reserved": balance.quantity_reserved,
+                    "quantity_available": balance.quantity_available,
+                    "average_cost": _format_currency(balance.average_cost),
+                    "total_value": _format_currency(balance.total_value),
+                    "total_value_raw": balance.total_value,
+                }
+            )
 
         return {
             "warehouse": {
@@ -683,7 +734,6 @@ class InventoryWebService:
                 "total_value_raw": total_value,
             },
         }
-
 
     def list_items_response(
         self,
@@ -751,9 +801,12 @@ class InventoryWebService:
         try:
             org_id = auth.organization_id
             assert org_id is not None
-            resolved_currency = currency_code or org_context_service.get_functional_currency(
-                db,
-                org_id,
+            resolved_currency = (
+                currency_code
+                or org_context_service.get_functional_currency(
+                    db,
+                    org_id,
+                )
             )
 
             input_data = ItemInput(
@@ -769,7 +822,9 @@ class InventoryWebService:
                 standard_cost=Decimal(standard_cost) if standard_cost else None,
                 list_price=Decimal(list_price) if list_price else None,
                 reorder_point=Decimal(reorder_point) if reorder_point else None,
-                reorder_quantity=Decimal(reorder_quantity) if reorder_quantity else None,
+                reorder_quantity=Decimal(reorder_quantity)
+                if reorder_quantity
+                else None,
                 minimum_stock=Decimal(minimum_stock) if minimum_stock else None,
                 maximum_stock=Decimal(maximum_stock) if maximum_stock else None,
                 lead_time_days=int(lead_time_days) if lead_time_days else None,
@@ -788,7 +843,9 @@ class InventoryWebService:
             context = base_context(request, auth, "New Item", "items")
             context.update(self.item_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "inventory/item_form.html", context)
+            return templates.TemplateResponse(
+                request, "inventory/item_form.html", context
+            )
 
     def item_detail_response(
         self,
@@ -799,7 +856,9 @@ class InventoryWebService:
     ) -> HTMLResponse:
         context = base_context(request, auth, "Item Details", "items")
         context.update(self.item_detail_context(db, str(auth.organization_id), item_id))
-        return templates.TemplateResponse(request, "inventory/item_detail.html", context)
+        return templates.TemplateResponse(
+            request, "inventory/item_detail.html", context
+        )
 
     def item_edit_form_response(
         self,
@@ -848,9 +907,12 @@ class InventoryWebService:
                 raise ValueError("Item name and category are required.")
             org_id = auth.organization_id
             assert org_id is not None
-            resolved_currency = currency_code or org_context_service.get_functional_currency(
-                db,
-                org_id,
+            resolved_currency = (
+                currency_code
+                or org_context_service.get_functional_currency(
+                    db,
+                    org_id,
+                )
             )
 
             updates = {
@@ -865,7 +927,9 @@ class InventoryWebService:
                 "standard_cost": Decimal(standard_cost) if standard_cost else None,
                 "list_price": Decimal(list_price) if list_price else None,
                 "reorder_point": Decimal(reorder_point) if reorder_point else None,
-                "reorder_quantity": Decimal(reorder_quantity) if reorder_quantity else None,
+                "reorder_quantity": Decimal(reorder_quantity)
+                if reorder_quantity
+                else None,
                 "minimum_stock": Decimal(minimum_stock) if minimum_stock else None,
                 "maximum_stock": Decimal(maximum_stock) if maximum_stock else None,
                 "lead_time_days": int(lead_time_days) if lead_time_days else None,
@@ -882,9 +946,13 @@ class InventoryWebService:
 
         except Exception as e:
             context = base_context(request, auth, "Edit Item", "items")
-            context.update(self.item_form_context(db, str(auth.organization_id), item_id))
+            context.update(
+                self.item_form_context(db, str(auth.organization_id), item_id)
+            )
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "inventory/item_form.html", context)
+            return templates.TemplateResponse(
+                request, "inventory/item_form.html", context
+            )
 
     def list_transactions_response(
         self,
@@ -905,7 +973,9 @@ class InventoryWebService:
                 page=page,
             )
         )
-        return templates.TemplateResponse(request, "inventory/transactions.html", context)
+        return templates.TemplateResponse(
+            request, "inventory/transactions.html", context
+        )
 
     # ========================================================================
     # Categories
@@ -950,10 +1020,14 @@ class InventoryWebService:
         # Get item counts for each category
         category_item_counts = {}
         for cat in categories:
-            count = db.query(Item).filter(
-                Item.category_id == cat.category_id,
-                Item.is_active.is_(True),
-            ).count()
+            count = (
+                db.query(Item)
+                .filter(
+                    Item.category_id == cat.category_id,
+                    Item.is_active.is_(True),
+                )
+                .count()
+            )
             category_item_counts[str(cat.category_id)] = count
 
         return {
@@ -1006,10 +1080,14 @@ class InventoryWebService:
 
         if category_id:
             cat_uuid = coerce_uuid(category_id)
-            category = db.query(ItemCategory).filter(
-                ItemCategory.category_id == cat_uuid,
-                ItemCategory.organization_id == org_id,
-            ).first()
+            category = (
+                db.query(ItemCategory)
+                .filter(
+                    ItemCategory.category_id == cat_uuid,
+                    ItemCategory.organization_id == org_id,
+                )
+                .first()
+            )
             context["category"] = category
             # Filter out the current category from parent options
             context["parent_categories"] = [
@@ -1049,7 +1127,9 @@ class InventoryWebService:
     ) -> HTMLResponse:
         context = base_context(request, auth, "New Category", "categories")
         context.update(self.category_form_context(db, str(auth.organization_id)))
-        return templates.TemplateResponse(request, "inventory/category_form.html", context)
+        return templates.TemplateResponse(
+            request, "inventory/category_form.html", context
+        )
 
     def category_edit_form_response(
         self,
@@ -1059,10 +1139,14 @@ class InventoryWebService:
         category_id: str,
     ) -> HTMLResponse | RedirectResponse:
         context = base_context(request, auth, "Edit Category", "categories")
-        context.update(self.category_form_context(db, str(auth.organization_id), category_id))
+        context.update(
+            self.category_form_context(db, str(auth.organization_id), category_id)
+        )
         if not context.get("category"):
             return RedirectResponse(url="/inventory/categories", status_code=303)
-        return templates.TemplateResponse(request, "inventory/category_form.html", context)
+        return templates.TemplateResponse(
+            request, "inventory/category_form.html", context
+        )
 
     def create_category_response(
         self,
@@ -1090,8 +1174,12 @@ class InventoryWebService:
                 revenue_account_id=UUID(revenue_account_id),
                 inventory_adjustment_account_id=UUID(inventory_adjustment_account_id),
                 description=description,
-                parent_category_id=UUID(parent_category_id) if parent_category_id else None,
-                purchase_variance_account_id=UUID(purchase_variance_account_id) if purchase_variance_account_id else None,
+                parent_category_id=UUID(parent_category_id)
+                if parent_category_id
+                else None,
+                purchase_variance_account_id=UUID(purchase_variance_account_id)
+                if purchase_variance_account_id
+                else None,
             )
 
             item_category_service.create_category(db, org_id, input_data)
@@ -1101,7 +1189,9 @@ class InventoryWebService:
             context = base_context(request, auth, "New Category", "categories")
             context.update(self.category_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "inventory/category_form.html", context)
+            return templates.TemplateResponse(
+                request, "inventory/category_form.html", context
+            )
 
     def update_category_response(
         self,
@@ -1127,20 +1217,32 @@ class InventoryWebService:
                 "inventory_account_id": UUID(inventory_account_id),
                 "cogs_account_id": UUID(cogs_account_id),
                 "revenue_account_id": UUID(revenue_account_id),
-                "inventory_adjustment_account_id": UUID(inventory_adjustment_account_id),
+                "inventory_adjustment_account_id": UUID(
+                    inventory_adjustment_account_id
+                ),
                 "description": description,
-                "parent_category_id": UUID(parent_category_id) if parent_category_id else None,
-                "purchase_variance_account_id": UUID(purchase_variance_account_id) if purchase_variance_account_id else None,
+                "parent_category_id": UUID(parent_category_id)
+                if parent_category_id
+                else None,
+                "purchase_variance_account_id": UUID(purchase_variance_account_id)
+                if purchase_variance_account_id
+                else None,
             }
 
-            item_category_service.update_category(db, org_id, UUID(category_id), updates)
+            item_category_service.update_category(
+                db, org_id, UUID(category_id), updates
+            )
             return RedirectResponse(url="/inventory/categories", status_code=303)
 
         except Exception as e:
             context = base_context(request, auth, "Edit Category", "categories")
-            context.update(self.category_form_context(db, str(auth.organization_id), category_id))
+            context.update(
+                self.category_form_context(db, str(auth.organization_id), category_id)
+            )
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "inventory/category_form.html", context)
+            return templates.TemplateResponse(
+                request, "inventory/category_form.html", context
+            )
 
     def toggle_category_status_response(
         self,
@@ -1157,7 +1259,9 @@ class InventoryWebService:
                 item_category_service.deactivate_category(db, org_id, UUID(category_id))
             else:
                 # Reactivate
-                item_category_service.update_category(db, org_id, UUID(category_id), {"is_active": True})
+                item_category_service.update_category(
+                    db, org_id, UUID(category_id), {"is_active": True}
+                )
         except Exception:
             pass  # Just redirect back
         return RedirectResponse(url="/inventory/categories", status_code=303)
@@ -1227,10 +1331,14 @@ class InventoryWebService:
 
         if warehouse_id:
             wh_uuid = coerce_uuid(warehouse_id)
-            warehouse = db.query(Warehouse).filter(
-                Warehouse.warehouse_id == wh_uuid,
-                Warehouse.organization_id == org_id,
-            ).first()
+            warehouse = (
+                db.query(Warehouse)
+                .filter(
+                    Warehouse.warehouse_id == wh_uuid,
+                    Warehouse.organization_id == org_id,
+                )
+                .first()
+            )
             context["warehouse"] = warehouse
 
         return context
@@ -1245,16 +1353,21 @@ class InventoryWebService:
         org_id = coerce_uuid(organization_id)
         wh_uuid = coerce_uuid(warehouse_id)
 
-        warehouse = db.query(Warehouse).filter(
-            Warehouse.warehouse_id == wh_uuid,
-            Warehouse.organization_id == org_id,
-        ).first()
+        warehouse = (
+            db.query(Warehouse)
+            .filter(
+                Warehouse.warehouse_id == wh_uuid,
+                Warehouse.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not warehouse:
             return {"warehouse": None}
 
         # Get inventory summary for this warehouse
         from app.services.inventory.balance import inventory_balance_service
+
         inventory = inventory_balance_service.get_warehouse_inventory(
             db=db,
             organization_id=org_id,
@@ -1302,7 +1415,9 @@ class InventoryWebService:
     ) -> HTMLResponse:
         context = base_context(request, auth, "New Warehouse", "warehouses")
         context.update(self.warehouse_form_context(db, str(auth.organization_id)))
-        return templates.TemplateResponse(request, "inventory/warehouse_form.html", context)
+        return templates.TemplateResponse(
+            request, "inventory/warehouse_form.html", context
+        )
 
     def warehouse_edit_form_response(
         self,
@@ -1312,10 +1427,14 @@ class InventoryWebService:
         warehouse_id: str,
     ) -> HTMLResponse | RedirectResponse:
         context = base_context(request, auth, "Edit Warehouse", "warehouses")
-        context.update(self.warehouse_form_context(db, str(auth.organization_id), warehouse_id))
+        context.update(
+            self.warehouse_form_context(db, str(auth.organization_id), warehouse_id)
+        )
         if not context.get("warehouse"):
             return RedirectResponse(url="/inventory/warehouses", status_code=303)
-        return templates.TemplateResponse(request, "inventory/warehouse_form.html", context)
+        return templates.TemplateResponse(
+            request, "inventory/warehouse_form.html", context
+        )
 
     def warehouse_detail_response(
         self,
@@ -1325,10 +1444,14 @@ class InventoryWebService:
         warehouse_id: str,
     ) -> HTMLResponse | RedirectResponse:
         context = base_context(request, auth, "Warehouse Details", "warehouses")
-        context.update(self.warehouse_detail_context(db, str(auth.organization_id), warehouse_id))
+        context.update(
+            self.warehouse_detail_context(db, str(auth.organization_id), warehouse_id)
+        )
         if not context.get("warehouse"):
             return RedirectResponse(url="/inventory/warehouses", status_code=303)
-        return templates.TemplateResponse(request, "inventory/warehouse_detail.html", context)
+        return templates.TemplateResponse(
+            request, "inventory/warehouse_detail.html", context
+        )
 
     def create_warehouse_response(
         self,
@@ -1388,7 +1511,9 @@ class InventoryWebService:
             context = base_context(request, auth, "New Warehouse", "warehouses")
             context.update(self.warehouse_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "inventory/warehouse_form.html", context)
+            return templates.TemplateResponse(
+                request, "inventory/warehouse_form.html", context
+            )
 
     def update_warehouse_response(
         self,
@@ -1446,9 +1571,13 @@ class InventoryWebService:
 
         except Exception as e:
             context = base_context(request, auth, "Edit Warehouse", "warehouses")
-            context.update(self.warehouse_form_context(db, str(auth.organization_id), warehouse_id))
+            context.update(
+                self.warehouse_form_context(db, str(auth.organization_id), warehouse_id)
+            )
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "inventory/warehouse_form.html", context)
+            return templates.TemplateResponse(
+                request, "inventory/warehouse_form.html", context
+            )
 
     def toggle_warehouse_status_response(
         self,
@@ -1465,7 +1594,9 @@ class InventoryWebService:
                 warehouse_service.deactivate_warehouse(db, org_id, UUID(warehouse_id))
             else:
                 # Reactivate
-                warehouse_service.update_warehouse(db, org_id, UUID(warehouse_id), {"is_active": True})
+                warehouse_service.update_warehouse(
+                    db, org_id, UUID(warehouse_id), {"is_active": True}
+                )
         except Exception:
             pass  # Just redirect back
         return RedirectResponse(url="/inventory/warehouses", status_code=303)
@@ -1695,13 +1826,14 @@ class InventoryTransactionWebService:
         db: Session,
     ) -> RedirectResponse:
         """Create a manual inventory transaction."""
+        from datetime import datetime
+
+        from app.models.finance.gl.fiscal_period import FiscalPeriod
+        from app.models.inventory.inventory_transaction import TransactionType
         from app.services.inventory.transaction import (
             InventoryTransactionService,
             TransactionInput,
         )
-        from app.models.inventory.inventory_transaction import TransactionType
-        from app.models.finance.gl.fiscal_period import FiscalPeriod
-        from datetime import datetime
 
         org_id = auth.organization_id
         user_id = auth.user_id
@@ -1735,10 +1867,17 @@ class InventoryTransactionWebService:
             )
 
             if not fiscal_period:
-                return RedirectResponse(url="/inventory/transactions?error=no_fiscal_period", status_code=303)
+                return RedirectResponse(
+                    url="/inventory/transactions?error=no_fiscal_period",
+                    status_code=303,
+                )
 
             # Map transaction type
-            txn_type = TransactionType.RECEIPT if transaction_type == "RECEIPT" else TransactionType.ISSUE
+            txn_type = (
+                TransactionType.RECEIPT
+                if transaction_type == "RECEIPT"
+                else TransactionType.ISSUE
+            )
 
             txn_input = TransactionInput(
                 transaction_type=txn_type,
@@ -1759,14 +1898,14 @@ class InventoryTransactionWebService:
                     db, org_id, txn_input, user_id
                 )
             else:
-                InventoryTransactionService.create_issue(
-                    db, org_id, txn_input, user_id
-                )
+                InventoryTransactionService.create_issue(db, org_id, txn_input, user_id)
 
             return RedirectResponse(url="/inventory/transactions", status_code=303)
 
         except Exception as e:
-            return RedirectResponse(url=f"/inventory/transactions?error={str(e)}", status_code=303)
+            return RedirectResponse(
+                url=f"/inventory/transactions?error={str(e)}", status_code=303
+            )
 
     @staticmethod
     def create_transfer_response(
@@ -1783,9 +1922,10 @@ class InventoryTransactionWebService:
         db: Session,
     ) -> RedirectResponse:
         """Create an inventory transfer."""
-        from app.services.inventory.transaction import InventoryTransactionService
-        from app.models.finance.gl.fiscal_period import FiscalPeriod
         from datetime import datetime
+
+        from app.models.finance.gl.fiscal_period import FiscalPeriod
+        from app.services.inventory.transaction import InventoryTransactionService
 
         org_id = auth.organization_id
         user_id = auth.user_id
@@ -1808,11 +1948,16 @@ class InventoryTransactionWebService:
             )
 
             if not fiscal_period:
-                return RedirectResponse(url="/inventory/transactions?error=no_fiscal_period", status_code=303)
+                return RedirectResponse(
+                    url="/inventory/transactions?error=no_fiscal_period",
+                    status_code=303,
+                )
 
             item = db.get(Item, UUID(item_id))
             if not item or item.organization_id != org_id:
-                return RedirectResponse(url="/inventory/transactions?error=item_not_found", status_code=303)
+                return RedirectResponse(
+                    url="/inventory/transactions?error=item_not_found", status_code=303
+                )
 
             txn_input = TransactionInput(
                 transaction_type=TransactionType.TRANSFER,
@@ -1838,7 +1983,9 @@ class InventoryTransactionWebService:
             return RedirectResponse(url="/inventory/transactions", status_code=303)
 
         except Exception as e:
-            return RedirectResponse(url=f"/inventory/transactions?error={str(e)}", status_code=303)
+            return RedirectResponse(
+                url=f"/inventory/transactions?error={str(e)}", status_code=303
+            )
 
     @staticmethod
     def create_adjustment_response(
@@ -1855,13 +2002,14 @@ class InventoryTransactionWebService:
         db: Session,
     ) -> RedirectResponse:
         """Create an inventory adjustment."""
+        from datetime import datetime
+
+        from app.models.finance.gl.fiscal_period import FiscalPeriod
+        from app.models.inventory.inventory_transaction import TransactionType
         from app.services.inventory.transaction import (
             InventoryTransactionService,
             TransactionInput,
         )
-        from app.models.inventory.inventory_transaction import TransactionType
-        from app.models.finance.gl.fiscal_period import FiscalPeriod
-        from datetime import datetime
 
         org_id = auth.organization_id
         user_id = auth.user_id
@@ -1885,7 +2033,10 @@ class InventoryTransactionWebService:
             )
 
             if not fiscal_period:
-                return RedirectResponse(url="/inventory/transactions?error=no_fiscal_period", status_code=303)
+                return RedirectResponse(
+                    url="/inventory/transactions?error=no_fiscal_period",
+                    status_code=303,
+                )
 
             txn_input = TransactionInput(
                 transaction_type=TransactionType.ADJUSTMENT,
@@ -1908,7 +2059,9 @@ class InventoryTransactionWebService:
             return RedirectResponse(url="/inventory/transactions", status_code=303)
 
         except Exception as e:
-            return RedirectResponse(url=f"/inventory/transactions?error={str(e)}", status_code=303)
+            return RedirectResponse(
+                url=f"/inventory/transactions?error={str(e)}", status_code=303
+            )
 
 
 inv_web_service = InventoryWebService()

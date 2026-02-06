@@ -16,12 +16,17 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import and_, extract, func, select
 from sqlalchemy.orm import Session
 
-from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimItem, ExpenseCategory
 from app.models.expense.cash_advance import CashAdvance
 from app.models.expense.corporate_card import CardTransaction
+from app.models.expense.expense_claim import (
+    ExpenseCategory,
+    ExpenseClaim,
+    ExpenseClaimItem,
+)
 from app.models.people.hr import Department, Employee
 from app.models.person import Person
 from app.services.common import coerce_uuid
+from app.services.formatters import format_currency
 from app.templates import templates
 
 if TYPE_CHECKING:
@@ -32,9 +37,7 @@ logger = logging.getLogger(__name__)
 
 def _format_currency(amount: Decimal, currency: str = "NGN") -> str:
     """Format amount as currency string."""
-    if amount is None:
-        return f"{currency} 0"
-    return f"{currency} {amount:,.2f}"
+    return format_currency(amount, currency, none_value=f"{currency} 0")
 
 
 class ExpenseDashboardService:
@@ -83,9 +86,7 @@ class ExpenseDashboardService:
             "presentation_currency_code": currency,
         }
 
-        return templates.TemplateResponse(
-            request, "expense/dashboard.html", context
-        )
+        return templates.TemplateResponse(request, "expense/dashboard.html", context)
 
     def claims_dashboard_response(
         self,
@@ -118,7 +119,9 @@ class ExpenseDashboardService:
         # Gather claims-specific dashboard data
         stats = self._get_claims_stats(db, org_id, start_date, currency)
         chart_data = self._get_claims_chart_data(db, org_id, start_date)
-        recent_claims = self._get_recent_claims_detailed(db, org_id, limit=8, currency=currency)
+        recent_claims = self._get_recent_claims_detailed(
+            db, org_id, limit=8, currency=currency
+        )
 
         context = {
             **base_context(request, auth, "Expense Claims", "claims"),
@@ -147,30 +150,38 @@ class ExpenseDashboardService:
             base_filter.append(ExpenseClaim.claim_date >= start_date)
 
         # Total claims
-        total_claims = db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(and_(*base_filter))
-        ) or 0
+        total_claims = (
+            db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(and_(*base_filter))
+            )
+            or 0
+        )
 
         # This period claims
         this_period_claims = total_claims
 
         # Total amount claimed
         total_amount = db.scalar(
-            select(func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0)).where(and_(*base_filter))
+            select(func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0)).where(
+                and_(*base_filter)
+            )
         ) or Decimal(0)
 
         # Average claim
         avg_claim = total_amount / total_claims if total_claims > 0 else Decimal(0)
 
         # Pending review (SUBMITTED or PENDING_APPROVAL)
-        pending_count = db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                and_(
-                    *base_filter,
-                    ExpenseClaim.status.in_(["SUBMITTED", "PENDING_APPROVAL"]),
+        pending_count = (
+            db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(
+                    and_(
+                        *base_filter,
+                        ExpenseClaim.status.in_(["SUBMITTED", "PENDING_APPROVAL"]),
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         pending_amount = db.scalar(
             select(func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0)).where(
@@ -182,24 +193,30 @@ class ExpenseDashboardService:
         ) or Decimal(0)
 
         # Approved count (waiting for payment)
-        approved_count = db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                and_(
-                    *base_filter,
-                    ExpenseClaim.status == "APPROVED",
+        approved_count = (
+            db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(
+                    and_(
+                        *base_filter,
+                        ExpenseClaim.status == "APPROVED",
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         # Paid
-        paid_count = db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                and_(
-                    *base_filter,
-                    ExpenseClaim.status == "PAID",
+        paid_count = (
+            db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(
+                    and_(
+                        *base_filter,
+                        ExpenseClaim.status == "PAID",
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         paid_amount = db.scalar(
             select(func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0)).where(
@@ -211,29 +228,41 @@ class ExpenseDashboardService:
         ) or Decimal(0)
 
         # Rejected count
-        rejected_count = db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                and_(
-                    *base_filter,
-                    ExpenseClaim.status == "REJECTED",
+        rejected_count = (
+            db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(
+                    and_(
+                        *base_filter,
+                        ExpenseClaim.status == "REJECTED",
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         # This month's claims
-        this_month_count = db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                and_(
-                    ExpenseClaim.organization_id == org_id,
-                    ExpenseClaim.claim_date >= month_start,
+        this_month_count = (
+            db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(
+                    and_(
+                        ExpenseClaim.organization_id == org_id,
+                        ExpenseClaim.claim_date >= month_start,
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         # Calculate rates
         completed_claims = paid_count + rejected_count
-        approval_rate = round((paid_count / completed_claims) * 100) if completed_claims > 0 else 0
-        rejection_rate = round((rejected_count / completed_claims) * 100) if completed_claims > 0 else 0
+        approval_rate = (
+            round((paid_count / completed_claims) * 100) if completed_claims > 0 else 0
+        )
+        rejection_rate = (
+            round((rejected_count / completed_claims) * 100)
+            if completed_claims > 0
+            else 0
+        )
 
         # Average processing time (simplified - would need actual date tracking)
         avg_processing_days = 3  # Placeholder
@@ -262,8 +291,12 @@ class ExpenseDashboardService:
         return {
             "claims_trend": self._get_claims_trend(db, org_id),
             "status_distribution": self._get_status_breakdown(db, org_id, start_date),
-            "category_breakdown": self._get_category_distribution(db, org_id, start_date),
-            "department_breakdown": self._get_department_spending(db, org_id, start_date),
+            "category_breakdown": self._get_category_distribution(
+                db, org_id, start_date
+            ),
+            "department_breakdown": self._get_department_spending(
+                db, org_id, start_date
+            ),
             "top_claimants": self._get_top_spenders(db, org_id, start_date),
             "monthly_amounts": self._get_monthly_amounts(db, org_id),
         }
@@ -278,33 +311,43 @@ class ExpenseDashboardService:
             month_name = month_date.strftime("%b")
 
             # Submitted count
-            submitted = db.scalar(
-                select(func.count(ExpenseClaim.claim_id)).where(
-                    and_(
-                        ExpenseClaim.organization_id == org_id,
-                        extract("year", ExpenseClaim.claim_date) == month_date.year,
-                        extract("month", ExpenseClaim.claim_date) == month_date.month,
+            submitted = (
+                db.scalar(
+                    select(func.count(ExpenseClaim.claim_id)).where(
+                        and_(
+                            ExpenseClaim.organization_id == org_id,
+                            extract("year", ExpenseClaim.claim_date) == month_date.year,
+                            extract("month", ExpenseClaim.claim_date)
+                            == month_date.month,
+                        )
                     )
                 )
-            ) or 0
+                or 0
+            )
 
             # Paid count
-            paid = db.scalar(
-                select(func.count(ExpenseClaim.claim_id)).where(
-                    and_(
-                        ExpenseClaim.organization_id == org_id,
-                        ExpenseClaim.status == "PAID",
-                        extract("year", ExpenseClaim.claim_date) == month_date.year,
-                        extract("month", ExpenseClaim.claim_date) == month_date.month,
+            paid = (
+                db.scalar(
+                    select(func.count(ExpenseClaim.claim_id)).where(
+                        and_(
+                            ExpenseClaim.organization_id == org_id,
+                            ExpenseClaim.status == "PAID",
+                            extract("year", ExpenseClaim.claim_date) == month_date.year,
+                            extract("month", ExpenseClaim.claim_date)
+                            == month_date.month,
+                        )
                     )
                 )
-            ) or 0
+                or 0
+            )
 
-            trend.append({
-                "month": month_name,
-                "submitted": submitted,
-                "paid": paid,
-            })
+            trend.append(
+                {
+                    "month": month_name,
+                    "submitted": submitted,
+                    "paid": paid,
+                }
+            )
 
         return trend
 
@@ -319,7 +362,9 @@ class ExpenseDashboardService:
 
             # Claimed amount
             claimed = db.scalar(
-                select(func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0)).where(
+                select(
+                    func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0)
+                ).where(
                     and_(
                         ExpenseClaim.organization_id == org_id,
                         extract("year", ExpenseClaim.claim_date) == month_date.year,
@@ -330,7 +375,9 @@ class ExpenseDashboardService:
 
             # Paid amount
             paid = db.scalar(
-                select(func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0)).where(
+                select(
+                    func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0)
+                ).where(
                     and_(
                         ExpenseClaim.organization_id == org_id,
                         ExpenseClaim.status == "PAID",
@@ -340,11 +387,13 @@ class ExpenseDashboardService:
                 )
             ) or Decimal(0)
 
-            amounts.append({
-                "month": month_name,
-                "claimed": float(claimed),
-                "paid": float(paid),
-            })
+            amounts.append(
+                {
+                    "month": month_name,
+                    "claimed": float(claimed),
+                    "paid": float(paid),
+                }
+            )
 
         return amounts
 
@@ -363,15 +412,21 @@ class ExpenseDashboardService:
 
         claims = []
         for claim, person in results:
-            claims.append({
-                "id": str(claim.claim_id),
-                "title": claim.purpose or f"Expense Claim",
-                "claim_number": claim.claim_number or "",
-                "employee_name": f"{person.first_name or ''} {person.last_name or ''}".strip(),
-                "amount": _format_currency(claim.total_claimed_amount, currency),
-                "status": str(claim.status).replace("_", " ").title() if claim.status else "Draft",
-                "date": claim.claim_date.strftime("%b %d, %Y") if claim.claim_date else "",
-            })
+            claims.append(
+                {
+                    "id": str(claim.claim_id),
+                    "title": claim.purpose or "Expense Claim",
+                    "claim_number": claim.claim_number or "",
+                    "employee_name": f"{person.first_name or ''} {person.last_name or ''}".strip(),
+                    "amount": _format_currency(claim.total_claimed_amount, currency),
+                    "status": str(claim.status).replace("_", " ").title()
+                    if claim.status
+                    else "Draft",
+                    "date": claim.claim_date.strftime("%b %d, %Y")
+                    if claim.claim_date
+                    else "",
+                }
+            )
 
         return claims
 
@@ -387,27 +442,35 @@ class ExpenseDashboardService:
             base_filter.append(ExpenseClaim.claim_date >= start_date)
 
         # Total claims count
-        total_claims = db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(and_(*base_filter))
-        ) or 0
+        total_claims = (
+            db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(and_(*base_filter))
+            )
+            or 0
+        )
 
         # Total amount
         total_amount = db.scalar(
-            select(func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0)).where(and_(*base_filter))
+            select(func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0)).where(
+                and_(*base_filter)
+            )
         ) or Decimal(0)
 
         # Average claim amount
         avg_claim = total_amount / total_claims if total_claims > 0 else Decimal(0)
 
         # Pending approval (SUBMITTED or PENDING_APPROVAL status)
-        pending_approval = db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                and_(
-                    *base_filter,
-                    ExpenseClaim.status.in_(["SUBMITTED", "PENDING_APPROVAL"]),
+        pending_approval = (
+            db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(
+                    and_(
+                        *base_filter,
+                        ExpenseClaim.status.in_(["SUBMITTED", "PENDING_APPROVAL"]),
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         pending_amount = db.scalar(
             select(func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0)).where(
@@ -419,14 +482,17 @@ class ExpenseDashboardService:
         ) or Decimal(0)
 
         # Reimbursed (PAID status)
-        reimbursed_count = db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                and_(
-                    *base_filter,
-                    ExpenseClaim.status == "PAID",
+        reimbursed_count = (
+            db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(
+                    and_(
+                        *base_filter,
+                        ExpenseClaim.status == "PAID",
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         reimbursed_amount = db.scalar(
             select(func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0)).where(
@@ -438,27 +504,40 @@ class ExpenseDashboardService:
         ) or Decimal(0)
 
         # Claims to review (for managers)
-        claims_to_review = db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                and_(
-                    ExpenseClaim.organization_id == org_id,
-                    ExpenseClaim.status.in_(["SUBMITTED", "PENDING_APPROVAL"]),
+        claims_to_review = (
+            db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(
+                    and_(
+                        ExpenseClaim.organization_id == org_id,
+                        ExpenseClaim.status.in_(["SUBMITTED", "PENDING_APPROVAL"]),
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         # Advances stats
-        active_advances = db.scalar(
-            select(func.count(CashAdvance.advance_id)).where(
-                and_(
-                    CashAdvance.organization_id == org_id,
-                    CashAdvance.status.in_(["PENDING_APPROVAL", "APPROVED", "DISBURSED"]),
+        active_advances = (
+            db.scalar(
+                select(func.count(CashAdvance.advance_id)).where(
+                    and_(
+                        CashAdvance.organization_id == org_id,
+                        CashAdvance.status.in_(
+                            ["PENDING_APPROVAL", "APPROVED", "DISBURSED"]
+                        ),
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         outstanding_advances = db.scalar(
-            select(func.coalesce(func.sum(CashAdvance.requested_amount - CashAdvance.amount_settled), 0)).where(
+            select(
+                func.coalesce(
+                    func.sum(CashAdvance.requested_amount - CashAdvance.amount_settled),
+                    0,
+                )
+            ).where(
                 and_(
                     CashAdvance.organization_id == org_id,
                     CashAdvance.status == "DISBURSED",
@@ -466,24 +545,30 @@ class ExpenseDashboardService:
             )
         ) or Decimal(0)
 
-        advances_to_approve = db.scalar(
-            select(func.count(CashAdvance.advance_id)).where(
-                and_(
-                    CashAdvance.organization_id == org_id,
-                    CashAdvance.status.in_(["SUBMITTED", "PENDING_APPROVAL"]),
+        advances_to_approve = (
+            db.scalar(
+                select(func.count(CashAdvance.advance_id)).where(
+                    and_(
+                        CashAdvance.organization_id == org_id,
+                        CashAdvance.status.in_(["SUBMITTED", "PENDING_APPROVAL"]),
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         # Ready for payment
-        ready_for_payment = db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                and_(
-                    ExpenseClaim.organization_id == org_id,
-                    ExpenseClaim.status == "APPROVED",
+        ready_for_payment = (
+            db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(
+                    and_(
+                        ExpenseClaim.organization_id == org_id,
+                        ExpenseClaim.status == "APPROVED",
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         # Corporate card stats
         month_start = today.replace(day=1)
@@ -496,23 +581,29 @@ class ExpenseDashboardService:
             )
         ) or Decimal(0)
 
-        card_transactions = db.scalar(
-            select(func.count(CardTransaction.transaction_id)).where(
-                and_(
-                    CardTransaction.organization_id == org_id,
-                    CardTransaction.transaction_date >= month_start,
+        card_transactions = (
+            db.scalar(
+                select(func.count(CardTransaction.transaction_id)).where(
+                    and_(
+                        CardTransaction.organization_id == org_id,
+                        CardTransaction.transaction_date >= month_start,
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
-        unreconciled_count = db.scalar(
-            select(func.count(CardTransaction.transaction_id)).where(
-                and_(
-                    CardTransaction.organization_id == org_id,
-                    CardTransaction.expense_claim_id.is_(None),
+        unreconciled_count = (
+            db.scalar(
+                select(func.count(CardTransaction.transaction_id)).where(
+                    and_(
+                        CardTransaction.organization_id == org_id,
+                        CardTransaction.expense_claim_id.is_(None),
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         unreconciled_amount = db.scalar(
             select(func.coalesce(func.sum(CardTransaction.amount), 0)).where(
@@ -524,16 +615,23 @@ class ExpenseDashboardService:
         ) or Decimal(0)
 
         # Compliance stats - count rejected claims as violations
-        total_rejected = db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                and_(
-                    *base_filter,
-                    ExpenseClaim.status == "REJECTED",
+        total_rejected = (
+            db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(
+                    and_(
+                        *base_filter,
+                        ExpenseClaim.status == "REJECTED",
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
-        compliance_rate = round(((total_claims - total_rejected) / total_claims) * 100) if total_claims > 0 else 100
+        compliance_rate = (
+            round(((total_claims - total_rejected) / total_claims) * 100)
+            if total_claims > 0
+            else 100
+        )
 
         return {
             "total_claims": total_claims,
@@ -568,16 +666,22 @@ class ExpenseDashboardService:
         chart_data["expense_trend"] = self._get_expense_trend(db, org_id)
 
         # Category distribution
-        chart_data["category_distribution"] = self._get_category_distribution(db, org_id, start_date)
+        chart_data["category_distribution"] = self._get_category_distribution(
+            db, org_id, start_date
+        )
 
         # Top spenders
         chart_data["top_spenders"] = self._get_top_spenders(db, org_id, start_date)
 
         # Status breakdown
-        chart_data["status_breakdown"] = self._get_status_breakdown(db, org_id, start_date)
+        chart_data["status_breakdown"] = self._get_status_breakdown(
+            db, org_id, start_date
+        )
 
         # Department spending
-        chart_data["department_spending"] = self._get_department_spending(db, org_id, start_date)
+        chart_data["department_spending"] = self._get_department_spending(
+            db, org_id, start_date
+        )
 
         return chart_data
 
@@ -592,7 +696,9 @@ class ExpenseDashboardService:
 
             # Submitted amount
             submitted = db.scalar(
-                select(func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0)).where(
+                select(
+                    func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0)
+                ).where(
                     and_(
                         ExpenseClaim.organization_id == org_id,
                         extract("year", ExpenseClaim.claim_date) == month_date.year,
@@ -603,7 +709,9 @@ class ExpenseDashboardService:
 
             # Reimbursed amount (approved/paid in that month based on updated_at)
             reimbursed = db.scalar(
-                select(func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0)).where(
+                select(
+                    func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0)
+                ).where(
                     and_(
                         ExpenseClaim.organization_id == org_id,
                         ExpenseClaim.status == "PAID",
@@ -613,11 +721,13 @@ class ExpenseDashboardService:
                 )
             ) or Decimal(0)
 
-            trend.append({
-                "month": month_name,
-                "submitted": float(submitted),
-                "reimbursed": float(reimbursed),
-            })
+            trend.append(
+                {
+                    "month": month_name,
+                    "submitted": float(submitted),
+                    "reimbursed": float(reimbursed),
+                }
+            )
 
         return trend
 
@@ -634,9 +744,12 @@ class ExpenseDashboardService:
         results = db.execute(
             select(
                 ExpenseCategory.category_name,
-                func.coalesce(func.sum(ExpenseClaimItem.claimed_amount), 0)
+                func.coalesce(func.sum(ExpenseClaimItem.claimed_amount), 0),
             )
-            .join(ExpenseCategory, ExpenseCategory.category_id == ExpenseClaimItem.category_id)
+            .join(
+                ExpenseCategory,
+                ExpenseCategory.category_id == ExpenseClaimItem.category_id,
+            )
             .where(and_(*base_filter))
             .group_by(ExpenseCategory.category_name)
             .order_by(func.sum(ExpenseClaimItem.claimed_amount).desc())
@@ -657,7 +770,7 @@ class ExpenseDashboardService:
             select(
                 Person.first_name,
                 Person.last_name,
-                func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0)
+                func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0),
             )
             .join(Employee, Employee.employee_id == ExpenseClaim.employee_id)
             .join(Person, Person.id == Employee.person_id)
@@ -697,7 +810,10 @@ class ExpenseDashboardService:
         }
 
         return [
-            {"status": status_labels.get(str(status), str(status).title()), "count": count}
+            {
+                "status": status_labels.get(str(status), str(status).title()),
+                "count": count,
+            }
             for status, count in results
         ]
 
@@ -712,7 +828,7 @@ class ExpenseDashboardService:
         results = db.execute(
             select(
                 Department.department_name,
-                func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0)
+                func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0),
             )
             .join(Employee, Employee.employee_id == ExpenseClaim.employee_id)
             .join(Department, Department.department_id == Employee.department_id)
@@ -722,7 +838,9 @@ class ExpenseDashboardService:
             .limit(5)
         ).all()
 
-        return [{"department": name, "amount": float(amount)} for name, amount in results]
+        return [
+            {"department": name, "amount": float(amount)} for name, amount in results
+        ]
 
     def _get_recent_claims(
         self, db: Session, org_id: UUID, limit: int = 5, currency: str = "NGN"
@@ -739,14 +857,20 @@ class ExpenseDashboardService:
 
         claims = []
         for claim, person in results:
-            claims.append({
-                "id": str(claim.claim_id),
-                "title": claim.purpose or f"Expense #{claim.claim_number}",
-                "employee_name": f"{person.first_name or ''} {person.last_name or ''}".strip(),
-                "amount": _format_currency(claim.total_claimed_amount, currency),
-                "status": str(claim.status).replace("_", " ").title() if claim.status else "Draft",
-                "date": claim.claim_date.strftime("%b %d, %Y") if claim.claim_date else "",
-            })
+            claims.append(
+                {
+                    "id": str(claim.claim_id),
+                    "title": claim.purpose or f"Expense #{claim.claim_number}",
+                    "employee_name": f"{person.first_name or ''} {person.last_name or ''}".strip(),
+                    "amount": _format_currency(claim.total_claimed_amount, currency),
+                    "status": str(claim.status).replace("_", " ").title()
+                    if claim.status
+                    else "Draft",
+                    "date": claim.claim_date.strftime("%b %d, %Y")
+                    if claim.claim_date
+                    else "",
+                }
+            )
 
         return claims
 

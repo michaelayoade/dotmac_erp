@@ -6,12 +6,12 @@ Validates JWT tokens against the shared auth database for SSO clients.
 import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
-from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models.auth import Session as AuthSession, SessionStatus
+from app.models.auth import Session as AuthSession
+from app.models.auth import SessionStatus
 from app.services.common import coerce_uuid
 
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ class SSOTokenValidator:
         """
         try:
             # Import here to avoid circular imports
-            from app.services.auth_flow import _decode_jwt, _jwt_algorithm
+            from app.services.auth_flow import _jwt_algorithm
 
             # Get SSO JWT secret or fall back to standard secret
             secret = self._get_jwt_secret()
@@ -79,6 +79,7 @@ class SSOTokenValidator:
         to the standard JWT_SECRET.
         """
         import os
+
         from app.services.secrets import resolve_secret
 
         if settings.sso_enabled and settings.sso_jwt_secret:
@@ -114,7 +115,9 @@ class SSOTokenValidator:
                 return False
 
             if session.status != SessionStatus.active:
-                logger.debug("Session not active: %s (status=%s)", session_id, session.status)
+                logger.debug(
+                    "Session not active: %s (status=%s)", session_id, session.status
+                )
                 return False
 
             if session.revoked_at is not None:
@@ -176,7 +179,9 @@ def _decode_jwt_with_secret(
     from jose import JWTError, jwt
 
     # Whitelist of allowed algorithms
-    allowed_algorithms = frozenset({"HS256", "HS384", "HS512", "RS256", "RS384", "RS512"})
+    allowed_algorithms = frozenset(
+        {"HS256", "HS384", "HS512", "RS256", "RS384", "RS512"}
+    )
 
     if algorithm.lower() == "none" or algorithm not in allowed_algorithms:
         logger.warning("Invalid JWT algorithm: %s", algorithm)
@@ -196,7 +201,11 @@ def _decode_jwt_with_secret(
         )
 
         if payload.get("typ") != expected_type:
-            logger.debug("Token type mismatch: expected %s, got %s", expected_type, payload.get("typ"))
+            logger.debug(
+                "Token type mismatch: expected %s, got %s",
+                expected_type,
+                payload.get("typ"),
+            )
             return None
 
         return payload

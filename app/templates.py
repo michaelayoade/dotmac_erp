@@ -22,12 +22,14 @@ templates = Jinja2Templates(directory="templates")
 
 # Register global functions
 templates.env.globals["now"] = datetime.now
-templates.env.globals["t"] = t      # Translation function
-templates.env.globals["_"] = t      # Alias for convenience
+templates.env.globals["t"] = t  # Translation function
+templates.env.globals["_"] = t  # Alias for convenience
 
 
 # Custom filters
-def format_currency(value: Union[Decimal, float, int, None], symbol: str = "", decimals: int = 2) -> str:
+def format_currency(
+    value: Union[Decimal, float, int, None], symbol: str = "", decimals: int = 2
+) -> str:
     """Format a number as currency with thousand separators."""
     if value is None:
         return f"{symbol}0.00" if symbol else "0.00"
@@ -61,14 +63,40 @@ def urldecode(value: str | None) -> str:
 
 # HTML Sanitization for safe rendering
 # Whitelist of allowed HTML tags
-ALLOWED_TAGS = frozenset([
-    "p", "br", "b", "i", "u", "strong", "em", "s", "strike",
-    "h1", "h2", "h3", "h4", "h5", "h6",
-    "ul", "ol", "li",
-    "a", "span", "div",
-    "table", "thead", "tbody", "tr", "th", "td",
-    "blockquote", "pre", "code",
-])
+ALLOWED_TAGS = frozenset(
+    [
+        "p",
+        "br",
+        "b",
+        "i",
+        "u",
+        "strong",
+        "em",
+        "s",
+        "strike",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "ul",
+        "ol",
+        "li",
+        "a",
+        "span",
+        "div",
+        "table",
+        "thead",
+        "tbody",
+        "tr",
+        "th",
+        "td",
+        "blockquote",
+        "pre",
+        "code",
+    ]
+)
 
 # Allowed attributes for specific tags
 ALLOWED_ATTRS = {
@@ -83,7 +111,9 @@ ALLOWED_ATTRS = {
 # Pattern to match HTML tags
 TAG_PATTERN = re.compile(r"<(/?)(\w+)([^>]*)>", re.IGNORECASE)
 # Pattern to match attributes
-ATTR_PATTERN = re.compile(r'(\w+)\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|(\S+))', re.IGNORECASE)
+ATTR_PATTERN = re.compile(
+    r'(\w+)\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|(\S+))', re.IGNORECASE
+)
 # Pattern for dangerous protocols
 DANGEROUS_PROTOCOLS = re.compile(r"^\s*(?:javascript|vbscript|data):", re.IGNORECASE)
 
@@ -125,7 +155,9 @@ def sanitize_html(value: str | None) -> Markup:
 
         for attr_match in ATTR_PATTERN.finditer(attrs):
             attr_name = attr_match.group(1).lower()
-            attr_value = attr_match.group(2) or attr_match.group(3) or attr_match.group(4) or ""
+            attr_value = (
+                attr_match.group(2) or attr_match.group(3) or attr_match.group(4) or ""
+            )
 
             # Skip disallowed attributes
             if attr_name not in allowed_attrs:
@@ -140,7 +172,9 @@ def sanitize_html(value: str | None) -> Markup:
                 if DANGEROUS_PROTOCOLS.match(attr_value):
                     continue
                 # Allow only http, https, mailto, tel, and relative URLs
-                if attr_value and not attr_value.startswith(("/", "#", "http://", "https://", "mailto:", "tel:")):
+                if attr_value and not attr_value.startswith(
+                    ("/", "#", "http://", "https://", "mailto:", "tel:")
+                ):
                     continue
 
             # Escape attribute value

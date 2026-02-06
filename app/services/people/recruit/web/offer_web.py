@@ -7,8 +7,6 @@ Provides view-focused data and operations for job offer web routes.
 from __future__ import annotations
 
 import logging
-from datetime import date
-from decimal import Decimal
 from typing import Any, Optional
 from uuid import UUID
 
@@ -18,20 +16,24 @@ from sqlalchemy.orm import Session
 
 from app.models.people.recruit import OfferStatus
 from app.services.common import PaginationParams, coerce_uuid
-from app.services.people.hr import DepartmentFilters, DesignationFilters, OrganizationService
+from app.services.people.hr import (
+    DepartmentFilters,
+    DesignationFilters,
+    OrganizationService,
+)
 from app.services.people.recruit import RecruitmentService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
 from .base import (
+    EMPLOYMENT_TYPES,
+    PAY_FREQUENCIES,
     logger,
-    parse_uuid,
     parse_date_only,
     parse_decimal,
     parse_int,
     parse_status,
-    EMPLOYMENT_TYPES,
-    PAY_FREQUENCIES,
+    parse_uuid,
 )
 
 logger = logging.getLogger(__name__)
@@ -174,16 +176,24 @@ class OfferWebService:
     def build_offer_input(form_data: dict) -> dict:
         """Build input kwargs for job offer from form data."""
         return {
-            "designation_id": coerce_uuid(form_data["designation_id"]) if form_data.get("designation_id") else None,
-            "department_id": coerce_uuid(form_data["department_id"]) if form_data.get("department_id") else None,
+            "designation_id": coerce_uuid(form_data["designation_id"])
+            if form_data.get("designation_id")
+            else None,
+            "department_id": coerce_uuid(form_data["department_id"])
+            if form_data.get("department_id")
+            else None,
             "offer_date": parse_date_only(form_data.get("offer_date")),
             "valid_until": parse_date_only(form_data.get("valid_until")),
-            "expected_joining_date": parse_date_only(form_data.get("expected_joining_date")),
+            "expected_joining_date": parse_date_only(
+                form_data.get("expected_joining_date")
+            ),
             "base_salary": parse_decimal(form_data.get("base_salary")),
             "currency_code": form_data.get("currency_code", "NGN"),
             "pay_frequency": form_data.get("pay_frequency", "MONTHLY"),
             "signing_bonus": parse_decimal(form_data.get("signing_bonus")),
-            "relocation_allowance": parse_decimal(form_data.get("relocation_allowance")),
+            "relocation_allowance": parse_decimal(
+                form_data.get("relocation_allowance")
+            ),
             "other_benefits": form_data.get("other_benefits") or None,
             "employment_type": form_data.get("employment_type", "FULL_TIME"),
             "probation_months": parse_int(form_data.get("probation_months")) or 3,
@@ -219,7 +229,9 @@ class OfferWebService:
                 page=page,
             )
         )
-        return templates.TemplateResponse(request, "people/recruit/offers.html", context)
+        return templates.TemplateResponse(
+            request, "people/recruit/offers.html", context
+        )
 
     def offer_new_form_response(
         self,
@@ -238,7 +250,9 @@ class OfferWebService:
                 applicant_id=applicant_id,
             )
         )
-        return templates.TemplateResponse(request, "people/recruit/offer_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/recruit/offer_form.html", context
+        )
 
     def offer_detail_response(
         self,
@@ -248,17 +262,19 @@ class OfferWebService:
         offer_id: str,
     ) -> HTMLResponse | RedirectResponse:
         """Render job offer detail page."""
-        ctx = self.offer_detail_context(
-            db, coerce_uuid(auth.organization_id), offer_id
-        )
+        ctx = self.offer_detail_context(db, coerce_uuid(auth.organization_id), offer_id)
 
         if not ctx.get("offer"):
             return RedirectResponse(url="/people/recruit/offers", status_code=303)
 
-        context = base_context(request, auth, f"Offer {ctx['offer'].offer_number}", "recruit", db=db)
+        context = base_context(
+            request, auth, f"Offer {ctx['offer'].offer_number}", "recruit", db=db
+        )
         context["request"] = request
         context.update(ctx)
-        return templates.TemplateResponse(request, "people/recruit/offer_detail.html", context)
+        return templates.TemplateResponse(
+            request, "people/recruit/offer_detail.html", context
+        )
 
     def offer_edit_form_response(
         self,
@@ -268,9 +284,7 @@ class OfferWebService:
         offer_id: str,
     ) -> HTMLResponse | RedirectResponse:
         """Render job offer edit form."""
-        ctx = self.offer_form_context(
-            db, coerce_uuid(auth.organization_id), offer_id
-        )
+        ctx = self.offer_form_context(db, coerce_uuid(auth.organization_id), offer_id)
 
         if not ctx.get("offer"):
             return RedirectResponse(url="/people/recruit/offers", status_code=303)
@@ -278,7 +292,9 @@ class OfferWebService:
         context = base_context(request, auth, "Edit Job Offer", "recruit", db=db)
         context["request"] = request
         context.update(ctx)
-        return templates.TemplateResponse(request, "people/recruit/offer_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/recruit/offer_form.html", context
+        )
 
     async def create_offer_response(
         self,
@@ -314,7 +330,9 @@ class OfferWebService:
             context.update(self.offer_form_context(db, org_id))
             context["form_data"] = dict(form_data)
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "people/recruit/offer_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/recruit/offer_form.html", context
+            )
 
     async def update_offer_response(
         self,
@@ -343,7 +361,9 @@ class OfferWebService:
             context["request"] = request
             context.update(self.offer_form_context(db, org_id, offer_id))
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "people/recruit/offer_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/recruit/offer_form.html", context
+            )
 
     def extend_offer_response(
         self,
@@ -361,7 +381,9 @@ class OfferWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url=f"/people/recruit/offers/{offer_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/recruit/offers/{offer_id}", status_code=303
+        )
 
     def accept_offer_response(
         self,
@@ -379,7 +401,9 @@ class OfferWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url=f"/people/recruit/offers/{offer_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/recruit/offers/{offer_id}", status_code=303
+        )
 
     async def decline_offer_response(
         self,
@@ -400,7 +424,9 @@ class OfferWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url=f"/people/recruit/offers/{offer_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/recruit/offers/{offer_id}", status_code=303
+        )
 
     async def withdraw_offer_response(
         self,
@@ -414,9 +440,13 @@ class OfferWebService:
         svc = RecruitmentService(db)
 
         try:
-            svc.update_job_offer(org_id, coerce_uuid(offer_id), status=OfferStatus.WITHDRAWN)
+            svc.update_job_offer(
+                org_id, coerce_uuid(offer_id), status=OfferStatus.WITHDRAWN
+            )
             db.commit()
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url=f"/people/recruit/offers/{offer_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/recruit/offers/{offer_id}", status_code=303
+        )

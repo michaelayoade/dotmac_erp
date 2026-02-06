@@ -6,21 +6,19 @@ status transitions, and assignment handling.
 """
 
 import logging
-import uuid
-from datetime import date, datetime
-from decimal import Decimal
+from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.support.ticket import Ticket, TicketPriority, TicketStatus
-from app.models.people.hr import Employee
 from app.models.expense.expense_claim import ExpenseClaim
+from app.models.people.hr import Employee
+from app.models.support.ticket import Ticket, TicketPriority, TicketStatus
 from app.services.common import coerce_uuid
-from app.services.support.comment import comment_service
 from app.services.notification import notification_service
+from app.services.support.comment import comment_service
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +28,24 @@ class TicketService:
 
     # Valid status transitions
     STATUS_TRANSITIONS = {
-        TicketStatus.OPEN: [TicketStatus.REPLIED, TicketStatus.ON_HOLD, TicketStatus.RESOLVED, TicketStatus.CLOSED],
-        TicketStatus.REPLIED: [TicketStatus.OPEN, TicketStatus.ON_HOLD, TicketStatus.RESOLVED, TicketStatus.CLOSED],
-        TicketStatus.ON_HOLD: [TicketStatus.OPEN, TicketStatus.REPLIED, TicketStatus.RESOLVED, TicketStatus.CLOSED],
+        TicketStatus.OPEN: [
+            TicketStatus.REPLIED,
+            TicketStatus.ON_HOLD,
+            TicketStatus.RESOLVED,
+            TicketStatus.CLOSED,
+        ],
+        TicketStatus.REPLIED: [
+            TicketStatus.OPEN,
+            TicketStatus.ON_HOLD,
+            TicketStatus.RESOLVED,
+            TicketStatus.CLOSED,
+        ],
+        TicketStatus.ON_HOLD: [
+            TicketStatus.OPEN,
+            TicketStatus.REPLIED,
+            TicketStatus.RESOLVED,
+            TicketStatus.CLOSED,
+        ],
         TicketStatus.RESOLVED: [TicketStatus.OPEN, TicketStatus.CLOSED],
         TicketStatus.CLOSED: [TicketStatus.OPEN],  # Can reopen
     }
@@ -346,7 +359,9 @@ class TicketService:
         if raised_by_id is not None:
             ticket.raised_by_id = coerce_uuid(raised_by_id) if raised_by_id else None
         if assigned_to_id is not None:
-            ticket.assigned_to_id = coerce_uuid(assigned_to_id) if assigned_to_id else None
+            ticket.assigned_to_id = (
+                coerce_uuid(assigned_to_id) if assigned_to_id else None
+            )
         if project_id is not None:
             ticket.project_id = coerce_uuid(project_id) if project_id else None
         if customer_id is not None:
@@ -367,10 +382,14 @@ class TicketService:
             org_id = coerce_uuid(organization_id)
             old_category_name = None
             if ticket.category_id:
-                old_cat = db.query(TicketCategory).filter(
-                    TicketCategory.category_id == ticket.category_id,
-                    TicketCategory.organization_id == org_id,
-                ).first()
+                old_cat = (
+                    db.query(TicketCategory)
+                    .filter(
+                        TicketCategory.category_id == ticket.category_id,
+                        TicketCategory.organization_id == org_id,
+                    )
+                    .first()
+                )
                 if old_cat:
                     old_category_name = old_cat.category_name
 
@@ -379,10 +398,14 @@ class TicketService:
                 ticket.category_id = new_cat_id
                 new_category_name = None
                 if new_cat_id:
-                    new_cat = db.query(TicketCategory).filter(
-                        TicketCategory.category_id == new_cat_id,
-                        TicketCategory.organization_id == org_id,
-                    ).first()
+                    new_cat = (
+                        db.query(TicketCategory)
+                        .filter(
+                            TicketCategory.category_id == new_cat_id,
+                            TicketCategory.organization_id == org_id,
+                        )
+                        .first()
+                    )
                     if new_cat:
                         new_category_name = new_cat.category_name
                 if new_category_name:
@@ -401,10 +424,14 @@ class TicketService:
             org_id = coerce_uuid(organization_id)
             old_team_name = None
             if ticket.team_id:
-                old_team = db.query(SupportTeam).filter(
-                    SupportTeam.team_id == ticket.team_id,
-                    SupportTeam.organization_id == org_id,
-                ).first()
+                old_team = (
+                    db.query(SupportTeam)
+                    .filter(
+                        SupportTeam.team_id == ticket.team_id,
+                        SupportTeam.organization_id == org_id,
+                    )
+                    .first()
+                )
                 if old_team:
                     old_team_name = old_team.team_name
 
@@ -413,10 +440,14 @@ class TicketService:
                 ticket.team_id = new_team_id
                 new_team_name = None
                 if new_team_id:
-                    new_team = db.query(SupportTeam).filter(
-                        SupportTeam.team_id == new_team_id,
-                        SupportTeam.organization_id == org_id,
-                    ).first()
+                    new_team = (
+                        db.query(SupportTeam)
+                        .filter(
+                            SupportTeam.team_id == new_team_id,
+                            SupportTeam.organization_id == org_id,
+                        )
+                        .first()
+                    )
                     if new_team:
                         new_team_name = new_team.team_name
                 if new_team_name:
@@ -460,7 +491,10 @@ class TicketService:
         # Validate transition
         allowed = self.STATUS_TRANSITIONS.get(ticket.status, [])
         if new_status_enum not in allowed:
-            return None, f"Cannot transition from {ticket.status.value} to {new_status_enum.value}"
+            return (
+                None,
+                f"Cannot transition from {ticket.status.value} to {new_status_enum.value}",
+            )
 
         old_status = ticket.status
         ticket.status = new_status_enum
@@ -475,7 +509,9 @@ class TicketService:
             ticket.resolution_date = date.today()
 
         db.flush()
-        logger.info(f"Ticket {ticket.ticket_number} status changed from {old_status.value} to {new_status_enum.value}")
+        logger.info(
+            f"Ticket {ticket.ticket_number} status changed from {old_status.value} to {new_status_enum.value}"
+        )
 
         # Log activity
         comment_service.log_status_change(
@@ -511,13 +547,17 @@ class TicketService:
             if raiser and raiser.person_id:
                 # Get resolver name
                 resolver_employee = None
-                for emp in db.execute(
-                    select(Employee).where(Employee.person_id == uid)
-                ).scalars().all():
+                for emp in (
+                    db.execute(select(Employee).where(Employee.person_id == uid))
+                    .scalars()
+                    .all()
+                ):
                     resolver_employee = emp
                     break
 
-                resolver_name = resolver_employee.full_name if resolver_employee else "Support"
+                resolver_name = (
+                    resolver_employee.full_name if resolver_employee else "Support"
+                )
                 notification_service.notify_ticket_resolved(
                     db,
                     organization_id=ticket.organization_id,
@@ -557,7 +597,9 @@ class TicketService:
 
         # Get new assignee name for logging
         new_assignee = db.get(Employee, coerce_uuid(assigned_to_id))
-        new_assignee_name = new_assignee.full_name if new_assignee else str(assigned_to_id)
+        new_assignee_name = (
+            new_assignee.full_name if new_assignee else str(assigned_to_id)
+        )
 
         # Log activity
         comment_service.log_assignment(
@@ -601,8 +643,7 @@ class TicketService:
 
         ticket.resolution = resolution
         return self.update_status(
-            db, organization_id, ticket_id, user_id,
-            "RESOLVED", notes=resolution
+            db, organization_id, ticket_id, user_id, "RESOLVED", notes=resolution
         )
 
     def get_linked_expenses(
@@ -623,7 +664,9 @@ class TicketService:
                     ExpenseClaim.ticket_id == tid,
                 )
                 .order_by(ExpenseClaim.claim_date.desc())
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
 
     def search_tickets(
@@ -643,15 +686,12 @@ class TicketService:
         org_id = coerce_uuid(organization_id)
         search_term = f"%{query}%"
 
-        q = (
-            select(Ticket)
-            .where(
-                Ticket.organization_id == org_id,
-                or_(
-                    Ticket.ticket_number.ilike(search_term),
-                    Ticket.subject.ilike(search_term),
-                )
-            )
+        q = select(Ticket).where(
+            Ticket.organization_id == org_id,
+            or_(
+                Ticket.ticket_number.ilike(search_term),
+                Ticket.subject.ilike(search_term),
+            ),
         )
 
         if status_filter:
@@ -679,69 +719,87 @@ class TicketService:
         # Total tickets (excluding deleted)
         not_deleted = Ticket.is_deleted == False  # noqa: E712
 
-        total = db.scalar(
-            select(func.count(Ticket.ticket_id))
-            .where(Ticket.organization_id == org_id, not_deleted)
-        ) or 0
+        total = (
+            db.scalar(
+                select(func.count(Ticket.ticket_id)).where(
+                    Ticket.organization_id == org_id, not_deleted
+                )
+            )
+            or 0
+        )
 
         # By status
-        open_count = db.scalar(
-            select(func.count(Ticket.ticket_id))
-            .where(
-                Ticket.organization_id == org_id,
-                Ticket.status == TicketStatus.OPEN,
-                not_deleted,
+        open_count = (
+            db.scalar(
+                select(func.count(Ticket.ticket_id)).where(
+                    Ticket.organization_id == org_id,
+                    Ticket.status == TicketStatus.OPEN,
+                    not_deleted,
+                )
             )
-        ) or 0
+            or 0
+        )
 
-        on_hold = db.scalar(
-            select(func.count(Ticket.ticket_id))
-            .where(
-                Ticket.organization_id == org_id,
-                Ticket.status == TicketStatus.ON_HOLD,
-                not_deleted,
+        on_hold = (
+            db.scalar(
+                select(func.count(Ticket.ticket_id)).where(
+                    Ticket.organization_id == org_id,
+                    Ticket.status == TicketStatus.ON_HOLD,
+                    not_deleted,
+                )
             )
-        ) or 0
+            or 0
+        )
 
-        resolved = db.scalar(
-            select(func.count(Ticket.ticket_id))
-            .where(
-                Ticket.organization_id == org_id,
-                Ticket.status == TicketStatus.RESOLVED,
-                not_deleted,
+        resolved = (
+            db.scalar(
+                select(func.count(Ticket.ticket_id)).where(
+                    Ticket.organization_id == org_id,
+                    Ticket.status == TicketStatus.RESOLVED,
+                    not_deleted,
+                )
             )
-        ) or 0
+            or 0
+        )
 
-        closed = db.scalar(
-            select(func.count(Ticket.ticket_id))
-            .where(
-                Ticket.organization_id == org_id,
-                Ticket.status == TicketStatus.CLOSED,
-                not_deleted,
+        closed = (
+            db.scalar(
+                select(func.count(Ticket.ticket_id)).where(
+                    Ticket.organization_id == org_id,
+                    Ticket.status == TicketStatus.CLOSED,
+                    not_deleted,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Urgent tickets
-        urgent = db.scalar(
-            select(func.count(Ticket.ticket_id))
-            .where(
-                Ticket.organization_id == org_id,
-                Ticket.priority == TicketPriority.URGENT,
-                Ticket.status.in_([TicketStatus.OPEN, TicketStatus.REPLIED, TicketStatus.ON_HOLD]),
-                not_deleted,
+        urgent = (
+            db.scalar(
+                select(func.count(Ticket.ticket_id)).where(
+                    Ticket.organization_id == org_id,
+                    Ticket.priority == TicketPriority.URGENT,
+                    Ticket.status.in_(
+                        [TicketStatus.OPEN, TicketStatus.REPLIED, TicketStatus.ON_HOLD]
+                    ),
+                    not_deleted,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Unassigned
-        unassigned = db.scalar(
-            select(func.count(Ticket.ticket_id))
-            .where(
-                Ticket.organization_id == org_id,
-                Ticket.assigned_to_id.is_(None),
-                Ticket.status.in_([TicketStatus.OPEN, TicketStatus.REPLIED]),
-                not_deleted,
+        unassigned = (
+            db.scalar(
+                select(func.count(Ticket.ticket_id)).where(
+                    Ticket.organization_id == org_id,
+                    Ticket.assigned_to_id.is_(None),
+                    Ticket.status.in_([TicketStatus.OPEN, TicketStatus.REPLIED]),
+                    not_deleted,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         return {
             "total": total,
@@ -781,21 +839,32 @@ class TicketService:
 
         if hard_delete:
             # Delete all related records first
-            from app.models.support.comment import TicketComment
             from app.models.support.attachment import TicketAttachment
+            from app.models.support.comment import TicketComment
 
             db.execute(
-                select(TicketComment)
-                .where(TicketComment.ticket_id == ticket.ticket_id)
-            )
-            for comment in db.execute(
                 select(TicketComment).where(TicketComment.ticket_id == ticket.ticket_id)
-            ).scalars().all():
+            )
+            for comment in (
+                db.execute(
+                    select(TicketComment).where(
+                        TicketComment.ticket_id == ticket.ticket_id
+                    )
+                )
+                .scalars()
+                .all()
+            ):
                 db.delete(comment)
 
-            for attachment in db.execute(
-                select(TicketAttachment).where(TicketAttachment.ticket_id == ticket.ticket_id)
-            ).scalars().all():
+            for attachment in (
+                db.execute(
+                    select(TicketAttachment).where(
+                        TicketAttachment.ticket_id == ticket.ticket_id
+                    )
+                )
+                .scalars()
+                .all()
+            ):
                 db.delete(attachment)
 
             db.delete(ticket)
@@ -872,7 +941,10 @@ class TicketService:
         for tid in ticket_ids:
             try:
                 result = self.update_status(
-                    db, org_id, tid, uid,
+                    db,
+                    org_id,
+                    tid,
+                    uid,
                     new_status=new_status,
                     notes=notes,
                 )

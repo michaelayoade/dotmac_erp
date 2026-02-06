@@ -45,7 +45,7 @@ class TestExpensesList:
             authenticated_page.keyboard.press("Enter")
             authenticated_page.wait_for_load_state("networkidle")
 
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_expenses_list_by_category(self, authenticated_page, base_url):
         """Test expenses list category filter."""
@@ -63,9 +63,7 @@ class TestExpensesList:
         authenticated_page.goto(f"{base_url}/expenses")
         authenticated_page.wait_for_load_state("networkidle")
 
-        status_filter = authenticated_page.locator(
-            "select[name='status'], #status"
-        )
+        status_filter = authenticated_page.locator("select[name='status'], #status")
         if status_filter.count() > 0:
             expect(status_filter.first).to_be_visible()
 
@@ -206,7 +204,7 @@ class TestExpenseDetail:
                 "img, a:has-text('Receipt'), a:has-text('View Receipt'), .receipt"
             )
             # Receipt may or may not exist
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
 
 @pytest.mark.e2e
@@ -331,7 +329,7 @@ class TestExpenseReports:
         response = authenticated_page.goto(f"{base_url}/expenses/reports")
         if response.ok:
             authenticated_page.wait_for_load_state("networkidle")
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_expense_report_create(self, authenticated_page, base_url):
         """Test creating an expense report/claim."""

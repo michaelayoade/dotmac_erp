@@ -3,6 +3,7 @@ ERPNext Task Sync Service.
 
 Syncs Task DocType to pm.task table with hierarchy support.
 """
+
 import logging
 import uuid
 from datetime import datetime
@@ -11,7 +12,7 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.pm import Task, TaskStatus, TaskPriority
+from app.models.pm import Task, TaskPriority, TaskStatus
 from app.models.sync import SyncEntity
 from app.services.erpnext.mappings.tasks import TaskMapping
 
@@ -56,7 +57,7 @@ class TaskSyncService(BaseSyncService[Task]):
         if since:
             filters.append(["modified", ">=", since.isoformat()])
 
-        # Exclude template tasks
+            # Exclude template tasks
             filters.append(["is_template", "=", "0"])
 
         fields = [
@@ -90,7 +91,9 @@ class TaskSyncService(BaseSyncService[Task]):
         project_id = self._resolve_project_id(project_source_name)
 
         if not project_id:
-            raise ValueError(f"Cannot create task without project: {project_source_name}")
+            raise ValueError(
+                f"Cannot create task without project: {project_source_name}"
+            )
 
         # Resolve parent task ID
         parent_source_name = data.pop("_parent_task_source_name", None)
@@ -151,7 +154,9 @@ class TaskSyncService(BaseSyncService[Task]):
             select(Task).where(Task.task_id == sync_entity.target_id)
         ).scalar_one_or_none()
 
-    def _resolve_project_id(self, project_source_name: Optional[str]) -> Optional[uuid.UUID]:
+    def _resolve_project_id(
+        self, project_source_name: Optional[str]
+    ) -> Optional[uuid.UUID]:
         """Resolve DotMac project_id from ERPNext project name."""
         if not project_source_name:
             return None

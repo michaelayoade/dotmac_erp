@@ -6,14 +6,17 @@ Provides bulk operations for AP payment documents.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.finance.ap.supplier_payment import SupplierPayment, APPaymentStatus
+from app.models.finance.ap.supplier_payment import APPaymentStatus, SupplierPayment
 from app.services.bulk_actions import BulkActionService
+
+logger = logging.getLogger(__name__)
 
 
 class APPaymentBulkService(BulkActionService[SupplierPayment]):

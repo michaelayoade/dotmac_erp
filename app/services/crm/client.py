@@ -29,16 +29,19 @@ class CRMError(Exception):
 
 class CRMAuthenticationError(CRMError):
     """Authentication failed."""
+
     pass
 
 
 class CRMNotFoundError(CRMError):
     """Resource not found."""
+
     pass
 
 
 class CRMRateLimitError(CRMError):
     """Rate limit exceeded."""
+
     pass
 
 
@@ -328,7 +331,9 @@ class CRMClient:
         if ticket_id:
             params["ticket_id"] = ticket_id
 
-        yield from self._paginate(self.ENDPOINTS["ticket_sla_events"], params, page_size)
+        yield from self._paginate(
+            self.ENDPOINTS["ticket_sla_events"], params, page_size
+        )
 
     # =========================================================================
     # Project Operations

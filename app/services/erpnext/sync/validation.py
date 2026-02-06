@@ -3,13 +3,13 @@ Staging Data Validation Service.
 
 Validates data in staging tables and generates reports on data quality issues.
 """
+
 import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.sync.staging import (
@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ValidationIssue:
     """Represents a single validation issue."""
+
     entity_type: str
     source_name: str
     field: str
@@ -39,6 +40,7 @@ class ValidationIssue:
 @dataclass
 class ValidationReport:
     """Complete validation report for a batch."""
+
     batch_id: uuid.UUID
     validated_at: datetime
     total_records: int = 0
@@ -122,10 +124,14 @@ class StagingValidationService:
 
     def _validate_departments(self, batch_id: uuid.UUID, report: ValidationReport):
         """Validate department records."""
-        records = self.db.query(StagingDepartment).filter(
-            StagingDepartment.batch_id == batch_id,
-            StagingDepartment.organization_id == self.organization_id,
-        ).all()
+        records = (
+            self.db.query(StagingDepartment)
+            .filter(
+                StagingDepartment.batch_id == batch_id,
+                StagingDepartment.organization_id == self.organization_id,
+            )
+            .all()
+        )
 
         valid = 0
         invalid = 0
@@ -148,12 +154,18 @@ class StagingValidationService:
 
             # Check parent reference exists
             if dept.parent_department_name:
-                parent_exists = self.db.query(StagingDepartment).filter(
-                    StagingDepartment.batch_id == batch_id,
-                    StagingDepartment.source_name == dept.parent_department_name,
-                ).first()
+                parent_exists = (
+                    self.db.query(StagingDepartment)
+                    .filter(
+                        StagingDepartment.batch_id == batch_id,
+                        StagingDepartment.source_name == dept.parent_department_name,
+                    )
+                    .first()
+                )
                 if not parent_exists:
-                    warnings.append(f"Parent department not found: {dept.parent_department_name}")
+                    warnings.append(
+                        f"Parent department not found: {dept.parent_department_name}"
+                    )
 
             # Update record status
             if errors:
@@ -161,13 +173,15 @@ class StagingValidationService:
                 dept.validation_errors = errors
                 invalid += 1
                 for err in errors:
-                    report.add_error(ValidationIssue(
-                        entity_type="department",
-                        source_name=dept.source_name,
-                        field="",
-                        issue_type="ERROR",
-                        message=err,
-                    ))
+                    report.add_error(
+                        ValidationIssue(
+                            entity_type="department",
+                            source_name=dept.source_name,
+                            field="",
+                            issue_type="ERROR",
+                            message=err,
+                        )
+                    )
             else:
                 dept.validation_status = StagingStatus.VALID
                 valid += 1
@@ -175,26 +189,36 @@ class StagingValidationService:
             if warnings:
                 dept.validation_warnings = warnings
                 for warn in warnings:
-                    report.add_warning(ValidationIssue(
-                        entity_type="department",
-                        source_name=dept.source_name,
-                        field="",
-                        issue_type="WARNING",
-                        message=warn,
-                    ))
+                    report.add_warning(
+                        ValidationIssue(
+                            entity_type="department",
+                            source_name=dept.source_name,
+                            field="",
+                            issue_type="WARNING",
+                            message=warn,
+                        )
+                    )
 
         report.total_records += len(records)
         report.valid_records += valid
         report.invalid_records += invalid
-        report.summary["departments"] = {"total": len(records), "valid": valid, "invalid": invalid}
+        report.summary["departments"] = {
+            "total": len(records),
+            "valid": valid,
+            "invalid": invalid,
+        }
         self.db.flush()
 
     def _validate_designations(self, batch_id: uuid.UUID, report: ValidationReport):
         """Validate designation records."""
-        records = self.db.query(StagingDesignation).filter(
-            StagingDesignation.batch_id == batch_id,
-            StagingDesignation.organization_id == self.organization_id,
-        ).all()
+        records = (
+            self.db.query(StagingDesignation)
+            .filter(
+                StagingDesignation.batch_id == batch_id,
+                StagingDesignation.organization_id == self.organization_id,
+            )
+            .all()
+        )
 
         valid = 0
         invalid = 0
@@ -212,13 +236,15 @@ class StagingValidationService:
                 desg.validation_errors = errors
                 invalid += 1
                 for err in errors:
-                    report.add_error(ValidationIssue(
-                        entity_type="designation",
-                        source_name=desg.source_name,
-                        field="",
-                        issue_type="ERROR",
-                        message=err,
-                    ))
+                    report.add_error(
+                        ValidationIssue(
+                            entity_type="designation",
+                            source_name=desg.source_name,
+                            field="",
+                            issue_type="ERROR",
+                            message=err,
+                        )
+                    )
             else:
                 desg.validation_status = StagingStatus.VALID
                 valid += 1
@@ -226,15 +252,23 @@ class StagingValidationService:
         report.total_records += len(records)
         report.valid_records += valid
         report.invalid_records += invalid
-        report.summary["designations"] = {"total": len(records), "valid": valid, "invalid": invalid}
+        report.summary["designations"] = {
+            "total": len(records),
+            "valid": valid,
+            "invalid": invalid,
+        }
         self.db.flush()
 
     def _validate_employment_types(self, batch_id: uuid.UUID, report: ValidationReport):
         """Validate employment type records."""
-        records = self.db.query(StagingEmploymentType).filter(
-            StagingEmploymentType.batch_id == batch_id,
-            StagingEmploymentType.organization_id == self.organization_id,
-        ).all()
+        records = (
+            self.db.query(StagingEmploymentType)
+            .filter(
+                StagingEmploymentType.batch_id == batch_id,
+                StagingEmploymentType.organization_id == self.organization_id,
+            )
+            .all()
+        )
 
         valid = 0
         invalid = 0
@@ -258,15 +292,23 @@ class StagingValidationService:
         report.total_records += len(records)
         report.valid_records += valid
         report.invalid_records += invalid
-        report.summary["employment_types"] = {"total": len(records), "valid": valid, "invalid": invalid}
+        report.summary["employment_types"] = {
+            "total": len(records),
+            "valid": valid,
+            "invalid": invalid,
+        }
         self.db.flush()
 
     def _validate_employee_grades(self, batch_id: uuid.UUID, report: ValidationReport):
         """Validate employee grade records."""
-        records = self.db.query(StagingEmployeeGrade).filter(
-            StagingEmployeeGrade.batch_id == batch_id,
-            StagingEmployeeGrade.organization_id == self.organization_id,
-        ).all()
+        records = (
+            self.db.query(StagingEmployeeGrade)
+            .filter(
+                StagingEmployeeGrade.batch_id == batch_id,
+                StagingEmployeeGrade.organization_id == self.organization_id,
+            )
+            .all()
+        )
 
         valid = 0
         invalid = 0
@@ -290,39 +332,51 @@ class StagingValidationService:
         report.total_records += len(records)
         report.valid_records += valid
         report.invalid_records += invalid
-        report.summary["employee_grades"] = {"total": len(records), "valid": valid, "invalid": invalid}
+        report.summary["employee_grades"] = {
+            "total": len(records),
+            "valid": valid,
+            "invalid": invalid,
+        }
         self.db.flush()
 
     def _validate_employees(self, batch_id: uuid.UUID, report: ValidationReport):
         """Validate employee records - the main validation target."""
-        records = self.db.query(StagingEmployee).filter(
-            StagingEmployee.batch_id == batch_id,
-            StagingEmployee.organization_id == self.organization_id,
-        ).all()
+        records = (
+            self.db.query(StagingEmployee)
+            .filter(
+                StagingEmployee.batch_id == batch_id,
+                StagingEmployee.organization_id == self.organization_id,
+            )
+            .all()
+        )
 
         valid = 0
         invalid = 0
 
         # Build lookup sets for reference validation
         dept_names = set(
-            r.source_name for r in self.db.query(StagingDepartment.source_name).filter(
-                StagingDepartment.batch_id == batch_id
-            ).all()
+            r.source_name
+            for r in self.db.query(StagingDepartment.source_name)
+            .filter(StagingDepartment.batch_id == batch_id)
+            .all()
         )
         desg_names = set(
-            r.source_name for r in self.db.query(StagingDesignation.source_name).filter(
-                StagingDesignation.batch_id == batch_id
-            ).all()
+            r.source_name
+            for r in self.db.query(StagingDesignation.source_name)
+            .filter(StagingDesignation.batch_id == batch_id)
+            .all()
         )
         emptype_names = set(
-            r.source_name for r in self.db.query(StagingEmploymentType.source_name).filter(
-                StagingEmploymentType.batch_id == batch_id
-            ).all()
+            r.source_name
+            for r in self.db.query(StagingEmploymentType.source_name)
+            .filter(StagingEmploymentType.batch_id == batch_id)
+            .all()
         )
         grade_names = set(
-            r.source_name for r in self.db.query(StagingEmployeeGrade.source_name).filter(
-                StagingEmployeeGrade.batch_id == batch_id
-            ).all()
+            r.source_name
+            for r in self.db.query(StagingEmployeeGrade.source_name)
+            .filter(StagingEmployeeGrade.batch_id == batch_id)
+            .all()
         )
         emp_names = set(r.source_name for r in records)
 
@@ -335,7 +389,9 @@ class StagingValidationService:
                     email_counts[email] = []
                 email_counts[email].append(emp.source_name)
 
-        duplicate_emails = {email: names for email, names in email_counts.items() if len(names) > 1}
+        duplicate_emails = {
+            email: names for email, names in email_counts.items() if len(names) > 1
+        }
 
         for emp in records:
             errors = []
@@ -349,28 +405,45 @@ class StagingValidationService:
 
             # Email validation
             if not emp.preferred_email:
-                errors.append("Missing email (company_email or personal_email required)")
+                errors.append(
+                    "Missing email (company_email or personal_email required)"
+                )
             elif emp.preferred_email in duplicate_emails:
-                other_emps = [n for n in duplicate_emails[emp.preferred_email] if n != emp.source_name]
+                other_emps = [
+                    n
+                    for n in duplicate_emails[emp.preferred_email]
+                    if n != emp.source_name
+                ]
                 errors.append(
                     f"Duplicate email '{emp.preferred_email}' shared with: {', '.join(other_emps)}"
                 )
 
             # Reference validation
             if emp.department_name and emp.department_name not in dept_names:
-                warnings.append(f"Department not found in staging: {emp.department_name}")
+                warnings.append(
+                    f"Department not found in staging: {emp.department_name}"
+                )
 
             if emp.designation_name and emp.designation_name not in desg_names:
-                warnings.append(f"Designation not found in staging: {emp.designation_name}")
+                warnings.append(
+                    f"Designation not found in staging: {emp.designation_name}"
+                )
 
-            if emp.employment_type_name and emp.employment_type_name not in emptype_names:
-                warnings.append(f"Employment type not found in staging: {emp.employment_type_name}")
+            if (
+                emp.employment_type_name
+                and emp.employment_type_name not in emptype_names
+            ):
+                warnings.append(
+                    f"Employment type not found in staging: {emp.employment_type_name}"
+                )
 
             if emp.grade_name and emp.grade_name not in grade_names:
                 warnings.append(f"Grade not found in staging: {emp.grade_name}")
 
             if emp.reports_to_name and emp.reports_to_name not in emp_names:
-                warnings.append(f"Reports-to employee not found in staging: {emp.reports_to_name}")
+                warnings.append(
+                    f"Reports-to employee not found in staging: {emp.reports_to_name}"
+                )
 
             # Date validation
             if emp.date_of_leaving and emp.date_of_joining:
@@ -383,13 +456,15 @@ class StagingValidationService:
                 emp.validation_errors = errors
                 invalid += 1
                 for err in errors:
-                    report.add_error(ValidationIssue(
-                        entity_type="employee",
-                        source_name=emp.source_name,
-                        field="",
-                        issue_type="ERROR",
-                        message=err,
-                    ))
+                    report.add_error(
+                        ValidationIssue(
+                            entity_type="employee",
+                            source_name=emp.source_name,
+                            field="",
+                            issue_type="ERROR",
+                            message=err,
+                        )
+                    )
             else:
                 emp.validation_status = StagingStatus.VALID
                 valid += 1
@@ -397,13 +472,15 @@ class StagingValidationService:
             if warnings:
                 emp.validation_warnings = warnings
                 for warn in warnings:
-                    report.add_warning(ValidationIssue(
-                        entity_type="employee",
-                        source_name=emp.source_name,
-                        field="",
-                        issue_type="WARNING",
-                        message=warn,
-                    ))
+                    report.add_warning(
+                        ValidationIssue(
+                            entity_type="employee",
+                            source_name=emp.source_name,
+                            field="",
+                            issue_type="WARNING",
+                            message=warn,
+                        )
+                    )
 
         report.total_records += len(records)
         report.valid_records += valid
@@ -424,10 +501,14 @@ class StagingValidationService:
         - email: The duplicate email
         - employees: List of employee records sharing this email
         """
-        records = self.db.query(StagingEmployee).filter(
-            StagingEmployee.batch_id == batch_id,
-            StagingEmployee.organization_id == self.organization_id,
-        ).all()
+        records = (
+            self.db.query(StagingEmployee)
+            .filter(
+                StagingEmployee.batch_id == batch_id,
+                StagingEmployee.organization_id == self.organization_id,
+            )
+            .all()
+        )
 
         email_groups: dict[str, list[dict]] = {}
         for emp in records:
@@ -435,25 +516,29 @@ class StagingValidationService:
             if email:
                 if email not in email_groups:
                     email_groups[email] = []
-                email_groups[email].append({
-                    "source_name": emp.source_name,
-                    "employee_code": emp.employee_code,
-                    "employee_name": emp.employee_name,
-                    "company_email": emp.company_email,
-                    "personal_email": emp.personal_email,
-                    "department": emp.department_name,
-                    "status": emp.status,
-                })
+                email_groups[email].append(
+                    {
+                        "source_name": emp.source_name,
+                        "employee_code": emp.employee_code,
+                        "employee_name": emp.employee_name,
+                        "company_email": emp.company_email,
+                        "personal_email": emp.personal_email,
+                        "department": emp.department_name,
+                        "status": emp.status,
+                    }
+                )
 
         # Filter to only duplicates
         duplicates = []
         for email, employees in email_groups.items():
             if len(employees) > 1:
-                duplicates.append({
-                    "email": email,
-                    "count": len(employees),
-                    "employees": employees,
-                })
+                duplicates.append(
+                    {
+                        "email": email,
+                        "count": len(employees),
+                        "employees": employees,
+                    }
+                )
 
         return sorted(duplicates, key=lambda x: -x["count"])
 
@@ -464,37 +549,53 @@ class StagingValidationService:
         Returns dict with missing references by type.
         """
         # Get all referenced values from employees
-        employees = self.db.query(StagingEmployee).filter(
-            StagingEmployee.batch_id == batch_id,
-            StagingEmployee.organization_id == self.organization_id,
-        ).all()
+        employees = (
+            self.db.query(StagingEmployee)
+            .filter(
+                StagingEmployee.batch_id == batch_id,
+                StagingEmployee.organization_id == self.organization_id,
+            )
+            .all()
+        )
 
-        referenced_depts = set(e.department_name for e in employees if e.department_name)
-        referenced_desgs = set(e.designation_name for e in employees if e.designation_name)
-        referenced_types = set(e.employment_type_name for e in employees if e.employment_type_name)
+        referenced_depts = set(
+            e.department_name for e in employees if e.department_name
+        )
+        referenced_desgs = set(
+            e.designation_name for e in employees if e.designation_name
+        )
+        referenced_types = set(
+            e.employment_type_name for e in employees if e.employment_type_name
+        )
         referenced_grades = set(e.grade_name for e in employees if e.grade_name)
-        referenced_managers = set(e.reports_to_name for e in employees if e.reports_to_name)
+        referenced_managers = set(
+            e.reports_to_name for e in employees if e.reports_to_name
+        )
 
         # Get existing staging records
         staged_depts = set(
-            r.source_name for r in self.db.query(StagingDepartment.source_name).filter(
-                StagingDepartment.batch_id == batch_id
-            ).all()
+            r.source_name
+            for r in self.db.query(StagingDepartment.source_name)
+            .filter(StagingDepartment.batch_id == batch_id)
+            .all()
         )
         staged_desgs = set(
-            r.source_name for r in self.db.query(StagingDesignation.source_name).filter(
-                StagingDesignation.batch_id == batch_id
-            ).all()
+            r.source_name
+            for r in self.db.query(StagingDesignation.source_name)
+            .filter(StagingDesignation.batch_id == batch_id)
+            .all()
         )
         staged_types = set(
-            r.source_name for r in self.db.query(StagingEmploymentType.source_name).filter(
-                StagingEmploymentType.batch_id == batch_id
-            ).all()
+            r.source_name
+            for r in self.db.query(StagingEmploymentType.source_name)
+            .filter(StagingEmploymentType.batch_id == batch_id)
+            .all()
         )
         staged_grades = set(
-            r.source_name for r in self.db.query(StagingEmployeeGrade.source_name).filter(
-                StagingEmployeeGrade.batch_id == batch_id
-            ).all()
+            r.source_name
+            for r in self.db.query(StagingEmployeeGrade.source_name)
+            .filter(StagingEmployeeGrade.batch_id == batch_id)
+            .all()
         )
         staged_emps = set(e.source_name for e in employees)
 

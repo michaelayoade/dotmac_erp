@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.services.admin.settings_web import admin_settings_web_service
+from app.services.branding_assets import delete_branding_asset, save_branding_asset
 from app.services.admin.web import admin_web_service
 from app.templates import templates
 from app.web.deps import get_db, optional_web_auth, org_brand_context, WebAuthContext
@@ -310,7 +311,9 @@ def admin_permissions(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Admin permissions management page."""
-    return admin_web_service.permissions_response(request, db, auth, page, search, status)
+    return admin_web_service.permissions_response(
+        request, db, auth, page, search, status
+    )
 
 
 @router.get("/permissions/new", response_class=HTMLResponse)
@@ -409,7 +412,9 @@ def admin_permissions_delete(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Delete a permission."""
-    return admin_web_service.permissions_delete_response(request, db, auth, permission_id)
+    return admin_web_service.permissions_delete_response(
+        request, db, auth, permission_id
+    )
 
 
 @router.get("/organizations", response_class=HTMLResponse)
@@ -422,7 +427,9 @@ def admin_organizations(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Admin organizations management page."""
-    return admin_web_service.organizations_response(request, db, auth, page, search, status)
+    return admin_web_service.organizations_response(
+        request, db, auth, page, search, status
+    )
 
 
 @router.get("/organizations/new", response_class=HTMLResponse)
@@ -573,7 +580,9 @@ def admin_settings(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Admin system settings page."""
-    return admin_web_service.settings_response(request, db, auth, page, search, status, domain)
+    return admin_web_service.settings_response(
+        request, db, auth, page, search, status, domain
+    )
 
 
 @router.get("/settings/new", response_class=HTMLResponse)
@@ -635,8 +644,6 @@ async def admin_settings_create(
     )
 
 
-
-
 @router.get("/audit-logs", response_class=HTMLResponse)
 def admin_audit_logs(
     request: Request,
@@ -656,6 +663,30 @@ def admin_audit_logs(
         search,
         status,
         actor_type,
+    )
+
+
+@router.get("/data-changes", response_class=HTMLResponse)
+def admin_data_changes(
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    search: str = Query(default=""),
+    module: str = Query(default=""),
+    entity: str = Query(default=""),
+    action: str = Query(default=""),
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Admin data changes audit trail page."""
+    return admin_web_service.data_changes_response(
+        request,
+        db,
+        auth,
+        page,
+        module,
+        entity,
+        action,
+        search,
     )
 
 
@@ -776,7 +807,9 @@ def admin_tasks_delete(
 # ========== Settings Hub ==========
 
 
-def _admin_base_context(request: Request, auth: WebAuthContext, page_title: str, db: Session) -> dict:
+def _admin_base_context(
+    request: Request, auth: WebAuthContext, page_title: str, db: Session
+) -> dict:
     """Build base context for admin settings pages."""
     context = {
         "request": request,
@@ -796,9 +829,11 @@ def admin_settings_hub(
 ):
     """Admin settings hub page."""
     context = _admin_base_context(request, auth, "Settings", db)
-    context.update(admin_settings_web_service.get_hub_context(
-        auth.organization_id if auth else None
-    ))
+    context.update(
+        admin_settings_web_service.get_hub_context(
+            auth.organization_id if auth else None
+        )
+    )
     return templates.TemplateResponse(request, "admin/settings/index.html", context)
 
 
@@ -811,8 +846,14 @@ def admin_settings_organization(
     """Organization profile settings page."""
     context = _admin_base_context(request, auth, "Organization Profile", db)
     if auth and auth.organization_id:
-        context.update(admin_settings_web_service.get_organization_context(db, auth.organization_id))
-    return templates.TemplateResponse(request, "admin/settings/organization.html", context)
+        context.update(
+            admin_settings_web_service.get_organization_context(
+                db, auth.organization_id
+            )
+        )
+    return templates.TemplateResponse(
+        request, "admin/settings/organization.html", context
+    )
 
 
 @router.post("/settings/organization", response_class=HTMLResponse)
@@ -828,12 +869,20 @@ async def admin_settings_organization_update(
     data = _normalize_form(form)
 
     if auth and auth.organization_id:
-        success, error = admin_settings_web_service.update_organization(db, auth.organization_id, data)
+        success, error = admin_settings_web_service.update_organization(
+            db, auth.organization_id, data
+        )
         if not success:
             context = _admin_base_context(request, auth, "Organization Profile", db)
-            context.update(admin_settings_web_service.get_organization_context(db, auth.organization_id))
+            context.update(
+                admin_settings_web_service.get_organization_context(
+                    db, auth.organization_id
+                )
+            )
             context["error"] = error
-            return templates.TemplateResponse(request, "admin/settings/organization.html", context)
+            return templates.TemplateResponse(
+                request, "admin/settings/organization.html", context
+            )
 
     return RedirectResponse(url="/admin/settings/organization?saved=1", status_code=303)
 
@@ -847,7 +896,9 @@ def admin_settings_branding(
     """Branding settings page."""
     context = _admin_base_context(request, auth, "Branding", db)
     if auth and auth.organization_id:
-        context.update(admin_settings_web_service.get_branding_context(db, auth.organization_id))
+        context.update(
+            admin_settings_web_service.get_branding_context(db, auth.organization_id)
+        )
     return templates.TemplateResponse(request, "admin/settings/branding.html", context)
 
 
@@ -864,12 +915,105 @@ async def admin_settings_branding_update(
     data = dict(form)
 
     if auth and auth.organization_id:
-        success, error = admin_settings_web_service.update_branding(db, auth.organization_id, data)
+        logo_file = form.get("logo_file")
+        favicon_file = form.get("favicon_file")
+        remove_logo = (form.get("remove_logo") or "").lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        remove_favicon = (form.get("remove_favicon") or "").lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        try:
+            context = admin_settings_web_service.get_branding_context(
+                db, auth.organization_id
+            )
+            branding = context.get("branding")
+            organization = context.get("organization")
+
+            existing_logo = None
+            if branding and getattr(branding, "logo_url", None):
+                existing_logo = branding.logo_url
+            elif organization and getattr(organization, "logo_url", None):
+                existing_logo = organization.logo_url
+
+            existing_favicon = None
+            if branding and getattr(branding, "favicon_url", None):
+                existing_favicon = branding.favicon_url
+
+            if isinstance(logo_file, UploadFile) and logo_file.filename:
+                uploaded_url = await save_branding_asset(
+                    logo_file, str(auth.organization_id), "logo"
+                )
+                data["logo_url"] = uploaded_url
+                if existing_logo and existing_logo != uploaded_url:
+                    delete_branding_asset(existing_logo)
+            elif remove_logo:
+                data["logo_url"] = ""
+                if existing_logo:
+                    delete_branding_asset(existing_logo)
+
+            if isinstance(favicon_file, UploadFile) and favicon_file.filename:
+                uploaded_favicon = await save_branding_asset(
+                    favicon_file, str(auth.organization_id), "favicon"
+                )
+                data["favicon_url"] = uploaded_favicon
+                if existing_favicon and existing_favicon != uploaded_favicon:
+                    delete_branding_asset(existing_favicon)
+            elif remove_favicon:
+                data["favicon_url"] = ""
+                if existing_favicon:
+                    delete_branding_asset(existing_favicon)
+        except Exception as exc:
+            context = _admin_base_context(request, auth, "Branding", db)
+            context.update(
+                admin_settings_web_service.get_branding_context(
+                    db, auth.organization_id
+                )
+            )
+            context["error"] = str(getattr(exc, "detail", exc))
+            return templates.TemplateResponse(
+                request, "admin/settings/branding.html", context
+            )
+
+    if auth and auth.organization_id:
+        effective_logo = data.get("logo_url")
+        if effective_logo is None:
+            context = admin_settings_web_service.get_branding_context(
+                db, auth.organization_id
+            )
+            branding = context.get("branding")
+            organization = context.get("organization")
+            if branding and getattr(branding, "logo_url", None):
+                effective_logo = branding.logo_url
+            elif organization and getattr(organization, "logo_url", None):
+                effective_logo = organization.logo_url
+
+        if effective_logo:
+            data["email_logo_url"] = effective_logo
+            data["report_logo_url"] = effective_logo
+        elif "logo_url" in data and not data.get("logo_url"):
+            data["email_logo_url"] = ""
+            data["report_logo_url"] = ""
+        success, error = admin_settings_web_service.update_branding(
+            db, auth.organization_id, data
+        )
         if not success:
             context = _admin_base_context(request, auth, "Branding", db)
-            context.update(admin_settings_web_service.get_branding_context(db, auth.organization_id))
+            context.update(
+                admin_settings_web_service.get_branding_context(
+                    db, auth.organization_id
+                )
+            )
             context["error"] = error
-            return templates.TemplateResponse(request, "admin/settings/branding.html", context)
+            return templates.TemplateResponse(
+                request, "admin/settings/branding.html", context
+            )
 
     return RedirectResponse(url="/admin/settings/branding?saved=1", status_code=303)
 
@@ -883,7 +1027,9 @@ def admin_settings_email(
     """Email configuration page."""
     context = _admin_base_context(request, auth, "Email Configuration", db)
     if auth and auth.organization_id:
-        context.update(admin_settings_web_service.get_email_context(db, auth.organization_id))
+        context.update(
+            admin_settings_web_service.get_email_context(db, auth.organization_id)
+        )
     return templates.TemplateResponse(request, "admin/settings/email.html", context)
 
 
@@ -900,12 +1046,18 @@ async def admin_settings_email_update(
     data = dict(form)
 
     if auth and auth.organization_id:
-        success, error = admin_settings_web_service.update_email(db, auth.organization_id, data)
+        success, error = admin_settings_web_service.update_email(
+            db, auth.organization_id, data
+        )
         if not success:
             context = _admin_base_context(request, auth, "Email Configuration", db)
-            context.update(admin_settings_web_service.get_email_context(db, auth.organization_id))
+            context.update(
+                admin_settings_web_service.get_email_context(db, auth.organization_id)
+            )
             context["error"] = error
-            return templates.TemplateResponse(request, "admin/settings/email.html", context)
+            return templates.TemplateResponse(
+                request, "admin/settings/email.html", context
+            )
 
     return RedirectResponse(url="/admin/settings/email?saved=1", status_code=303)
 
@@ -919,7 +1071,9 @@ def admin_settings_features(
     """Feature flags page."""
     context = _admin_base_context(request, auth, "Feature Flags", db)
     if auth and auth.organization_id:
-        context.update(admin_settings_web_service.get_features_context(db, auth.organization_id))
+        context.update(
+            admin_settings_web_service.get_features_context(db, auth.organization_id)
+        )
     return templates.TemplateResponse(request, "admin/settings/features.html", context)
 
 
@@ -942,9 +1096,15 @@ async def admin_settings_feature_toggle(
         )
         if not success:
             context = _admin_base_context(request, auth, "Feature Flags", db)
-            context.update(admin_settings_web_service.get_features_context(db, auth.organization_id))
+            context.update(
+                admin_settings_web_service.get_features_context(
+                    db, auth.organization_id
+                )
+            )
             context["error"] = error
-            return templates.TemplateResponse(request, "admin/settings/features.html", context)
+            return templates.TemplateResponse(
+                request, "admin/settings/features.html", context
+            )
 
     return RedirectResponse(url="/admin/settings/features?saved=1", status_code=303)
 
@@ -958,8 +1118,14 @@ def admin_settings_payments(
     """Payments settings hub page."""
     context = _admin_base_context(request, auth, "Payment Providers", db)
     if auth and auth.organization_id:
-        context.update(admin_settings_web_service.get_payments_hub_context(db, auth.organization_id))
-    return templates.TemplateResponse(request, "admin/settings/payments_index.html", context)
+        context.update(
+            admin_settings_web_service.get_payments_hub_context(
+                db, auth.organization_id
+            )
+        )
+    return templates.TemplateResponse(
+        request, "admin/settings/payments_index.html", context
+    )
 
 
 @router.get("/settings/payments/paystack", response_class=HTMLResponse)
@@ -971,7 +1137,9 @@ def admin_settings_paystack(
     """Paystack settings page."""
     context = _admin_base_context(request, auth, "Paystack Settings", db)
     if auth and auth.organization_id:
-        context.update(admin_settings_web_service.get_paystack_context(db, auth.organization_id))
+        context.update(
+            admin_settings_web_service.get_paystack_context(db, auth.organization_id)
+        )
     return templates.TemplateResponse(request, "admin/settings/paystack.html", context)
 
 
@@ -988,14 +1156,24 @@ async def admin_settings_paystack_update(
     data = dict(form)
 
     if auth and auth.organization_id:
-        success, error = admin_settings_web_service.update_paystack(db, auth.organization_id, data)
+        success, error = admin_settings_web_service.update_paystack(
+            db, auth.organization_id, data
+        )
         if not success:
             context = _admin_base_context(request, auth, "Paystack Settings", db)
-            context.update(admin_settings_web_service.get_paystack_context(db, auth.organization_id))
+            context.update(
+                admin_settings_web_service.get_paystack_context(
+                    db, auth.organization_id
+                )
+            )
             context["error"] = error
-            return templates.TemplateResponse(request, "admin/settings/paystack.html", context)
+            return templates.TemplateResponse(
+                request, "admin/settings/paystack.html", context
+            )
 
-    return RedirectResponse(url="/admin/settings/payments/paystack?saved=1", status_code=303)
+    return RedirectResponse(
+        url="/admin/settings/payments/paystack?saved=1", status_code=303
+    )
 
 
 @router.get("/settings/advanced", response_class=HTMLResponse)
@@ -1009,7 +1187,9 @@ def admin_settings_advanced(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Advanced settings (raw DomainSettings CRUD)."""
-    return admin_web_service.settings_response(request, db, auth, page, search, status, domain)
+    return admin_web_service.settings_response(
+        request, db, auth, page, search, status, domain
+    )
 
 
 @router.get("/settings/{setting_id}", response_class=HTMLResponse)
@@ -1093,4 +1273,6 @@ def admin_settings_delete(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Delete a setting."""
-    return admin_web_service.settings_delete_response(request, db, auth, str(setting_id))
+    return admin_web_service.settings_delete_response(
+        request, db, auth, str(setting_id)
+    )

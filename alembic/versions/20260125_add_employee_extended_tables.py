@@ -4,6 +4,7 @@ Revision ID: 20260125_add_employee_extended_tables
 Revises: 20260125_extend_project_type
 Create Date: 2026-01-25
 """
+
 from alembic import op
 from app.alembic_utils import ensure_enum
 

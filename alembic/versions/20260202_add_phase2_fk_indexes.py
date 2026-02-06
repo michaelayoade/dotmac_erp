@@ -32,7 +32,10 @@ def upgrade() -> None:
     # --- GL Schema: Journal Entry Line ---
     # Critical for loading journal lines - prevents N+1 when loading journal with lines
     if inspector.has_table("journal_entry_line", schema="gl"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("journal_entry_line", schema="gl")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("journal_entry_line", schema="gl")
+        }
         if "idx_jel_journal_entry" not in indexes:
             op.create_index(
                 "idx_jel_journal_entry",
@@ -44,7 +47,9 @@ def upgrade() -> None:
     # --- AR Schema: Invoice Line ---
     # Critical for loading invoice details - prevents N+1 when rendering invoice
     if inspector.has_table("invoice_line", schema="ar"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("invoice_line", schema="ar")}
+        indexes = {
+            idx["name"] for idx in inspector.get_indexes("invoice_line", schema="ar")
+        }
         if "idx_invoice_line_invoice" not in indexes:
             op.create_index(
                 "idx_invoice_line_invoice",
@@ -56,7 +61,10 @@ def upgrade() -> None:
     # --- AP Schema: Supplier Invoice Line ---
     # Critical for three-way matching and invoice detail loading
     if inspector.has_table("supplier_invoice_line", schema="ap"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("supplier_invoice_line", schema="ap")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("supplier_invoice_line", schema="ap")
+        }
         if "idx_supplier_invoice_line_invoice" not in indexes:
             op.create_index(
                 "idx_supplier_invoice_line_invoice",
@@ -68,7 +76,10 @@ def upgrade() -> None:
     # --- Payroll Schema: Salary Slip Earning ---
     # Speeds up component lookups when rendering payslips
     if inspector.has_table("salary_slip_earning", schema="payroll"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("salary_slip_earning", schema="payroll")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("salary_slip_earning", schema="payroll")
+        }
         if "idx_slip_earning_component" not in indexes:
             op.create_index(
                 "idx_slip_earning_component",
@@ -80,7 +91,10 @@ def upgrade() -> None:
     # --- Payroll Schema: Salary Slip Deduction ---
     # Speeds up component lookups when rendering payslips
     if inspector.has_table("salary_slip_deduction", schema="payroll"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("salary_slip_deduction", schema="payroll")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("salary_slip_deduction", schema="payroll")
+        }
         if "idx_slip_deduction_component" not in indexes:
             op.create_index(
                 "idx_slip_deduction_component",
@@ -93,7 +107,9 @@ def upgrade() -> None:
     # Speeds up org chart queries and direct reports lookups
     # Partial index since most employees have a manager (excludes CEO/top level)
     if inspector.has_table("employee", schema="hr"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("employee", schema="hr")}
+        indexes = {
+            idx["name"] for idx in inspector.get_indexes("employee", schema="hr")
+        }
         if "idx_employee_reports_to" not in indexes:
             op.create_index(
                 "idx_employee_reports_to",
@@ -110,35 +126,67 @@ def downgrade() -> None:
 
     # --- Drop HR Schema Index ---
     if inspector.has_table("employee", schema="hr"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("employee", schema="hr")}
+        indexes = {
+            idx["name"] for idx in inspector.get_indexes("employee", schema="hr")
+        }
         if "idx_employee_reports_to" in indexes:
             op.drop_index("idx_employee_reports_to", table_name="employee", schema="hr")
 
     # --- Drop Payroll Schema Indexes ---
     if inspector.has_table("salary_slip_deduction", schema="payroll"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("salary_slip_deduction", schema="payroll")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("salary_slip_deduction", schema="payroll")
+        }
         if "idx_slip_deduction_component" in indexes:
-            op.drop_index("idx_slip_deduction_component", table_name="salary_slip_deduction", schema="payroll")
+            op.drop_index(
+                "idx_slip_deduction_component",
+                table_name="salary_slip_deduction",
+                schema="payroll",
+            )
 
     if inspector.has_table("salary_slip_earning", schema="payroll"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("salary_slip_earning", schema="payroll")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("salary_slip_earning", schema="payroll")
+        }
         if "idx_slip_earning_component" in indexes:
-            op.drop_index("idx_slip_earning_component", table_name="salary_slip_earning", schema="payroll")
+            op.drop_index(
+                "idx_slip_earning_component",
+                table_name="salary_slip_earning",
+                schema="payroll",
+            )
 
     # --- Drop AP Schema Index ---
     if inspector.has_table("supplier_invoice_line", schema="ap"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("supplier_invoice_line", schema="ap")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("supplier_invoice_line", schema="ap")
+        }
         if "idx_supplier_invoice_line_invoice" in indexes:
-            op.drop_index("idx_supplier_invoice_line_invoice", table_name="supplier_invoice_line", schema="ap")
+            op.drop_index(
+                "idx_supplier_invoice_line_invoice",
+                table_name="supplier_invoice_line",
+                schema="ap",
+            )
 
     # --- Drop AR Schema Index ---
     if inspector.has_table("invoice_line", schema="ar"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("invoice_line", schema="ar")}
+        indexes = {
+            idx["name"] for idx in inspector.get_indexes("invoice_line", schema="ar")
+        }
         if "idx_invoice_line_invoice" in indexes:
-            op.drop_index("idx_invoice_line_invoice", table_name="invoice_line", schema="ar")
+            op.drop_index(
+                "idx_invoice_line_invoice", table_name="invoice_line", schema="ar"
+            )
 
     # --- Drop GL Schema Index ---
     if inspector.has_table("journal_entry_line", schema="gl"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("journal_entry_line", schema="gl")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("journal_entry_line", schema="gl")
+        }
         if "idx_jel_journal_entry" in indexes:
-            op.drop_index("idx_jel_journal_entry", table_name="journal_entry_line", schema="gl")
+            op.drop_index(
+                "idx_jel_journal_entry", table_name="journal_entry_line", schema="gl"
+            )

@@ -45,6 +45,44 @@
         linear-gradient(180deg, var(--parchment) 0%, var(--parchment-dark) 100%);
 }
 
+/* Login page background - richer than bg-mesh for first-impression impact */
+.login-bg {
+    background-color: #f8faf9;
+    background-image:
+        radial-gradient(ellipse at 20% 0%, rgba(13, 148, 136, 0.14) 0%, transparent 55%),
+        radial-gradient(ellipse at 80% 10%, rgba(217, 119, 6, 0.09) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 100%, rgba(13, 148, 136, 0.07) 0%, transparent 55%),
+        radial-gradient(circle at 70% 60%, rgba(139, 92, 246, 0.04) 0%, transparent 40%);
+}
+.dark .login-bg {
+    background-color: #0c1322;
+    background-image:
+        radial-gradient(ellipse at 20% 0%, rgba(13, 148, 136, 0.20) 0%, transparent 55%),
+        radial-gradient(ellipse at 80% 10%, rgba(217, 119, 6, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 100%, rgba(13, 148, 136, 0.10) 0%, transparent 55%);
+}
+
+/* Login card glass-morphism lift */
+.login-card {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    box-shadow:
+        0 0 0 1px rgba(13, 148, 136, 0.06),
+        0 1px 2px rgba(15, 23, 42, 0.04),
+        0 8px 32px rgba(15, 23, 42, 0.08),
+        0 24px 64px rgba(15, 23, 42, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+}
+.dark .login-card {
+    background: rgba(30, 41, 59, 0.80);
+    border-color: rgba(255, 255, 255, 0.06);
+    box-shadow:
+        0 0 0 1px rgba(13, 148, 136, 0.1),
+        0 8px 32px rgba(0, 0, 0, 0.3),
+        0 24px 64px rgba(0, 0, 0, 0.2);
+}
+
 .grain-overlay {
     position: fixed;
     inset: 0;

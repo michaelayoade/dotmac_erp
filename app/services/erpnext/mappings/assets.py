@@ -1,19 +1,20 @@
 """
 Asset mapping from ERPNext to DotMac ERP.
 """
-from typing import Any, Optional
+
+import logging
+from typing import Any
 
 from .base import (
     DocTypeMapping,
     FieldMapping,
     clean_string,
-    default_currency,
     parse_date,
     parse_datetime,
     parse_decimal,
-    parse_int,
 )
 
+logger = logging.getLogger(__name__)
 
 # ERPNext depreciation_method to DotMac ERP
 DEPRECIATION_METHOD_MAP = {

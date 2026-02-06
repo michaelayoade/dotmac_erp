@@ -110,7 +110,7 @@ class TestProcureToPay:
             "button:has-text('Match'), a:has-text('Match to Invoice')"
         )
         # Just verify the page loaded properly
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
 
 # =============================================================================
@@ -122,7 +122,9 @@ class TestProcureToPay:
 class TestOrderToCash:
     """Tests for the complete Order to Cash workflow."""
 
-    def test_customer_to_invoice_to_receipt_workflow(self, authenticated_page, base_url):
+    def test_customer_to_invoice_to_receipt_workflow(
+        self, authenticated_page, base_url
+    ):
         """Test complete workflow from customer creation to receipt."""
         uid = unique_id()
 
@@ -164,14 +166,14 @@ class TestOrderToCash:
         )
 
         # Page should have either data or new button
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
         # Navigate to sales orders
         authenticated_page.goto(f"{base_url}/sales-orders")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Check for sales orders
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
         # Navigate to AR invoices
         authenticated_page.goto(f"{base_url}/ar/invoices")
@@ -250,7 +252,7 @@ class TestPeriodClose:
             ".alert, .warning, text=open items, text=unposted"
         )
         # Just verify page loaded, warnings may or may not exist
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_year_end_close_workflow(self, authenticated_page, base_url):
         """Test year-end close workflow."""
@@ -269,7 +271,7 @@ class TestPeriodClose:
             "text=Retained Earnings, select[name='retained_earnings_account']"
         )
         # Just verify page loaded
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
 
 # =============================================================================
@@ -315,7 +317,7 @@ class TestReportingWorkflows:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Verify AR aging shows
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_report_export_pdf(self, authenticated_page, base_url):
         """Test report export to PDF."""
@@ -367,7 +369,7 @@ class TestCrossModuleIntegration:
             authenticated_page.wait_for_load_state("networkidle")
 
         # Verify journals page is accessible
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_payment_updates_invoice_status(self, authenticated_page, base_url):
         """Test that payments update invoice status."""
@@ -387,7 +389,7 @@ class TestCrossModuleIntegration:
             "text=Paid, text=Partial, .badge-success, .badge-warning"
         )
         # Just verify page loaded
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_bank_reconciliation_updates_statements(self, authenticated_page, base_url):
         """Test bank reconciliation updates statement status."""

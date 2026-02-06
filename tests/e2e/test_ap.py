@@ -18,7 +18,9 @@ class TestAPSuppliersNavigation:
     def test_suppliers_page_loads(self, ap_suppliers_page: Page):
         """Test that suppliers page loads successfully."""
         expect(ap_suppliers_page).to_have_url(re.compile(r".*/ap/suppliers.*"))
-        expect(ap_suppliers_page.get_by_test_id("page-title")).to_contain_text("Suppliers")
+        expect(ap_suppliers_page.get_by_test_id("page-title")).to_contain_text(
+            "Suppliers"
+        )
 
     @pytest.mark.e2e
     def test_suppliers_page_has_content(self, ap_suppliers_page: Page):
@@ -32,7 +34,9 @@ class TestAPSuppliersNavigation:
         expect(new_btn).to_be_visible()
         new_btn.click()
         ap_suppliers_page.wait_for_load_state("networkidle")
-        expect(ap_suppliers_page.get_by_test_id("page-title")).to_contain_text("New Supplier")
+        expect(ap_suppliers_page.get_by_test_id("page-title")).to_contain_text(
+            "New Supplier"
+        )
 
 
 class TestAPSuppliersSearch:
@@ -56,7 +60,9 @@ class TestAPSupplierForm:
         """Test that supplier form loads."""
         authenticated_page.goto(f"{base_url}/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("New Supplier")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "New Supplier"
+        )
 
     @pytest.mark.e2e
     def test_supplier_form_has_fields(self, authenticated_page: Page, base_url: str):
@@ -79,14 +85,18 @@ class TestAPInvoices:
         authenticated_page.goto(f"{base_url}/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/ap/invoices.*"))
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("AP Invoices")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "AP Invoices"
+        )
 
     @pytest.mark.e2e
     def test_new_invoice_form_loads(self, authenticated_page: Page, base_url: str):
         """Test that new invoice form loads."""
         authenticated_page.goto(f"{base_url}/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("New AP Invoice")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "New AP Invoice"
+        )
         expect(authenticated_page.locator("form").first).to_be_visible()
 
 
@@ -99,7 +109,9 @@ class TestAPPayments:
         authenticated_page.goto(f"{base_url}/ap/payments")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/ap/payments.*"))
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("AP Payments")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "AP Payments"
+        )
 
 
 class TestAPAgingReport:
@@ -111,21 +123,27 @@ class TestAPAgingReport:
         authenticated_page.goto(f"{base_url}/ap/aging")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/ap/aging.*"))
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("AP Aging Report")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "AP Aging Report"
+        )
 
     @pytest.mark.e2e
     def test_aging_report_with_date(self, authenticated_page: Page, base_url: str):
         """Test aging report with date filter."""
         authenticated_page.goto(f"{base_url}/ap/aging?as_of_date=2024-06-30")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("AP Aging Report")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "AP Aging Report"
+        )
 
 
 class TestAPInvoiceWorkflow:
     """Test AP invoice approval workflow."""
 
     @pytest.mark.e2e
-    def test_invoice_form_has_required_fields(self, authenticated_page: Page, base_url: str):
+    def test_invoice_form_has_required_fields(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test invoice form has all required fields."""
         authenticated_page.goto(f"{base_url}/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -188,7 +206,9 @@ class TestAPPaymentBatchWorkflow:
         """Test payment batch page loads."""
         authenticated_page.goto(f"{base_url}/ap/payment-batches")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("Payment Batches")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "Payment Batches"
+        )
 
     @pytest.mark.e2e
     def test_create_payment_batch_form(self, authenticated_page: Page, base_url: str):
@@ -198,19 +218,27 @@ class TestAPPaymentBatchWorkflow:
 
         form = authenticated_page.locator("form").first
         expect(form).to_be_visible()
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("New Payment Batch")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "New Payment Batch"
+        )
 
     @pytest.mark.e2e
-    def test_payment_batch_has_bank_account_field(self, authenticated_page: Page, base_url: str):
+    def test_payment_batch_has_bank_account_field(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test payment batch has bank account selection."""
         authenticated_page.goto(f"{base_url}/ap/payment-batches/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        bank_account = authenticated_page.locator("select[name='bank_account_id']").first
+        bank_account = authenticated_page.locator(
+            "select[name='bank_account_id']"
+        ).first
         expect(bank_account).to_be_visible()
 
     @pytest.mark.e2e
-    def test_payment_batch_invoice_selection(self, authenticated_page: Page, base_url: str):
+    def test_payment_batch_invoice_selection(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test payment batch has invoice selection."""
         authenticated_page.goto(f"{base_url}/ap/payment-batches/new")
         authenticated_page.wait_for_load_state("networkidle")

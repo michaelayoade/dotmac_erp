@@ -3,8 +3,10 @@ Resource Allocation Service - PM Module.
 
 Business logic for resource allocation and utilization tracking.
 """
+
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date
 from decimal import Decimal
@@ -22,6 +24,8 @@ from app.services.common import (
     ValidationError,
     paginate,
 )
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.auth import Principal
@@ -50,9 +54,7 @@ class ResourceService:
     # Read Operations
     # =========================================================================
 
-    def get_allocation(
-        self, allocation_id: uuid.UUID
-    ) -> Optional[ResourceAllocation]:
+    def get_allocation(self, allocation_id: uuid.UUID) -> Optional[ResourceAllocation]:
         """Fetch a single allocation by ID."""
         stmt = (
             select(ResourceAllocation)
@@ -67,9 +69,7 @@ class ResourceService:
         )
         return self.db.scalars(stmt).first()
 
-    def get_allocation_or_raise(
-        self, allocation_id: uuid.UUID
-    ) -> ResourceAllocation:
+    def get_allocation_or_raise(self, allocation_id: uuid.UUID) -> ResourceAllocation:
         """Fetch an allocation or raise NotFoundError."""
         allocation = self.get_allocation(allocation_id)
         if not allocation:
@@ -322,9 +322,7 @@ class ResourceService:
         team = self.get_project_team(project_id)
 
         total_allocation = sum(m.allocation_percent for m in team)
-        average_allocation = (
-            total_allocation / len(team) if team else Decimal("0")
-        )
+        average_allocation = total_allocation / len(team) if team else Decimal("0")
 
         # Get total hours logged
         stmt = select(func.sum(TimeEntry.hours)).where(
@@ -424,6 +422,7 @@ class ResourceService:
     def _count_business_days(self, start_date: date, end_date: date) -> int:
         """Count business days (Mon-Fri) between two dates."""
         from datetime import timedelta
+
         count = 0
         current = start_date
         while current <= end_date:

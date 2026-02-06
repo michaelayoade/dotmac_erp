@@ -4,6 +4,7 @@ Revision ID: 20260124_department_head
 Revises: 20260124_add_hr_lifecycle_erpnext_fields
 Create Date: 2026-01-24
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
@@ -49,5 +50,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("idx_department_head", table_name="department", schema="hr")
-    op.drop_constraint("fk_department_head", "department", type_="foreignkey", schema="hr")
+    op.drop_constraint(
+        "fk_department_head", "department", type_="foreignkey", schema="hr"
+    )
     op.drop_column("department", "head_id", schema="hr")

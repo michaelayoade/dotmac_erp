@@ -49,7 +49,7 @@ class TestAssetList:
             authenticated_page.keyboard.press("Enter")
             authenticated_page.wait_for_load_state("networkidle")
 
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_assets_list_by_category(self, authenticated_page, base_url):
         """Test assets list category filter."""
@@ -405,7 +405,7 @@ class TestDepreciation:
         response = authenticated_page.goto(f"{base_url}/fa/depreciation")
         if response.ok:
             authenticated_page.wait_for_load_state("networkidle")
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_depreciation_run_button(self, authenticated_page, base_url):
         """Test depreciation run button exists."""
@@ -457,7 +457,7 @@ class TestAssetCategories:
         response = authenticated_page.goto(f"{base_url}/fa/categories")
         if response.ok:
             authenticated_page.wait_for_load_state("networkidle")
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_category_create_page_loads(self, authenticated_page, base_url):
         """Test category create page loads."""

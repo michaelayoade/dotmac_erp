@@ -10,6 +10,7 @@ This migration adds the audit schema with 4 tables:
 - approval_request: Pending approval requests
 - approval_decision: Approval decisions
 """
+
 from alembic import op
 from app.alembic_utils import ensure_enum
 from sqlalchemy import text
@@ -131,7 +132,8 @@ def upgrade() -> None:
         op.execute(statement)
 
     # Add RLS policies to audit tables with organization_id
-    result = bind.execute(text("""
+    result = bind.execute(
+        text("""
         SELECT t.table_name
         FROM information_schema.tables t
         JOIN information_schema.columns c
@@ -139,7 +141,8 @@ def upgrade() -> None:
         WHERE t.table_schema = 'audit'
         AND c.column_name = 'organization_id'
         AND t.table_type = 'BASE TABLE'
-    """))
+    """)
+    )
 
     for row in result:
         table = row[0]
@@ -201,10 +204,12 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Drop RLS policies from audit tables
     bind = op.get_bind()
-    result = bind.execute(text("""
+    result = bind.execute(
+        text("""
         SELECT table_name FROM information_schema.tables
         WHERE table_schema = 'audit' AND table_type = 'BASE TABLE'
-    """))
+    """)
+    )
 
     for row in result:
         table = row[0]
@@ -216,7 +221,6 @@ def downgrade() -> None:
         op.execute(f"DROP POLICY IF EXISTS {policy_name}_update ON {full_table};")
         op.execute(f"DROP POLICY IF EXISTS {policy_name}_delete ON {full_table};")
         op.execute(f"ALTER TABLE {full_table} DISABLE ROW LEVEL SECURITY;")
-
 
     statements = [
         """DROP TABLE IF EXISTS audit.approval_decision CASCADE;""",

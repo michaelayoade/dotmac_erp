@@ -6,7 +6,6 @@ Wraps DocumentGeneratorService with offer-specific context building.
 """
 
 import logging
-from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
@@ -18,7 +17,6 @@ from app.models.people.recruit.job_offer import JobOffer, OfferStatus
 from app.schemas.document_context import OfferLetterContext
 from app.services.automation.document_generator import (
     DocumentGeneratorService,
-    TemplateNotFoundError,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,12 +60,17 @@ class OfferLetterService:
 
         Loads applicant, job opening, designation, department for context building.
         """
-        return self.db.query(JobOffer).options(
-            joinedload(JobOffer.applicant),
-            joinedload(JobOffer.job_opening),
-            joinedload(JobOffer.designation),
-            joinedload(JobOffer.department),
-        ).filter(JobOffer.offer_id == offer_id).first()
+        return (
+            self.db.query(JobOffer)
+            .options(
+                joinedload(JobOffer.applicant),
+                joinedload(JobOffer.job_opening),
+                joinedload(JobOffer.designation),
+                joinedload(JobOffer.department),
+            )
+            .filter(JobOffer.offer_id == offer_id)
+            .first()
+        )
 
     def generate_offer_letter(
         self,
@@ -180,9 +183,13 @@ class OfferLetterService:
         department = offer.department
 
         # Get organization info
-        org = self.db.query(
-            # Minimal org query for name/address
-        ).first() if not organization_name else None
+        org = (
+            self.db.query(
+                # Minimal org query for name/address
+            ).first()
+            if not organization_name
+            else None
+        )
 
         # Calculate annual salary if pay frequency is monthly
         annual_salary = None
@@ -215,7 +222,9 @@ class OfferLetterService:
             candidate_phone=getattr(applicant, "phone", None),
             # Position
             job_title=job.job_title,
-            designation_name=designation.designation_name if designation else job.job_title,
+            designation_name=designation.designation_name
+            if designation
+            else job.job_title,
             department_name=department.department_name if department else None,
             location=job.location,
             employment_type=offer.employment_type,

@@ -32,12 +32,17 @@ def upgrade() -> None:
     def has_column(schema: str, table: str, column: str) -> bool:
         if not has_table(schema, table):
             return False
-        return any(col["name"] == column for col in inspector.get_columns(table, schema=schema))
+        return any(
+            col["name"] == column for col in inspector.get_columns(table, schema=schema)
+        )
 
     def has_fk(schema: str, table: str, fk_name: str) -> bool:
         if not has_table(schema, table):
             return False
-        return any(fk.get("name") == fk_name for fk in inspector.get_foreign_keys(table, schema=schema))
+        return any(
+            fk.get("name") == fk_name
+            for fk in inspector.get_foreign_keys(table, schema=schema)
+        )
 
     # Create AR Invoice Line Tax table
     if not has_table("ar", "invoice_line_tax"):
@@ -317,7 +322,12 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Remove WHT columns from ap.supplier_payment
-    op.drop_constraint("fk_supplier_payment_wht_code", "supplier_payment", schema="ap", type_="foreignkey")
+    op.drop_constraint(
+        "fk_supplier_payment_wht_code",
+        "supplier_payment",
+        schema="ap",
+        type_="foreignkey",
+    )
     op.drop_column("supplier_payment", "gross_amount", schema="ap")
     op.drop_column("supplier_payment", "withholding_tax_code_id", schema="ap")
 

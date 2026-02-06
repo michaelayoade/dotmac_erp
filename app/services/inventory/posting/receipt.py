@@ -14,14 +14,23 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.inventory.inventory_transaction import InventoryTransaction, TransactionType
 from app.models.finance.gl.journal_entry import JournalType
+from app.models.inventory.inventory_transaction import (
+    InventoryTransaction,
+    TransactionType,
+)
 from app.services.common import coerce_uuid
-from app.services.finance.gl.journal import JournalService, JournalInput, JournalLineInput
+from app.services.finance.gl.journal import (
+    JournalInput,
+    JournalLineInput,
+    JournalService,
+)
 from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
-
+from app.services.inventory.posting.helpers import (
+    get_inventory_account,
+    get_item_accounts,
+)
 from app.services.inventory.posting.result import INVPostingResult
-from app.services.inventory.posting.helpers import get_item_accounts, get_inventory_account
 
 
 def post_receipt(
@@ -85,7 +94,9 @@ def post_receipt(
 
     inventory_account = get_inventory_account(item, category)
     if not inventory_account:
-        return INVPostingResult(success=False, message="Inventory account not configured")
+        return INVPostingResult(
+            success=False, message="Inventory account not configured"
+        )
 
     journal_lines = [
         # Debit: Inventory
@@ -114,7 +125,9 @@ def post_receipt(
     else:
         # Use inventory adjustment account as GRNI placeholder
         if not category.inventory_adjustment_account_id:
-            return INVPostingResult(success=False, message="Adjustment account not configured")
+            return INVPostingResult(
+                success=False, message="Adjustment account not configured"
+            )
         journal_lines.append(
             JournalLineInput(
                 account_id=category.inventory_adjustment_account_id,
@@ -127,7 +140,10 @@ def post_receipt(
         )
 
     # Add variance entry for standard costing
-    if transaction.cost_variance != Decimal("0") and category.purchase_variance_account_id:
+    if (
+        transaction.cost_variance != Decimal("0")
+        and category.purchase_variance_account_id
+    ):
         if transaction.cost_variance > 0:
             # Unfavorable variance - debit
             journal_lines.append(

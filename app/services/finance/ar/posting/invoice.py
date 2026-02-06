@@ -21,11 +21,14 @@ from app.models.finance.gl.fiscal_period import FiscalPeriod
 from app.models.finance.gl.journal_entry import JournalType
 from app.services.common import coerce_uuid
 from app.services.finance.ar.ar_inventory_integration import ARInventoryIntegration
-from app.services.finance.gl.journal import JournalService, JournalInput, JournalLineInput
-from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
-
-from app.services.finance.ar.posting.result import ARPostingResult
 from app.services.finance.ar.posting.helpers import create_tax_transactions
+from app.services.finance.ar.posting.result import ARPostingResult
+from app.services.finance.gl.journal import (
+    JournalInput,
+    JournalLineInput,
+    JournalService,
+)
+from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
 
 
 def post_invoice(
@@ -102,10 +105,12 @@ def post_invoice(
 
     # Validate inventory availability for standard invoices (not credit notes)
     if inventory_lines and not is_credit_note:
-        is_valid, validation_errors = ARInventoryIntegration.validate_inventory_availability(
-            db=db,
-            organization_id=org_id,
-            lines=inventory_lines,
+        is_valid, validation_errors = (
+            ARInventoryIntegration.validate_inventory_availability(
+                db=db,
+                organization_id=org_id,
+                lines=inventory_lines,
+            )
         )
         if not is_valid:
             return ARPostingResult(

@@ -6,12 +6,15 @@ Provides view-focused data for payment-related web routes.
 
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
 from app.models.domain_settings import SettingDomain
 from app.services.settings_spec import resolve_value
+
+logger = logging.getLogger(__name__)
 
 
 class PaymentWebService:
@@ -42,7 +45,11 @@ class PaymentWebService:
         if intent:
             amount = float(intent.amount)
             currency = intent.currency_code
-            invoice_number = intent.intent_metadata.get("invoice_number") if intent.intent_metadata else None
+            invoice_number = (
+                intent.intent_metadata.get("invoice_number")
+                if intent.intent_metadata
+                else None
+            )
             customer_payment_id = intent.customer_payment_id
 
             if intent.status == PaymentIntentStatus.COMPLETED:
@@ -59,9 +66,14 @@ class PaymentWebService:
             elif intent.status == PaymentIntentStatus.ABANDONED:
                 status = "abandoned"
                 message = "Payment was cancelled. Please try again if you wish to complete the payment."
-            elif intent.status in [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]:
+            elif intent.status in [
+                PaymentIntentStatus.PENDING,
+                PaymentIntentStatus.PROCESSING,
+            ]:
                 status = "pending"
-                message = "Payment is being processed. You will receive confirmation shortly."
+                message = (
+                    "Payment is being processed. You will receive confirmation shortly."
+                )
             elif intent.status == PaymentIntentStatus.EXPIRED:
                 status = "expired"
                 message = "Payment session expired. Please initiate a new payment."
@@ -74,13 +86,15 @@ class PaymentWebService:
             "invoice_number": invoice_number,
             "amount": amount,
             "currency": currency,
-            "customer_payment_id": str(customer_payment_id) if customer_payment_id else None,
+            "customer_payment_id": str(customer_payment_id)
+            if customer_payment_id
+            else None,
         }
 
     @staticmethod
     def pay_invoice_context(db: Session, organization_id, invoice_id: str) -> dict:
-        from app.models.finance.ar.invoice import Invoice, InvoiceStatus
         from app.models.finance.ar.customer import Customer
+        from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 
         invoice = db.get(Invoice, invoice_id)
         if not invoice or invoice.organization_id != organization_id:
@@ -93,10 +107,14 @@ class PaymentWebService:
         ]
         is_payable = invoice.status in payable_statuses and invoice.balance_due > 0
 
-        customer = db.get(Customer, invoice.customer_id) if invoice.customer_id else None
+        customer = (
+            db.get(Customer, invoice.customer_id) if invoice.customer_id else None
+        )
 
         paystack_enabled = resolve_value(db, SettingDomain.payments, "paystack_enabled")
-        paystack_public_key = resolve_value(db, SettingDomain.payments, "paystack_public_key")
+        paystack_public_key = resolve_value(
+            db, SettingDomain.payments, "paystack_public_key"
+        )
 
         contact_email = None
         if customer and isinstance(customer.primary_contact, dict):
@@ -109,13 +127,17 @@ class PaymentWebService:
                 "customer": customer,
                 "is_payable": is_payable,
                 "paystack_enabled": bool(paystack_enabled),
-                "paystack_public_key": str(paystack_public_key) if paystack_public_key else None,
+                "paystack_public_key": str(paystack_public_key)
+                if paystack_public_key
+                else None,
                 "has_email": bool(contact_email),
             }
         }
 
     @staticmethod
-    def reimburse_expense_context(db: Session, organization_id, expense_claim_id: str) -> dict:
+    def reimburse_expense_context(
+        db: Session, organization_id, expense_claim_id: str
+    ) -> dict:
         from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
         from app.models.finance.payments.payment_intent import (
             PaymentIntent,
@@ -140,12 +162,19 @@ class PaymentWebService:
         )
 
         can_reimburse = (
-            expense_claim.status == ExpenseClaimStatus.APPROVED and active_intent is None
+            expense_claim.status == ExpenseClaimStatus.APPROVED
+            and active_intent is None
         )
-        employee = db.get(Employee, expense_claim.employee_id) if expense_claim.employee_id else None
+        employee = (
+            db.get(Employee, expense_claim.employee_id)
+            if expense_claim.employee_id
+            else None
+        )
 
         paystack_enabled = resolve_value(db, SettingDomain.payments, "paystack_enabled")
-        transfers_enabled = resolve_value(db, SettingDomain.payments, "paystack_transfers_enabled")
+        transfers_enabled = resolve_value(
+            db, SettingDomain.payments, "paystack_transfers_enabled"
+        )
 
         return {
             "context": {
@@ -158,7 +187,9 @@ class PaymentWebService:
                 "paystack_enabled": bool(paystack_enabled),
                 "transfers_enabled": bool(transfers_enabled),
                 "has_active_payment": active_intent is not None,
-                "active_intent_status": active_intent.status.value if active_intent else None,
+                "active_intent_status": active_intent.status.value
+                if active_intent
+                else None,
             }
         }
 
@@ -170,7 +201,11 @@ class PaymentWebService:
         page: int,
         per_page: int = 20,
     ) -> dict:
-        from app.models.finance.payments import PaymentIntent, PaymentIntentStatus, PaymentDirection
+        from app.models.finance.payments import (
+            PaymentDirection,
+            PaymentIntent,
+            PaymentIntentStatus,
+        )
 
         offset = (page - 1) * per_page
 

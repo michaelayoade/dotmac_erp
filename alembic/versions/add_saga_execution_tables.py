@@ -8,6 +8,7 @@ This migration adds saga orchestration tables for distributed transactions:
 - saga_execution: Tracks saga state and progress
 - saga_step: Individual step execution records
 """
+
 from alembic import op
 from app.alembic_utils import ensure_enum
 
@@ -226,7 +227,6 @@ def downgrade() -> None:
         op.execute(f"DROP POLICY IF EXISTS {policy_name}_update ON {full_table};")
         op.execute(f"DROP POLICY IF EXISTS {policy_name}_delete ON {full_table};")
         op.execute(f"ALTER TABLE {full_table} DISABLE ROW LEVEL SECURITY;")
-
 
     statements = [
         """DROP TABLE IF EXISTS platform.saga_step CASCADE;""",

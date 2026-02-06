@@ -5,6 +5,7 @@ Revises: 20260128_add_organization_slug
 Create Date: 2026-01-28
 
 """
+
 from alembic import op
 import sqlalchemy as sa
 

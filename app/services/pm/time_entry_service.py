@@ -3,8 +3,10 @@ Time Entry Service - PM Module.
 
 Business logic for time tracking and timesheets.
 """
+
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date, timedelta
 from decimal import Decimal
@@ -21,6 +23,8 @@ from app.services.common import (
     ValidationError,
     paginate,
 )
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.auth import Principal
@@ -277,7 +281,11 @@ class TimeEntryService:
         count = 0
         for entry_id in entry_ids:
             entry = self.get_entry(entry_id)
-            if entry and entry.is_billable and entry.billing_status == BillingStatus.NOT_BILLED:
+            if (
+                entry
+                and entry.is_billable
+                and entry.billing_status == BillingStatus.NOT_BILLED
+            ):
                 entry.billing_status = BillingStatus.BILLED
                 count += 1
         return count
@@ -344,9 +352,7 @@ class TimeEntryService:
             "hours_by_employee": {
                 str(emp_id): hours for emp_id, hours in employee_hours
             },
-            "hours_by_task": {
-                str(task_id): hours for task_id, hours in task_hours
-            },
+            "hours_by_task": {str(task_id): hours for task_id, hours in task_hours},
         }
 
     def get_employee_time_summary(
@@ -410,9 +416,7 @@ class TimeEntryService:
             )
         ) or Decimal("0")
 
-        task = self.db.scalars(
-            select(Task).where(Task.task_id == task_id)
-        ).first()
+        task = self.db.scalars(select(Task).where(Task.task_id == task_id)).first()
 
         if task:
             task.actual_hours = total_hours

@@ -1,6 +1,8 @@
 """
 Asset Sync Service - ERPNext to DotMac ERP.
 """
+
+import logging
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -12,10 +14,11 @@ from sqlalchemy.orm import Session
 from app.models.finance.gl.account import Account
 from app.models.fixed_assets.asset import Asset, AssetStatus
 from app.models.fixed_assets.asset_category import AssetCategory, DepreciationMethod
-from app.services.erpnext.mappings.assets import AssetMapping, AssetCategoryMapping
+from app.services.erpnext.mappings.assets import AssetCategoryMapping, AssetMapping
 
 from .base import BaseSyncService
 
+logger = logging.getLogger(__name__)
 
 # Default account codes for asset categories
 DEFAULT_ASSET_ACCOUNT = "ACC00064"  # Office Equipment (general fixed asset)
@@ -53,12 +56,16 @@ class AssetCategorySyncService(BaseSyncService[AssetCategory]):
             DEFAULT_DISPOSAL_ACCOUNT,
         ]
 
-        accounts = self.db.execute(
-            select(Account).where(
-                Account.organization_id == self.organization_id,
-                Account.account_code.in_(account_codes),
+        accounts = (
+            self.db.execute(
+                select(Account).where(
+                    Account.organization_id == self.organization_id,
+                    Account.account_code.in_(account_codes),
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         for acc in accounts:
             self._default_accounts[acc.account_code] = acc.account_id
@@ -104,24 +111,34 @@ class AssetCategorySyncService(BaseSyncService[AssetCategory]):
             is_active=data.get("is_active", True),
             # Required accounts
             asset_account_id=accounts.get(DEFAULT_ASSET_ACCOUNT),
-            accumulated_depreciation_account_id=accounts.get(DEFAULT_ACCUM_DEPR_ACCOUNT),
+            accumulated_depreciation_account_id=accounts.get(
+                DEFAULT_ACCUM_DEPR_ACCOUNT
+            ),
             depreciation_expense_account_id=accounts.get(DEFAULT_DEPR_EXPENSE_ACCOUNT),
             gain_loss_disposal_account_id=accounts.get(DEFAULT_DISPOSAL_ACCOUNT),
         )
         return category
 
-    def update_entity(self, entity: AssetCategory, data: dict[str, Any]) -> AssetCategory:
+    def update_entity(
+        self, entity: AssetCategory, data: dict[str, Any]
+    ) -> AssetCategory:
         """Update existing AssetCategory."""
         data.pop("_source_modified", None)
 
         entity.category_name = data["category_name"]
         if data.get("depreciation_method"):
             try:
-                entity.depreciation_method = DepreciationMethod(data["depreciation_method"])
+                entity.depreciation_method = DepreciationMethod(
+                    data["depreciation_method"]
+                )
             except ValueError:
                 pass
-        entity.useful_life_months = data.get("useful_life_months", entity.useful_life_months)
-        entity.residual_value_percent = Decimal(str(data.get("residual_value_percent", 0)))
+        entity.useful_life_months = data.get(
+            "useful_life_months", entity.useful_life_months
+        )
+        entity.residual_value_percent = Decimal(
+            str(data.get("residual_value_percent", 0))
+        )
         entity.is_active = data.get("is_active", True)
 
         return entity
@@ -210,6 +227,7 @@ class AssetSyncService(BaseSyncService[Asset]):
             acquisition_date = data.get("in_service_date")
         if not acquisition_date:
             from datetime import date
+
             acquisition_date = date.today()
 
         # Calculate costs
@@ -229,7 +247,9 @@ class AssetSyncService(BaseSyncService[Asset]):
             useful_life_months=data.get("useful_life_months", 60),
             remaining_life_months=data.get("remaining_life_months", 60),
             residual_value=Decimal(str(data.get("residual_value", 0))),
-            accumulated_depreciation=Decimal(str(data.get("accumulated_depreciation", 0))),
+            accumulated_depreciation=Decimal(
+                str(data.get("accumulated_depreciation", 0))
+            ),
             net_book_value=Decimal(str(data.get("net_book_value", 0))),
             impairment_loss=Decimal("0"),  # Default no impairment
             status=status,
@@ -261,7 +281,9 @@ class AssetSyncService(BaseSyncService[Asset]):
         entity.useful_life_months = data.get("useful_life_months", 60)
         entity.remaining_life_months = data.get("remaining_life_months", 60)
         entity.residual_value = Decimal(str(data.get("residual_value", 0)))
-        entity.accumulated_depreciation = Decimal(str(data.get("accumulated_depreciation", 0)))
+        entity.accumulated_depreciation = Decimal(
+            str(data.get("accumulated_depreciation", 0))
+        )
         entity.net_book_value = Decimal(str(data.get("net_book_value", 0)))
         entity.serial_number = data.get("serial_number")
         entity.disposal_date = data.get("disposal_date")

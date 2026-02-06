@@ -3,6 +3,7 @@ NHF Export Service.
 
 Generates NHF (National Housing Fund) contribution schedules for FMBN.
 """
+
 from __future__ import annotations
 
 import csv
@@ -10,7 +11,7 @@ import io
 import logging
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 from uuid import UUID
 
@@ -19,8 +20,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.payroll.salary_slip import (
     SalarySlip,
-    SalarySlipStatus,
     SalarySlipDeduction,
+    SalarySlipStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -93,7 +94,9 @@ class NHFExportService:
             select(SalarySlip)
             .options(
                 joinedload(SalarySlip.employee),
-                joinedload(SalarySlip.deductions).joinedload(SalarySlipDeduction.component),
+                joinedload(SalarySlip.deductions).joinedload(
+                    SalarySlipDeduction.component
+                ),
             )
             .where(
                 SalarySlip.organization_id == organization_id,
@@ -148,13 +151,15 @@ class NHFExportService:
         writer = csv.writer(output)
 
         # Header row
-        writer.writerow([
-            "LASTNAME",
-            "FIRSTNAME",
-            "MIDDLE_NAME",
-            "NHF_NO",
-            "AMOUNT",
-        ])
+        writer.writerow(
+            [
+                "LASTNAME",
+                "FIRSTNAME",
+                "MIDDLE_NAME",
+                "NHF_NO",
+                "AMOUNT",
+            ]
+        )
 
         errors: list[str] = []
         total_contribution = Decimal("0")
@@ -187,13 +192,15 @@ class NHFExportService:
             # Split name
             last_name, first_name, middle_name = self._split_name(employee.full_name)
 
-            writer.writerow([
-                last_name.upper(),
-                first_name.upper(),
-                middle_name.upper(),
-                nhf_number,
-                str(_round_currency(nhf)),
-            ])
+            writer.writerow(
+                [
+                    last_name.upper(),
+                    first_name.upper(),
+                    middle_name.upper(),
+                    nhf_number,
+                    str(_round_currency(nhf)),
+                ]
+            )
 
             total_contribution += nhf
             employee_count += 1
@@ -214,10 +221,14 @@ class NHFExportService:
         """Map deduction component codes to totals."""
         totals: dict[str, Decimal] = {}
         for deduction in slip.deductions:
-            component_code = (deduction.component.component_code if deduction.component else "").upper()
+            component_code = (
+                deduction.component.component_code if deduction.component else ""
+            ).upper()
             if not component_code:
                 continue
-            totals[component_code] = totals.get(component_code, Decimal("0")) + (deduction.amount or Decimal("0"))
+            totals[component_code] = totals.get(component_code, Decimal("0")) + (
+                deduction.amount or Decimal("0")
+            )
         return totals
 
 

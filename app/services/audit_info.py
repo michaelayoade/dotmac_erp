@@ -5,6 +5,7 @@ Shared service for fetching and formatting audit trail information.
 Used by both API and web routes across all modules.
 """
 
+import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Protocol, TypeVar
 from uuid import UUID
@@ -13,16 +14,19 @@ from sqlalchemy.orm import Session
 
 from app.models.person import Person
 
+logger = logging.getLogger(__name__)
+
 
 class HasAuditFields(Protocol):
     """Protocol for models with audit fields."""
+
     created_by_user_id: Optional[UUID]
     created_at: Optional[datetime]
     updated_by_user_id: Optional[UUID]
     updated_at: Optional[datetime]
 
 
-T = TypeVar('T', bound=HasAuditFields)
+T = TypeVar("T", bound=HasAuditFields)
 
 
 class AuditInfoService:
@@ -90,7 +94,7 @@ class AuditInfoService:
         creator_ids = [
             e.created_by_user_id
             for e in entities
-            if hasattr(e, 'created_by_user_id') and e.created_by_user_id
+            if hasattr(e, "created_by_user_id") and e.created_by_user_id
         ]
         return self.get_user_names_batch(creator_ids)
 
@@ -103,18 +107,18 @@ class AuditInfoService:
         created_by_name = None
         updated_by_name = None
 
-        if hasattr(entity, 'created_by_user_id') and entity.created_by_user_id:
+        if hasattr(entity, "created_by_user_id") and entity.created_by_user_id:
             created_by_name = self.get_user_name(entity.created_by_user_id)
 
-        if hasattr(entity, 'updated_by_user_id') and entity.updated_by_user_id:
+        if hasattr(entity, "updated_by_user_id") and entity.updated_by_user_id:
             updated_by_name = self.get_user_name(entity.updated_by_user_id)
 
         return {
-            "created_at": getattr(entity, 'created_at', None),
-            "created_by_user_id": getattr(entity, 'created_by_user_id', None),
+            "created_at": getattr(entity, "created_at", None),
+            "created_by_user_id": getattr(entity, "created_by_user_id", None),
             "created_by_name": created_by_name,
-            "updated_at": getattr(entity, 'updated_at', None),
-            "updated_by_user_id": getattr(entity, 'updated_by_user_id', None),
+            "updated_at": getattr(entity, "updated_at", None),
+            "updated_by_user_id": getattr(entity, "updated_by_user_id", None),
             "updated_by_name": updated_by_name,
         }
 
@@ -128,9 +132,9 @@ class AuditInfoService:
         # Pre-fetch all creator and updater names
         all_user_ids = []
         for e in entities:
-            if hasattr(e, 'created_by_user_id') and e.created_by_user_id:
+            if hasattr(e, "created_by_user_id") and e.created_by_user_id:
                 all_user_ids.append(e.created_by_user_id)
-            if hasattr(e, 'updated_by_user_id') and e.updated_by_user_id:
+            if hasattr(e, "updated_by_user_id") and e.updated_by_user_id:
                 all_user_ids.append(e.updated_by_user_id)
 
         # Batch fetch all names

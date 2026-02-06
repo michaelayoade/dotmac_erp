@@ -4,17 +4,20 @@ Support Module Services.
 Business logic for helpdesk/support ticket management.
 """
 
+from app.services.support.attachment import AttachmentService, attachment_service
+from app.services.support.category import CategoryService, category_service
+from app.services.support.comment import CommentService, comment_service
+from app.services.support.sla import SLAService, sla_service
+from app.services.support.team import TeamService, team_service
 from app.services.support.ticket import TicketService, ticket_service
 from app.services.support.web import SupportWebService, support_web_service
-from app.services.support.comment import CommentService, comment_service
-from app.services.support.attachment import AttachmentService, attachment_service
-from app.services.support.team import TeamService, team_service
-from app.services.support.category import CategoryService, category_service
-from app.services.support.web_comments import CommentWebService, comment_web_service
-from app.services.support.web_attachments import AttachmentWebService, attachment_web_service
-from app.services.support.web_teams import TeamWebService, team_web_service
+from app.services.support.web_attachments import (
+    AttachmentWebService,
+    attachment_web_service,
+)
 from app.services.support.web_categories import CategoryWebService, category_web_service
-from app.services.support.sla import SLAService, sla_service
+from app.services.support.web_comments import CommentWebService, comment_web_service
+from app.services.support.web_teams import TeamWebService, team_web_service
 
 __all__ = [
     # Ticket

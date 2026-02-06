@@ -19,20 +19,23 @@ from uuid import UUID
 from sqlalchemy import func
 from sqlalchemy.orm import Session, load_only
 
-from app.models.finance.ap.supplier import Supplier, SupplierType
-from app.models.finance.ap.supplier_invoice import SupplierInvoice, SupplierInvoiceStatus, SupplierInvoiceType
-from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
-from app.models.finance.ap.supplier_payment import SupplierPayment, APPaymentStatus
 from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
+from app.models.finance.ap.supplier import Supplier, SupplierType
+from app.models.finance.ap.supplier_invoice import (
+    SupplierInvoice,
+    SupplierInvoiceStatus,
+)
+from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
+from app.models.finance.ap.supplier_payment import APPaymentStatus, SupplierPayment
 from app.models.finance.core_org.cost_center import CostCenter
 from app.models.finance.core_org.project import Project
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.services.finance.common import (
-    parse_date,
-    format_date,
     format_currency,
+    format_date,
     format_file_size,
+    parse_date,
     parse_enum_safe,
 )
 
@@ -42,6 +45,7 @@ logger = logging.getLogger(__name__)
 # ==============================================================================
 # Parsing Utilities
 # ==============================================================================
+
 
 def parse_supplier_type(value: Optional[str]) -> SupplierType:
     """Parse supplier type from string value."""
@@ -85,6 +89,7 @@ def parse_payment_status(value: Optional[str]) -> Optional[APPaymentStatus]:
 # Display/Label Utilities
 # ==============================================================================
 
+
 def supplier_display_name(supplier: Supplier) -> str:
     """Get display name for a supplier."""
     return supplier.trading_name or supplier.legal_name
@@ -112,6 +117,7 @@ def payment_status_label(status: APPaymentStatus) -> str:
 # View Transformers - Suppliers
 # ==============================================================================
 
+
 def supplier_option_view(supplier: Supplier) -> dict:
     """Transform supplier to option/select view."""
     return {
@@ -120,8 +126,12 @@ def supplier_option_view(supplier: Supplier) -> dict:
         "supplier_code": supplier.supplier_code,
         "currency_code": supplier.currency_code,
         "payment_terms_days": supplier.payment_terms_days,
-        "withholding_tax_applicable": getattr(supplier, "withholding_tax_applicable", False),
-        "withholding_tax_code_id": str(supplier.withholding_tax_code_id) if getattr(supplier, "withholding_tax_code_id", None) else "",
+        "withholding_tax_applicable": getattr(
+            supplier, "withholding_tax_applicable", False
+        ),
+        "withholding_tax_code_id": str(supplier.withholding_tax_code_id)
+        if getattr(supplier, "withholding_tax_code_id", None)
+        else "",
     }
 
 
@@ -161,7 +171,9 @@ def supplier_list_view(
         "contact_email": contact.get("email"),
         "payment_terms_days": supplier.payment_terms_days,
         "balance": format_currency(balance, supplier.currency_code),
-        "balance_trend": balance_trend if balance_trend and any(v > 0 for v in balance_trend) else None,
+        "balance_trend": balance_trend
+        if balance_trend and any(v > 0 for v in balance_trend)
+        else None,
         "is_active": supplier.is_active,
         "created_at": supplier.created_at,
         "created_by_user_id": supplier.created_by_user_id,
@@ -193,6 +205,7 @@ def supplier_detail_view(supplier: Supplier, balance: Decimal) -> dict:
 # ==============================================================================
 # View Transformers - Invoices
 # ==============================================================================
+
 
 def invoice_line_view(line: SupplierInvoiceLine, currency_code: str) -> dict:
     """Transform invoice line to view."""
@@ -237,7 +250,8 @@ def invoice_detail_view(invoice: SupplierInvoice, supplier: Optional[Supplier]) 
         "status": invoice_status_label(invoice.status),
         "is_overdue": (
             invoice.due_date < today
-            and invoice.status not in {SupplierInvoiceStatus.PAID, SupplierInvoiceStatus.VOID}
+            and invoice.status
+            not in {SupplierInvoiceStatus.PAID, SupplierInvoiceStatus.VOID}
         ),
     }
 
@@ -245,6 +259,7 @@ def invoice_detail_view(invoice: SupplierInvoice, supplier: Optional[Supplier]) 
 # ==============================================================================
 # View Transformers - Payments
 # ==============================================================================
+
 
 def payment_detail_view(payment: SupplierPayment, supplier: Optional[Supplier]) -> dict:
     """Transform payment to detail view."""
@@ -286,6 +301,7 @@ def allocation_view(
 # ==============================================================================
 # Reference Data Queries
 # ==============================================================================
+
 
 def get_accounts(
     db: Session,
@@ -361,7 +377,7 @@ def calculate_supplier_balance_trends(
         if i == 0:
             as_of_date = today
         else:
-            month_start = (today.replace(day=1) - relativedelta(months=i))
+            month_start = today.replace(day=1) - relativedelta(months=i)
             next_month = month_start + relativedelta(months=1)
             as_of_date = next_month - timedelta(days=1)
 
@@ -369,18 +385,23 @@ def calculate_supplier_balance_trends(
             db.query(
                 SupplierInvoice.supplier_id,
                 func.coalesce(
-                    func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
+                    func.sum(
+                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
+                    ),
+                    0,
                 ).label("balance"),
             )
             .filter(
                 SupplierInvoice.organization_id == organization_id,
                 SupplierInvoice.supplier_id.in_(supplier_ids),
                 SupplierInvoice.invoice_date <= as_of_date,
-                SupplierInvoice.status.in_([
-                    SupplierInvoiceStatus.POSTED,
-                    SupplierInvoiceStatus.PARTIALLY_PAID,
-                    SupplierInvoiceStatus.PAID,
-                ]),
+                SupplierInvoice.status.in_(
+                    [
+                        SupplierInvoiceStatus.POSTED,
+                        SupplierInvoiceStatus.PARTIALLY_PAID,
+                        SupplierInvoiceStatus.PAID,
+                    ]
+                ),
             )
             .group_by(SupplierInvoice.supplier_id)
             .all()
@@ -398,9 +419,11 @@ def calculate_supplier_balance_trends(
 # Data Classes
 # ==============================================================================
 
+
 @dataclass
 class InvoiceStats:
     """Statistics for invoice list view."""
+
     total_outstanding: str
     past_due: str
     due_this_week: str

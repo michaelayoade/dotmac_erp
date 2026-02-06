@@ -93,7 +93,9 @@ def validate_unique_code(
     # Build base filter
     code_column = getattr(model_class, code_field_name, None)
     if code_column is None:
-        raise ValueError(f"Model {model_class.__name__} has no field '{code_field_name}'")
+        raise ValueError(
+            f"Model {model_class.__name__} has no field '{code_field_name}'"
+        )
 
     org_column = getattr(model_class, "organization_id", None)
     if org_column is None:

@@ -4,6 +4,7 @@ Revision ID: 20260123_add_employee_location_shift_fields
 Revises: 4f4e6f737d70
 Create Date: 2026-01-23
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -22,12 +23,17 @@ def upgrade() -> None:
     def has_column(schema: str, table: str, column: str) -> bool:
         if not inspector.has_table(table, schema=schema):
             return False
-        return any(col["name"] == column for col in inspector.get_columns(table, schema=schema))
+        return any(
+            col["name"] == column for col in inspector.get_columns(table, schema=schema)
+        )
 
     def has_fk(schema: str, table: str, name: str) -> bool:
         if not inspector.has_table(table, schema=schema):
             return False
-        return any(fk["name"] == name for fk in inspector.get_foreign_keys(table, schema=schema))
+        return any(
+            fk["name"] == name
+            for fk in inspector.get_foreign_keys(table, schema=schema)
+        )
 
     if not has_column("core_org", "location", "latitude"):
         op.add_column(
@@ -67,13 +73,17 @@ def upgrade() -> None:
     if not has_column("hr", "employee", "assigned_location_id"):
         op.add_column(
             "employee",
-            sa.Column("assigned_location_id", postgresql.UUID(as_uuid=True), nullable=True),
+            sa.Column(
+                "assigned_location_id", postgresql.UUID(as_uuid=True), nullable=True
+            ),
             schema="hr",
         )
     if not has_column("hr", "employee", "default_shift_type_id"):
         op.add_column(
             "employee",
-            sa.Column("default_shift_type_id", postgresql.UUID(as_uuid=True), nullable=True),
+            sa.Column(
+                "default_shift_type_id", postgresql.UUID(as_uuid=True), nullable=True
+            ),
             schema="hr",
         )
 
@@ -108,12 +118,17 @@ def downgrade() -> None:
     def has_column(schema: str, table: str, column: str) -> bool:
         if not inspector.has_table(table, schema=schema):
             return False
-        return any(col["name"] == column for col in inspector.get_columns(table, schema=schema))
+        return any(
+            col["name"] == column for col in inspector.get_columns(table, schema=schema)
+        )
 
     def has_fk(schema: str, table: str, name: str) -> bool:
         if not inspector.has_table(table, schema=schema):
             return False
-        return any(fk["name"] == name for fk in inspector.get_foreign_keys(table, schema=schema))
+        return any(
+            fk["name"] == name
+            for fk in inspector.get_foreign_keys(table, schema=schema)
+        )
 
     if has_fk("hr", "employee", "fk_employee_default_shift_type"):
         op.drop_constraint(

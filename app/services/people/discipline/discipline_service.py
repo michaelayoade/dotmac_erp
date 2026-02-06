@@ -17,36 +17,36 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
+from app.errors import NotFoundError, ValidationError
 from app.models.people.discipline import (
-    DisciplinaryCase,
-    CaseStatus,
-    ViolationType,
-    SeverityLevel,
-    CaseWitness,
-    CaseAction,
     ActionType,
+    CaseAction,
     CaseDocument,
-    DocumentType,
     CaseResponse,
+    CaseStatus,
+    CaseWitness,
+    DisciplinaryCase,
+    DocumentType,
 )
 from app.models.people.hr.employee import Employee
 from app.schemas.people.discipline import (
+    CaseActionCreate,
+    CaseListFilter,
+    CaseResponseCreate,
+    CaseWitnessCreate,
+    DecideAppealRequest,
     DisciplinaryCaseCreate,
     DisciplinaryCaseUpdate,
-    IssueQueryRequest,
-    ScheduleHearingRequest,
-    RecordDecisionRequest,
     FileAppealRequest,
-    DecideAppealRequest,
-    CaseActionCreate,
-    CaseWitnessCreate,
-    CaseResponseCreate,
-    CaseListFilter,
+    IssueQueryRequest,
+    RecordDecisionRequest,
+    ScheduleHearingRequest,
 )
-from app.errors import NotFoundError, ValidationError
+from app.models.finance.audit.audit_log import AuditAction
+from app.services.audit_dispatcher import fire_audit_event
 from app.services.notification import notification_service
 
 logger = logging.getLogger(__name__)
@@ -254,6 +254,23 @@ class DisciplineService:
         self.db.add(case)
         self.db.flush()
 
+        fire_audit_event(
+            self.db,
+            organization_id,
+            "discipline",
+            "disciplinary_case",
+            str(case.case_id),
+            AuditAction.INSERT,
+            new_values={
+                "case_number": case_number,
+                "employee_id": str(data.employee_id),
+                "violation_type": data.violation_type.value,
+                "severity": data.severity.value,
+                "status": "DRAFT",
+            },
+            user_id=created_by_id,
+        )
+
         logger.info(
             "Created disciplinary case %s for employee %s",
             case.case_number,
@@ -339,9 +356,27 @@ class DisciplineService:
         self._update_status(case, CaseStatus.QUERY_ISSUED, issued_by_id)
         self.db.flush()
 
+        fire_audit_event(
+            self.db,
+            case.organization_id,
+            "discipline",
+            "disciplinary_case",
+            str(case.case_id),
+            AuditAction.UPDATE,
+            old_values={"status": old_status},
+            new_values={
+                "status": "QUERY_ISSUED",
+                "response_due_date": str(case.response_due_date),
+            },
+            user_id=issued_by_id,
+        )
+
         # Fire workflow automation event
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
                 db=self.db,
                 organization_id=case.organization_id,
@@ -405,6 +440,17 @@ class DisciplineService:
 
         self.db.flush()
 
+        fire_audit_event(
+            self.db,
+            case.organization_id,
+            "discipline",
+            "disciplinary_case",
+            str(case.case_id),
+            AuditAction.UPDATE,
+            new_values={"status": case.status.value},
+            reason="Employee response recorded",
+        )
+
         logger.info("Response recorded for case %s", case.case_number)
 
         # Notify HR that employee has responded
@@ -463,9 +509,27 @@ class DisciplineService:
         self._update_status(case, CaseStatus.HEARING_SCHEDULED, scheduled_by_id)
         self.db.flush()
 
+        fire_audit_event(
+            self.db,
+            case.organization_id,
+            "discipline",
+            "disciplinary_case",
+            str(case.case_id),
+            AuditAction.UPDATE,
+            old_values={"status": old_status},
+            new_values={
+                "status": "HEARING_SCHEDULED",
+                "hearing_date": str(case.hearing_date),
+            },
+            user_id=scheduled_by_id,
+        )
+
         # Fire workflow automation event
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
                 db=self.db,
                 organization_id=case.organization_id,
@@ -561,9 +625,28 @@ class DisciplineService:
         self._update_status(case, CaseStatus.DECISION_MADE, decided_by_id)
         self.db.flush()
 
+        fire_audit_event(
+            self.db,
+            case.organization_id,
+            "discipline",
+            "disciplinary_case",
+            str(case.case_id),
+            AuditAction.UPDATE,
+            old_values={"status": old_status},
+            new_values={
+                "status": "DECISION_MADE",
+                "decision_date": str(case.decision_date),
+                "action_count": len(data.actions),
+            },
+            user_id=decided_by_id,
+        )
+
         # Fire workflow automation event
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
                 db=self.db,
                 organization_id=case.organization_id,
@@ -626,9 +709,23 @@ class DisciplineService:
         self._update_status(case, CaseStatus.APPEAL_FILED)
         self.db.flush()
 
+        fire_audit_event(
+            self.db,
+            case.organization_id,
+            "discipline",
+            "disciplinary_case",
+            str(case.case_id),
+            AuditAction.UPDATE,
+            old_values={"status": old_status},
+            new_values={"status": "APPEAL_FILED"},
+        )
+
         # Fire workflow automation event
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
                 db=self.db,
                 organization_id=case.organization_id,
@@ -725,9 +822,24 @@ class DisciplineService:
         self._update_status(case, CaseStatus.CLOSED, closed_by_id)
         self.db.flush()
 
+        fire_audit_event(
+            self.db,
+            case.organization_id,
+            "discipline",
+            "disciplinary_case",
+            str(case.case_id),
+            AuditAction.UPDATE,
+            old_values={"status": old_status},
+            new_values={"status": "CLOSED", "closed_date": str(case.closed_date)},
+            user_id=closed_by_id,
+        )
+
         # Fire workflow automation event
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
                 db=self.db,
                 organization_id=case.organization_id,
@@ -1079,9 +1191,9 @@ class DisciplineService:
             triggered_by_id: User who triggered the action
         """
         try:
-            from app.services.people.hr.lifecycle import LifecycleService
-            from app.models.people.hr.lifecycle import SeparationType
             from app.models.people.hr.employee import EmployeeStatus
+            from app.models.people.hr.lifecycle import SeparationType
+            from app.services.people.hr.lifecycle import LifecycleService
 
             lifecycle_svc = LifecycleService(self.db)
 

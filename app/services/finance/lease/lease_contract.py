@@ -6,27 +6,29 @@ Manages lease contract lifecycle, classification, and initial recognition.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Any, Optional
+from decimal import Decimal
+from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
+from app.models.finance.core_config.numbering_sequence import SequenceType
+from app.models.finance.lease.lease_asset import LeaseAsset
 from app.models.finance.lease.lease_contract import (
-    LeaseContract,
     LeaseClassification,
+    LeaseContract,
     LeaseStatus,
 )
 from app.models.finance.lease.lease_liability import LeaseLiability
-from app.models.finance.lease.lease_asset import LeaseAsset
-from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.services.common import coerce_uuid
 from app.services.finance.platform.sequence import SequenceService
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -103,9 +105,8 @@ class LeaseContractService(ListResponseMixin):
         Returns:
             Total lease term in months
         """
-        base_months = (
-            (end_date.year - commencement_date.year) * 12
-            + (end_date.month - commencement_date.month)
+        base_months = (end_date.year - commencement_date.year) * 12 + (
+            end_date.month - commencement_date.month
         )
 
         if renewal_certain and renewal_months:
@@ -159,9 +160,7 @@ class LeaseContractService(ListResponseMixin):
         user_id = coerce_uuid(created_by_user_id)
 
         # Generate lease number
-        lease_number = SequenceService.get_next_number(
-            db, org_id, SequenceType.LEASE
-        )
+        lease_number = SequenceService.get_next_number(db, org_id, SequenceType.LEASE)
 
         # Calculate lease term
         lease_term_months = LeaseContractService.calculate_lease_term_months(
@@ -464,11 +463,7 @@ class LeaseContractService(ListResponseMixin):
     ) -> Optional[LeaseLiability]:
         """Get the lease liability for a contract."""
         ls_id = coerce_uuid(lease_id)
-        return (
-            db.query(LeaseLiability)
-            .filter(LeaseLiability.lease_id == ls_id)
-            .first()
-        )
+        return db.query(LeaseLiability).filter(LeaseLiability.lease_id == ls_id).first()
 
     @staticmethod
     def get_asset(
@@ -477,11 +472,7 @@ class LeaseContractService(ListResponseMixin):
     ) -> Optional[LeaseAsset]:
         """Get the ROU asset for a contract."""
         ls_id = coerce_uuid(lease_id)
-        return (
-            db.query(LeaseAsset)
-            .filter(LeaseAsset.lease_id == ls_id)
-            .first()
-        )
+        return db.query(LeaseAsset).filter(LeaseAsset.lease_id == ls_id).first()
 
     @staticmethod
     def list(

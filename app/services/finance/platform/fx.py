@@ -5,10 +5,11 @@ Provides rate resolution, currency conversion, and functional currency
 conversion capabilities for multi-currency accounting operations.
 """
 
+import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import List, Optional
+from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -20,6 +21,8 @@ from app.models.finance.core_fx.exchange_rate_type import ExchangeRateType
 from app.models.finance.core_org.organization import Organization
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -509,7 +512,9 @@ class FXService(ListResponseMixin):
                 .first()
             )
             if rate_type:
-                query = query.filter(ExchangeRate.rate_type_id == rate_type.rate_type_id)
+                query = query.filter(
+                    ExchangeRate.rate_type_id == rate_type.rate_type_id
+                )
 
         query = query.order_by(ExchangeRate.effective_date.desc())
         return query.limit(limit).offset(offset).all()

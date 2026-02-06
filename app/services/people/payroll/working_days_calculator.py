@@ -22,11 +22,10 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import select, and_
+from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.people.leave.holiday_list import HolidayList, Holiday
-from app.models.people.payroll.payroll_entry import PayrollEntry
+from app.models.people.leave.holiday_list import HolidayList
 
 logger = logging.getLogger(__name__)
 
@@ -478,9 +477,7 @@ class WorkingDaysCalculator:
                     else False
                 )
                 # Check if day is a holiday (using calendar's holidays)
-                is_holiday = (
-                    current in calendar.holidays if exclude_holidays else False
-                )
+                is_holiday = current in calendar.holidays if exclude_holidays else False
 
                 if not is_weekly_off and not is_holiday:
                     business_days += 1

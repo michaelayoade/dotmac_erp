@@ -5,13 +5,12 @@ Revises: 20260130_competency_jd
 Create Date: 2026-01-30
 
 """
+
 from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = '20260130_emp_doc_type'
-down_revision = '20260130_competency_jd'
+revision = "20260130_emp_doc_type"
+down_revision = "20260130_competency_jd"
 branch_labels = None
 depends_on = None
 

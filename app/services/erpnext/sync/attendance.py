@@ -5,20 +5,22 @@ Sync services for Attendance entities:
 - Shift Type
 - Attendance
 """
+
 import logging
 import uuid
-from datetime import datetime, time as datetime_time
+from datetime import datetime
+from datetime import time as datetime_time
 from decimal import Decimal
 from typing import Any, Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.people.attendance.shift_type import ShiftType
 from app.models.people.attendance.attendance import Attendance, AttendanceStatus
+from app.models.people.attendance.shift_type import ShiftType
 from app.services.erpnext.mappings.attendance import (
-    ShiftTypeMapping,
     AttendanceMapping,
+    ShiftTypeMapping,
 )
 
 from .base import BaseSyncService
@@ -95,10 +97,16 @@ class ShiftTypeSyncService(BaseSyncService[ShiftType]):
 
         entity.shift_name = data["shift_name"][:100]
         entity.working_hours = data.get("working_hours", entity.working_hours)
-        entity.late_entry_grace_period = data.get("late_entry_grace_period", entity.late_entry_grace_period)
-        entity.early_exit_grace_period = data.get("early_exit_grace_period", entity.early_exit_grace_period)
+        entity.late_entry_grace_period = data.get(
+            "late_entry_grace_period", entity.late_entry_grace_period
+        )
+        entity.early_exit_grace_period = data.get(
+            "early_exit_grace_period", entity.early_exit_grace_period
+        )
         entity.half_day_threshold_hours = data.get("half_day_threshold_hours")
-        entity.break_duration_minutes = data.get("break_duration_minutes", entity.break_duration_minutes)
+        entity.break_duration_minutes = data.get(
+            "break_duration_minutes", entity.break_duration_minutes
+        )
         entity.is_active = data.get("is_active", True)
         entity.updated_by_id = self.user_id
         return entity

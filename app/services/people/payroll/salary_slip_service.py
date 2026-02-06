@@ -7,34 +7,34 @@ Integrates with PAYECalculator for NTA 2025 tax computation.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 from uuid import UUID
-import uuid as uuid_lib
 
 from fastapi import HTTPException
-from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
-from app.models.people.payroll.salary_slip import (
-    SalarySlip,
-    SalarySlipEarning,
-    SalarySlipDeduction,
-    SalarySlipStatus,
-)
+from app.models.people.hr.employee import Employee, EmployeeStatus
+from app.models.people.hr.employment_type import EmploymentType
+from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
 from app.models.people.payroll.salary_component import (
     SalaryComponent,
     SalaryComponentType,
 )
+from app.models.people.payroll.salary_slip import (
+    SalarySlip,
+    SalarySlipDeduction,
+    SalarySlipEarning,
+    SalarySlipStatus,
+)
 from app.models.people.payroll.salary_structure import SalaryStructure
-from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
-from app.models.people.hr.employee import Employee, EmployeeStatus
-from app.models.people.hr.employment_type import EmploymentType
 from app.services.common import coerce_uuid
-from app.services.people.payroll.paye_calculator import PAYECalculator, PAYEBreakdown
+from app.services.people.payroll.paye_calculator import PAYEBreakdown, PAYECalculator
 
+logger = logging.getLogger(__name__)
 
 # Standard component codes for statutory deductions
 BASIC_COMPONENT_CODE = "BASIC"

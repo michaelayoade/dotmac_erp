@@ -5,6 +5,7 @@ Sync services for Expense entities:
 - Expense Category (Expense Claim Type)
 - Expense Claim (with items)
 """
+
 import logging
 import uuid
 from datetime import datetime
@@ -22,8 +23,8 @@ from app.models.expense.expense_claim import (
 )
 from app.services.erpnext.mappings.expense import (
     ExpenseCategoryMapping,
-    ExpenseClaimMapping,
     ExpenseClaimItemMapping,
+    ExpenseClaimMapping,
 )
 
 from .base import BaseSyncService
@@ -74,7 +75,9 @@ class ExpenseCategorySyncService(BaseSyncService[ExpenseCategory]):
         )
         return category
 
-    def update_entity(self, entity: ExpenseCategory, data: dict[str, Any]) -> ExpenseCategory:
+    def update_entity(
+        self, entity: ExpenseCategory, data: dict[str, Any]
+    ) -> ExpenseCategory:
         data.pop("_source_modified", None)
         data.pop("_source_name", None)
 
@@ -165,9 +168,7 @@ class ExpenseClaimSyncService(BaseSyncService[ExpenseClaim]):
             return sync_entity.target_id
         return None
 
-    def _create_claim_items(
-        self, claim: ExpenseClaim, items_data: list[dict]
-    ) -> None:
+    def _create_claim_items(self, claim: ExpenseClaim, items_data: list[dict]) -> None:
         """Create expense claim items."""
         for seq, item_data in enumerate(items_data, 1):
             expense_type_source = item_data.pop("_expense_type_source_name", None)
@@ -192,7 +193,8 @@ class ExpenseClaimSyncService(BaseSyncService[ExpenseClaim]):
                 claim_id=claim.claim_id,
                 expense_date=item_data["expense_date"],
                 category_id=category_id,
-                description=item_data.get("description") or f"Expense: {expense_type_source}",
+                description=item_data.get("description")
+                or f"Expense: {expense_type_source}",
                 claimed_amount=item_data.get("claimed_amount", Decimal("0")),
                 approved_amount=item_data.get("approved_amount"),
                 sequence=seq,
@@ -253,7 +255,9 @@ class ExpenseClaimSyncService(BaseSyncService[ExpenseClaim]):
 
         # Update claim fields
         entity.purpose = data.get("purpose", entity.purpose)[:500]
-        entity.total_claimed_amount = data.get("total_claimed_amount", entity.total_claimed_amount)
+        entity.total_claimed_amount = data.get(
+            "total_claimed_amount", entity.total_claimed_amount
+        )
         entity.total_approved_amount = data.get("total_approved_amount")
         entity.net_payable_amount = data.get("net_payable_amount")
 

@@ -1,10 +1,11 @@
 """Add recipient_account_name to expense_claim.
 
 Revision ID: 20260201_recipient_name
-Revises: 
+Revises:
 Create Date: 2026-02-01
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -25,7 +26,10 @@ def upgrade() -> None:
 
     # Check if column already exists
     if inspector.has_table("expense_claim", schema="expense"):
-        columns = {col["name"] for col in inspector.get_columns("expense_claim", schema="expense")}
+        columns = {
+            col["name"]
+            for col in inspector.get_columns("expense_claim", schema="expense")
+        }
         if "recipient_account_name" not in columns:
             op.add_column(
                 "expense_claim",
@@ -45,6 +49,9 @@ def downgrade() -> None:
     inspector = sa.inspect(bind)
 
     if inspector.has_table("expense_claim", schema="expense"):
-        columns = {col["name"] for col in inspector.get_columns("expense_claim", schema="expense")}
+        columns = {
+            col["name"]
+            for col in inspector.get_columns("expense_claim", schema="expense")
+        }
         if "recipient_account_name" in columns:
             op.drop_column("expense_claim", "recipient_account_name", schema="expense")

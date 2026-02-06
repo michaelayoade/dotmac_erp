@@ -6,19 +6,21 @@ Generates tax reports by type, VAT returns, WHT reports, and exports.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import func, and_, case
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.finance.tax.tax_code import TaxCode, TaxType
 from app.models.finance.tax.tax_transaction import TaxTransaction, TaxTransactionType
-from app.models.finance.gl.fiscal_period import FiscalPeriod
 from app.services.common import coerce_uuid
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -105,7 +107,9 @@ class WHTReportData:
     wht_deducted_by_customers: Decimal = field(default_factory=lambda: Decimal("0"))
     wht_deducted_count: int = 0
     # Net WHT position
-    net_wht_payable: Decimal = field(default_factory=lambda: Decimal("0"))  # What we owe to tax authority
+    net_wht_payable: Decimal = field(
+        default_factory=lambda: Decimal("0")
+    )  # What we owe to tax authority
     # Breakdown by WHT rate
     by_rate: list = field(default_factory=list)
     # Transaction details
@@ -186,7 +190,9 @@ class TaxReportService:
                 if total_tax and total_tax > 0:
                     type_data[tax_type]["wht_collected"] += total_tax
                 else:
-                    type_data[tax_type]["wht_deducted"] += abs(total_tax or Decimal("0"))
+                    type_data[tax_type]["wht_deducted"] += abs(
+                        total_tax or Decimal("0")
+                    )
 
         # Convert to summary objects
         summaries = []
@@ -349,15 +355,19 @@ class TaxReportService:
                 return_data.box3_taxable_purchases += base
                 return_data.box4_input_vat += tax
 
-            rate_breakdown.append({
-                "rate": float(rate),
-                "transaction_type": txn_type.value,
-                "base_amount": float(base),
-                "tax_amount": float(tax),
-            })
+            rate_breakdown.append(
+                {
+                    "rate": float(rate),
+                    "transaction_type": txn_type.value,
+                    "base_amount": float(base),
+                    "tax_amount": float(tax),
+                }
+            )
 
         # Calculate net VAT
-        return_data.box5_net_vat = return_data.box2_output_vat - return_data.box4_input_vat
+        return_data.box5_net_vat = (
+            return_data.box2_output_vat - return_data.box4_input_vat
+        )
         return_data.rate_breakdown = rate_breakdown
 
         return return_data
@@ -423,9 +433,19 @@ class TaxReportService:
             period_end=end_date,
         )
         by_rate = []
-        by_rate_totals: dict[tuple[str, str, Decimal, str], dict[str, Decimal | int]] = {}
+        by_rate_totals: dict[
+            tuple[str, str, Decimal, str], dict[str, Decimal | int]
+        ] = {}
 
-        for tax_code, tax_name, rate, source_document_type, total_base, total_tax, count in results:
+        for (
+            tax_code,
+            tax_name,
+            rate,
+            source_document_type,
+            total_base,
+            total_tax,
+            count,
+        ) in results:
             tax_amount = total_tax or Decimal("0")
             source_module = _source_module(source_document_type)
             key = (tax_code, tax_name, rate, source_module)
@@ -465,7 +485,9 @@ class TaxReportService:
 
         report.by_rate = by_rate
         # Net position: what we withheld (owe to tax authority) minus what was deducted from us (receivable)
-        report.net_wht_payable = report.wht_withheld_from_suppliers - report.wht_deducted_by_customers
+        report.net_wht_payable = (
+            report.wht_withheld_from_suppliers - report.wht_deducted_by_customers
+        )
 
         # Include transaction details if requested
         if include_transactions:

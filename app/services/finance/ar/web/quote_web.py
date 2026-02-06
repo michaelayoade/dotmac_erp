@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import logging
 from datetime import date, datetime, timedelta
-from decimal import Decimal
 from typing import Optional
 
 from fastapi import Request
@@ -24,11 +23,11 @@ from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.models.finance.tax.tax_code import TaxCode
 from app.services.common import coerce_uuid
 from app.services.finance.ar.quote import quote_service
-from app.services.finance.common import format_date, format_currency, parse_date
+from app.services.finance.common import format_currency, format_date
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.platform.org_context import org_context_service
 from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
+from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +113,9 @@ class QuoteWebService:
         # Payment terms
         payment_terms = (
             db.query(PaymentTerms)
-            .filter(PaymentTerms.organization_id == org_id, PaymentTerms.is_active.is_(True))
+            .filter(
+                PaymentTerms.organization_id == org_id, PaymentTerms.is_active.is_(True)
+            )
             .order_by(PaymentTerms.terms_name)
             .all()
         )
@@ -146,7 +147,9 @@ class QuoteWebService:
         """Get context for quote listing page."""
         logger.debug(
             "list_context: org=%s status=%s customer=%s",
-            organization_id, status, customer_id
+            organization_id,
+            status,
+            customer_id,
         )
         org_id = coerce_uuid(organization_id)
 
@@ -178,24 +181,30 @@ class QuoteWebService:
         # Format for template
         items = []
         for q in quotes:
-            items.append({
-                "quote_id": str(q.quote_id),
-                "quote_number": q.quote_number,
-                "quote_date": format_date(q.quote_date),
-                "valid_until": format_date(q.valid_until),
-                "customer_name": _customer_display_name(q.customer),
-                "total_amount": format_currency(q.total_amount, q.currency_code),
-                "status": q.status.value,
-                "is_expired": q.is_expired,
-            })
+            items.append(
+                {
+                    "quote_id": str(q.quote_id),
+                    "quote_number": q.quote_number,
+                    "quote_date": format_date(q.quote_date),
+                    "valid_until": format_date(q.valid_until),
+                    "customer_name": _customer_display_name(q.customer),
+                    "total_amount": format_currency(q.total_amount, q.currency_code),
+                    "status": q.status.value,
+                    "is_expired": q.is_expired,
+                }
+            )
 
         # Status counts
         status_counts = {}
         for s in QuoteStatus:
-            count = db.query(Quote).filter(
-                Quote.organization_id == org_id,
-                Quote.status == s,
-            ).count()
+            count = (
+                db.query(Quote)
+                .filter(
+                    Quote.organization_id == org_id,
+                    Quote.status == s,
+                )
+                .count()
+            )
             status_counts[s.value] = count
 
         # Customers for filter dropdown
@@ -248,7 +257,9 @@ class QuoteWebService:
             "contact_name": quote.contact_name or "-",
             "contact_email": quote.contact_email or "-",
             "subtotal": format_currency(quote.subtotal, quote.currency_code),
-            "discount_amount": format_currency(quote.discount_amount, quote.currency_code),
+            "discount_amount": format_currency(
+                quote.discount_amount, quote.currency_code
+            ),
             "tax_amount": format_currency(quote.tax_amount, quote.currency_code),
             "total_amount": format_currency(quote.total_amount, quote.currency_code),
             "currency_code": quote.currency_code,
@@ -258,20 +269,39 @@ class QuoteWebService:
             "internal_notes": quote.internal_notes or "",
             "terms_and_conditions": quote.terms_and_conditions or "",
             "reference": quote.reference or "-",
-            "payment_terms": quote.payment_terms.terms_name if quote.payment_terms else "-",
-            "sent_at": quote.sent_at.strftime("%Y-%m-%d %H:%M") if quote.sent_at else None,
-            "viewed_at": quote.viewed_at.strftime("%Y-%m-%d %H:%M") if quote.viewed_at else None,
-            "accepted_at": quote.accepted_at.strftime("%Y-%m-%d %H:%M") if quote.accepted_at else None,
-            "rejected_at": quote.rejected_at.strftime("%Y-%m-%d %H:%M") if quote.rejected_at else None,
+            "payment_terms": quote.payment_terms.terms_name
+            if quote.payment_terms
+            else "-",
+            "sent_at": quote.sent_at.strftime("%Y-%m-%d %H:%M")
+            if quote.sent_at
+            else None,
+            "viewed_at": quote.viewed_at.strftime("%Y-%m-%d %H:%M")
+            if quote.viewed_at
+            else None,
+            "accepted_at": quote.accepted_at.strftime("%Y-%m-%d %H:%M")
+            if quote.accepted_at
+            else None,
+            "rejected_at": quote.rejected_at.strftime("%Y-%m-%d %H:%M")
+            if quote.rejected_at
+            else None,
             "rejection_reason": quote.rejection_reason,
-            "converted_at": quote.converted_at.strftime("%Y-%m-%d %H:%M") if quote.converted_at else None,
-            "converted_to_invoice_id": str(quote.converted_to_invoice_id) if quote.converted_to_invoice_id else None,
-            "converted_to_so_id": str(quote.converted_to_so_id) if quote.converted_to_so_id else None,
-            "created_at": quote.created_at.strftime("%Y-%m-%d %H:%M") if quote.created_at else "",
+            "converted_at": quote.converted_at.strftime("%Y-%m-%d %H:%M")
+            if quote.converted_at
+            else None,
+            "converted_to_invoice_id": str(quote.converted_to_invoice_id)
+            if quote.converted_to_invoice_id
+            else None,
+            "converted_to_so_id": str(quote.converted_to_so_id)
+            if quote.converted_to_so_id
+            else None,
+            "created_at": quote.created_at.strftime("%Y-%m-%d %H:%M")
+            if quote.created_at
+            else "",
             # Actions
             "can_edit": quote.status == QuoteStatus.DRAFT,
             "can_send": quote.status == QuoteStatus.DRAFT,
-            "can_accept": quote.status in [QuoteStatus.SENT, QuoteStatus.VIEWED] and not quote.is_expired,
+            "can_accept": quote.status in [QuoteStatus.SENT, QuoteStatus.VIEWED]
+            and not quote.is_expired,
             "can_reject": quote.status in [QuoteStatus.SENT, QuoteStatus.VIEWED],
             "can_convert": quote.status == QuoteStatus.ACCEPTED,
             "can_void": quote.status not in [QuoteStatus.CONVERTED, QuoteStatus.VOID],
@@ -280,16 +310,20 @@ class QuoteWebService:
         # Format lines
         lines = []
         for line in quote.lines:
-            lines.append({
-                "line_number": line.line_number,
-                "item_code": line.item_code or "-",
-                "description": line.description,
-                "quantity": str(line.quantity),
-                "unit_price": format_currency(line.unit_price, quote.currency_code),
-                "discount": format_currency(line.discount_amount, quote.currency_code),
-                "tax": format_currency(line.tax_amount, quote.currency_code),
-                "line_total": format_currency(line.line_total, quote.currency_code),
-            })
+            lines.append(
+                {
+                    "line_number": line.line_number,
+                    "item_code": line.item_code or "-",
+                    "description": line.description,
+                    "quantity": str(line.quantity),
+                    "unit_price": format_currency(line.unit_price, quote.currency_code),
+                    "discount": format_currency(
+                        line.discount_amount, quote.currency_code
+                    ),
+                    "tax": format_currency(line.tax_amount, quote.currency_code),
+                    "line_total": format_currency(line.line_total, quote.currency_code),
+                }
+            )
 
         return {"quote": quote_data, "lines": lines}
 
@@ -315,10 +349,7 @@ class QuoteWebService:
         terms_and_conditions: Optional[str] = None,
     ) -> tuple[Optional[Quote], Optional[str]]:
         """Create a new quote. Returns (quote, error)."""
-        logger.debug(
-            "create_quote: org=%s customer=%s",
-            organization_id, customer_id
-        )
+        logger.debug("create_quote: org=%s customer=%s", organization_id, customer_id)
         try:
             lines = json.loads(lines_json) if lines_json else []
 
@@ -350,7 +381,11 @@ class QuoteWebService:
                 lines=lines,
             )
             db.commit()
-            logger.info("create_quote: created %s for org %s", quote.quote_number, organization_id)
+            logger.info(
+                "create_quote: created %s for org %s",
+                quote.quote_number,
+                organization_id,
+            )
             return quote, None
 
         except Exception as e:
@@ -398,7 +433,9 @@ class QuoteWebService:
         context.update(self.form_context(db, auth.organization_id))
         context["quote"] = None
         context["selected_customer_id"] = customer_id
-        return templates.TemplateResponse(request, "finance/ar/quote_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/quote_form.html", context
+        )
 
     def create_response(
         self,
@@ -440,7 +477,9 @@ class QuoteWebService:
             context.update(self.form_context(db, auth.organization_id))
             context["quote"] = None
             context["error"] = error or "Quote creation failed"
-            return templates.TemplateResponse(request, "finance/ar/quote_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/quote_form.html", context
+            )
 
         return RedirectResponse(url=f"/quotes/{quote.quote_id}", status_code=303)
 
@@ -457,12 +496,16 @@ class QuoteWebService:
         if detail_ctx["quote"] is None:
             context = base_context(request, auth, "Quote Not Found", "quotes")
             context["quote"] = None
-            return templates.TemplateResponse(request, "finance/ar/quote_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/quote_detail.html", context
+            )
 
         quote_number = detail_ctx["quote"]["quote_number"]
         context = base_context(request, auth, f"Quote {quote_number}", "quotes")
         context.update(detail_ctx)
-        return templates.TemplateResponse(request, "finance/ar/quote_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/quote_detail.html", context
+        )
 
     def send_response(
         self,
@@ -473,7 +516,9 @@ class QuoteWebService:
     ) -> RedirectResponse:
         """Handle send quote action."""
         try:
-            quote_service.send(db, str(auth.organization_id), quote_id, str(auth.user_id))
+            quote_service.send(
+                db, str(auth.organization_id), quote_id, str(auth.user_id)
+            )
             db.commit()
         except Exception:
             db.rollback()
@@ -523,7 +568,9 @@ class QuoteWebService:
                 db, str(auth.organization_id), quote_id, str(auth.user_id)
             )
             db.commit()
-            return RedirectResponse(url=f"/ar/invoices/{invoice.invoice_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/ar/invoices/{invoice.invoice_id}", status_code=303
+            )
         except Exception:
             db.rollback()
             return RedirectResponse(url=f"/quotes/{quote_id}", status_code=303)
@@ -539,7 +586,10 @@ class QuoteWebService:
         """Handle convert to sales order action."""
         try:
             so = quote_service.convert_to_sales_order(
-                db, str(auth.organization_id), quote_id, str(auth.user_id),
+                db,
+                str(auth.organization_id),
+                quote_id,
+                str(auth.user_id),
                 customer_po_number=customer_po_number,
             )
             db.commit()
@@ -557,7 +607,9 @@ class QuoteWebService:
     ) -> RedirectResponse:
         """Handle void quote action."""
         try:
-            quote_service.void(db, str(auth.organization_id), quote_id, str(auth.user_id))
+            quote_service.void(
+                db, str(auth.organization_id), quote_id, str(auth.user_id)
+            )
             db.commit()
         except Exception:
             db.rollback()

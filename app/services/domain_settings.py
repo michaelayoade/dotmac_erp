@@ -16,6 +16,8 @@ from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
 from app.services.settings_cache import invalidate_setting_cache
 
+logger = logging.getLogger(__name__)
+
 # Structured logger for settings audit trail
 settings_audit_logger = logging.getLogger("dotmac.settings.audit")
 
@@ -156,7 +158,9 @@ def _record_setting_history(
     return history
 
 
-def _apply_ordering(query, order_by, order_dir, allowed_columns):
+def _apply_ordering(
+    query: Any, order_by: str, order_dir: str, allowed_columns: dict[str, Any]
+) -> Any:
     if order_by not in allowed_columns:
         raise HTTPException(
             status_code=400,
@@ -168,7 +172,7 @@ def _apply_ordering(query, order_by, order_dir, allowed_columns):
     return query.order_by(column.asc())
 
 
-def _apply_pagination(query, limit, offset):
+def _apply_pagination(query: Any, limit: int, offset: int) -> Any:
     return query.limit(limit).offset(offset)
 
 
@@ -198,7 +202,9 @@ def _normalize_setting_values(
         try:
             int_value = int(str(raw_value))
         except (TypeError, ValueError) as exc:
-            raise HTTPException(status_code=400, detail="Value must be an integer") from exc
+            raise HTTPException(
+                status_code=400, detail="Value must be an integer"
+            ) from exc
         return str(int_value), None
     if value_type == SettingValueType.string:
         return str(raw_value), None
@@ -228,7 +234,7 @@ class DomainSettings(ListResponseMixin):
         change_reason: str | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
-    ):
+    ) -> DomainSetting:
         data = payload.model_dump()
         data["domain"] = self._resolve_domain(payload.domain)
         value_type = data.get("value_type") or SettingValueType.string
@@ -279,7 +285,7 @@ class DomainSettings(ListResponseMixin):
 
         return setting
 
-    def get(self, db: Session, setting_id: str):
+    def get(self, db: Session, setting_id: str) -> DomainSetting:
         setting = db.get(DomainSetting, coerce_uuid(setting_id))
         if not setting or (self.domain and setting.domain != self.domain):
             raise HTTPException(status_code=404, detail="Setting not found")
@@ -294,7 +300,7 @@ class DomainSettings(ListResponseMixin):
         order_dir: str,
         limit: int,
         offset: int,
-    ):
+    ) -> list[DomainSetting]:
         query = db.query(DomainSetting)
         effective_domain = self.domain or domain
         if effective_domain:
@@ -320,7 +326,7 @@ class DomainSettings(ListResponseMixin):
         change_reason: str | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
-    ):
+    ) -> DomainSetting:
         setting = db.get(DomainSetting, coerce_uuid(setting_id))
         if not setting or (self.domain and setting.domain != self.domain):
             raise HTTPException(status_code=404, detail="Setting not found")
@@ -338,8 +344,12 @@ class DomainSettings(ListResponseMixin):
             raise HTTPException(status_code=400, detail="Setting domain mismatch")
         if {"value_type", "value_text", "value_json"} & data.keys():
             value_type = data.get("value_type", setting.value_type)
-            value_text = data["value_text"] if "value_text" in data else setting.value_text
-            value_json = data["value_json"] if "value_json" in data else setting.value_json
+            value_text = (
+                data["value_text"] if "value_text" in data else setting.value_text
+            )
+            value_json = (
+                data["value_json"] if "value_json" in data else setting.value_json
+            )
             if "value_text" in data and "value_json" not in data:
                 value_json = None
             if "value_json" in data and "value_text" not in data:
@@ -389,7 +399,7 @@ class DomainSettings(ListResponseMixin):
 
         return setting
 
-    def get_by_key(self, db: Session, key: str):
+    def get_by_key(self, db: Session, key: str) -> DomainSetting:
         if not self.domain:
             raise HTTPException(status_code=400, detail="Setting domain is required")
         setting = (
@@ -411,7 +421,7 @@ class DomainSettings(ListResponseMixin):
         change_reason: str | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
-    ):
+    ) -> DomainSetting:
         if not self.domain:
             raise HTTPException(status_code=400, detail="Setting domain is required")
         setting = (
@@ -496,7 +506,7 @@ class DomainSettings(ListResponseMixin):
         value_text: str | None = None,
         value_json: dict[str, Any] | List[Any] | bool | int | None = None,
         is_secret: bool = False,
-    ):
+    ) -> DomainSetting:
         if not self.domain:
             raise HTTPException(status_code=400, detail="Setting domain is required")
         existing = (
@@ -526,7 +536,7 @@ class DomainSettings(ListResponseMixin):
         change_reason: str | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
-    ):
+    ) -> DomainSetting:
         setting = db.get(DomainSetting, coerce_uuid(setting_id))
         if not setting or (self.domain and setting.domain != self.domain):
             raise HTTPException(status_code=404, detail="Setting not found")
@@ -709,14 +719,18 @@ def restore_from_history(
         restore_value_text = history.old_value_text
         restore_value_json = history.old_value_json
         restore_is_secret = history.old_is_secret
-        restore_is_active = history.old_is_active if history.old_is_active is not None else True
+        restore_is_active = (
+            history.old_is_active if history.old_is_active is not None else True
+        )
     elif history.action == SettingChangeAction.UPDATE:
         # Restoring from UPDATE means we use the old values (before update)
         restore_value_type = history.old_value_type
         restore_value_text = history.old_value_text
         restore_value_json = history.old_value_json
         restore_is_secret = history.old_is_secret
-        restore_is_active = history.old_is_active if history.old_is_active is not None else True
+        restore_is_active = (
+            history.old_is_active if history.old_is_active is not None else True
+        )
     else:  # CREATE
         # Restoring from CREATE would mean deleting (not typically wanted)
         raise HTTPException(
@@ -735,10 +749,16 @@ def restore_from_history(
         old_is_active = setting.is_active
 
         # Apply restored values
-        setting.value_type = SettingValueType(restore_value_type) if restore_value_type else SettingValueType.string
+        setting.value_type = (
+            SettingValueType(restore_value_type)
+            if restore_value_type
+            else SettingValueType.string
+        )
         setting.value_text = restore_value_text
         setting.value_json = restore_value_json
-        setting.is_secret = restore_is_secret if restore_is_secret is not None else False
+        setting.is_secret = (
+            restore_is_secret if restore_is_secret is not None else False
+        )
         setting.is_active = restore_is_active
 
         # Record this restore as an UPDATE in history
@@ -764,7 +784,9 @@ def restore_from_history(
         setting = DomainSetting(
             domain=domain,
             key=history.key,
-            value_type=SettingValueType(restore_value_type) if restore_value_type else SettingValueType.string,
+            value_type=SettingValueType(restore_value_type)
+            if restore_value_type
+            else SettingValueType.string,
             value_text=restore_value_text,
             value_json=restore_value_json,
             is_secret=restore_is_secret if restore_is_secret is not None else False,

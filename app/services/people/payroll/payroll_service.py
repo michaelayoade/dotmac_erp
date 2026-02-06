@@ -3,36 +3,40 @@ Payroll service - structures, assignments, and payroll entries.
 
 Builds payroll runs and generates salary slips using SalarySlipService.
 """
+
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import and_, case, func, literal_column, or_, select
+from sqlalchemy import func, literal_column, or_, select
 from sqlalchemy.orm import Session
 
+from app.models.domain_settings import SettingDomain
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.payroll.payroll_entry import PayrollEntry, PayrollEntryStatus
 from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
 from app.models.people.payroll.salary_component import SalaryComponent
+from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
 from app.models.people.payroll.salary_structure import (
     PayrollFrequency,
     SalaryStructure,
     SalaryStructureDeduction,
     SalaryStructureEarning,
 )
-from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
 from app.services.common import PaginatedResult, PaginationParams, coerce_uuid
-from app.models.domain_settings import SettingDomain
 from app.services.people.integrations.payroll_gl_adapter import PayrollGLAdapter
 from app.services.people.payroll.salary_slip_service import (
     SalarySlipInput,
     salary_slip_service,
 )
 from app.services.settings_cache import get_cached_setting
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["PayrollService", "PayrollServiceError", "AutoGenerateResult"]
 
@@ -50,6 +54,7 @@ def _dispatch_slip_paid(slip_id: UUID, slip_number: str, employee_id: UUID) -> N
         employee_id: The employee ID
     """
     import logging
+
     logger = logging.getLogger(__name__)
     logger.debug(
         "Dispatching slip paid event for slip %s (employee %s)",
@@ -232,7 +237,9 @@ class PayrollService:
                     SalaryStructureEarning(
                         component_id=line["component_id"],
                         amount=line.get("amount", Decimal("0")),
-                        amount_based_on_formula=line.get("amount_based_on_formula", False),
+                        amount_based_on_formula=line.get(
+                            "amount_based_on_formula", False
+                        ),
                         formula=line.get("formula"),
                         condition=line.get("condition"),
                         display_order=line.get("display_order", 0),
@@ -249,7 +256,9 @@ class PayrollService:
                     SalaryStructureDeduction(
                         component_id=line["component_id"],
                         amount=line.get("amount", Decimal("0")),
-                        amount_based_on_formula=line.get("amount_based_on_formula", False),
+                        amount_based_on_formula=line.get(
+                            "amount_based_on_formula", False
+                        ),
                         formula=line.get("formula"),
                         condition=line.get("condition"),
                         display_order=line.get("display_order", 0),
@@ -304,7 +313,9 @@ class PayrollService:
             limit=pagination.limit if pagination else len(items),
         )
 
-    def get_assignment(self, org_id: UUID, assignment_id: UUID) -> SalaryStructureAssignment:
+    def get_assignment(
+        self, org_id: UUID, assignment_id: UUID
+    ) -> SalaryStructureAssignment:
         assignment = self.db.scalar(
             select(SalaryStructureAssignment).where(
                 SalaryStructureAssignment.organization_id == org_id,
@@ -468,7 +479,9 @@ class PayrollService:
     ) -> PayrollEntry:
         entry = self.get_payroll_entry(org_id, entry_id)
         if entry.salary_slips_created:
-            raise PayrollServiceError("Cannot update payroll entry after slips are created")
+            raise PayrollServiceError(
+                "Cannot update payroll entry after slips are created"
+            )
 
         for key, value in kwargs.items():
             if value is not None and hasattr(entry, key):
@@ -480,7 +493,9 @@ class PayrollService:
     def delete_payroll_entry(self, org_id: UUID, entry_id: UUID) -> None:
         entry = self.get_payroll_entry(org_id, entry_id)
         if entry.salary_slips_created:
-            raise PayrollServiceError("Cannot delete payroll entry after slips are created")
+            raise PayrollServiceError(
+                "Cannot delete payroll entry after slips are created"
+            )
         self.db.delete(entry)
         self.db.flush()
 
@@ -559,20 +574,22 @@ class PayrollService:
         """
         import logging
 
-        from app.services.people.payroll.working_days_calculator import (
-            WorkingDaysCalculator,
-            ProrationReason,
-        )
-        from app.services.people.payroll.leave_adapter import LeavePayrollAdapter
         from app.services.people.payroll.data_completeness import (
             PayrollReadinessService,
+        )
+        from app.services.people.payroll.leave_adapter import LeavePayrollAdapter
+        from app.services.people.payroll.working_days_calculator import (
+            ProrationReason,
+            WorkingDaysCalculator,
         )
 
         logger = logging.getLogger(__name__)
 
         entry = self.get_payroll_entry(org_id, entry_id)
         if entry.salary_slips_created:
-            raise PayrollServiceError("Salary slips already created. Use regenerate instead.")
+            raise PayrollServiceError(
+                "Salary slips already created. Use regenerate instead."
+            )
 
         # Get eligible employees (with salary assignments)
         assignments = self._get_entry_assignments(org_id, entry)
@@ -682,13 +699,15 @@ class PayrollService:
                 if review_reasons:
                     slip.needs_review = True
                     slip.review_reasons = review_reasons
-                    result.flagged_for_review.append({
-                        "employee_id": str(employee.employee_id),
-                        "employee_code": employee.employee_code,
-                        "employee_name": employee.full_name,
-                        "slip_id": str(slip.slip_id),
-                        "reasons": review_reasons,
-                    })
+                    result.flagged_for_review.append(
+                        {
+                            "employee_id": str(employee.employee_id),
+                            "employee_code": employee.employee_code,
+                            "employee_name": employee.full_name,
+                            "slip_id": str(slip.slip_id),
+                            "reasons": review_reasons,
+                        }
+                    )
 
                 result.created += 1
 
@@ -697,10 +716,12 @@ class PayrollService:
                     "Failed to create slip for employee %s",
                     assignment.employee_id,
                 )
-                result.errors.append({
-                    "employee_id": str(assignment.employee_id),
-                    "error": str(e),
-                })
+                result.errors.append(
+                    {
+                        "employee_id": str(assignment.employee_id),
+                        "error": str(e),
+                    }
+                )
 
         # Update entry totals and status
         self._update_entry_totals(entry)
@@ -814,6 +835,7 @@ class PayrollService:
                     )
         except Exception as notify_err:
             import logging
+
             logging.getLogger(__name__).warning(
                 "Payroll approve: failed to notify slips for entry %s: %s",
                 entry_id,
@@ -823,7 +845,9 @@ class PayrollService:
         entry.status = PayrollEntryStatus.APPROVED
         self.db.flush()
 
-        if get_cached_setting(self.db, SettingDomain.payroll, "auto_post_gl_on_approval", True):
+        if get_cached_setting(
+            self.db, SettingDomain.payroll, "auto_post_gl_on_approval", True
+        ):
             posting_result = self.handoff_payroll_to_books(
                 org_id,
                 entry_id,
@@ -833,7 +857,8 @@ class PayrollService:
             )
             if not posting_result.get("success"):
                 raise PayrollServiceError(
-                    posting_result.get("error") or "Payroll approved but GL posting failed"
+                    posting_result.get("error")
+                    or "Payroll approved but GL posting failed"
                 )
         return entry
 
@@ -858,6 +883,7 @@ class PayrollService:
         from app.services.people.payroll.payroll_notifications import (
             PayrollNotificationService,
         )
+
         notification_service = PayrollNotificationService(self.db)
 
         paid_slips: list[SalarySlip] = []
@@ -882,6 +908,7 @@ class PayrollService:
                     notification_service.notify_payslip_paid(slip, employee)
             except Exception as notify_err:
                 import logging
+
                 logging.getLogger(__name__).warning(
                     "Failed to send payment notification for slip %s: %s",
                     slip.slip_id,
@@ -929,7 +956,9 @@ class PayrollService:
     ) -> list[SalaryStructureAssignment]:
         query = (
             self.db.query(SalaryStructureAssignment)
-            .join(Employee, SalaryStructureAssignment.employee_id == Employee.employee_id)
+            .join(
+                Employee, SalaryStructureAssignment.employee_id == Employee.employee_id
+            )
             .filter(SalaryStructureAssignment.organization_id == org_id)
             .filter(SalaryStructureAssignment.from_date <= entry.start_date)
             .filter(
@@ -938,7 +967,9 @@ class PayrollService:
                     SalaryStructureAssignment.to_date >= entry.start_date,
                 )
             )
-            .filter(Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]))
+            .filter(
+                Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE])
+            )
         )
         if entry.department_id:
             query = query.filter(Employee.department_id == entry.department_id)
@@ -949,9 +980,7 @@ class PayrollService:
     def _update_entry_totals(self, entry: PayrollEntry) -> None:
         slips = list(
             self.db.scalars(
-                select(SalarySlip).where(
-                    SalarySlip.payroll_entry_id == entry.entry_id
-                )
+                select(SalarySlip).where(SalarySlip.payroll_entry_id == entry.entry_id)
             ).all()
         )
         entry.employee_count = len(slips)
@@ -984,7 +1013,6 @@ class PayrollService:
 
         Returns total gross, deductions, net pay, and breakdown by status.
         """
-        from app.models.people.hr import Department
 
         today = date.today()
         if not start_date:
@@ -1025,14 +1053,16 @@ class PayrollService:
             deductions = row.total_deductions or Decimal("0")
             net = row.total_net or Decimal("0")
 
-            status_breakdown.append({
-                "status": row.status.value if row.status else "Unknown",
-                "run_count": run_count,
-                "employee_count": emp_count,
-                "total_gross": gross,
-                "total_deductions": deductions,
-                "total_net": net,
-            })
+            status_breakdown.append(
+                {
+                    "status": row.status.value if row.status else "Unknown",
+                    "run_count": run_count,
+                    "employee_count": emp_count,
+                    "total_gross": gross,
+                    "total_deductions": deductions,
+                    "total_net": net,
+                }
+            )
 
             total_runs += run_count
             total_employees += emp_count
@@ -1104,14 +1134,18 @@ class PayrollService:
             deductions = row.total_deductions or Decimal("0")
             net = row.total_net or Decimal("0")
 
-            departments.append({
-                "department_id": str(row.department_id) if row.department_id else None,
-                "department_name": row.department_name or "No Department",
-                "slip_count": row.slip_count or 0,
-                "total_gross": gross,
-                "total_deductions": deductions,
-                "total_net": net,
-            })
+            departments.append(
+                {
+                    "department_id": str(row.department_id)
+                    if row.department_id
+                    else None,
+                    "department_name": row.department_name or "No Department",
+                    "slip_count": row.slip_count or 0,
+                    "total_gross": gross,
+                    "total_deductions": deductions,
+                    "total_net": net,
+                }
+            )
 
             total_gross += gross
             total_deductions += deductions
@@ -1168,7 +1202,10 @@ class PayrollService:
             )
             .select_from(SalarySlipDeduction)
             .join(SalarySlip, SalarySlipDeduction.slip_id == SalarySlip.slip_id)
-            .join(SalaryComponent, SalarySlipDeduction.component_id == SalaryComponent.component_id)
+            .join(
+                SalaryComponent,
+                SalarySlipDeduction.component_id == SalaryComponent.component_id,
+            )
             .filter(
                 SalarySlip.organization_id == org_id,
                 SalarySlip.start_date >= start_date,
@@ -1190,14 +1227,16 @@ class PayrollService:
 
         for row in results:
             amount = row.total_amount or Decimal("0")
-            deductions.append({
-                "component_id": str(row.component_id),
-                "component_name": row.component_name,
-                "component_code": row.component_code,
-                "is_statutory": row.is_statutory,
-                "deduction_count": row.deduction_count or 0,
-                "total_amount": amount,
-            })
+            deductions.append(
+                {
+                    "component_id": str(row.component_id),
+                    "component_name": row.component_name,
+                    "component_code": row.component_code,
+                    "is_statutory": row.is_statutory,
+                    "deduction_count": row.deduction_count or 0,
+                    "total_amount": amount,
+                }
+            )
 
             if row.is_statutory:
                 statutory_total += amount
@@ -1208,7 +1247,11 @@ class PayrollService:
 
         # Calculate percentages
         for d in deductions:
-            d["percentage"] = round(float(d["total_amount"]) / float(total_deductions) * 100, 1) if total_deductions > 0 else 0
+            d["percentage"] = (
+                round(float(d["total_amount"]) / float(total_deductions) * 100, 1)
+                if total_deductions > 0
+                else 0
+            )
 
         return {
             "start_date": start_date,
@@ -1285,14 +1328,16 @@ class PayrollService:
                 total_gross += monthly_data[month_key]["total_gross"]
                 total_net += monthly_data[month_key]["total_net"]
             else:
-                months_list.append({
-                    "month": month_key,
-                    "month_label": current.strftime("%b %Y"),
-                    "slip_count": 0,
-                    "total_gross": Decimal("0"),
-                    "total_deductions": Decimal("0"),
-                    "total_net": Decimal("0"),
-                })
+                months_list.append(
+                    {
+                        "month": month_key,
+                        "month_label": current.strftime("%b %Y"),
+                        "slip_count": 0,
+                        "total_gross": Decimal("0"),
+                        "total_deductions": Decimal("0"),
+                        "total_net": Decimal("0"),
+                    }
+                )
             current = current + relativedelta(months=1)
 
         num_months = len(months_list)
@@ -1325,8 +1370,8 @@ class PayrollService:
         Returns:
             Dict with 'totals' and 'rows' keys
         """
-        from app.models.people.payroll.salary_slip import SalarySlipDeduction
         from app.models.people.payroll.salary_component import SalaryComponent
+        from app.models.people.payroll.salary_slip import SalarySlipDeduction
         from app.models.person import Person
 
         # Allow string org_id for testing compatibility
@@ -1346,7 +1391,9 @@ class PayrollService:
             self.db.query(
                 SalarySlip.employee_id,
                 Employee.employee_code,
-                func.concat(Person.first_name, " ", Person.last_name).label("employee_name"),
+                func.concat(Person.first_name, " ", Person.last_name).label(
+                    "employee_name"
+                ),
                 func.coalesce(Employee.department_id, None).label("department_name"),
                 func.count(SalarySlip.slip_id).label("slip_count"),
                 func.sum(SalarySlip.gross_pay).label("total_gross"),
@@ -1381,7 +1428,10 @@ class PayrollService:
             )
             .select_from(SalarySlipDeduction)
             .join(SalarySlip, SalarySlipDeduction.slip_id == SalarySlip.slip_id)
-            .join(SalaryComponent, SalarySlipDeduction.component_id == SalaryComponent.component_id)
+            .join(
+                SalaryComponent,
+                SalarySlipDeduction.component_id == SalaryComponent.component_id,
+            )
             .filter(
                 SalarySlip.organization_id == org_id,
                 SalarySlip.start_date >= year_start,
@@ -1402,7 +1452,9 @@ class PayrollService:
             emp_id = str(row.employee_id)
             if emp_id not in deductions_by_employee:
                 deductions_by_employee[emp_id] = {}
-            deductions_by_employee[emp_id][row.component_code] = row.total_amount or Decimal("0")
+            deductions_by_employee[emp_id][row.component_code] = (
+                row.total_amount or Decimal("0")
+            )
 
             if row.component_code == "PAYE":
                 total_paye += row.total_amount or Decimal("0")
@@ -1422,19 +1474,21 @@ class PayrollService:
             emp_id = str(base_row.employee_id)
             emp_deductions = deductions_by_employee.get(emp_id, {})
 
-            rows.append({
-                "employee_id": emp_id,
-                "employee_code": base_row.employee_code,
-                "employee_name": base_row.employee_name,
-                "department_name": base_row.department_name,
-                "slip_count": base_row.slip_count,
-                "total_gross": base_row.total_gross or Decimal("0"),
-                "total_deductions": base_row.total_deductions or Decimal("0"),
-                "total_net": base_row.total_net or Decimal("0"),
-                "paye": emp_deductions.get("PAYE", Decimal("0")),
-                "pension": emp_deductions.get("PENSION", Decimal("0")),
-                "nhf": emp_deductions.get("NHF", Decimal("0")),
-            })
+            rows.append(
+                {
+                    "employee_id": emp_id,
+                    "employee_code": base_row.employee_code,
+                    "employee_name": base_row.employee_name,
+                    "department_name": base_row.department_name,
+                    "slip_count": base_row.slip_count,
+                    "total_gross": base_row.total_gross or Decimal("0"),
+                    "total_deductions": base_row.total_deductions or Decimal("0"),
+                    "total_net": base_row.total_net or Decimal("0"),
+                    "paye": emp_deductions.get("PAYE", Decimal("0")),
+                    "pension": emp_deductions.get("PENSION", Decimal("0")),
+                    "nhf": emp_deductions.get("NHF", Decimal("0")),
+                }
+            )
 
             total_gross += base_row.total_gross or Decimal("0")
             total_deductions += base_row.total_deductions or Decimal("0")

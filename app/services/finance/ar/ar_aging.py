@@ -6,25 +6,27 @@ Generates aging snapshots and provides aging analysis for AR management.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
-import uuid as uuid_lib
 
-from sqlalchemy import and_, func
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
+from app.models.finance.ar.ar_aging_snapshot import ARAgingSnapshot
 from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.invoice import (
     Invoice,
     InvoiceStatus,
 )
-from app.models.finance.ar.ar_aging_snapshot import ARAgingSnapshot
 from app.services.common import coerce_uuid
-from app.services.response import ListResponseMixin
 from app.services.finance.platform.org_context import org_context_service
+from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -318,9 +320,7 @@ class ARAgingService(ListResponseMixin):
         ref_date = as_of_date or date.today()
 
         # Get aging by customer
-        customer_aging = ARAgingService.get_aging_by_customer(
-            db, org_id, ref_date
-        )
+        customer_aging = ARAgingService.get_aging_by_customer(db, org_id, ref_date)
 
         snapshots = []
         bucket_configs = [
@@ -341,7 +341,9 @@ class ARAgingService(ListResponseMixin):
                         customer_id=aging.customer_id,
                         aging_bucket=bucket_name,
                         amount_functional=amount,
-                        invoice_count=aging.invoice_count if bucket_name == "Current" else 0,
+                        invoice_count=aging.invoice_count
+                        if bucket_name == "Current"
+                        else 0,
                         currency_code=aging.currency_code,
                         amount_original_currency=amount,
                     )
@@ -391,9 +393,7 @@ class ARAgingService(ListResponseMixin):
         )
 
         if customer_id:
-            query = query.filter(
-                Invoice.customer_id == coerce_uuid(customer_id)
-            )
+            query = query.filter(Invoice.customer_id == coerce_uuid(customer_id))
 
         invoices = query.order_by(Invoice.due_date).all()
 

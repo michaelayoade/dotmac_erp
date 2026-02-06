@@ -18,7 +18,6 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.people.hr import Employee
 from app.models.people.hr.checklist_template import (
     AssigneeRole,
     ChecklistTemplate,
@@ -56,41 +55,54 @@ class OnboardingAdminWebService:
         org_id = coerce_uuid(auth.organization_id)
 
         # Get active onboardings count
-        active_count = db.scalar(
-            select(func.count(EmployeeOnboarding.onboarding_id)).where(
-                EmployeeOnboarding.organization_id == org_id,
-                EmployeeOnboarding.status.in_([
-                    BoardingStatus.PENDING,
-                    BoardingStatus.IN_PROGRESS,
-                ]),
+        active_count = (
+            db.scalar(
+                select(func.count(EmployeeOnboarding.onboarding_id)).where(
+                    EmployeeOnboarding.organization_id == org_id,
+                    EmployeeOnboarding.status.in_(
+                        [
+                            BoardingStatus.PENDING,
+                            BoardingStatus.IN_PROGRESS,
+                        ]
+                    ),
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Get overdue activities count
         today = date.today()
-        overdue_count = db.scalar(
-            select(func.count(EmployeeOnboardingActivity.activity_id))
-            .join(EmployeeOnboarding)
-            .where(
-                EmployeeOnboarding.organization_id == org_id,
-                EmployeeOnboarding.status.in_([
-                    BoardingStatus.PENDING,
-                    BoardingStatus.IN_PROGRESS,
-                ]),
-                EmployeeOnboardingActivity.activity_status == "PENDING",
-                EmployeeOnboardingActivity.due_date < today,
+        overdue_count = (
+            db.scalar(
+                select(func.count(EmployeeOnboardingActivity.activity_id))
+                .join(EmployeeOnboarding)
+                .where(
+                    EmployeeOnboarding.organization_id == org_id,
+                    EmployeeOnboarding.status.in_(
+                        [
+                            BoardingStatus.PENDING,
+                            BoardingStatus.IN_PROGRESS,
+                        ]
+                    ),
+                    EmployeeOnboardingActivity.activity_status == "PENDING",
+                    EmployeeOnboardingActivity.due_date < today,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Get completed this month
         first_of_month = today.replace(day=1)
-        completed_this_month = db.scalar(
-            select(func.count(EmployeeOnboarding.onboarding_id)).where(
-                EmployeeOnboarding.organization_id == org_id,
-                EmployeeOnboarding.status == BoardingStatus.COMPLETED,
-                EmployeeOnboarding.actual_completion_date >= first_of_month,
+        completed_this_month = (
+            db.scalar(
+                select(func.count(EmployeeOnboarding.onboarding_id)).where(
+                    EmployeeOnboarding.organization_id == org_id,
+                    EmployeeOnboarding.status == BoardingStatus.COMPLETED,
+                    EmployeeOnboarding.actual_completion_date >= first_of_month,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Get recent completions (last 5)
         recent_completions = list(
@@ -114,10 +126,12 @@ class OnboardingAdminWebService:
                 .options(joinedload(EmployeeOnboarding.employee))
                 .where(
                     EmployeeOnboarding.organization_id == org_id,
-                    EmployeeOnboarding.status.in_([
-                        BoardingStatus.PENDING,
-                        BoardingStatus.IN_PROGRESS,
-                    ]),
+                    EmployeeOnboarding.status.in_(
+                        [
+                            BoardingStatus.PENDING,
+                            BoardingStatus.IN_PROGRESS,
+                        ]
+                    ),
                     EmployeeOnboarding.date_of_joining >= today,
                     EmployeeOnboarding.date_of_joining <= next_week,
                 )
@@ -127,22 +141,29 @@ class OnboardingAdminWebService:
         )
 
         # Template count
-        template_count = db.scalar(
-            select(func.count(ChecklistTemplate.template_id)).where(
-                ChecklistTemplate.organization_id == org_id,
-                ChecklistTemplate.is_active == True,
+        template_count = (
+            db.scalar(
+                select(func.count(ChecklistTemplate.template_id)).where(
+                    ChecklistTemplate.organization_id == org_id,
+                    ChecklistTemplate.is_active == True,
+                )
             )
-        ) or 0
+            or 0
+        )
 
-        context = base_context(request, auth, "Onboarding Dashboard", "onboarding", db=db)
-        context.update({
-            "active_count": active_count,
-            "overdue_count": overdue_count,
-            "completed_this_month": completed_this_month,
-            "recent_completions": recent_completions,
-            "upcoming_starts": upcoming_starts,
-            "template_count": template_count,
-        })
+        context = base_context(
+            request, auth, "Onboarding Dashboard", "onboarding", db=db
+        )
+        context.update(
+            {
+                "active_count": active_count,
+                "overdue_count": overdue_count,
+                "completed_this_month": completed_this_month,
+                "recent_completions": recent_completions,
+                "upcoming_starts": upcoming_starts,
+                "template_count": template_count,
+            }
+        )
 
         return templates.TemplateResponse(
             request, "people/onboarding/admin/dashboard.html", context
@@ -173,12 +194,16 @@ class OnboardingAdminWebService:
         for tpl in template_list:
             item_counts[tpl.template_id] = len(tpl.items) if tpl.items else 0
 
-        context = base_context(request, auth, "Onboarding Templates", "onboarding", db=db)
-        context.update({
-            "templates": template_list,
-            "item_counts": item_counts,
-            "template_types": ChecklistTemplateType,
-        })
+        context = base_context(
+            request, auth, "Onboarding Templates", "onboarding", db=db
+        )
+        context.update(
+            {
+                "templates": template_list,
+                "item_counts": item_counts,
+                "template_types": ChecklistTemplateType,
+            }
+        )
 
         return templates.TemplateResponse(
             request, "people/onboarding/admin/templates.html", context
@@ -208,12 +233,14 @@ class OnboardingAdminWebService:
                 title = f"Edit: {template.template_name}"
 
         context = base_context(request, auth, title, "onboarding", db=db)
-        context.update({
-            "template": template,
-            "template_types": list(ChecklistTemplateType),
-            "categories": list(OnboardingCategory),
-            "assignee_roles": list(AssigneeRole),
-        })
+        context.update(
+            {
+                "template": template,
+                "template_types": list(ChecklistTemplateType),
+                "categories": list(OnboardingCategory),
+                "assignee_roles": list(AssigneeRole),
+            }
+        )
 
         return templates.TemplateResponse(
             request, "people/onboarding/admin/template_form.html", context
@@ -294,13 +321,17 @@ class OnboardingAdminWebService:
         # Sort items by sequence
         items = sorted(template.items, key=lambda x: x.sequence)
 
-        context = base_context(request, auth, template.template_name, "onboarding", db=db)
-        context.update({
-            "template": template,
-            "items": items,
-            "categories": list(OnboardingCategory),
-            "assignee_roles": list(AssigneeRole),
-        })
+        context = base_context(
+            request, auth, template.template_name, "onboarding", db=db
+        )
+        context.update(
+            {
+                "template": template,
+                "items": items,
+                "categories": list(OnboardingCategory),
+                "assignee_roles": list(AssigneeRole),
+            }
+        )
 
         return templates.TemplateResponse(
             request, "people/onboarding/admin/template_detail.html", context
@@ -336,17 +367,24 @@ class OnboardingAdminWebService:
         assignee_role = str(form.get("default_assignee_role", "")).strip() or None
         days_from_start_val = str(form.get("days_from_start", "0")).strip() or "0"
         days_from_start = int(days_from_start_val)
-        requires_document = str(form.get("requires_document", "")).lower() in ("1", "true", "on")
+        requires_document = str(form.get("requires_document", "")).lower() in (
+            "1",
+            "true",
+            "on",
+        )
         document_type = str(form.get("document_type", "")).strip() or None
         instructions = str(form.get("instructions", "")).strip() or None
         is_required = str(form.get("is_required", "1")).lower() in ("1", "true", "on")
 
         # Get next sequence
-        max_seq = db.scalar(
-            select(func.max(ChecklistTemplateItem.sequence)).where(
-                ChecklistTemplateItem.template_id == template_id
+        max_seq = (
+            db.scalar(
+                select(func.max(ChecklistTemplateItem.sequence)).where(
+                    ChecklistTemplateItem.template_id == template_id
+                )
             )
-        ) or 0
+            or 0
+        )
 
         item = ChecklistTemplateItem(
             template_id=template_id,
@@ -441,13 +479,17 @@ class OnboardingAdminWebService:
         for ob in onboardings:
             progress_map[ob.onboarding_id] = svc.calculate_progress(ob)
 
-        context = base_context(request, auth, "Employee Onboardings", "onboarding", db=db)
-        context.update({
-            "onboardings": onboardings,
-            "progress_map": progress_map,
-            "status_filter": status_filter,
-            "statuses": list(BoardingStatus),
-        })
+        context = base_context(
+            request, auth, "Employee Onboardings", "onboarding", db=db
+        )
+        context.update(
+            {
+                "onboardings": onboardings,
+                "progress_map": progress_map,
+                "status_filter": status_filter,
+                "statuses": list(BoardingStatus),
+            }
+        )
 
         return templates.TemplateResponse(
             request, "people/onboarding/admin/employees.html", context
@@ -500,22 +542,26 @@ class OnboardingAdminWebService:
         svc = OnboardingService(db)
         progress = svc.calculate_progress(onboarding)
 
-        context = base_context(request, auth, "Onboarding Progress", "onboarding", db=db)
-        context.update({
-            "onboarding": onboarding,
-            "employee": onboarding.employee,
-            "activities": activities,
-            "categories": categories,
-            "progress": progress,
-            "category_labels": {
-                "PRE_BOARDING": "Pre-Boarding",
-                "DAY_ONE": "Day One",
-                "FIRST_WEEK": "First Week",
-                "FIRST_MONTH": "First Month",
-                "ONGOING": "Ongoing",
-                "GENERAL": "General",
-            },
-        })
+        context = base_context(
+            request, auth, "Onboarding Progress", "onboarding", db=db
+        )
+        context.update(
+            {
+                "onboarding": onboarding,
+                "employee": onboarding.employee,
+                "activities": activities,
+                "categories": categories,
+                "progress": progress,
+                "category_labels": {
+                    "PRE_BOARDING": "Pre-Boarding",
+                    "DAY_ONE": "Day One",
+                    "FIRST_WEEK": "First Week",
+                    "FIRST_MONTH": "First Month",
+                    "ONGOING": "Ongoing",
+                    "GENERAL": "General",
+                },
+            }
+        )
 
         return templates.TemplateResponse(
             request, "people/onboarding/admin/employee_detail.html", context

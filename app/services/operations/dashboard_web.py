@@ -11,10 +11,9 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from app.services.inventory.web import inv_web_service
 from app.services.inventory.material_request_web import material_request_web_service
+from app.services.inventory.web import inv_web_service
 from app.services.support.web import support_web_service
-
 
 logger = logging.getLogger(__name__)
 
@@ -55,13 +54,19 @@ class OperationsDashboardWebService:
                 page=1,
                 limit=10,
             )
-            context["recent_transactions"] = transactions_context.get("transactions", [])
+            context["recent_transactions"] = transactions_context.get(
+                "transactions", []
+            )
         except Exception:
-            logger.exception("Failed to load recent transactions for operations dashboard")
+            logger.exception(
+                "Failed to load recent transactions for operations dashboard"
+            )
             context["recent_transactions"] = []
 
         try:
-            mr_context = material_request_web_service.dashboard_context(db, str(organization_id))
+            mr_context = material_request_web_service.dashboard_context(
+                db, str(organization_id)
+            )
             context.update(mr_context)
         except Exception:
             logger.exception("Failed to load material request dashboard context")
@@ -69,7 +74,9 @@ class OperationsDashboardWebService:
             context["recent_pending_requests"] = []
 
         try:
-            support_context = support_web_service.dashboard_context(db, str(organization_id))
+            support_context = support_web_service.dashboard_context(
+                db, str(organization_id)
+            )
             context.update(support_context)
         except Exception:
             logger.exception("Failed to load support dashboard context")
@@ -77,21 +84,27 @@ class OperationsDashboardWebService:
             context["recent_open_tickets"] = []
 
         try:
-            from app.models.inventory.inventory_count import InventoryCount, CountStatus
+            from app.models.inventory.inventory_count import CountStatus, InventoryCount
 
             count_stats = {
-                "draft": db.query(InventoryCount).filter(
+                "draft": db.query(InventoryCount)
+                .filter(
                     InventoryCount.organization_id == organization_id,
-                    InventoryCount.status == CountStatus.DRAFT
-                ).count(),
-                "in_progress": db.query(InventoryCount).filter(
+                    InventoryCount.status == CountStatus.DRAFT,
+                )
+                .count(),
+                "in_progress": db.query(InventoryCount)
+                .filter(
                     InventoryCount.organization_id == organization_id,
-                    InventoryCount.status == CountStatus.IN_PROGRESS
-                ).count(),
-                "completed": db.query(InventoryCount).filter(
+                    InventoryCount.status == CountStatus.IN_PROGRESS,
+                )
+                .count(),
+                "completed": db.query(InventoryCount)
+                .filter(
                     InventoryCount.organization_id == organization_id,
-                    InventoryCount.status == CountStatus.COMPLETED
-                ).count(),
+                    InventoryCount.status == CountStatus.COMPLETED,
+                )
+                .count(),
             }
             context["count_stats"] = count_stats
         except Exception:
@@ -104,13 +117,19 @@ class OperationsDashboardWebService:
             now = datetime.now().date()
             expiring_soon = now + timedelta(days=30)
 
-            expiring_lots = db.query(InventoryLot).filter(
-                InventoryLot.organization_id == organization_id,
-                InventoryLot.expiry_date != None,
-                InventoryLot.expiry_date > now,
-                InventoryLot.expiry_date <= expiring_soon,
-                InventoryLot.quantity_available > 0
-            ).order_by(InventoryLot.expiry_date).limit(10).all()
+            expiring_lots = (
+                db.query(InventoryLot)
+                .filter(
+                    InventoryLot.organization_id == organization_id,
+                    InventoryLot.expiry_date != None,
+                    InventoryLot.expiry_date > now,
+                    InventoryLot.expiry_date <= expiring_soon,
+                    InventoryLot.quantity_available > 0,
+                )
+                .order_by(InventoryLot.expiry_date)
+                .limit(10)
+                .all()
+            )
 
             for lot in expiring_lots:
                 setattr(lot, "item", db.get(Item, lot.item_id))

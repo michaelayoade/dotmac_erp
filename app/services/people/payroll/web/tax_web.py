@@ -4,6 +4,7 @@ Payroll Web Service - Tax operations.
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from decimal import Decimal
 from typing import Any, Optional
@@ -13,12 +14,14 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.hr.employee import Employee, EmployeeStatus
-from app.models.people.payroll.tax_band import TaxBand
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
+from app.models.people.payroll.tax_band import TaxBand
 from app.services.common import coerce_uuid
 from app.services.people.payroll.paye_calculator import PAYECalculator
 from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
+from app.web.deps import WebAuthContext, base_context
+
+logger = logging.getLogger(__name__)
 
 
 def _get_form_str(form: Any, key: str, default: str = "") -> str:
@@ -27,11 +30,12 @@ def _get_form_str(form: Any, key: str, default: str = "") -> str:
         return default
     return str(value).strip()
 
+
 from .base import (
     DEFAULT_PAGE_SIZE,
-    parse_uuid,
-    parse_decimal,
     parse_bool,
+    parse_decimal,
+    parse_uuid,
 )
 
 
@@ -68,7 +72,9 @@ class TaxWebService:
         context = base_context(request, auth, "Tax Bands (NTA 2025)", "payroll", db=db)
         context["request"] = request
         context.update({"bands": bands})
-        return templates.TemplateResponse(request, "people/payroll/tax_bands.html", context)
+        return templates.TemplateResponse(
+            request, "people/payroll/tax_bands.html", context
+        )
 
     def seed_tax_bands_response(
         self,
@@ -155,12 +161,16 @@ class TaxWebService:
 
         context = base_context(request, auth, "PAYE Calculator", "payroll", db=db)
         context["request"] = request
-        context.update({
-            "bands": bands,
-            "form_data": {},
-            "result": None,
-        })
-        return templates.TemplateResponse(request, "people/payroll/tax_calculator.html", context)
+        context.update(
+            {
+                "bands": bands,
+                "form_data": {},
+                "result": None,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/tax_calculator.html", context
+        )
 
     async def calculate_tax_response(
         self,
@@ -175,13 +185,25 @@ class TaxWebService:
         if form is None:
             form = await request.form()
 
-        gross_monthly = parse_decimal(_safe_form_text(form.get("gross_monthly"))) or Decimal("0")
-        basic_monthly = parse_decimal(_safe_form_text(form.get("basic_monthly"))) or Decimal("0")
-        annual_rent = parse_decimal(_safe_form_text(form.get("annual_rent"))) or Decimal("0")
+        gross_monthly = parse_decimal(
+            _safe_form_text(form.get("gross_monthly"))
+        ) or Decimal("0")
+        basic_monthly = parse_decimal(
+            _safe_form_text(form.get("basic_monthly"))
+        ) or Decimal("0")
+        annual_rent = parse_decimal(
+            _safe_form_text(form.get("annual_rent"))
+        ) or Decimal("0")
         rent_verified = parse_bool(_safe_form_text(form.get("rent_verified")), False)
-        pension_rate = parse_decimal(_safe_form_text(form.get("pension_rate"))) or Decimal("0.08")
-        nhf_rate = parse_decimal(_safe_form_text(form.get("nhf_rate"))) or Decimal("0.025")
-        nhis_rate = parse_decimal(_safe_form_text(form.get("nhis_rate"))) or Decimal("0")
+        pension_rate = parse_decimal(
+            _safe_form_text(form.get("pension_rate"))
+        ) or Decimal("0.08")
+        nhf_rate = parse_decimal(_safe_form_text(form.get("nhf_rate"))) or Decimal(
+            "0.025"
+        )
+        nhis_rate = parse_decimal(_safe_form_text(form.get("nhis_rate"))) or Decimal(
+            "0"
+        )
 
         bands = (
             db.query(TaxBand)
@@ -206,20 +228,24 @@ class TaxWebService:
 
         context = base_context(request, auth, "PAYE Calculator", "payroll", db=db)
         context["request"] = request
-        context.update({
-            "bands": bands,
-            "form_data": {
-                "gross_monthly": str(gross_monthly),
-                "basic_monthly": str(basic_monthly),
-                "annual_rent": str(annual_rent),
-                "rent_verified": rent_verified,
-                "pension_rate": str(pension_rate),
-                "nhf_rate": str(nhf_rate),
-                "nhis_rate": str(nhis_rate),
-            },
-            "result": result,
-        })
-        return templates.TemplateResponse(request, "people/payroll/tax_calculator.html", context)
+        context.update(
+            {
+                "bands": bands,
+                "form_data": {
+                    "gross_monthly": str(gross_monthly),
+                    "basic_monthly": str(basic_monthly),
+                    "annual_rent": str(annual_rent),
+                    "rent_verified": rent_verified,
+                    "pension_rate": str(pension_rate),
+                    "nhf_rate": str(nhf_rate),
+                    "nhis_rate": str(nhis_rate),
+                },
+                "result": result,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/tax_calculator.html", context
+        )
 
     # =========================================================================
     # Tax Profiles
@@ -252,15 +278,19 @@ class TaxWebService:
 
         context = base_context(request, auth, "Tax Profiles", "payroll", db=db)
         context["request"] = request
-        context.update({
-            "profiles": profiles,
-            "page": page,
-            "total_pages": total_pages,
-            "total": total,
-            "has_prev": page > 1,
-            "has_next": page < total_pages,
-        })
-        return templates.TemplateResponse(request, "people/payroll/tax_profiles.html", context)
+        context.update(
+            {
+                "profiles": profiles,
+                "page": page,
+                "total_pages": total_pages,
+                "total": total,
+                "has_prev": page > 1,
+                "has_next": page < total_pages,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/tax_profiles.html", context
+        )
 
     def tax_profile_new_form_response(
         self,
@@ -277,12 +307,9 @@ class TaxWebService:
             selected_employee = db.get(Employee, parse_uuid(employee_id))
 
         # Get employees without tax profiles
-        existing_profile_ids = (
-            db.query(EmployeeTaxProfile.employee_id)
-            .filter(
-                EmployeeTaxProfile.organization_id == org_id,
-                EmployeeTaxProfile.effective_to.is_(None),
-            )
+        existing_profile_ids = db.query(EmployeeTaxProfile.employee_id).filter(
+            EmployeeTaxProfile.organization_id == org_id,
+            EmployeeTaxProfile.effective_to.is_(None),
         )
 
         employees = (
@@ -298,16 +325,20 @@ class TaxWebService:
 
         context = base_context(request, auth, "New Tax Profile", "payroll", db=db)
         context["request"] = request
-        context.update({
-            "profile": None,
-            "employees": employees,
-            "selected_employee": selected_employee,
-            "selected_employee_id": employee_id,
-            "is_edit": False,
-            "form_data": {},
-            "errors": {},
-        })
-        return templates.TemplateResponse(request, "people/payroll/tax_profile_form.html", context)
+        context.update(
+            {
+                "profile": None,
+                "employees": employees,
+                "selected_employee": selected_employee,
+                "selected_employee_id": employee_id,
+                "is_edit": False,
+                "form_data": {},
+                "errors": {},
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/tax_profile_form.html", context
+        )
 
     async def create_tax_profile_response(
         self,
@@ -324,13 +355,27 @@ class TaxWebService:
 
         employee_id = _safe_form_text(form.get("employee_id")).strip()
         tin = _safe_form_text(form.get("tin")).strip()
-        annual_rent = parse_decimal(_safe_form_text(form.get("annual_rent"))) or Decimal("0")
-        rent_receipt_verified = parse_bool(_safe_form_text(form.get("rent_receipt_verified")), False)
-        pension_rate = parse_decimal(_safe_form_text(form.get("pension_rate"))) or Decimal("0.08")
-        nhf_rate = parse_decimal(_safe_form_text(form.get("nhf_rate"))) or Decimal("0.025")
-        nhis_rate = parse_decimal(_safe_form_text(form.get("nhis_rate"))) or Decimal("0")
-        voluntary_pension = parse_decimal(_safe_form_text(form.get("voluntary_pension"))) or Decimal("0")
-        life_insurance = parse_decimal(_safe_form_text(form.get("life_insurance"))) or Decimal("0")
+        annual_rent = parse_decimal(
+            _safe_form_text(form.get("annual_rent"))
+        ) or Decimal("0")
+        rent_receipt_verified = parse_bool(
+            _safe_form_text(form.get("rent_receipt_verified")), False
+        )
+        pension_rate = parse_decimal(
+            _safe_form_text(form.get("pension_rate"))
+        ) or Decimal("0.08")
+        nhf_rate = parse_decimal(_safe_form_text(form.get("nhf_rate"))) or Decimal(
+            "0.025"
+        )
+        nhis_rate = parse_decimal(_safe_form_text(form.get("nhis_rate"))) or Decimal(
+            "0"
+        )
+        voluntary_pension = parse_decimal(
+            _safe_form_text(form.get("voluntary_pension"))
+        ) or Decimal("0")
+        life_insurance = parse_decimal(
+            _safe_form_text(form.get("life_insurance"))
+        ) or Decimal("0")
 
         try:
             profile = EmployeeTaxProfile(
@@ -349,12 +394,18 @@ class TaxWebService:
 
             db.add(profile)
             db.commit()
-            return RedirectResponse(url=f"/people/payroll/tax/profiles/{employee_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/payroll/tax/profiles/{employee_id}", status_code=303
+            )
 
         except Exception as e:
             db.rollback()
             return self._render_tax_profile_form_with_error(
-                request, auth, db, str(e), {
+                request,
+                auth,
+                db,
+                str(e),
+                {
                     "employee_id": employee_id,
                     "tin": tin,
                     "annual_rent": str(annual_rent),
@@ -364,7 +415,7 @@ class TaxWebService:
                     "nhis_rate": str(nhis_rate),
                     "voluntary_pension": str(voluntary_pension),
                     "life_insurance": str(life_insurance),
-                }
+                },
             )
 
     def tax_profile_detail_response(
@@ -395,13 +446,19 @@ class TaxWebService:
             .first()
         )
 
-        context = base_context(request, auth, f"Tax Profile - {employee.full_name}", "payroll", db=db)
+        context = base_context(
+            request, auth, f"Tax Profile - {employee.full_name}", "payroll", db=db
+        )
         context["request"] = request
-        context.update({
-            "employee": employee,
-            "profile": profile,
-        })
-        return templates.TemplateResponse(request, "people/payroll/tax_profile_detail.html", context)
+        context.update(
+            {
+                "employee": employee,
+                "profile": profile,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/tax_profile_detail.html", context
+        )
 
     def tax_profile_edit_form_response(
         self,
@@ -434,18 +491,24 @@ class TaxWebService:
         if not profile:
             return RedirectResponse(url="/people/payroll/tax/profiles", status_code=303)
 
-        context = base_context(request, auth, f"Edit Tax Profile - {employee.full_name}", "payroll", db=db)
+        context = base_context(
+            request, auth, f"Edit Tax Profile - {employee.full_name}", "payroll", db=db
+        )
         context["request"] = request
-        context.update({
-            "profile": profile,
-            "employees": [employee],
-            "selected_employee": employee,
-            "selected_employee_id": employee_id,
-            "is_edit": True,
-            "form_data": {},
-            "errors": {},
-        })
-        return templates.TemplateResponse(request, "people/payroll/tax_profile_form.html", context)
+        context.update(
+            {
+                "profile": profile,
+                "employees": [employee],
+                "selected_employee": employee,
+                "selected_employee_id": employee_id,
+                "is_edit": True,
+                "form_data": {},
+                "errors": {},
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/tax_profile_form.html", context
+        )
 
     async def update_tax_profile_response(
         self,
@@ -480,16 +543,26 @@ class TaxWebService:
 
         try:
             profile.tin = _get_form_str(form, "tin") or None
-            profile.annual_rent = parse_decimal(_get_form_str(form, "annual_rent") or None) or Decimal("0")
+            profile.annual_rent = parse_decimal(
+                _get_form_str(form, "annual_rent") or None
+            ) or Decimal("0")
             profile.rent_receipt_verified = parse_bool(
                 _get_form_str(form, "rent_receipt_verified") or None, False
             )
-            profile.pension_rate = parse_decimal(_get_form_str(form, "pension_rate") or None) or Decimal("0.08")
-            profile.nhf_rate = parse_decimal(_get_form_str(form, "nhf_rate") or None) or Decimal("0.025")
-            profile.nhis_rate = parse_decimal(_get_form_str(form, "nhis_rate") or None) or Decimal("0")
+            profile.pension_rate = parse_decimal(
+                _get_form_str(form, "pension_rate") or None
+            ) or Decimal("0.08")
+            profile.nhf_rate = parse_decimal(
+                _get_form_str(form, "nhf_rate") or None
+            ) or Decimal("0.025")
+            profile.nhis_rate = parse_decimal(
+                _get_form_str(form, "nhis_rate") or None
+            ) or Decimal("0")
 
             db.commit()
-            return RedirectResponse(url=f"/people/payroll/tax/profiles/{employee_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/payroll/tax/profiles/{employee_id}", status_code=303
+            )
 
         except Exception as e:
             db.rollback()
@@ -500,17 +573,21 @@ class TaxWebService:
                 request, auth, f"Edit Tax Profile - {employee_name}", "payroll", db=db
             )
             context["request"] = request
-            context.update({
-                "profile": profile,
-                "employees": [employee],
-                "selected_employee": employee,
-                "selected_employee_id": employee_id,
-                "is_edit": True,
-                "form_data": {},
-                "error": str(e),
-                "errors": {},
-            })
-            return templates.TemplateResponse(request, "people/payroll/tax_profile_form.html", context)
+            context.update(
+                {
+                    "profile": profile,
+                    "employees": [employee],
+                    "selected_employee": employee,
+                    "selected_employee_id": employee_id,
+                    "is_edit": True,
+                    "form_data": {},
+                    "error": str(e),
+                    "errors": {},
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/payroll/tax_profile_form.html", context
+            )
 
     def _render_tax_profile_form_with_error(
         self,
@@ -523,12 +600,9 @@ class TaxWebService:
         """Render tax profile form with error."""
         org_id = coerce_uuid(auth.organization_id)
 
-        existing_profile_ids = (
-            db.query(EmployeeTaxProfile.employee_id)
-            .filter(
-                EmployeeTaxProfile.organization_id == org_id,
-                EmployeeTaxProfile.effective_to.is_(None),
-            )
+        existing_profile_ids = db.query(EmployeeTaxProfile.employee_id).filter(
+            EmployeeTaxProfile.organization_id == org_id,
+            EmployeeTaxProfile.effective_to.is_(None),
         )
 
         employees = (
@@ -544,14 +618,18 @@ class TaxWebService:
 
         context = base_context(request, auth, "New Tax Profile", "payroll", db=db)
         context["request"] = request
-        context.update({
-            "profile": None,
-            "employees": employees,
-            "selected_employee": None,
-            "selected_employee_id": form_data.get("employee_id"),
-            "is_edit": False,
-            "form_data": form_data,
-            "error": error,
-            "errors": {},
-        })
-        return templates.TemplateResponse(request, "people/payroll/tax_profile_form.html", context)
+        context.update(
+            {
+                "profile": None,
+                "employees": employees,
+                "selected_employee": None,
+                "selected_employee_id": form_data.get("employee_id"),
+                "is_edit": False,
+                "form_data": form_data,
+                "error": error,
+                "errors": {},
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/tax_profile_form.html", context
+        )

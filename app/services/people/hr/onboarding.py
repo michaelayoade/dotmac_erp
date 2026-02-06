@@ -8,13 +8,13 @@ Provides comprehensive onboarding workflow management including:
 - Due date management and overdue detection
 - Activity completion with document support
 """
+
 from __future__ import annotations
 
 import hashlib
 import logging
 import secrets
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select
@@ -23,7 +23,6 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.people.hr import Employee
 from app.models.people.hr.checklist_template import (
     ChecklistTemplate,
-    ChecklistTemplateItem,
     ChecklistTemplateType,
 )
 from app.models.people.hr.lifecycle import (
@@ -115,7 +114,9 @@ class OnboardingService:
         active_only: bool = True,
     ) -> list[ChecklistTemplate]:
         """List checklist templates for an organization."""
-        query = select(ChecklistTemplate).where(ChecklistTemplate.organization_id == org_id)
+        query = select(ChecklistTemplate).where(
+            ChecklistTemplate.organization_id == org_id
+        )
 
         if template_type:
             query = query.where(ChecklistTemplate.template_type == template_type)
@@ -176,7 +177,9 @@ class OnboardingService:
         expected_completion = None
         if template and template.items:
             max_days = max((item.days_from_start for item in template.items), default=0)
-            expected_completion = date_of_joining + timedelta(days=max(max_days + 7, 30))
+            expected_completion = date_of_joining + timedelta(
+                days=max(max_days + 7, 30)
+            )
 
         # Create onboarding record
         onboarding = EmployeeOnboarding(
@@ -203,7 +206,9 @@ class OnboardingService:
         if generate_self_service_token:
             raw_token = secrets.token_urlsafe(32)
             onboarding.self_service_token = self._hash_token(raw_token)
-            onboarding.self_service_token_expires = datetime.now(timezone.utc) + timedelta(days=self.TOKEN_VALIDITY_DAYS)
+            onboarding.self_service_token_expires = datetime.now(
+                timezone.utc
+            ) + timedelta(days=self.TOKEN_VALIDITY_DAYS)
             # Store raw token temporarily (not persisted) for welcome email
             onboarding._raw_self_service_token = raw_token  # type: ignore[attr-defined]
 
@@ -212,7 +217,9 @@ class OnboardingService:
 
         # Create activities from template items
         if template and template.items:
-            for idx, item in enumerate(sorted(template.items, key=lambda x: x.sequence)):
+            for idx, item in enumerate(
+                sorted(template.items, key=lambda x: x.sequence)
+            ):
                 due_date = date_of_joining + timedelta(days=item.days_from_start)
 
                 activity = EmployeeOnboardingActivity(
@@ -282,11 +289,12 @@ class OnboardingService:
             # If expires is naive, treat it as UTC
             if expires.tzinfo is None:
                 from datetime import timezone as tz
+
                 expires = expires.replace(tzinfo=tz.utc)
             if expires < now:
                 logger.warning(
                     "Expired self-service token for onboarding %s",
-                    onboarding.onboarding_id
+                    onboarding.onboarding_id,
                 )
                 raise InvalidSelfServiceTokenError("Self-service token has expired")
 
@@ -294,23 +302,21 @@ class OnboardingService:
         org = self.db.get(Organization, onboarding.organization_id)
         if not org or not getattr(org, "is_active", True):
             logger.warning(
-                "Token lookup for inactive organization %s",
-                onboarding.organization_id
+                "Token lookup for inactive organization %s", onboarding.organization_id
             )
             raise InvalidSelfServiceTokenError("Organization is not active")
 
         # Validate onboarding is not cancelled
         if onboarding.status == BoardingStatus.CANCELLED:
             logger.warning(
-                "Token lookup for cancelled onboarding %s",
-                onboarding.onboarding_id
+                "Token lookup for cancelled onboarding %s", onboarding.onboarding_id
             )
             raise InvalidSelfServiceTokenError("Onboarding has been cancelled")
 
         logger.debug(
             "Valid token access for onboarding %s (org: %s)",
             onboarding.onboarding_id,
-            onboarding.organization_id
+            onboarding.organization_id,
         )
 
         return onboarding
@@ -327,7 +333,9 @@ class OnboardingService:
         # Generate raw token and store its hash
         raw_token = secrets.token_urlsafe(32)
         onboarding.self_service_token = self._hash_token(raw_token)
-        onboarding.self_service_token_expires = datetime.now(timezone.utc) + timedelta(days=self.TOKEN_VALIDITY_DAYS)
+        onboarding.self_service_token_expires = datetime.now(timezone.utc) + timedelta(
+            days=self.TOKEN_VALIDITY_DAYS
+        )
         self.db.flush()
 
         logger.info("Regenerated self-service token for onboarding %s", onboarding_id)
@@ -356,7 +364,9 @@ class OnboardingService:
             )
         )
         if not onboarding:
-            raise OnboardingNotFoundError(message=f"Onboarding {onboarding_id} not found")
+            raise OnboardingNotFoundError(
+                message=f"Onboarding {onboarding_id} not found"
+            )
         return onboarding
 
     def list_onboardings(
@@ -375,7 +385,9 @@ class OnboardingService:
 
         Returns a tuple of (items, total_count).
         """
-        query = select(EmployeeOnboarding).where(EmployeeOnboarding.organization_id == org_id)
+        query = select(EmployeeOnboarding).where(
+            EmployeeOnboarding.organization_id == org_id
+        )
 
         if status:
             query = query.where(EmployeeOnboarding.status == status)
@@ -396,7 +408,11 @@ class OnboardingService:
         query = query.order_by(EmployeeOnboarding.date_of_joining.desc())
 
         # Count total
-        count_subq = query.with_only_columns(EmployeeOnboarding.onboarding_id).distinct().subquery()
+        count_subq = (
+            query.with_only_columns(EmployeeOnboarding.onboarding_id)
+            .distinct()
+            .subquery()
+        )
         total = self.db.scalar(select(func.count()).select_from(count_subq)) or 0
 
         # Apply pagination
@@ -409,7 +425,9 @@ class OnboardingService:
     # Activity Management
     # =========================================================================
 
-    def get_activity(self, org_id: UUID, activity_id: UUID) -> EmployeeOnboardingActivity:
+    def get_activity(
+        self, org_id: UUID, activity_id: UUID
+    ) -> EmployeeOnboardingActivity:
         """Get a specific activity."""
         activity = self.db.scalar(
             select(EmployeeOnboardingActivity)
@@ -482,7 +500,9 @@ class OnboardingService:
         # Update onboarding progress
         self._update_progress(activity.onboarding_id)
 
-        logger.info("Skipped activity %s by user %s: %s", activity_id, skipped_by, reason)
+        logger.info(
+            "Skipped activity %s by user %s: %s", activity_id, skipped_by, reason
+        )
 
         return activity
 
@@ -517,7 +537,10 @@ class OnboardingService:
                     EmployeeOnboardingActivity.onboarding_id == onboarding_id,
                     EmployeeOnboardingActivity.assigned_to_employee == True,
                 )
-                .order_by(EmployeeOnboardingActivity.due_date, EmployeeOnboardingActivity.sequence)
+                .order_by(
+                    EmployeeOnboardingActivity.due_date,
+                    EmployeeOnboardingActivity.sequence,
+                )
             ).all()
         )
 
@@ -551,8 +574,10 @@ class OnboardingService:
 
         total = len(onboarding.activities)
         completed = sum(
-            1 for a in onboarding.activities
-            if a.activity_status in (ActivityStatus.COMPLETED.value, ActivityStatus.SKIPPED.value)
+            1
+            for a in onboarding.activities
+            if a.activity_status
+            in (ActivityStatus.COMPLETED.value, ActivityStatus.SKIPPED.value)
             or a.status in ("completed", "skipped")  # Legacy support
         )
 
@@ -578,11 +603,13 @@ class OnboardingService:
             .where(
                 EmployeeOnboarding.organization_id == org_id,
                 EmployeeOnboardingActivity.due_date < today,
-                EmployeeOnboardingActivity.activity_status.in_([
-                    ActivityStatus.PENDING.value,
-                    ActivityStatus.IN_PROGRESS.value,
-                    ActivityStatus.AWAITING_DOCUMENT.value,
-                ]),
+                EmployeeOnboardingActivity.activity_status.in_(
+                    [
+                        ActivityStatus.PENDING.value,
+                        ActivityStatus.IN_PROGRESS.value,
+                        ActivityStatus.AWAITING_DOCUMENT.value,
+                    ]
+                ),
                 EmployeeOnboardingActivity.is_overdue == False,
             )
         ).all()
@@ -640,10 +667,12 @@ class OnboardingService:
                 .where(
                     EmployeeOnboarding.organization_id == org_id,
                     EmployeeOnboardingActivity.due_date.between(today, cutoff),
-                    EmployeeOnboardingActivity.activity_status.in_([
-                        ActivityStatus.PENDING.value,
-                        ActivityStatus.IN_PROGRESS.value,
-                    ]),
+                    EmployeeOnboardingActivity.activity_status.in_(
+                        [
+                            ActivityStatus.PENDING.value,
+                            ActivityStatus.IN_PROGRESS.value,
+                        ]
+                    ),
                 )
                 .order_by(EmployeeOnboardingActivity.due_date)
                 .limit(limit)
@@ -679,15 +708,19 @@ class OnboardingService:
         """
         today = date.today()
         due_cutoff = today + timedelta(days=days_before_due)
-        reminder_cutoff = datetime.now(timezone.utc) - timedelta(hours=hours_since_last_reminder)
+        reminder_cutoff = datetime.now(timezone.utc) - timedelta(
+            hours=hours_since_last_reminder
+        )
 
         conditions = [
             EmployeeOnboarding.organization_id == org_id,
-            EmployeeOnboardingActivity.activity_status.in_([
-                ActivityStatus.PENDING.value,
-                ActivityStatus.IN_PROGRESS.value,
-                ActivityStatus.AWAITING_DOCUMENT.value,
-            ]),
+            EmployeeOnboardingActivity.activity_status.in_(
+                [
+                    ActivityStatus.PENDING.value,
+                    ActivityStatus.IN_PROGRESS.value,
+                    ActivityStatus.AWAITING_DOCUMENT.value,
+                ]
+            ),
             or_(
                 EmployeeOnboardingActivity.reminder_sent_at.is_(None),
                 EmployeeOnboardingActivity.reminder_sent_at < reminder_cutoff,
@@ -757,14 +790,19 @@ class OnboardingService:
         if onboarding.status == BoardingStatus.COMPLETED:
             return onboarding
 
-        if onboarding.status not in (BoardingStatus.PENDING, BoardingStatus.IN_PROGRESS):
+        if onboarding.status not in (
+            BoardingStatus.PENDING,
+            BoardingStatus.IN_PROGRESS,
+        ):
             raise LifecycleStatusError(onboarding.status.value, "complete onboarding")
 
         if not force:
             # Check for incomplete required activities
             incomplete = [
-                a for a in onboarding.activities
-                if a.activity_status not in (ActivityStatus.COMPLETED.value, ActivityStatus.SKIPPED.value)
+                a
+                for a in onboarding.activities
+                if a.activity_status
+                not in (ActivityStatus.COMPLETED.value, ActivityStatus.SKIPPED.value)
                 and a.status not in ("completed", "skipped")
             ]
             if incomplete:

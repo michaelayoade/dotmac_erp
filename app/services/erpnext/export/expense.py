@@ -4,9 +4,10 @@ Expense Export Services - Push DotMac expense data to ERPNext.
 During transition, expense claims created/modified in DotMac
 need to sync back to ERPNext for approval workflows.
 """
+
+import logging
 import uuid
 from datetime import date, datetime
-from decimal import Decimal
 from typing import Any, Optional
 
 from sqlalchemy import select
@@ -19,9 +20,11 @@ from app.models.expense.expense_claim import (
     ExpenseClaimStatus,
 )
 from app.services.erpnext.client import ERPNextClient
+from app.services.formatters import format_date as _base_format_date
 
 from .base import BaseExportService
 
+logger = logging.getLogger(__name__)
 
 # Status mapping: DotMac → ERPNext
 EXPENSE_STATUS_EXPORT_MAP = {
@@ -91,12 +94,14 @@ class ExpenseClaimExportService(BaseExportService[ExpenseClaim]):
         # 2. Are not cancelled
         stmt = select(ExpenseClaim).where(
             ExpenseClaim.organization_id == self.organization_id,
-            ExpenseClaim.status.in_([
-                ExpenseClaimStatus.SUBMITTED,
-                ExpenseClaimStatus.PENDING_APPROVAL,
-                ExpenseClaimStatus.APPROVED,
-                ExpenseClaimStatus.PAID,
-            ]),
+            ExpenseClaim.status.in_(
+                [
+                    ExpenseClaimStatus.SUBMITTED,
+                    ExpenseClaimStatus.PENDING_APPROVAL,
+                    ExpenseClaimStatus.APPROVED,
+                    ExpenseClaimStatus.PAID,
+                ]
+            ),
         )
         return list(self.db.execute(stmt).scalars().all())
 
@@ -104,16 +109,22 @@ class ExpenseClaimExportService(BaseExportService[ExpenseClaim]):
         """Transform ExpenseClaim to ERPNext format with child items."""
         data: dict[str, Any] = {
             "company": self.company,
-            "posting_date": _format_date(entity.claim_date) or datetime.utcnow().date().isoformat(),
+            "posting_date": _format_date(entity.claim_date)
+            or datetime.utcnow().date().isoformat(),
             "expense_approver": None,  # Will be set by ERPNext workflow
         }
 
         # Status (ERPNext uses approval_status and status differently)
         erpnext_status = EXPENSE_STATUS_EXPORT_MAP.get(entity.status, "Draft")
-        data["approval_status"] = "Approved" if entity.status in [
-            ExpenseClaimStatus.APPROVED,
-            ExpenseClaimStatus.PAID,
-        ] else "Draft"
+        data["approval_status"] = (
+            "Approved"
+            if entity.status
+            in [
+                ExpenseClaimStatus.APPROVED,
+                ExpenseClaimStatus.PAID,
+            ]
+            else "Draft"
+        )
 
         # Employee (required for ERPNext)
         if entity.employee and entity.employee.erpnext_id:
@@ -196,6 +207,4 @@ class ExpenseClaimExportService(BaseExportService[ExpenseClaim]):
 
 def _format_date(d: Optional[date]) -> Optional[str]:
     """Format date for ERPNext API (YYYY-MM-DD)."""
-    if d:
-        return d.isoformat()
-    return None
+    return _base_format_date(d) or None

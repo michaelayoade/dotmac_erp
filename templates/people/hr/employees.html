@@ -25,7 +25,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="space-y-6" x-data="employeeBulkActions()">
+<div class="space-y-6 page-enter" x-data="employeeBulkActions()">
     {# Success/Error Messages #}
     {% if success %}
     <div class="p-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
@@ -51,7 +51,7 @@
     {# Stats Cards with Icons #}
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {# Total Employees #}
-        <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow">
+        <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow stagger-in">
             <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full bg-gradient-to-br from-sky-500/10 to-sky-500/5 dark:from-sky-400/10 dark:to-sky-400/5 group-hover:scale-110 transition-transform"></div>
             <div class="flex items-start justify-between relative">
                 <div>
@@ -67,7 +67,7 @@
         </div>
 
         {# Active #}
-        <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow">
+        <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow stagger-in">
             <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 dark:from-emerald-400/10 dark:to-emerald-400/5 group-hover:scale-110 transition-transform"></div>
             <div class="flex items-start justify-between relative">
                 <div>
@@ -83,7 +83,7 @@
         </div>
 
         {# On Leave #}
-        <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow">
+        <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow stagger-in">
             <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full bg-gradient-to-br from-amber-500/10 to-amber-500/5 dark:from-amber-400/10 dark:to-amber-400/5 group-hover:scale-110 transition-transform"></div>
             <div class="flex items-start justify-between relative">
                 <div>
@@ -99,14 +99,14 @@
         </div>
 
         {# Inactive #}
-        <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow">
-            <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full bg-gradient-to-br from-slate-500/10 to-slate-500/5 dark:from-slate-400/10 dark:to-slate-400/5 group-hover:scale-110 transition-transform"></div>
+        <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow stagger-in">
+            <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full bg-gradient-to-br from-rose-500/10 to-rose-500/5 dark:from-rose-400/10 dark:to-rose-400/5 group-hover:scale-110 transition-transform"></div>
             <div class="flex items-start justify-between relative">
                 <div>
                     <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Inactive</p>
-                    <p class="text-3xl font-bold text-slate-500 dark:text-slate-400 mt-1">{{ stats.inactive | default(0) }}</p>
+                    <p class="text-3xl font-bold text-rose-600 dark:text-rose-400 mt-1">{{ stats.inactive | default(0) }}</p>
                 </div>
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
                     <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
                     </svg>
@@ -116,9 +116,11 @@
     </div>
 
     {# Search and Filters #}
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap gap-4 items-end">
+    {% set has_advanced = date_of_joining_from or date_of_joining_to or date_of_leaving_from or date_of_leaving_to %}
+    <div class="card" x-data="{ showAdvanced: {{ 'true' if has_advanced else 'false' }} }">
+        <form method="get" class="p-4 space-y-3">
+            {# Primary row: search + quick filters + actions #}
+            <div class="flex flex-wrap gap-3 items-end">
                 <div class="flex-1 min-w-[240px]">
                     <label for="search" class="form-label">Search</label>
                     <div class="relative">
@@ -164,6 +166,24 @@
                         {% endfor %}
                     </select>
                 </div>
+                <button type="button" @click="showAdvanced = !showAdvanced"
+                    class="btn btn-secondary h-10 text-xs"
+                    :class="showAdvanced ? 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-800' : ''">
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                    </svg>
+                    More
+                </button>
+                <button type="submit" class="btn btn-secondary h-10">
+                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                    </svg>
+                    Filter
+                </button>
+            </div>
+
+            {# Advanced row: date ranges (collapsible) #}
+            <div x-show="showAdvanced" x-collapse class="flex flex-wrap gap-4 items-end pt-3 border-t border-slate-100 dark:border-slate-800">
                 <div class="min-w-[260px]">
                     <label for="date_of_joining_from" class="form-label">Joining Date</label>
                     <div class="flex items-center gap-2">
@@ -180,12 +200,6 @@
                         <input type="date" name="date_of_leaving_to" id="date_of_leaving_to" value="{{ date_of_leaving_to | default('', true) }}" class="form-input w-full">
                     </div>
                 </div>
-                <button type="submit" class="btn btn-secondary h-10">
-                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                    </svg>
-                    Filter
-                </button>
             </div>
         </form>
     </div>

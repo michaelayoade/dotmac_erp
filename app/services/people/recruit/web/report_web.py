@@ -19,7 +19,7 @@ from app.services.people.recruit import RecruitmentService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
-from .base import logger, parse_uuid, parse_date_only
+from .base import logger, parse_date_only, parse_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +137,9 @@ class ReportWebService:
                 job_opening_id=job_opening_id,
             )
         )
-        return templates.TemplateResponse(request, "people/recruit/reports/pipeline.html", context)
+        return templates.TemplateResponse(
+            request, "people/recruit/reports/pipeline.html", context
+        )
 
     def time_to_hire_report_response(
         self,
@@ -158,7 +160,9 @@ class ReportWebService:
                 end_date=end_date,
             )
         )
-        return templates.TemplateResponse(request, "people/recruit/reports/time_to_hire.html", context)
+        return templates.TemplateResponse(
+            request, "people/recruit/reports/time_to_hire.html", context
+        )
 
     def source_analysis_report_response(
         self,
@@ -179,7 +183,9 @@ class ReportWebService:
                 end_date=end_date,
             )
         )
-        return templates.TemplateResponse(request, "people/recruit/reports/sources.html", context)
+        return templates.TemplateResponse(
+            request, "people/recruit/reports/sources.html", context
+        )
 
     def overview_report_response(
         self,
@@ -200,4 +206,6 @@ class ReportWebService:
                 end_date=end_date,
             )
         )
-        return templates.TemplateResponse(request, "people/recruit/reports/overview.html", context)
+        return templates.TemplateResponse(
+            request, "people/recruit/reports/overview.html", context
+        )

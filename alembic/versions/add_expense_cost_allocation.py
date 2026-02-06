@@ -21,7 +21,9 @@ def upgrade() -> None:
     inspector = sa.inspect(bind)
 
     def columns_exist(table_name: str, schema: str, columns: list[str]) -> bool:
-        existing = {col["name"] for col in inspector.get_columns(table_name, schema=schema)}
+        existing = {
+            col["name"] for col in inspector.get_columns(table_name, schema=schema)
+        }
         return all(col in existing for col in columns)
 
     def fk_exists(
@@ -48,8 +50,7 @@ def upgrade() -> None:
         return False
 
     existing_columns = {
-        col["name"]
-        for col in inspector.get_columns("expense_entry", schema="exp")
+        col["name"] for col in inspector.get_columns("expense_entry", schema="exp")
     }
 
     # Add cost allocation columns only if they don't exist
@@ -149,13 +150,21 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Drop indexes
-    op.drop_index("idx_expense_entry_cost_center", table_name="expense_entry", schema="exp")
+    op.drop_index(
+        "idx_expense_entry_cost_center", table_name="expense_entry", schema="exp"
+    )
     op.drop_index("idx_expense_entry_project", table_name="expense_entry", schema="exp")
 
     # Drop foreign keys
-    op.drop_constraint("fk_expense_business_unit", "expense_entry", schema="exp", type_="foreignkey")
-    op.drop_constraint("fk_expense_cost_center", "expense_entry", schema="exp", type_="foreignkey")
-    op.drop_constraint("fk_expense_project", "expense_entry", schema="exp", type_="foreignkey")
+    op.drop_constraint(
+        "fk_expense_business_unit", "expense_entry", schema="exp", type_="foreignkey"
+    )
+    op.drop_constraint(
+        "fk_expense_cost_center", "expense_entry", schema="exp", type_="foreignkey"
+    )
+    op.drop_constraint(
+        "fk_expense_project", "expense_entry", schema="exp", type_="foreignkey"
+    )
 
     # Drop columns
     op.drop_column("expense_entry", "business_unit_id", schema="exp")

@@ -6,9 +6,10 @@ Manages consolidation runs, eliminations, and consolidated balances (IFRS 10).
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
 
@@ -16,6 +17,7 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.models.finance.cons.consolidated_balance import ConsolidatedBalance
 from app.models.finance.cons.consolidation_run import (
     ConsolidationRun,
     ConsolidationStatus,
@@ -24,15 +26,16 @@ from app.models.finance.cons.elimination_entry import (
     EliminationEntry,
     EliminationType,
 )
-from app.models.finance.cons.consolidated_balance import ConsolidatedBalance
-from app.models.finance.cons.legal_entity import (
-    LegalEntity,
-    ConsolidationMethod,
-)
 from app.models.finance.cons.intercompany_balance import IntercompanyBalance
+from app.models.finance.cons.legal_entity import (
+    ConsolidationMethod,
+    LegalEntity,
+)
 from app.models.finance.cons.ownership_interest import OwnershipInterest
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -130,7 +133,8 @@ class ConsolidationService(ListResponseMixin):
             .filter(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.is_active == True,
-                LegalEntity.consolidation_method != ConsolidationMethod.NOT_CONSOLIDATED,
+                LegalEntity.consolidation_method
+                != ConsolidationMethod.NOT_CONSOLIDATED,
             )
             .all()
         )
@@ -139,7 +143,11 @@ class ConsolidationService(ListResponseMixin):
             [e for e in entities if e.consolidation_method == ConsolidationMethod.FULL]
         )
         associates_count = len(
-            [e for e in entities if e.consolidation_method == ConsolidationMethod.EQUITY]
+            [
+                e
+                for e in entities
+                if e.consolidation_method == ConsolidationMethod.EQUITY
+            ]
         )
 
         run = ConsolidationRun(
@@ -326,7 +334,9 @@ class ConsolidationService(ListResponseMixin):
 
         for balance in balances:
             # Skip if we've already processed this pair
-            pair_key = tuple(sorted([str(balance.from_entity_id), str(balance.to_entity_id)]))
+            pair_key = tuple(
+                sorted([str(balance.from_entity_id), str(balance.to_entity_id)])
+            )
             if pair_key in processed_pairs:
                 continue
             processed_pairs.add(pair_key)
@@ -702,7 +712,9 @@ class ConsolidationService(ListResponseMixin):
         )
 
         if segment_id:
-            query = query.filter(ConsolidatedBalance.segment_id == coerce_uuid(segment_id))
+            query = query.filter(
+                ConsolidatedBalance.segment_id == coerce_uuid(segment_id)
+            )
 
         return query.all()
 

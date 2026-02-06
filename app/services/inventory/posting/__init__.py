@@ -11,10 +11,10 @@ The main INVPostingAdapter in inv_posting_adapter.py serves as a facade
 that delegates to the functions in this package.
 """
 
-from app.services.inventory.posting.result import INVPostingResult
-from app.services.inventory.posting.receipt import post_receipt
-from app.services.inventory.posting.issue import post_issue
 from app.services.inventory.posting.adjustment import post_adjustment
+from app.services.inventory.posting.issue import post_issue
+from app.services.inventory.posting.receipt import post_receipt
+from app.services.inventory.posting.result import INVPostingResult
 from app.services.inventory.posting.router import post_transaction
 
 __all__ = [

@@ -20,7 +20,9 @@ class TestBankAccountListWorkflow:
         authenticated_page.goto(f"{base_url}/banking/accounts")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/banking/accounts.*"))
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("Bank Accounts")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "Bank Accounts"
+        )
 
     @pytest.mark.e2e
     def test_accounts_page_has_title(self, authenticated_page: Page, base_url: str):
@@ -28,10 +30,14 @@ class TestBankAccountListWorkflow:
         authenticated_page.goto(f"{base_url}/banking/accounts")
         authenticated_page.wait_for_load_state("networkidle")
 
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("Bank Accounts")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "Bank Accounts"
+        )
 
     @pytest.mark.e2e
-    def test_accounts_page_has_new_button(self, authenticated_page: Page, base_url: str):
+    def test_accounts_page_has_new_button(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that accounts page has new account button."""
         authenticated_page.goto(f"{base_url}/banking/accounts")
         authenticated_page.wait_for_load_state("networkidle")
@@ -49,7 +55,9 @@ class TestBankAccountListWorkflow:
         expect(search).to_be_visible()
 
     @pytest.mark.e2e
-    def test_accounts_page_has_status_filter(self, authenticated_page: Page, base_url: str):
+    def test_accounts_page_has_status_filter(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that accounts page has status filter."""
         authenticated_page.goto(f"{base_url}/banking/accounts")
         authenticated_page.wait_for_load_state("networkidle")
@@ -90,7 +98,9 @@ class TestBankAccountCreateWorkflow:
         expect(form.locator("select[name='currency_code']")).to_be_visible()
 
     @pytest.mark.e2e
-    def test_new_account_form_has_gl_account(self, authenticated_page: Page, base_url: str):
+    def test_new_account_form_has_gl_account(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that new account form has GL account selection."""
         authenticated_page.goto(f"{base_url}/banking/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -101,7 +111,9 @@ class TestBankAccountCreateWorkflow:
         expect(gl_account).to_be_visible()
 
     @pytest.mark.e2e
-    def test_create_bank_account_workflow(self, authenticated_page: Page, base_url: str):
+    def test_create_bank_account_workflow(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test full create bank account workflow."""
         authenticated_page.goto(f"{base_url}/banking/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -134,7 +146,7 @@ class TestBankAccountCreateWorkflow:
         expect(submit_btn).to_be_visible()
         submit_btn.click()
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
 
 class TestBankStatementWorkflow:
@@ -175,10 +187,14 @@ class TestBankReconciliationListWorkflow:
         """Test that reconciliations page loads."""
         authenticated_page.goto(f"{base_url}/banking/reconciliations")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page).to_have_url(re.compile(r".*/banking/reconciliations.*"))
+        expect(authenticated_page).to_have_url(
+            re.compile(r".*/banking/reconciliations.*")
+        )
 
     @pytest.mark.e2e
-    def test_reconciliations_page_has_stats(self, authenticated_page: Page, base_url: str):
+    def test_reconciliations_page_has_stats(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that reconciliations page shows statistics."""
         authenticated_page.goto(f"{base_url}/banking/reconciliations")
         authenticated_page.wait_for_load_state("networkidle")
@@ -187,7 +203,9 @@ class TestBankReconciliationListWorkflow:
         expect(stats).to_be_visible()
 
     @pytest.mark.e2e
-    def test_reconciliations_page_has_new_button(self, authenticated_page: Page, base_url: str):
+    def test_reconciliations_page_has_new_button(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that reconciliations page has new reconciliation button."""
         authenticated_page.goto(f"{base_url}/banking/reconciliations")
         authenticated_page.wait_for_load_state("networkidle")
@@ -199,16 +217,22 @@ class TestBankReconciliationListWorkflow:
         expect(new_btn).to_be_visible()
 
     @pytest.mark.e2e
-    def test_reconciliations_page_has_account_filter(self, authenticated_page: Page, base_url: str):
+    def test_reconciliations_page_has_account_filter(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that reconciliations page has account filter."""
         authenticated_page.goto(f"{base_url}/banking/reconciliations")
         authenticated_page.wait_for_load_state("networkidle")
 
-        account_filter = authenticated_page.get_by_test_id("bank-reconciliations-account")
+        account_filter = authenticated_page.get_by_test_id(
+            "bank-reconciliations-account"
+        )
         expect(account_filter).to_be_visible()
 
     @pytest.mark.e2e
-    def test_reconciliations_page_has_status_filter(self, authenticated_page: Page, base_url: str):
+    def test_reconciliations_page_has_status_filter(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that reconciliations page has status filter."""
         authenticated_page.goto(f"{base_url}/banking/reconciliations")
         authenticated_page.wait_for_load_state("networkidle")
@@ -217,13 +241,17 @@ class TestBankReconciliationListWorkflow:
         expect(status_filter).to_be_visible()
 
     @pytest.mark.e2e
-    def test_reconciliations_page_has_date_filters(self, authenticated_page: Page, base_url: str):
+    def test_reconciliations_page_has_date_filters(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that reconciliations page has date range filters."""
         authenticated_page.goto(f"{base_url}/banking/reconciliations")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Start date
-        start_date = authenticated_page.get_by_test_id("bank-reconciliations-start-date")
+        start_date = authenticated_page.get_by_test_id(
+            "bank-reconciliations-start-date"
+        )
         expect(start_date).to_be_visible()
 
         # End date
@@ -231,7 +259,9 @@ class TestBankReconciliationListWorkflow:
         expect(end_date).to_be_visible()
 
     @pytest.mark.e2e
-    def test_reconciliations_page_has_table(self, authenticated_page: Page, base_url: str):
+    def test_reconciliations_page_has_table(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that reconciliations page has data table."""
         authenticated_page.goto(f"{base_url}/banking/reconciliations")
         authenticated_page.wait_for_load_state("networkidle")
@@ -244,14 +274,20 @@ class TestBankReconciliationCreateWorkflow:
     """Test bank reconciliation create workflow."""
 
     @pytest.mark.e2e
-    def test_new_reconciliation_form_loads(self, authenticated_page: Page, base_url: str):
+    def test_new_reconciliation_form_loads(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that new reconciliation form loads."""
         authenticated_page.goto(f"{base_url}/banking/reconciliations/new")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page).to_have_url(re.compile(r".*/banking/reconciliations/new.*"))
+        expect(authenticated_page).to_have_url(
+            re.compile(r".*/banking/reconciliations/new.*")
+        )
 
     @pytest.mark.e2e
-    def test_new_reconciliation_form_has_account_select(self, authenticated_page: Page, base_url: str):
+    def test_new_reconciliation_form_has_account_select(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that new reconciliation form has account selection."""
         authenticated_page.goto(f"{base_url}/banking/reconciliations/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -262,7 +298,9 @@ class TestBankReconciliationCreateWorkflow:
         expect(account_select).to_be_visible()
 
     @pytest.mark.e2e
-    def test_new_reconciliation_form_has_dates(self, authenticated_page: Page, base_url: str):
+    def test_new_reconciliation_form_has_dates(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that new reconciliation form has date fields."""
         authenticated_page.goto(f"{base_url}/banking/reconciliations/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -273,7 +311,9 @@ class TestBankReconciliationCreateWorkflow:
         expect(date_field).to_be_visible()
 
     @pytest.mark.e2e
-    def test_new_reconciliation_form_has_balance_fields(self, authenticated_page: Page, base_url: str):
+    def test_new_reconciliation_form_has_balance_fields(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that new reconciliation form has balance fields."""
         authenticated_page.goto(f"{base_url}/banking/reconciliations/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -290,14 +330,16 @@ class TestBankReconciliationDetailWorkflow:
     """Test bank reconciliation detail and matching workflow."""
 
     @pytest.mark.e2e
-    def test_reconciliation_detail_not_found(self, authenticated_page: Page, base_url: str):
+    def test_reconciliation_detail_not_found(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that non-existent reconciliation shows appropriate message."""
         recon_id = str(uuid4())
         authenticated_page.goto(f"{base_url}/banking/reconciliations/{recon_id}")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Should show not found or handle gracefully
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
 
 class TestBankAccountDetailWorkflow:
@@ -311,7 +353,7 @@ class TestBankAccountDetailWorkflow:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Should show not found or handle gracefully
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
 
 class TestBankingResponsiveDesign:
@@ -321,26 +363,36 @@ class TestBankingResponsiveDesign:
     def test_banking_accounts_mobile(self, authenticated_page: Page, base_url: str):
         """Test banking accounts on mobile viewport."""
         authenticated_page.set_viewport_size({"width": 375, "height": 667})
-        authenticated_page.goto(f"{base_url}/banking/accounts", wait_until="domcontentloaded")
-        expect(authenticated_page.locator("body")).to_be_visible()
+        authenticated_page.goto(
+            f"{base_url}/banking/accounts", wait_until="domcontentloaded"
+        )
+        expect(authenticated_page.locator("main")).to_be_visible()
 
     @pytest.mark.e2e
-    def test_banking_reconciliations_mobile(self, authenticated_page: Page, base_url: str):
+    def test_banking_reconciliations_mobile(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test banking reconciliations on mobile viewport."""
         authenticated_page.set_viewport_size({"width": 375, "height": 667})
-        authenticated_page.goto(f"{base_url}/banking/reconciliations", wait_until="domcontentloaded")
-        expect(authenticated_page.locator("body")).to_be_visible()
+        authenticated_page.goto(
+            f"{base_url}/banking/reconciliations", wait_until="domcontentloaded"
+        )
+        expect(authenticated_page.locator("main")).to_be_visible()
 
     @pytest.mark.e2e
     def test_banking_accounts_tablet(self, authenticated_page: Page, base_url: str):
         """Test banking accounts on tablet viewport."""
         authenticated_page.set_viewport_size({"width": 768, "height": 1024})
-        authenticated_page.goto(f"{base_url}/banking/accounts", wait_until="domcontentloaded")
-        expect(authenticated_page.locator("body")).to_be_visible()
+        authenticated_page.goto(
+            f"{base_url}/banking/accounts", wait_until="domcontentloaded"
+        )
+        expect(authenticated_page.locator("main")).to_be_visible()
 
     @pytest.mark.e2e
     def test_new_account_form_mobile(self, authenticated_page: Page, base_url: str):
         """Test new account form on mobile viewport."""
         authenticated_page.set_viewport_size({"width": 375, "height": 667})
-        authenticated_page.goto(f"{base_url}/banking/accounts/new", wait_until="domcontentloaded")
-        expect(authenticated_page.locator("body")).to_be_visible()
+        authenticated_page.goto(
+            f"{base_url}/banking/accounts/new", wait_until="domcontentloaded"
+        )
+        expect(authenticated_page.locator("main")).to_be_visible()

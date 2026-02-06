@@ -16,7 +16,9 @@ class TestReportsNavigation:
         """Test that reports page loads successfully."""
         authenticated_page.goto(f"{base_url}/reports")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("Reports")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "Reports"
+        )
         expect(authenticated_page.locator("input[name='start_date']")).to_be_visible()
         expect(authenticated_page.locator("input[name='end_date']")).to_be_visible()
 
@@ -26,9 +28,15 @@ class TestReportsNavigation:
         authenticated_page.goto(f"{base_url}/reports")
         authenticated_page.wait_for_load_state("networkidle")
 
-        expect(authenticated_page.locator("a[href='/reports/income-statement']").first).to_be_visible()
-        expect(authenticated_page.locator("a[href='/reports/balance-sheet']").first).to_be_visible()
-        expect(authenticated_page.locator("a[href='/reports/tax-summary']").first).to_be_visible()
+        expect(
+            authenticated_page.locator("a[href='/reports/income-statement']").first
+        ).to_be_visible()
+        expect(
+            authenticated_page.locator("a[href='/reports/balance-sheet']").first
+        ).to_be_visible()
+        expect(
+            authenticated_page.locator("a[href='/reports/tax-summary']").first
+        ).to_be_visible()
 
 
 class TestTrialBalanceReport:
@@ -39,10 +47,14 @@ class TestTrialBalanceReport:
         """Test trial balance report page loads."""
         authenticated_page.goto(f"{base_url}/reports/trial-balance")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("Trial Balance")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "Trial Balance"
+        )
 
     @pytest.mark.e2e
-    def test_trial_balance_has_as_of_date(self, authenticated_page: Page, base_url: str):
+    def test_trial_balance_has_as_of_date(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test trial balance has as-of date selector."""
         authenticated_page.goto(f"{base_url}/reports/trial-balance")
         authenticated_page.wait_for_load_state("networkidle")
@@ -51,7 +63,9 @@ class TestTrialBalanceReport:
         expect(as_of_date).to_be_visible()
 
     @pytest.mark.e2e
-    def test_trial_balance_refresh_button(self, authenticated_page: Page, base_url: str):
+    def test_trial_balance_refresh_button(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test trial balance has refresh button."""
         authenticated_page.goto(f"{base_url}/reports/trial-balance")
         authenticated_page.wait_for_load_state("networkidle")
@@ -68,7 +82,9 @@ class TestIncomeStatementReport:
         """Test income statement report page loads."""
         authenticated_page.goto(f"{base_url}/reports/income-statement")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("Statement of Profit or Loss")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "Statement of Profit or Loss"
+        )
 
     @pytest.mark.e2e
     def test_income_statement_date_range(self, authenticated_page: Page, base_url: str):
@@ -90,7 +106,9 @@ class TestBalanceSheetReport:
         """Test balance sheet report page loads."""
         authenticated_page.goto(f"{base_url}/reports/balance-sheet")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("Statement of Financial Position")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "Statement of Financial Position"
+        )
 
     @pytest.mark.e2e
     def test_balance_sheet_as_of_date(self, authenticated_page: Page, base_url: str):
@@ -110,7 +128,9 @@ class TestGeneralLedgerReport:
         """Test general ledger report page loads."""
         authenticated_page.goto(f"{base_url}/reports/general-ledger")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("General Ledger")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "General Ledger"
+        )
         expect(authenticated_page.locator("select[name='account_id']")).to_be_visible()
         expect(authenticated_page.locator("input[name='start_date']")).to_be_visible()
         expect(authenticated_page.locator("input[name='end_date']")).to_be_visible()
@@ -120,7 +140,9 @@ class TestReportActions:
     """Test report action buttons."""
 
     @pytest.mark.e2e
-    def test_trial_balance_print_button_exists(self, authenticated_page: Page, base_url: str):
+    def test_trial_balance_print_button_exists(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test trial balance print button exists."""
         authenticated_page.goto(f"{base_url}/reports/trial-balance")
         authenticated_page.wait_for_load_state("networkidle")
@@ -129,7 +151,9 @@ class TestReportActions:
         expect(print_btn).to_be_visible()
 
     @pytest.mark.e2e
-    def test_income_statement_print_button_exists(self, authenticated_page: Page, base_url: str):
+    def test_income_statement_print_button_exists(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test income statement print button exists."""
         authenticated_page.goto(f"{base_url}/reports/income-statement")
         authenticated_page.wait_for_load_state("networkidle")
@@ -138,7 +162,9 @@ class TestReportActions:
         expect(print_btn).to_be_visible()
 
     @pytest.mark.e2e
-    def test_balance_sheet_print_button_exists(self, authenticated_page: Page, base_url: str):
+    def test_balance_sheet_print_button_exists(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test balance sheet print button exists."""
         authenticated_page.goto(f"{base_url}/reports/balance-sheet")
         authenticated_page.wait_for_load_state("networkidle")
@@ -155,7 +181,9 @@ class TestAdditionalReports:
         """Test tax summary page loads."""
         authenticated_page.goto(f"{base_url}/reports/tax-summary")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("Tax Summary")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "Tax Summary"
+        )
         expect(authenticated_page.locator("input[name='start_date']")).to_be_visible()
         expect(authenticated_page.locator("input[name='end_date']")).to_be_visible()
 
@@ -164,6 +192,8 @@ class TestAdditionalReports:
         """Test expense summary page loads."""
         authenticated_page.goto(f"{base_url}/reports/expense-summary")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("Expense Summary")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "Expense Summary"
+        )
         expect(authenticated_page.locator("input[name='start_date']")).to_be_visible()
         expect(authenticated_page.locator("input[name='end_date']")).to_be_visible()

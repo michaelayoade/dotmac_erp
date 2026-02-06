@@ -5,6 +5,7 @@ Revises: 20260201_external_sync
 Create Date: 2026-02-01
 
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -210,8 +211,12 @@ def downgrade() -> None:
 
     if inspector.has_table("crm_sync_mapping", schema="sync"):
         # Drop indexes first
-        op.drop_index("idx_crm_sync_local", table_name="crm_sync_mapping", schema="sync")
-        op.drop_index("idx_crm_sync_crm_id", table_name="crm_sync_mapping", schema="sync")
+        op.drop_index(
+            "idx_crm_sync_local", table_name="crm_sync_mapping", schema="sync"
+        )
+        op.drop_index(
+            "idx_crm_sync_crm_id", table_name="crm_sync_mapping", schema="sync"
+        )
         op.drop_index("idx_crm_sync_org", table_name="crm_sync_mapping", schema="sync")
         # Drop table
         op.drop_table("crm_sync_mapping", schema="sync")

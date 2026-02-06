@@ -3,17 +3,21 @@
 Handles appraisal cycles, KRAs, KPIs, appraisals, and scorecards.
 Adapted from DotMac People for the unified ERP platform.
 """
+
 from __future__ import annotations
 
+import logging
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
-from typing import TYPE_CHECKING, List, Optional, Sequence, TypedDict
+from decimal import ROUND_HALF_UP, Decimal
+from typing import TYPE_CHECKING, List, Optional, TypedDict
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select, false
+from sqlalchemy import and_, false, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.perf import (
+    KPI,
+    KRA,
     Appraisal,
     AppraisalCycle,
     AppraisalCycleStatus,
@@ -22,13 +26,13 @@ from app.models.people.perf import (
     AppraisalStatus,
     AppraisalTemplate,
     AppraisalTemplateKRA,
-    KPI,
     KPIStatus,
-    KRA,
     Scorecard,
     ScorecardItem,
 )
 from app.services.common import PaginatedResult, PaginationParams
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
@@ -440,7 +444,9 @@ class PerformanceService:
         pagination: Optional[PaginationParams] = None,
     ) -> PaginatedResult[AppraisalTemplate]:
         """List appraisal templates."""
-        query = select(AppraisalTemplate).where(AppraisalTemplate.organization_id == org_id)
+        query = select(AppraisalTemplate).where(
+            AppraisalTemplate.organization_id == org_id
+        )
 
         if department_id:
             query = query.where(AppraisalTemplate.department_id == department_id)
@@ -460,7 +466,9 @@ class PerformanceService:
                 )
             )
 
-        query = query.options(joinedload(AppraisalTemplate.kras).joinedload(AppraisalTemplateKRA.kra))
+        query = query.options(
+            joinedload(AppraisalTemplate.kras).joinedload(AppraisalTemplateKRA.kra)
+        )
         query = query.order_by(AppraisalTemplate.template_name)
 
         count_query = select(func.count()).select_from(query.subquery())
@@ -482,7 +490,9 @@ class PerformanceService:
         """Get an appraisal template by ID."""
         template = self.db.scalar(
             select(AppraisalTemplate)
-            .options(joinedload(AppraisalTemplate.kras).joinedload(AppraisalTemplateKRA.kra))
+            .options(
+                joinedload(AppraisalTemplate.kras).joinedload(AppraisalTemplateKRA.kra)
+            )
             .where(
                 AppraisalTemplate.template_id == template_id,
                 AppraisalTemplate.organization_id == org_id,
@@ -728,9 +738,9 @@ class PerformanceService:
 
         # Calculate achievement percentage
         if kpi.target_value and kpi.target_value > 0:
-            kpi.achievement_percentage = (actual_value / kpi.target_value * 100).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
+            kpi.achievement_percentage = (
+                actual_value / kpi.target_value * 100
+            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         # Update status based on achievement
         if kpi.achievement_percentage:
@@ -892,7 +902,10 @@ class PerformanceService:
         """Submit employee self-assessment."""
         appraisal = self.get_appraisal(org_id, appraisal_id)
 
-        if appraisal.status not in {AppraisalStatus.DRAFT, AppraisalStatus.SELF_ASSESSMENT}:
+        if appraisal.status not in {
+            AppraisalStatus.DRAFT,
+            AppraisalStatus.SELF_ASSESSMENT,
+        }:
             raise AppraisalStatusError(
                 appraisal.status.value, AppraisalStatus.SELF_ASSESSMENT.value
             )
@@ -1014,12 +1027,11 @@ class PerformanceService:
         if department_id:
             from app.models.people.hr.employee import Employee
 
-            query = (
-                query.join(Employee, Scorecard.employee_id == Employee.employee_id)
-                .where(
-                    Employee.department_id == department_id,
-                    Employee.organization_id == org_id,
-                )
+            query = query.join(
+                Employee, Scorecard.employee_id == Employee.employee_id
+            ).where(
+                Employee.department_id == department_id,
+                Employee.organization_id == org_id,
             )
 
         if employee_id:
@@ -1145,9 +1157,9 @@ class PerformanceService:
 
         # Calculate weighted score
         if item.score and item.weightage:
-            item.weighted_score = (item.score * item.weightage / Decimal("100")).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
+            item.weighted_score = (
+                item.score * item.weightage / Decimal("100")
+            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         self.db.flush()
         return item
@@ -1178,16 +1190,24 @@ class PerformanceService:
                 perspectives[item.perspective].append(item.weighted_score)
 
         scorecard.financial_score = (
-            sum(perspectives["FINANCIAL"], Decimal("0")) if perspectives["FINANCIAL"] else None
+            sum(perspectives["FINANCIAL"], Decimal("0"))
+            if perspectives["FINANCIAL"]
+            else None
         )
         scorecard.customer_score = (
-            sum(perspectives["CUSTOMER"], Decimal("0")) if perspectives["CUSTOMER"] else None
+            sum(perspectives["CUSTOMER"], Decimal("0"))
+            if perspectives["CUSTOMER"]
+            else None
         )
         scorecard.process_score = (
-            sum(perspectives["PROCESS"], Decimal("0")) if perspectives["PROCESS"] else None
+            sum(perspectives["PROCESS"], Decimal("0"))
+            if perspectives["PROCESS"]
+            else None
         )
         scorecard.learning_score = (
-            sum(perspectives["LEARNING"], Decimal("0")) if perspectives["LEARNING"] else None
+            sum(perspectives["LEARNING"], Decimal("0"))
+            if perspectives["LEARNING"]
+            else None
         )
 
         # Calculate overall score
@@ -1229,46 +1249,63 @@ class PerformanceService:
     def get_performance_stats(self, org_id: UUID) -> dict:
         """Get performance statistics for dashboard."""
         # Active cycles
-        active_cycles = self.db.scalar(
-            select(func.count(AppraisalCycle.cycle_id)).where(
-                AppraisalCycle.organization_id == org_id,
-                AppraisalCycle.status == AppraisalCycleStatus.ACTIVE,
+        active_cycles = (
+            self.db.scalar(
+                select(func.count(AppraisalCycle.cycle_id)).where(
+                    AppraisalCycle.organization_id == org_id,
+                    AppraisalCycle.status == AppraisalCycleStatus.ACTIVE,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Pending self assessment
-        pending_self = self.db.scalar(
-            select(func.count(Appraisal.appraisal_id)).where(
-                Appraisal.organization_id == org_id,
-                Appraisal.status.in_([AppraisalStatus.DRAFT, AppraisalStatus.SELF_ASSESSMENT]),
+        pending_self = (
+            self.db.scalar(
+                select(func.count(Appraisal.appraisal_id)).where(
+                    Appraisal.organization_id == org_id,
+                    Appraisal.status.in_(
+                        [AppraisalStatus.DRAFT, AppraisalStatus.SELF_ASSESSMENT]
+                    ),
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Pending manager review
-        pending_manager = self.db.scalar(
-            select(func.count(Appraisal.appraisal_id)).where(
-                Appraisal.organization_id == org_id,
-                Appraisal.status == AppraisalStatus.UNDER_REVIEW,
+        pending_manager = (
+            self.db.scalar(
+                select(func.count(Appraisal.appraisal_id)).where(
+                    Appraisal.organization_id == org_id,
+                    Appraisal.status == AppraisalStatus.UNDER_REVIEW,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Pending calibration
-        pending_calibration = self.db.scalar(
-            select(func.count(Appraisal.appraisal_id)).where(
-                Appraisal.organization_id == org_id,
-                Appraisal.status == AppraisalStatus.CALIBRATION,
+        pending_calibration = (
+            self.db.scalar(
+                select(func.count(Appraisal.appraisal_id)).where(
+                    Appraisal.organization_id == org_id,
+                    Appraisal.status == AppraisalStatus.CALIBRATION,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Completed appraisals (this year)
         year_start = date(date.today().year, 1, 1)
-        completed = self.db.scalar(
-            select(func.count(Appraisal.appraisal_id)).where(
-                Appraisal.organization_id == org_id,
-                Appraisal.status == AppraisalStatus.COMPLETED,
-                Appraisal.completed_on >= year_start,
+        completed = (
+            self.db.scalar(
+                select(func.count(Appraisal.appraisal_id)).where(
+                    Appraisal.organization_id == org_id,
+                    Appraisal.status == AppraisalStatus.COMPLETED,
+                    Appraisal.completed_on >= year_start,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Average rating
         avg_rating = self.db.scalar(
@@ -1284,19 +1321,24 @@ class PerformanceService:
             "pending_manager_review": pending_manager,
             "pending_calibration": pending_calibration,
             "completed_appraisals": completed,
-            "average_rating": Decimal(str(avg_rating)).quantize(Decimal("0.1")) if avg_rating else None,
+            "average_rating": Decimal(str(avg_rating)).quantize(Decimal("0.1"))
+            if avg_rating
+            else None,
         }
 
     def get_cycle_statistics(self, org_id: UUID, cycle_id: UUID) -> dict:
         """Get statistics for a specific appraisal cycle."""
         self.get_cycle(org_id, cycle_id)
 
-        total = self.db.scalar(
-            select(func.count(Appraisal.appraisal_id)).where(
-                Appraisal.organization_id == org_id,
-                Appraisal.cycle_id == cycle_id,
+        total = (
+            self.db.scalar(
+                select(func.count(Appraisal.appraisal_id)).where(
+                    Appraisal.organization_id == org_id,
+                    Appraisal.cycle_id == cycle_id,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         results = self.db.execute(
             select(Appraisal.status, func.count(Appraisal.appraisal_id))
@@ -1320,7 +1362,9 @@ class PerformanceService:
             "cycle_id": cycle_id,
             "total": total,
             "status_counts": status_counts,
-            "average_final_rating": float(avg_final_rating) if avg_final_rating is not None else None,
+            "average_final_rating": float(avg_final_rating)
+            if avg_final_rating is not None
+            else None,
         }
 
     # ─────────────────────────────────────────────────────────────────────────────
@@ -1371,13 +1415,17 @@ class PerformanceService:
 
         for rating in range(5, 0, -1):
             count = rating_counts.get(rating, 0)
-            pct = round(count / total_appraisals * 100, 1) if total_appraisals > 0 else 0
-            distribution.append({
-                "rating": rating,
-                "label": rating_labels[rating],
-                "count": count,
-                "percentage": pct,
-            })
+            pct = (
+                round(count / total_appraisals * 100, 1) if total_appraisals > 0 else 0
+            )
+            distribution.append(
+                {
+                    "rating": rating,
+                    "label": rating_labels[rating],
+                    "count": count,
+                    "percentage": pct,
+                }
+            )
 
         # Calculate average rating
         avg_rating = self.db.scalar(
@@ -1440,14 +1488,22 @@ class PerformanceService:
         total_appraisals = sum(r.appraisal_count for r in results)
 
         for row in results:
-            departments.append({
-                "department_id": row.department_id,
-                "department_name": row.department_name,
-                "appraisal_count": row.appraisal_count,
-                "average_rating": round(float(row.avg_rating), 1) if row.avg_rating else None,
-                "average_score": round(float(row.avg_score), 1) if row.avg_score else None,
-                "percentage": round(row.appraisal_count / total_appraisals * 100, 1) if total_appraisals > 0 else 0,
-            })
+            departments.append(
+                {
+                    "department_id": row.department_id,
+                    "department_name": row.department_name,
+                    "appraisal_count": row.appraisal_count,
+                    "average_rating": round(float(row.avg_rating), 1)
+                    if row.avg_rating
+                    else None,
+                    "average_score": round(float(row.avg_score), 1)
+                    if row.avg_score
+                    else None,
+                    "percentage": round(row.appraisal_count / total_appraisals * 100, 1)
+                    if total_appraisals > 0
+                    else 0,
+                }
+            )
 
         # Overall stats
         overall_avg = self.db.scalar(
@@ -1458,7 +1514,9 @@ class PerformanceService:
             "departments": departments,
             "total_departments": len(departments),
             "total_appraisals": total_appraisals,
-            "overall_average_rating": round(float(overall_avg), 1) if overall_avg else None,
+            "overall_average_rating": round(float(overall_avg), 1)
+            if overall_avg
+            else None,
         }
 
     def get_kpi_achievement_report(
@@ -1473,18 +1531,15 @@ class PerformanceService:
 
         Returns KPI achievement statistics by status and category.
         """
-        from app.models.people.hr import Department, Employee
+        from app.models.people.hr import Employee
 
         # Base filters
         filters = [KPI.organization_id == org_id]
 
         if department_id:
-            subquery = (
-                select(Employee.employee_id)
-                .where(
-                    Employee.department_id == department_id,
-                    Employee.organization_id == org_id,
-                )
+            subquery = select(Employee.employee_id).where(
+                Employee.department_id == department_id,
+                Employee.organization_id == org_id,
             )
             filters.append(KPI.employee_id.in_(subquery))
         if start_date:
@@ -1503,16 +1558,19 @@ class PerformanceService:
         status_breakdown = []
 
         for status, count in status_results:
-            status_breakdown.append({
-                "status": status.value,
-                "count": count,
-                "percentage": round(count / total_kpis * 100, 1) if total_kpis > 0 else 0,
-            })
+            status_breakdown.append(
+                {
+                    "status": status.value,
+                    "count": count,
+                    "percentage": round(count / total_kpis * 100, 1)
+                    if total_kpis > 0
+                    else 0,
+                }
+            )
 
         # Achievement statistics for achieved KPIs
         completed_kpis = self.db.scalars(
-            select(KPI)
-            .where(
+            select(KPI).where(
                 *filters,
                 KPI.status == KPIStatus.ACHIEVED,
                 KPI.target_value.isnot(None),
@@ -1541,7 +1599,9 @@ class PerformanceService:
             "achieved": achieved,
             "exceeded": exceeded,
             "partial": partial,
-            "achievement_rate": round((achieved + exceeded) / total_completed * 100, 1) if total_completed > 0 else 0,
+            "achievement_rate": round((achieved + exceeded) / total_completed * 100, 1)
+            if total_completed > 0
+            else 0,
         }
 
         # Top performing KPIs (by achievement percentage)
@@ -1558,12 +1618,14 @@ class PerformanceService:
             if kpi.target_value > 0:
                 achievement_pct = float(kpi.actual_value / kpi.target_value * 100)
                 if achievement_pct >= 100:
-                    top_kpis.append({
-                        "kpi_id": kpi.kpi_id,
-                        "kpi_title": kpi.kpi_name,
-                        "employee_id": kpi.employee_id,
-                        "achievement_percentage": round(achievement_pct, 1),
-                    })
+                    top_kpis.append(
+                        {
+                            "kpi_id": kpi.kpi_id,
+                            "kpi_title": kpi.kpi_name,
+                            "employee_id": kpi.employee_id,
+                            "achievement_percentage": round(achievement_pct, 1),
+                        }
+                    )
 
         top_kpis.sort(key=lambda x: x["achievement_percentage"], reverse=True)
 
@@ -1588,12 +1650,9 @@ class PerformanceService:
 
         employee_subquery = None
         if department_id:
-            employee_subquery = (
-                select(Employee.employee_id)
-                .where(
-                    Employee.department_id == department_id,
-                    Employee.organization_id == org_id,
-                )
+            employee_subquery = select(Employee.employee_id).where(
+                Employee.department_id == department_id,
+                Employee.organization_id == org_id,
             )
 
         # Get all cycles with their statistics
@@ -1615,16 +1674,22 @@ class PerformanceService:
             if employee_subquery is not None:
                 base_filters.append(Appraisal.employee_id.in_(employee_subquery))
 
-            total = self.db.scalar(
-                select(func.count(Appraisal.appraisal_id)).where(*base_filters)
-            ) or 0
-
-            completed = self.db.scalar(
-                select(func.count(Appraisal.appraisal_id)).where(
-                    *base_filters,
-                    Appraisal.status == AppraisalStatus.COMPLETED,
+            total = (
+                self.db.scalar(
+                    select(func.count(Appraisal.appraisal_id)).where(*base_filters)
                 )
-            ) or 0
+                or 0
+            )
+
+            completed = (
+                self.db.scalar(
+                    select(func.count(Appraisal.appraisal_id)).where(
+                        *base_filters,
+                        Appraisal.status == AppraisalStatus.COMPLETED,
+                    )
+                )
+                or 0
+            )
 
             avg_rating = self.db.scalar(
                 select(func.avg(Appraisal.final_rating)).where(
@@ -1635,23 +1700,29 @@ class PerformanceService:
 
             completion_rate = round(completed / total * 100, 1) if total > 0 else 0
 
-            cycle_data.append({
-                "cycle_id": cycle.cycle_id,
-                "cycle_name": cycle.cycle_name,
-                "period_start": cycle.review_period_start,
-                "period_end": cycle.review_period_end,
-                "status": cycle.status.value,
-                "total_appraisals": total,
-                "completed_appraisals": completed,
-                "completion_rate": completion_rate,
-                "average_rating": round(float(avg_rating), 1) if avg_rating else None,
-            })
+            cycle_data.append(
+                {
+                    "cycle_id": cycle.cycle_id,
+                    "cycle_name": cycle.cycle_name,
+                    "period_start": cycle.review_period_start,
+                    "period_end": cycle.review_period_end,
+                    "status": cycle.status.value,
+                    "total_appraisals": total,
+                    "completed_appraisals": completed,
+                    "completion_rate": completion_rate,
+                    "average_rating": round(float(avg_rating), 1)
+                    if avg_rating
+                    else None,
+                }
+            )
 
             if avg_rating:
                 all_ratings.append(float(avg_rating))
 
         # Overall trend
-        overall_avg = round(sum(all_ratings) / len(all_ratings), 1) if all_ratings else None
+        overall_avg = (
+            round(sum(all_ratings) / len(all_ratings), 1) if all_ratings else None
+        )
 
         return {
             "cycles": cycle_data,
@@ -1674,7 +1745,9 @@ class PerformanceService:
         pagination: Optional[PaginationParams] = None,
     ) -> PaginatedResult[AppraisalFeedback]:
         """List feedback entries."""
-        query = select(AppraisalFeedback).where(AppraisalFeedback.organization_id == org_id)
+        query = select(AppraisalFeedback).where(
+            AppraisalFeedback.organization_id == org_id
+        )
 
         if appraisal_id:
             query = query.where(AppraisalFeedback.appraisal_id == appraisal_id)
@@ -1783,18 +1856,26 @@ class PerformanceService:
         self.db.delete(feedback)
         self.db.flush()
 
-    def get_pending_feedback_for_employee(self, org_id: UUID, employee_id: UUID) -> list[AppraisalFeedback]:
+    def get_pending_feedback_for_employee(
+        self, org_id: UUID, employee_id: UUID
+    ) -> list[AppraisalFeedback]:
         """Get pending feedback requests for an employee."""
-        result = self.db.scalars(
-            select(AppraisalFeedback)
-            .options(
-                joinedload(AppraisalFeedback.appraisal).joinedload(Appraisal.employee),
+        result = (
+            self.db.scalars(
+                select(AppraisalFeedback)
+                .options(
+                    joinedload(AppraisalFeedback.appraisal).joinedload(
+                        Appraisal.employee
+                    ),
+                )
+                .where(
+                    AppraisalFeedback.organization_id == org_id,
+                    AppraisalFeedback.feedback_from_id == employee_id,
+                    AppraisalFeedback.submitted_on.is_(None),
+                )
+                .order_by(AppraisalFeedback.created_at.desc())
             )
-            .where(
-                AppraisalFeedback.organization_id == org_id,
-                AppraisalFeedback.feedback_from_id == employee_id,
-                AppraisalFeedback.submitted_on.is_(None),
-            )
-            .order_by(AppraisalFeedback.created_at.desc())
-        ).unique().all()
+            .unique()
+            .all()
+        )
         return list(result)

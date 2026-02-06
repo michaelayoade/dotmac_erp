@@ -6,15 +6,21 @@ Provides bulk operations for AP (supplier) invoice documents.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.models.finance.ap.supplier_invoice import SupplierInvoice, SupplierInvoiceStatus
+from app.models.finance.ap.supplier_invoice import (
+    SupplierInvoice,
+    SupplierInvoiceStatus,
+)
 from app.schemas.bulk_actions import BulkActionResult
 from app.services.bulk_actions import BulkActionService
 from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
+
+logger = logging.getLogger(__name__)
 
 
 class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
@@ -145,7 +151,9 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
         if failed_count > 0:
             return BulkActionResult.partial(success_count, failed_count, errors)
 
-        return BulkActionResult.success(success_count, f"Approved {success_count} invoices")
+        return BulkActionResult.success(
+            success_count, f"Approved {success_count} invoices"
+        )
 
     async def bulk_post(self, ids: list[UUID]) -> BulkActionResult:
         """
@@ -188,7 +196,9 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
         if failed_count > 0:
             return BulkActionResult.partial(success_count, failed_count, errors)
 
-        return BulkActionResult.success(success_count, f"Posted {success_count} invoices to ledger")
+        return BulkActionResult.success(
+            success_count, f"Posted {success_count} invoices to ledger"
+        )
 
 
 def get_ap_invoice_bulk_service(

@@ -5,7 +5,7 @@ Handles category management template responses.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 from fastapi import Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -60,9 +60,7 @@ class CategoryWebService:
             "categories": formatted_categories,
         }
 
-        return templates.TemplateResponse(
-            request, "support/categories.html", context
-        )
+        return templates.TemplateResponse(request, "support/categories.html", context)
 
     def category_form_response(
         self,
@@ -73,8 +71,8 @@ class CategoryWebService:
         error: Optional[str] = None,
     ) -> HTMLResponse:
         """Render the category create/edit form."""
-        from app.web.deps import base_context
         from app.models.support.ticket import TicketPriority
+        from app.web.deps import base_context
 
         category = None
         title = "New Category"
@@ -114,8 +112,7 @@ class CategoryWebService:
         ]
 
         priorities = [
-            {"value": p.value, "label": p.value.title()}
-            for p in TicketPriority
+            {"value": p.value, "label": p.value.title()} for p in TicketPriority
         ]
 
         context = {
@@ -151,7 +148,8 @@ class CategoryWebService:
 
         try:
             category, error = category_service.create_category(
-                db, org_id,
+                db,
+                org_id,
                 category_code=category_code,
                 category_name=category_name,
                 description=description,
@@ -163,9 +161,7 @@ class CategoryWebService:
             )
 
             if error:
-                return self.category_form_response(
-                    request, auth, db, error=error
-                )
+                return self.category_form_response(request, auth, db, error=error)
 
             db.commit()
 
@@ -182,9 +178,7 @@ class CategoryWebService:
         except Exception as e:
             db.rollback()
             logger.exception("Failed to create category")
-            return self.category_form_response(
-                request, auth, db, error=str(e)
-            )
+            return self.category_form_response(request, auth, db, error=str(e))
 
     def update_category_response(
         self,
@@ -208,7 +202,9 @@ class CategoryWebService:
 
         try:
             category = category_service.update_category(
-                db, org_id, cid,
+                db,
+                org_id,
+                cid,
                 category_name=category_name,
                 description=description,
                 color=color,

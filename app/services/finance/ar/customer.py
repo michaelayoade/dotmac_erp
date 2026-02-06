@@ -6,8 +6,8 @@ Manages customer records, credit limits, and risk assessment.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, List, Optional
 from uuid import UUID
@@ -19,13 +19,15 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models.finance.ar.customer import Customer, CustomerType, RiskCategory
 from app.services.common import coerce_uuid
-from app.services.response import ListResponseMixin
 from app.services.finance.common import (
-    validate_unique_code,
+    apply_search_filter,
     get_org_scoped_entity,
     toggle_entity_status,
-    apply_search_filter,
+    validate_unique_code,
 )
+from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -41,7 +43,9 @@ class CustomerInput:
     customer_code: str
     customer_type: CustomerType
     customer_name: str  # Maps to model: legal_name
-    default_receivable_account_id: Optional[UUID] = None  # Maps to model: ar_control_account_id
+    default_receivable_account_id: Optional[UUID] = (
+        None  # Maps to model: ar_control_account_id
+    )
     trading_name: Optional[str] = None
     tax_id: Optional[str] = None  # Maps to model: tax_identification_number
     registration_number: Optional[str] = None
@@ -194,18 +198,26 @@ class CustomerService(ListResponseMixin):
         # Update fields - map template-friendly names to model field names
         customer.customer_code = input.customer_code
         customer.customer_type = input.customer_type
-        customer.legal_name = input.customer_name  # template: customer_name → model: legal_name
+        customer.legal_name = (
+            input.customer_name
+        )  # template: customer_name → model: legal_name
         customer.trading_name = input.trading_name
-        customer.tax_identification_number = input.tax_id  # template: tax_id → model: tax_identification_number
+        customer.tax_identification_number = (
+            input.tax_id
+        )  # template: tax_id → model: tax_identification_number
         customer.registration_number = input.registration_number
         customer.credit_limit = input.credit_limit
-        customer.credit_terms_days = input.payment_terms_days  # template: payment_terms_days → model: credit_terms_days
+        customer.credit_terms_days = (
+            input.payment_terms_days
+        )  # template: payment_terms_days → model: credit_terms_days
         customer.credit_hold = input.credit_hold
         customer.payment_terms_id = input.payment_terms_id
         customer.currency_code = input.currency_code
         customer.price_list_id = input.price_list_id
         if input.default_receivable_account_id is not None:
-            customer.ar_control_account_id = input.default_receivable_account_id  # template: default_receivable_account_id → model: ar_control_account_id
+            customer.ar_control_account_id = (
+                input.default_receivable_account_id
+            )  # template: default_receivable_account_id → model: ar_control_account_id
         customer.default_revenue_account_id = input.default_revenue_account_id
         customer.sales_rep_user_id = input.sales_rep_user_id
         customer.customer_group_id = input.customer_group_id
@@ -291,7 +303,10 @@ class CustomerService(ListResponseMixin):
 
         # Update mapped fields (template name → model name)
         for template_field, model_field in field_mapping.items():
-            if template_field in update_data and update_data[template_field] is not None:
+            if (
+                template_field in update_data
+                and update_data[template_field] is not None
+            ):
                 setattr(customer, model_field, update_data[template_field])
 
         # Update direct fields (same name in both)

@@ -116,14 +116,18 @@ class OperationsInventoryWebService:
         assert org_id is not None
         assert user_id is not None
 
-        request_type = _safe_form_text(_form_value(form_data, "request_type") or "PURCHASE")
+        request_type = _safe_form_text(
+            _form_value(form_data, "request_type") or "PURCHASE"
+        )
         schedule_date = _safe_form_text(_form_value(form_data, "schedule_date")) or None
         default_warehouse_id = (
             _safe_form_text(_form_value(form_data, "default_warehouse_id")) or None
         )
         project_id = _safe_form_text(_form_value(form_data, "project_id")) or None
         ticket_id = _safe_form_text(_form_value(form_data, "ticket_id")) or None
-        requested_by_id = _safe_form_text(_form_value(form_data, "requested_by_id")) or None
+        requested_by_id = (
+            _safe_form_text(_form_value(form_data, "requested_by_id")) or None
+        )
         remarks = _safe_form_text(_form_value(form_data, "remarks")) or None
 
         # Parse items from JSON
@@ -200,11 +204,11 @@ class OperationsInventoryWebService:
         """Material request detail page."""
         context = base_context(request, auth, "Material Request", "material_requests")
         org_id_str = self._org_id_str(auth)
-        context.update(MaterialRequestWebService.detail_context(db, org_id_str, request_id))
+        context.update(
+            MaterialRequestWebService.detail_context(db, org_id_str, request_id)
+        )
         if not context.get("material_request"):
-            return RedirectResponse(
-                "/inventory/material-requests", status_code=302
-            )
+            return RedirectResponse("/inventory/material-requests", status_code=302)
         return templates.TemplateResponse(
             request, "inventory/material_request_detail.html", context
         )
@@ -229,9 +233,7 @@ class OperationsInventoryWebService:
             )
         )
         if not context.get("material_request"):
-            return RedirectResponse(
-                "/inventory/material-requests", status_code=302
-            )
+            return RedirectResponse("/inventory/material-requests", status_code=302)
         return templates.TemplateResponse(
             request, "inventory/material_request_form.html", context
         )
@@ -250,14 +252,18 @@ class OperationsInventoryWebService:
         assert org_id is not None
         assert user_id is not None
 
-        request_type = _safe_form_text(_form_value(form_data, "request_type") or "PURCHASE")
+        request_type = _safe_form_text(
+            _form_value(form_data, "request_type") or "PURCHASE"
+        )
         schedule_date = _safe_form_text(_form_value(form_data, "schedule_date")) or None
         default_warehouse_id = (
             _safe_form_text(_form_value(form_data, "default_warehouse_id")) or None
         )
         project_id = _safe_form_text(_form_value(form_data, "project_id")) or None
         ticket_id = _safe_form_text(_form_value(form_data, "ticket_id")) or None
-        requested_by_id = _safe_form_text(_form_value(form_data, "requested_by_id")) or None
+        requested_by_id = (
+            _safe_form_text(_form_value(form_data, "requested_by_id")) or None
+        )
         remarks = _safe_form_text(_form_value(form_data, "remarks")) or None
 
         # Parse items from JSON
@@ -411,10 +417,11 @@ class OperationsInventoryWebService:
     ) -> HTMLResponse | RedirectResponse:
         """Inventory transaction detail page."""
         from uuid import UUID as UUID_Type
+
+        from app.models.inventory.inventory_lot import InventoryLot
         from app.models.inventory.inventory_transaction import InventoryTransaction
         from app.models.inventory.item import Item
         from app.models.inventory.warehouse import Warehouse
-        from app.models.inventory.inventory_lot import InventoryLot
 
         context = base_context(request, auth, "Transaction Detail", "transactions")
 
@@ -453,7 +460,7 @@ class OperationsInventoryWebService:
         page: int = 1,
     ) -> HTMLResponse:
         """Stock counts list page."""
-        from app.models.inventory.inventory_count import InventoryCount, CountStatus
+        from app.models.inventory.inventory_count import CountStatus, InventoryCount
         from app.models.inventory.warehouse import Warehouse
 
         context = base_context(request, auth, "Stock Counts", "counts")
@@ -462,24 +469,36 @@ class OperationsInventoryWebService:
 
         # Summary stats (unfiltered)
         base_filter = InventoryCount.organization_id == org_id
-        total_count = db.scalar(
-            select(func.count()).select_from(InventoryCount).where(base_filter)
-        ) or 0
-        in_progress_count = db.scalar(
-            select(func.count())
-            .select_from(InventoryCount)
-            .where(base_filter, InventoryCount.status == CountStatus.IN_PROGRESS)
-        ) or 0
-        completed_count = db.scalar(
-            select(func.count())
-            .select_from(InventoryCount)
-            .where(base_filter, InventoryCount.status == CountStatus.COMPLETED)
-        ) or 0
-        variance_count = db.scalar(
-            select(func.count())
-            .select_from(InventoryCount)
-            .where(base_filter, InventoryCount.items_with_variance > 0)
-        ) or 0
+        total_count = (
+            db.scalar(
+                select(func.count()).select_from(InventoryCount).where(base_filter)
+            )
+            or 0
+        )
+        in_progress_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(InventoryCount)
+                .where(base_filter, InventoryCount.status == CountStatus.IN_PROGRESS)
+            )
+            or 0
+        )
+        completed_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(InventoryCount)
+                .where(base_filter, InventoryCount.status == CountStatus.COMPLETED)
+            )
+            or 0
+        )
+        variance_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(InventoryCount)
+                .where(base_filter, InventoryCount.items_with_variance > 0)
+            )
+            or 0
+        )
 
         # Build filtered query
         stmt = select(InventoryCount).where(base_filter)
@@ -498,9 +517,9 @@ class OperationsInventoryWebService:
             )
 
         # Pagination
-        filtered_total = db.scalar(
-            select(func.count()).select_from(stmt.subquery())
-        ) or 0
+        filtered_total = (
+            db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+        )
         total_pages = max(1, ceil(filtered_total / per_page))
 
         stmt = (
@@ -515,7 +534,9 @@ class OperationsInventoryWebService:
         warehouses = list(
             db.scalars(
                 select(Warehouse)
-                .where(Warehouse.organization_id == org_id, Warehouse.is_active.is_(True))
+                .where(
+                    Warehouse.organization_id == org_id, Warehouse.is_active.is_(True)
+                )
                 .order_by(Warehouse.warehouse_name)
             ).all()
         )
@@ -559,24 +580,36 @@ class OperationsInventoryWebService:
 
         # Summary stats (unfiltered)
         base_filter = BillOfMaterials.organization_id == org_id
-        total_count = db.scalar(
-            select(func.count()).select_from(BillOfMaterials).where(base_filter)
-        ) or 0
-        active_count = db.scalar(
-            select(func.count())
-            .select_from(BillOfMaterials)
-            .where(base_filter, BillOfMaterials.is_active.is_(True))
-        ) or 0
-        assembly_count = db.scalar(
-            select(func.count())
-            .select_from(BillOfMaterials)
-            .where(base_filter, BillOfMaterials.bom_type == BOMType.ASSEMBLY)
-        ) or 0
-        kit_count = db.scalar(
-            select(func.count())
-            .select_from(BillOfMaterials)
-            .where(base_filter, BillOfMaterials.bom_type == BOMType.KIT)
-        ) or 0
+        total_count = (
+            db.scalar(
+                select(func.count()).select_from(BillOfMaterials).where(base_filter)
+            )
+            or 0
+        )
+        active_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(BillOfMaterials)
+                .where(base_filter, BillOfMaterials.is_active.is_(True))
+            )
+            or 0
+        )
+        assembly_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(BillOfMaterials)
+                .where(base_filter, BillOfMaterials.bom_type == BOMType.ASSEMBLY)
+            )
+            or 0
+        )
+        kit_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(BillOfMaterials)
+                .where(base_filter, BillOfMaterials.bom_type == BOMType.KIT)
+            )
+            or 0
+        )
 
         # Build filtered query
         stmt = select(BillOfMaterials).where(base_filter)
@@ -604,9 +637,9 @@ class OperationsInventoryWebService:
                 pass
 
         # Pagination
-        filtered_total = db.scalar(
-            select(func.count()).select_from(stmt.subquery())
-        ) or 0
+        filtered_total = (
+            db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+        )
         total_pages = max(1, ceil(filtered_total / per_page))
 
         stmt = (
@@ -658,32 +691,40 @@ class OperationsInventoryWebService:
 
         # Summary stats (unfiltered)
         base_filter = PriceList.organization_id == org_id
-        total_count = db.scalar(
-            select(func.count()).select_from(PriceList).where(base_filter)
-        ) or 0
-        sales_count = db.scalar(
-            select(func.count())
-            .select_from(PriceList)
-            .where(base_filter, PriceList.price_list_type == PriceListType.SALES)
-        ) or 0
-        purchase_count = db.scalar(
-            select(func.count())
-            .select_from(PriceList)
-            .where(base_filter, PriceList.price_list_type == PriceListType.PURCHASE)
-        ) or 0
-        active_count = db.scalar(
-            select(func.count())
-            .select_from(PriceList)
-            .where(base_filter, PriceList.is_active.is_(True))
-        ) or 0
+        total_count = (
+            db.scalar(select(func.count()).select_from(PriceList).where(base_filter))
+            or 0
+        )
+        sales_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(PriceList)
+                .where(base_filter, PriceList.price_list_type == PriceListType.SALES)
+            )
+            or 0
+        )
+        purchase_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(PriceList)
+                .where(base_filter, PriceList.price_list_type == PriceListType.PURCHASE)
+            )
+            or 0
+        )
+        active_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(PriceList)
+                .where(base_filter, PriceList.is_active.is_(True))
+            )
+            or 0
+        )
 
         # Build filtered query
         stmt = select(PriceList).where(base_filter)
         if list_type:
             try:
-                stmt = stmt.where(
-                    PriceList.price_list_type == PriceListType(list_type)
-                )
+                stmt = stmt.where(PriceList.price_list_type == PriceListType(list_type))
             except ValueError:
                 pass
         if search:
@@ -696,9 +737,9 @@ class OperationsInventoryWebService:
             )
 
         # Pagination
-        filtered_total = db.scalar(
-            select(func.count()).select_from(stmt.subquery())
-        ) or 0
+        filtered_total = (
+            db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+        )
         total_pages = max(1, ceil(filtered_total / per_page))
 
         stmt = (
@@ -751,32 +792,42 @@ class OperationsInventoryWebService:
 
         # Summary stats (unfiltered)
         base_filter = InventoryLot.organization_id == org_id
-        total_count = db.scalar(
-            select(func.count()).select_from(InventoryLot).where(base_filter)
-        ) or 0
-        available_count = db.scalar(
-            select(func.count())
-            .select_from(InventoryLot)
-            .where(
-                base_filter,
-                InventoryLot.quantity_available > 0,
-                InventoryLot.is_quarantined.is_(False),
+        total_count = (
+            db.scalar(select(func.count()).select_from(InventoryLot).where(base_filter))
+            or 0
+        )
+        available_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(InventoryLot)
+                .where(
+                    base_filter,
+                    InventoryLot.quantity_available > 0,
+                    InventoryLot.is_quarantined.is_(False),
+                )
             )
-        ) or 0
-        expiring_count = db.scalar(
-            select(func.count())
-            .select_from(InventoryLot)
-            .where(
-                base_filter,
-                InventoryLot.expiry_date.isnot(None),
-                InventoryLot.expiry_date <= today,
+            or 0
+        )
+        expiring_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(InventoryLot)
+                .where(
+                    base_filter,
+                    InventoryLot.expiry_date.isnot(None),
+                    InventoryLot.expiry_date <= today,
+                )
             )
-        ) or 0
-        quarantine_count = db.scalar(
-            select(func.count())
-            .select_from(InventoryLot)
-            .where(base_filter, InventoryLot.is_quarantined.is_(True))
-        ) or 0
+            or 0
+        )
+        quarantine_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(InventoryLot)
+                .where(base_filter, InventoryLot.is_quarantined.is_(True))
+            )
+            or 0
+        )
 
         # Build filtered query
         stmt = select(InventoryLot).where(base_filter)
@@ -807,9 +858,9 @@ class OperationsInventoryWebService:
             stmt = stmt.where(InventoryLot.lot_number.ilike(term))
 
         # Pagination
-        filtered_total = db.scalar(
-            select(func.count()).select_from(stmt.subquery())
-        ) or 0
+        filtered_total = (
+            db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+        )
         total_pages = max(1, ceil(filtered_total / per_page))
 
         stmt = (
@@ -849,7 +900,9 @@ class OperationsInventoryWebService:
         warehouses = list(
             db.scalars(
                 select(Warehouse)
-                .where(Warehouse.organization_id == org_id, Warehouse.is_active.is_(True))
+                .where(
+                    Warehouse.organization_id == org_id, Warehouse.is_active.is_(True)
+                )
                 .order_by(Warehouse.warehouse_name)
             ).all()
         )
@@ -894,14 +947,19 @@ class OperationsInventoryWebService:
         warehouses = list(
             db.scalars(
                 select(Warehouse)
-                .where(Warehouse.organization_id == org_id, Warehouse.is_active.is_(True))
+                .where(
+                    Warehouse.organization_id == org_id, Warehouse.is_active.is_(True)
+                )
                 .order_by(Warehouse.warehouse_name)
             ).all()
         )
         categories = list(
             db.scalars(
                 select(ItemCategory)
-                .where(ItemCategory.organization_id == org_id, ItemCategory.is_active.is_(True))
+                .where(
+                    ItemCategory.organization_id == org_id,
+                    ItemCategory.is_active.is_(True),
+                )
                 .order_by(ItemCategory.category_name)
             ).all()
         )
@@ -919,11 +977,16 @@ class OperationsInventoryWebService:
         # Generate next count number
         from app.models.inventory.inventory_count import InventoryCount
 
-        last_num = db.scalar(
-            select(func.count()).select_from(InventoryCount).where(
-                InventoryCount.organization_id == org_id,
+        last_num = (
+            db.scalar(
+                select(func.count())
+                .select_from(InventoryCount)
+                .where(
+                    InventoryCount.organization_id == org_id,
+                )
             )
-        ) or 0
+            or 0
+        )
         next_count_number = f"CNT-{last_num + 1:05d}"
 
         context.update(
@@ -935,9 +998,7 @@ class OperationsInventoryWebService:
                 "today": date_type.today().strftime("%Y-%m-%d"),
             }
         )
-        return templates.TemplateResponse(
-            request, "inventory/count_form.html", context
-        )
+        return templates.TemplateResponse(request, "inventory/count_form.html", context)
 
     async def create_count_response(
         self,
@@ -969,7 +1030,11 @@ class OperationsInventoryWebService:
         try:
             from datetime import date as date_cls
 
-            count_date = date_cls.fromisoformat(count_date_str) if count_date_str else date_cls.today()
+            count_date = (
+                date_cls.fromisoformat(count_date_str)
+                if count_date_str
+                else date_cls.today()
+            )
             count = InventoryCount(
                 organization_id=org_id,
                 count_number=count_number,
@@ -1023,15 +1088,15 @@ class OperationsInventoryWebService:
         warehouses = list(
             db.scalars(
                 select(Warehouse)
-                .where(Warehouse.organization_id == org_id, Warehouse.is_active.is_(True))
+                .where(
+                    Warehouse.organization_id == org_id, Warehouse.is_active.is_(True)
+                )
                 .order_by(Warehouse.warehouse_name)
             ).all()
         )
 
         context.update({"items": items, "warehouses": warehouses})
-        return templates.TemplateResponse(
-            request, "inventory/bom_form.html", context
-        )
+        return templates.TemplateResponse(request, "inventory/bom_form.html", context)
 
     async def create_bom_response(
         self,
@@ -1059,17 +1124,26 @@ class OperationsInventoryWebService:
         components_json = _safe_form_text(form.get("components_json") or "[]")
 
         try:
-            bom_type = BOMType(bom_type_str) if bom_type_str in {t.value for t in BOMType} else BOMType.ASSEMBLY
+            bom_type = (
+                BOMType(bom_type_str)
+                if bom_type_str in {t.value for t in BOMType}
+                else BOMType.ASSEMBLY
+            )
             output_qty = Decimal(quantity_str) if quantity_str else Decimal("1")
 
             # Generate BOM code
             from app.models.inventory.bom import BillOfMaterials as BOM_Model
 
-            last_num = db.scalar(
-                select(func.count()).select_from(BOM_Model).where(
-                    BOM_Model.organization_id == org_id,
+            last_num = (
+                db.scalar(
+                    select(func.count())
+                    .select_from(BOM_Model)
+                    .where(
+                        BOM_Model.organization_id == org_id,
+                    )
                 )
-            ) or 0
+                or 0
+            )
             bom_code = f"BOM-{last_num + 1:05d}"
 
             bom = BillOfMaterials(
@@ -1116,9 +1190,7 @@ class OperationsInventoryWebService:
                 )
 
             db.commit()
-            return RedirectResponse(
-                f"/inventory/boms/{bom.bom_id}", status_code=303
-            )
+            return RedirectResponse(f"/inventory/boms/{bom.bom_id}", status_code=303)
         except Exception as e:
             db.rollback()
             logger.warning("Failed to create BOM: %s", e)
@@ -1137,9 +1209,7 @@ class OperationsInventoryWebService:
     ) -> HTMLResponse:
         """Inventory reports hub page (navigation only)."""
         context = base_context(request, auth, "Inventory Reports", "reports")
-        return templates.TemplateResponse(
-            request, "inventory/reports.html", context
-        )
+        return templates.TemplateResponse(request, "inventory/reports.html", context)
 
     # ------------------------------------------------------------------
     # Stock Count Detail & Workflow
@@ -1156,7 +1226,6 @@ class OperationsInventoryWebService:
         from uuid import UUID as UUID_Type
 
         from app.models.inventory.inventory_count import InventoryCount
-        from app.models.inventory.inventory_count_line import InventoryCountLine
         from app.models.inventory.item import Item
         from app.models.inventory.warehouse import Warehouse
         from app.services.inventory.count import InventoryCountService
@@ -1180,7 +1249,9 @@ class OperationsInventoryWebService:
 
         # Load count lines with related item and warehouse
         lines_raw = InventoryCountService.list_lines(
-            db, count_id, limit=500,
+            db,
+            count_id,
+            limit=500,
         )
 
         # Batch-load items and warehouses for the lines
@@ -1212,7 +1283,9 @@ class OperationsInventoryWebService:
         # Get summary stats
         try:
             summary = InventoryCountService.get_count_summary(
-                db, auth.organization_id, cnt_id,
+                db,
+                auth.organization_id,
+                cnt_id,
             )
             summary_dict = {
                 "total_items": summary.total_items,
@@ -1228,11 +1301,13 @@ class OperationsInventoryWebService:
                 "total_variance_value": 0,
             }
 
-        context.update({
-            "count": count,
-            "lines": lines_raw,
-            "summary": summary_dict,
-        })
+        context.update(
+            {
+                "count": count,
+                "lines": lines_raw,
+                "summary": summary_dict,
+            }
+        )
         return templates.TemplateResponse(
             request, "inventory/count_detail.html", context
         )
@@ -1244,8 +1319,8 @@ class OperationsInventoryWebService:
         db: Session,
     ) -> RedirectResponse:
         """Start an inventory count (DRAFT → IN_PROGRESS)."""
-        from app.services.inventory.count import InventoryCountService
         from app.services.common import coerce_uuid
+        from app.services.inventory.count import InventoryCountService
 
         org_id = auth.organization_id
         user_id = auth.user_id
@@ -1253,13 +1328,14 @@ class OperationsInventoryWebService:
         assert user_id is not None
         try:
             InventoryCountService.start_count(
-                db, org_id, coerce_uuid(count_id), user_id,
+                db,
+                org_id,
+                coerce_uuid(count_id),
+                user_id,
             )
         except Exception as e:
             logger.warning("Failed to start count %s: %s", count_id, e)
-        return RedirectResponse(
-            f"/inventory/counts/{count_id}", status_code=303
-        )
+        return RedirectResponse(f"/inventory/counts/{count_id}", status_code=303)
 
     def complete_count_response(
         self,
@@ -1268,20 +1344,20 @@ class OperationsInventoryWebService:
         db: Session,
     ) -> RedirectResponse:
         """Complete an inventory count (IN_PROGRESS → COMPLETED)."""
-        from app.services.inventory.count import InventoryCountService
         from app.services.common import coerce_uuid
+        from app.services.inventory.count import InventoryCountService
 
         org_id = auth.organization_id
         assert org_id is not None
         try:
             InventoryCountService.complete_count(
-                db, org_id, coerce_uuid(count_id),
+                db,
+                org_id,
+                coerce_uuid(count_id),
             )
         except Exception as e:
             logger.warning("Failed to complete count %s: %s", count_id, e)
-        return RedirectResponse(
-            f"/inventory/counts/{count_id}", status_code=303
-        )
+        return RedirectResponse(f"/inventory/counts/{count_id}", status_code=303)
 
     def post_count_response(
         self,
@@ -1290,8 +1366,8 @@ class OperationsInventoryWebService:
         db: Session,
     ) -> RedirectResponse:
         """Post inventory count adjustments (COMPLETED → POSTED)."""
-        from app.services.inventory.count import InventoryCountService
         from app.services.common import coerce_uuid
+        from app.services.inventory.count import InventoryCountService
 
         org_id = auth.organization_id
         user_id = auth.user_id
@@ -1299,13 +1375,14 @@ class OperationsInventoryWebService:
         assert user_id is not None
         try:
             InventoryCountService.post_count(
-                db, org_id, coerce_uuid(count_id), user_id,
+                db,
+                org_id,
+                coerce_uuid(count_id),
+                user_id,
             )
         except Exception as e:
             logger.warning("Failed to post count %s: %s", count_id, e)
-        return RedirectResponse(
-            f"/inventory/counts/{count_id}", status_code=303
-        )
+        return RedirectResponse(f"/inventory/counts/{count_id}", status_code=303)
 
     async def record_count_line_response(
         self,
@@ -1320,8 +1397,8 @@ class OperationsInventoryWebService:
         from uuid import UUID as UUID_Type
 
         from app.models.inventory.inventory_count_line import InventoryCountLine
-        from app.services.inventory.count import CountLineInput, InventoryCountService
         from app.services.common import coerce_uuid
+        from app.services.inventory.count import CountLineInput, InventoryCountService
 
         org_id = auth.organization_id
         user_id = auth.user_id
@@ -1342,15 +1419,11 @@ class OperationsInventoryWebService:
         try:
             lid = UUID_Type(line_id)
         except ValueError:
-            return RedirectResponse(
-                f"/inventory/counts/{count_id}", status_code=303
-            )
+            return RedirectResponse(f"/inventory/counts/{count_id}", status_code=303)
 
         line = db.get(InventoryCountLine, lid)
         if not line or str(line.count_id) != count_id:
-            return RedirectResponse(
-                f"/inventory/counts/{count_id}", status_code=303
-            )
+            return RedirectResponse(f"/inventory/counts/{count_id}", status_code=303)
 
         try:
             InventoryCountService.record_count(
@@ -1370,11 +1443,11 @@ class OperationsInventoryWebService:
         except Exception as e:
             logger.warning(
                 "Failed to record count line %s on count %s: %s",
-                line_id, count_id, e,
+                line_id,
+                count_id,
+                e,
             )
-        return RedirectResponse(
-            f"/inventory/counts/{count_id}", status_code=303
-        )
+        return RedirectResponse(f"/inventory/counts/{count_id}", status_code=303)
 
     # ------------------------------------------------------------------
     # BOM Detail
@@ -1391,7 +1464,7 @@ class OperationsInventoryWebService:
         from decimal import Decimal
         from uuid import UUID as UUID_Type
 
-        from app.models.inventory.bom import BillOfMaterials, BOMComponent
+        from app.models.inventory.bom import BillOfMaterials
         from app.models.inventory.inventory_transaction import (
             InventoryTransaction,
             TransactionType,
@@ -1438,7 +1511,9 @@ class OperationsInventoryWebService:
             comp.component_item = comp_items_map.get(comp.component_item_id)  # type: ignore[attr-defined]
             comp.scrap_percentage = comp.scrap_percent  # type: ignore[attr-defined]
             if comp.component_item:  # type: ignore[attr-defined]
-                item_cost = getattr(comp.component_item, "standard_cost", None) or Decimal("0")  # type: ignore[attr-defined]
+                item_cost = getattr(
+                    comp.component_item, "standard_cost", None
+                ) or Decimal("0")  # type: ignore[attr-defined]
                 estimated_cost += (comp.quantity or Decimal("0")) * item_cost
 
         bom.estimated_cost = estimated_cost  # type: ignore[attr-defined]
@@ -1453,23 +1528,25 @@ class OperationsInventoryWebService:
                     .where(
                         InventoryTransaction.organization_id == auth.organization_id,
                         InventoryTransaction.item_id == bom.item_id,
-                        InventoryTransaction.transaction_type.in_([
-                            TransactionType.ASSEMBLY,
-                            TransactionType.DISASSEMBLY,
-                        ]),
+                        InventoryTransaction.transaction_type.in_(
+                            [
+                                TransactionType.ASSEMBLY,
+                                TransactionType.DISASSEMBLY,
+                            ]
+                        ),
                     )
                     .order_by(InventoryTransaction.transaction_date.desc())
                     .limit(10)
                 ).all()
             )
 
-        context.update({
-            "bom": bom,
-            "recent_transactions": recent_transactions,
-        })
-        return templates.TemplateResponse(
-            request, "inventory/bom_detail.html", context
+        context.update(
+            {
+                "bom": bom,
+                "recent_transactions": recent_transactions,
+            }
         )
+        return templates.TemplateResponse(request, "inventory/bom_detail.html", context)
 
     # ------------------------------------------------------------------
     # Lot Detail & Quarantine
@@ -1522,14 +1599,14 @@ class OperationsInventoryWebService:
             ).all()
         )
 
-        context.update({
-            "lot": lot,
-            "transactions": transactions,
-            "now": dt_cls.now(timezone.utc),
-        })
-        return templates.TemplateResponse(
-            request, "inventory/lot_detail.html", context
+        context.update(
+            {
+                "lot": lot,
+                "transactions": transactions,
+                "now": dt_cls.now(timezone.utc),
+            }
         )
+        return templates.TemplateResponse(request, "inventory/lot_detail.html", context)
 
     def toggle_lot_quarantine_response(
         self,
@@ -1563,9 +1640,7 @@ class OperationsInventoryWebService:
             db.rollback()
             logger.warning("Failed to toggle quarantine for lot %s: %s", lot_id, e)
 
-        return RedirectResponse(
-            f"/inventory/lots/{lot_id}", status_code=303
-        )
+        return RedirectResponse(f"/inventory/lots/{lot_id}", status_code=303)
 
     # ------------------------------------------------------------------
     # Price List Form & Create
@@ -1599,11 +1674,13 @@ class OperationsInventoryWebService:
             ).all()
         )
 
-        context.update({
-            "price_list": None,
-            "currencies": currencies,
-            "inventory_items": items,
-        })
+        context.update(
+            {
+                "price_list": None,
+                "currencies": currencies,
+                "inventory_items": items,
+            }
+        )
         return templates.TemplateResponse(
             request, "inventory/price_list_form.html", context
         )
@@ -1618,7 +1695,11 @@ class OperationsInventoryWebService:
         from decimal import Decimal, InvalidOperation
         from uuid import UUID as UUID_Type
 
-        from app.models.inventory.price_list import PriceList, PriceListItem, PriceListType
+        from app.models.inventory.price_list import (
+            PriceList,
+            PriceListItem,
+            PriceListType,
+        )
 
         org_id = auth.organization_id
         assert org_id is not None
@@ -1643,17 +1724,24 @@ class OperationsInventoryWebService:
             )
 
             # Generate price list code
-            last_num = db.scalar(
-                select(func.count()).select_from(PriceList).where(
-                    PriceList.organization_id == org_id,
+            last_num = (
+                db.scalar(
+                    select(func.count())
+                    .select_from(PriceList)
+                    .where(
+                        PriceList.organization_id == org_id,
+                    )
                 )
-            ) or 0
+                or 0
+            )
             pl_code = f"PL-{last_num + 1:05d}"
 
             # Parse dates
             from datetime import date as date_cls
 
-            eff_from = date_cls.fromisoformat(effective_from) if effective_from else None
+            eff_from = (
+                date_cls.fromisoformat(effective_from) if effective_from else None
+            )
             eff_to = date_cls.fromisoformat(effective_to) if effective_to else None
 
             markup = None
@@ -1713,9 +1801,7 @@ class OperationsInventoryWebService:
                 )
 
             db.commit()
-            return RedirectResponse(
-                "/inventory/price-lists", status_code=303
-            )
+            return RedirectResponse("/inventory/price-lists", status_code=303)
         except Exception as e:
             db.rollback()
             logger.warning("Failed to create price list: %s", e)
@@ -1755,14 +1841,19 @@ class OperationsInventoryWebService:
         warehouses = list(
             db.scalars(
                 select(Warehouse)
-                .where(Warehouse.organization_id == org_id, Warehouse.is_active.is_(True))
+                .where(
+                    Warehouse.organization_id == org_id, Warehouse.is_active.is_(True)
+                )
                 .order_by(Warehouse.warehouse_name)
             ).all()
         )
         categories = list(
             db.scalars(
                 select(ItemCategory)
-                .where(ItemCategory.organization_id == org_id, ItemCategory.is_active.is_(True))
+                .where(
+                    ItemCategory.organization_id == org_id,
+                    ItemCategory.is_active.is_(True),
+                )
                 .order_by(ItemCategory.category_name)
             ).all()
         )
@@ -1797,7 +1888,9 @@ class OperationsInventoryWebService:
         from app.services.inventory.web import _get_batch_stock_quantities
 
         item_ids = [item.item_id for item in items]
-        stock_quantities = _get_batch_stock_quantities(db, org_id, item_ids) if item_ids else {}
+        stock_quantities = (
+            _get_batch_stock_quantities(db, org_id, item_ids) if item_ids else {}
+        )
 
         # Build stock data rows
         all_stock_data = []
@@ -1814,25 +1907,29 @@ class OperationsInventoryWebService:
             available = stock.get("available", Decimal("0"))
             unit_cost = item.average_cost or item.standard_cost or Decimal("0")
             item_value = on_hand * unit_cost
-            reorder_pt = Decimal(str(item.reorder_point)) if item.reorder_point else None
+            reorder_pt = (
+                Decimal(str(item.reorder_point)) if item.reorder_point else None
+            )
             is_low = bool(reorder_pt and on_hand < reorder_pt)
 
             if not include_zero and on_hand == 0:
                 continue
 
             cat = cat_map.get(item.category_id)
-            all_stock_data.append({
-                "item_code": item.item_code,
-                "item_name": item.item_name,
-                "category_name": cat.category_name if cat else "-",
-                "warehouse_name": "All",
-                "on_hand": on_hand,
-                "reserved": reserved,
-                "available": available,
-                "unit_cost": unit_cost,
-                "total_value": item_value,
-                "is_low_stock": is_low,
-            })
+            all_stock_data.append(
+                {
+                    "item_code": item.item_code,
+                    "item_name": item.item_name,
+                    "category_name": cat.category_name if cat else "-",
+                    "warehouse_name": "All",
+                    "on_hand": on_hand,
+                    "reserved": reserved,
+                    "available": available,
+                    "unit_cost": unit_cost,
+                    "total_value": item_value,
+                    "is_low_stock": is_low,
+                }
+            )
 
             total_quantity += on_hand
             total_value += item_value
@@ -1857,19 +1954,21 @@ class OperationsInventoryWebService:
             "below_reorder": below_reorder,
         }
 
-        context.update({
-            "summary": summary,
-            "stock_data": stock_data_page,
-            "warehouses": warehouses,
-            "categories": categories,
-            "warehouse": warehouse or "",
-            "category": category or "",
-            "show_zero": include_zero,
-            "page": page,
-            "total_pages": total_pages,
-            "total_count": total_items_count,
-            "limit": per_page,
-        })
+        context.update(
+            {
+                "summary": summary,
+                "stock_data": stock_data_page,
+                "warehouses": warehouses,
+                "categories": categories,
+                "warehouse": warehouse or "",
+                "category": category or "",
+                "show_zero": include_zero,
+                "page": page,
+                "total_pages": total_pages,
+                "total_count": total_items_count,
+                "limit": per_page,
+            }
+        )
         return templates.TemplateResponse(
             request, "inventory/report_stock_on_hand.html", context
         )

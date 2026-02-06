@@ -27,8 +27,11 @@
 <div class="space-y-6 print:space-y-4">
     <!-- Report Header -->
     <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50 print:border-0 print:p-0">
+        {% include "partials/_document_header.html" with {
+            "doc_title": "Bank Reconciliation Report",
+            "doc_number": report.reconciliation.reconciliation_date
+        } %}
         <div class="text-center mb-6">
-            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Bank Reconciliation Report</h1>
             <p class="text-slate-500">As of {{ report.reconciliation.reconciliation_date }}</p>
         </div>
 

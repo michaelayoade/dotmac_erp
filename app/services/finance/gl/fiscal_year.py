@@ -6,6 +6,7 @@ Manages fiscal years including creation, closing, and queries.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from typing import Optional
@@ -14,10 +15,12 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.finance.gl.fiscal_year import FiscalYear
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
+from app.models.finance.gl.fiscal_year import FiscalYear
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -73,7 +76,7 @@ class FiscalYearService(ListResponseMixin):
         if existing:
             raise HTTPException(
                 status_code=400,
-                detail=f"Fiscal year '{input.year_code}' already exists"
+                detail=f"Fiscal year '{input.year_code}' already exists",
             )
 
         year = FiscalYear(
@@ -85,7 +88,8 @@ class FiscalYearService(ListResponseMixin):
             is_adjustment_year=input.is_adjustment_year,
             retained_earnings_account_id=(
                 coerce_uuid(input.retained_earnings_account_id)
-                if input.retained_earnings_account_id else None
+                if input.retained_earnings_account_id
+                else None
             ),
         )
 
@@ -198,7 +202,7 @@ class FiscalYearService(ListResponseMixin):
         if open_periods > 0:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot close year: {open_periods} periods are not hard closed"
+                detail=f"Cannot close year: {open_periods} periods are not hard closed",
             )
 
         year.is_closed = True

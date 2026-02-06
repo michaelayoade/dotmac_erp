@@ -4,6 +4,7 @@ Payments Importer.
 Imports customer and supplier payments from CSV data.
 """
 
+import logging
 from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
@@ -12,12 +13,20 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.finance.ar.customer_payment import CustomerPayment, PaymentMethod as ARPaymentMethod, PaymentStatus as ARPaymentStatus
-from app.models.finance.ar.customer import Customer
-from app.models.finance.ap.supplier_payment import SupplierPayment, APPaymentMethod, APPaymentStatus
 from app.models.finance.ap.supplier import Supplier
+from app.models.finance.ap.supplier_payment import (
+    APPaymentMethod,
+    APPaymentStatus,
+    SupplierPayment,
+)
+from app.models.finance.ar.customer import Customer
+from app.models.finance.ar.customer_payment import CustomerPayment
+from app.models.finance.ar.customer_payment import PaymentMethod as ARPaymentMethod
+from app.models.finance.ar.customer_payment import PaymentStatus as ARPaymentStatus
 
 from .base import BaseImporter, FieldMapping, ImportConfig
+
+logger = logging.getLogger(__name__)
 
 
 class CustomerPaymentImporter(BaseImporter[CustomerPayment]):
@@ -60,23 +69,40 @@ class CustomerPaymentImporter(BaseImporter[CustomerPayment]):
             FieldMapping("Payment No", "payment_no_alt", required=False),
             FieldMapping("Reference", "reference", required=False),
             # Date
-            FieldMapping("Payment Date", "payment_date", required=False,
-                         transformer=self.parse_date),
-            FieldMapping("Date", "date_alt", required=False,
-                         transformer=self.parse_date),
+            FieldMapping(
+                "Payment Date",
+                "payment_date",
+                required=False,
+                transformer=self.parse_date,
+            ),
+            FieldMapping(
+                "Date", "date_alt", required=False, transformer=self.parse_date
+            ),
             # Customer
             FieldMapping("Customer Name", "customer_name", required=False),
             FieldMapping("Customer", "customer_alt", required=False),
             # Amount
-            FieldMapping("Amount", "amount", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Payment Amount", "payment_amount_alt", required=False,
-                         transformer=self.parse_decimal),
+            FieldMapping(
+                "Amount", "amount", required=False, transformer=self.parse_decimal
+            ),
+            FieldMapping(
+                "Payment Amount",
+                "payment_amount_alt",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
             # Currency
-            FieldMapping("Currency Code", "currency_code", required=False, default="NGN"),
+            FieldMapping(
+                "Currency Code", "currency_code", required=False, default="NGN"
+            ),
             FieldMapping("Currency", "currency_alt", required=False),
-            FieldMapping("Exchange Rate", "exchange_rate", required=False,
-                         transformer=self.parse_decimal, default=Decimal("1")),
+            FieldMapping(
+                "Exchange Rate",
+                "exchange_rate",
+                required=False,
+                transformer=self.parse_decimal,
+                default=Decimal("1"),
+            ),
             # Payment details
             FieldMapping("Payment Method", "payment_method_str", required=False),
             FieldMapping("Method", "method_alt", required=False),
@@ -92,8 +118,12 @@ class CustomerPaymentImporter(BaseImporter[CustomerPayment]):
         ]
 
     def get_unique_key(self, row: Dict[str, Any]) -> str:
-        return str(row.get("Payment Number") or row.get("Payment No") or
-                   row.get("Reference") or "").strip()
+        return str(
+            row.get("Payment Number")
+            or row.get("Payment No")
+            or row.get("Reference")
+            or ""
+        ).strip()
 
     def check_duplicate(self, row: Dict[str, Any]) -> Optional[CustomerPayment]:
         payment_number = self.get_unique_key(row)
@@ -112,7 +142,9 @@ class CustomerPaymentImporter(BaseImporter[CustomerPayment]):
     def validate_row(self, row: Dict[str, Any], row_num: int) -> bool:
         is_valid = super().validate_row(row, row_num)
 
-        customer_name = str(row.get("Customer Name") or row.get("Customer") or "").strip()
+        customer_name = str(
+            row.get("Customer Name") or row.get("Customer") or ""
+        ).strip()
         if not customer_name:
             self.result.add_error(row_num, "Customer name is required", "Customer Name")
             is_valid = False
@@ -126,8 +158,12 @@ class CustomerPaymentImporter(BaseImporter[CustomerPayment]):
 
     def create_entity(self, row: Dict[str, Any]) -> CustomerPayment:
         # Get payment number
-        payment_number = str(row.get("payment_number") or row.get("payment_no_alt") or
-                             row.get("reference") or "").strip()
+        payment_number = str(
+            row.get("payment_number")
+            or row.get("payment_no_alt")
+            or row.get("reference")
+            or ""
+        ).strip()
         if not payment_number:
             self._payment_counter += 1
             payment_number = f"RCPT{self._payment_counter:06d}"
@@ -136,22 +172,31 @@ class CustomerPaymentImporter(BaseImporter[CustomerPayment]):
         payment_date = row.get("payment_date") or row.get("date_alt") or date.today()
 
         # Get customer
-        customer_name = str(row.get("customer_name") or row.get("customer_alt") or "").strip()
+        customer_name = str(
+            row.get("customer_name") or row.get("customer_alt") or ""
+        ).strip()
         customer_id = self._get_customer_id(customer_name)
 
         # Get amount and currency
         amount = row.get("amount") or row.get("payment_amount_alt") or Decimal("0")
-        currency_code = (row.get("currency_code") or row.get("currency_alt") or "NGN")[:3]
+        currency_code = (row.get("currency_code") or row.get("currency_alt") or "NGN")[
+            :3
+        ]
         exchange_rate = row.get("exchange_rate") or Decimal("1")
         functional_currency_amount = amount * exchange_rate
 
         # Get payment method
-        method_str = row.get("payment_method_str") or row.get("method_alt") or "BANK_TRANSFER"
+        method_str = (
+            row.get("payment_method_str") or row.get("method_alt") or "BANK_TRANSFER"
+        )
         payment_method = self._parse_payment_method(method_str)
 
         # Get reference
-        reference = (row.get("reference") or row.get("check_number") or
-                     row.get("transaction_ref"))
+        reference = (
+            row.get("reference")
+            or row.get("check_number")
+            or row.get("transaction_ref")
+        )
 
         # Get status
         status_str = row.get("status_str", "PENDING")
@@ -208,7 +253,9 @@ class CustomerPaymentImporter(BaseImporter[CustomerPayment]):
             "DIRECT_DEBIT": ARPaymentMethod.DIRECT_DEBIT,
             "MOBILE_MONEY": ARPaymentMethod.MOBILE_MONEY,
         }
-        return method_map.get(method_str.upper().replace("-", "_"), ARPaymentMethod.BANK_TRANSFER)
+        return method_map.get(
+            method_str.upper().replace("-", "_"), ARPaymentMethod.BANK_TRANSFER
+        )
 
     def _parse_status(self, status_str: str) -> ARPaymentStatus:
         status_map = {
@@ -246,22 +293,39 @@ class SupplierPaymentImporter(BaseImporter[SupplierPayment]):
             FieldMapping("Payment Number", "payment_number", required=False),
             FieldMapping("Payment No", "payment_no_alt", required=False),
             FieldMapping("Reference", "reference", required=False),
-            FieldMapping("Payment Date", "payment_date", required=False,
-                         transformer=self.parse_date),
-            FieldMapping("Date", "date_alt", required=False,
-                         transformer=self.parse_date),
+            FieldMapping(
+                "Payment Date",
+                "payment_date",
+                required=False,
+                transformer=self.parse_date,
+            ),
+            FieldMapping(
+                "Date", "date_alt", required=False, transformer=self.parse_date
+            ),
             FieldMapping("Vendor Name", "vendor_name", required=False),
             FieldMapping("Vendor", "vendor_alt", required=False),
             FieldMapping("Supplier Name", "supplier_name", required=False),
             FieldMapping("Supplier", "supplier_alt", required=False),
-            FieldMapping("Amount", "amount", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Payment Amount", "payment_amount_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Currency Code", "currency_code", required=False, default="NGN"),
+            FieldMapping(
+                "Amount", "amount", required=False, transformer=self.parse_decimal
+            ),
+            FieldMapping(
+                "Payment Amount",
+                "payment_amount_alt",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Currency Code", "currency_code", required=False, default="NGN"
+            ),
             FieldMapping("Currency", "currency_alt", required=False),
-            FieldMapping("Exchange Rate", "exchange_rate", required=False,
-                         transformer=self.parse_decimal, default=Decimal("1")),
+            FieldMapping(
+                "Exchange Rate",
+                "exchange_rate",
+                required=False,
+                transformer=self.parse_decimal,
+                default=Decimal("1"),
+            ),
             FieldMapping("Payment Method", "payment_method_str", required=False),
             FieldMapping("Method", "method_alt", required=False),
             FieldMapping("Check Number", "check_number", required=False),
@@ -269,13 +333,22 @@ class SupplierPaymentImporter(BaseImporter[SupplierPayment]):
             FieldMapping("Description", "description", required=False),
             FieldMapping("Notes", "notes_alt", required=False),
             FieldMapping("Status", "status_str", required=False, default="DRAFT"),
-            FieldMapping("Withholding Tax", "withholding_tax", required=False,
-                         transformer=self.parse_decimal, default=Decimal("0")),
+            FieldMapping(
+                "Withholding Tax",
+                "withholding_tax",
+                required=False,
+                transformer=self.parse_decimal,
+                default=Decimal("0"),
+            ),
         ]
 
     def get_unique_key(self, row: Dict[str, Any]) -> str:
-        return str(row.get("Payment Number") or row.get("Payment No") or
-                   row.get("Reference") or "").strip()
+        return str(
+            row.get("Payment Number")
+            or row.get("Payment No")
+            or row.get("Reference")
+            or ""
+        ).strip()
 
     def check_duplicate(self, row: Dict[str, Any]) -> Optional[SupplierPayment]:
         payment_number = self.get_unique_key(row)
@@ -294,10 +367,17 @@ class SupplierPaymentImporter(BaseImporter[SupplierPayment]):
     def validate_row(self, row: Dict[str, Any], row_num: int) -> bool:
         is_valid = super().validate_row(row, row_num)
 
-        supplier_name = str(row.get("Vendor Name") or row.get("Vendor") or
-                            row.get("Supplier Name") or row.get("Supplier") or "").strip()
+        supplier_name = str(
+            row.get("Vendor Name")
+            or row.get("Vendor")
+            or row.get("Supplier Name")
+            or row.get("Supplier")
+            or ""
+        ).strip()
         if not supplier_name:
-            self.result.add_error(row_num, "Vendor/Supplier name is required", "Vendor Name")
+            self.result.add_error(
+                row_num, "Vendor/Supplier name is required", "Vendor Name"
+            )
             is_valid = False
 
         amount = row.get("Amount") or row.get("Payment Amount")
@@ -309,8 +389,12 @@ class SupplierPaymentImporter(BaseImporter[SupplierPayment]):
 
     def create_entity(self, row: Dict[str, Any]) -> SupplierPayment:
         # Get payment number
-        payment_number = str(row.get("payment_number") or row.get("payment_no_alt") or
-                             row.get("reference") or "").strip()
+        payment_number = str(
+            row.get("payment_number")
+            or row.get("payment_no_alt")
+            or row.get("reference")
+            or ""
+        ).strip()
         if not payment_number:
             self._payment_counter += 1
             payment_number = f"VPMT{self._payment_counter:06d}"
@@ -319,23 +403,35 @@ class SupplierPaymentImporter(BaseImporter[SupplierPayment]):
         payment_date = row.get("payment_date") or row.get("date_alt") or date.today()
 
         # Get supplier
-        supplier_name = str(row.get("vendor_name") or row.get("vendor_alt") or
-                            row.get("supplier_name") or row.get("supplier_alt") or "").strip()
+        supplier_name = str(
+            row.get("vendor_name")
+            or row.get("vendor_alt")
+            or row.get("supplier_name")
+            or row.get("supplier_alt")
+            or ""
+        ).strip()
         supplier_id = self._get_supplier_id(supplier_name)
 
         # Get amount and currency
         amount = row.get("amount") or row.get("payment_amount_alt") or Decimal("0")
-        currency_code = (row.get("currency_code") or row.get("currency_alt") or "NGN")[:3]
+        currency_code = (row.get("currency_code") or row.get("currency_alt") or "NGN")[
+            :3
+        ]
         exchange_rate = row.get("exchange_rate") or Decimal("1")
         functional_currency_amount = amount * exchange_rate
 
         # Get payment method
-        method_str = row.get("payment_method_str") or row.get("method_alt") or "BANK_TRANSFER"
+        method_str = (
+            row.get("payment_method_str") or row.get("method_alt") or "BANK_TRANSFER"
+        )
         payment_method = self._parse_payment_method(method_str)
 
         # Get reference
-        reference = (row.get("reference") or row.get("check_number") or
-                     row.get("transaction_ref"))
+        reference = (
+            row.get("reference")
+            or row.get("check_number")
+            or row.get("transaction_ref")
+        )
 
         # Get status
         status_str = row.get("status_str", "DRAFT")
@@ -391,7 +487,9 @@ class SupplierPaymentImporter(BaseImporter[SupplierPayment]):
             "ACH": APPaymentMethod.ACH,
             "CARD": APPaymentMethod.CARD,
         }
-        return method_map.get(method_str.upper().replace("-", "_"), APPaymentMethod.BANK_TRANSFER)
+        return method_map.get(
+            method_str.upper().replace("-", "_"), APPaymentMethod.BANK_TRANSFER
+        )
 
     def _parse_status(self, status_str: str) -> APPaymentStatus:
         status_map = {

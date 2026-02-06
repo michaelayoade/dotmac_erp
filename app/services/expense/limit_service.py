@@ -7,10 +7,12 @@ Handles multi-dimensional expense limit enforcement including:
 - Limit evaluation with audit trail
 - Approver selection and escalation
 """
+
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional, Tuple
 from uuid import UUID
@@ -31,6 +33,8 @@ from app.models.expense import (
     LimitScopeType,
 )
 from app.services.common import PaginatedResult, PaginationParams
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.models.people.hr.employee import Employee
@@ -141,7 +145,9 @@ class ExpenseLimitService:
         pagination: Optional[PaginationParams] = None,
     ) -> PaginatedResult[ExpenseLimitRule]:
         """List expense limit rules."""
-        query = select(ExpenseLimitRule).where(ExpenseLimitRule.organization_id == org_id)
+        query = select(ExpenseLimitRule).where(
+            ExpenseLimitRule.organization_id == org_id
+        )
 
         if scope_type:
             query = query.where(ExpenseLimitRule.scope_type == scope_type)
@@ -270,7 +276,9 @@ class ExpenseLimitService:
         pagination: Optional[PaginationParams] = None,
     ) -> PaginatedResult[ExpenseApproverLimit]:
         """List expense approver limits."""
-        query = select(ExpenseApproverLimit).where(ExpenseApproverLimit.organization_id == org_id)
+        query = select(ExpenseApproverLimit).where(
+            ExpenseApproverLimit.organization_id == org_id
+        )
 
         if scope_type:
             query = query.where(ExpenseApproverLimit.scope_type == scope_type)
@@ -297,7 +305,9 @@ class ExpenseLimitService:
             limit=pagination.limit if pagination else len(items),
         )
 
-    def get_approver_limit(self, org_id: UUID, approver_limit_id: UUID) -> ExpenseApproverLimit:
+    def get_approver_limit(
+        self, org_id: UUID, approver_limit_id: UUID
+    ) -> ExpenseApproverLimit:
         """Get an expense approver limit by ID."""
         limit = self.db.scalar(
             select(ExpenseApproverLimit).where(
@@ -367,7 +377,9 @@ class ExpenseLimitService:
     # Period Usage
     # =========================================================================
 
-    def get_period_bounds(self, period_type: LimitPeriodType, reference_date: Optional[date] = None) -> Tuple[date, date]:
+    def get_period_bounds(
+        self, period_type: LimitPeriodType, reference_date: Optional[date] = None
+    ) -> Tuple[date, date]:
         """Calculate period start and end dates."""
         ref = reference_date or date.today()
 
@@ -467,8 +479,12 @@ class ExpenseLimitService:
                 ExpensePeriodUsage.employee_id == employee_id,
                 ExpensePeriodUsage.period_type == period_type,
                 ExpensePeriodUsage.period_start == period_start,
-                ExpensePeriodUsage.dimension_type == dimension_type if dimension_type else ExpensePeriodUsage.dimension_type.is_(None),
-                ExpensePeriodUsage.dimension_id == dimension_id if dimension_id else ExpensePeriodUsage.dimension_id.is_(None),
+                ExpensePeriodUsage.dimension_type == dimension_type
+                if dimension_type
+                else ExpensePeriodUsage.dimension_type.is_(None),
+                ExpensePeriodUsage.dimension_id == dimension_id
+                if dimension_id
+                else ExpensePeriodUsage.dimension_id.is_(None),
             )
         )
 
@@ -678,7 +694,9 @@ class ExpenseLimitService:
             # Track most restrictive
             if most_restrictive is None:
                 most_restrictive = rule_result
-            elif result_priority.get(rule_result.result, 0) > result_priority.get(most_restrictive.result, 0):
+            elif result_priority.get(rule_result.result, 0) > result_priority.get(
+                most_restrictive.result, 0
+            ):
                 most_restrictive = rule_result
 
         final_result = most_restrictive or EvaluationResult(
@@ -695,8 +713,12 @@ class ExpenseLimitService:
                 period_spent_amount=final_result.period_spent,
                 period_start=final_result.period_start,
                 period_end=final_result.period_end,
-                rule_id=final_result.triggered_rule.rule_id if final_result.triggered_rule else None,
-                rule_code=final_result.triggered_rule.rule_code if final_result.triggered_rule else None,
+                rule_id=final_result.triggered_rule.rule_id
+                if final_result.triggered_rule
+                else None,
+                rule_code=final_result.triggered_rule.rule_code
+                if final_result.triggered_rule
+                else None,
                 result=final_result.result,
                 result_message=final_result.message,
                 context_data={
@@ -741,7 +763,9 @@ class ExpenseLimitService:
             )
 
         # For cumulative limits, calculate period usage
-        period_start, period_end = self.get_period_bounds(rule.period_type, claim.claim_date)
+        period_start, period_end = self.get_period_bounds(
+            rule.period_type, claim.claim_date
+        )
 
         period_spent, _ = self.calculate_period_usage(
             org_id,
@@ -874,12 +898,17 @@ class ExpenseLimitService:
 
         for limit in limits:
             # Find employees matching this limit scope
-            matching_employees = self._find_employees_for_approver_limit(org_id, limit, employee)
+            matching_employees = self._find_employees_for_approver_limit(
+                org_id, limit, employee
+            )
             for emp in matching_employees:
                 if emp.employee_id in seen_ids:
                     continue
                 # Skip if this is the same employee and can't approve own
-                if emp.employee_id == employee.employee_id and not limit.can_approve_own_expenses:
+                if (
+                    emp.employee_id == employee.employee_id
+                    and not limit.can_approve_own_expenses
+                ):
                     continue
 
                 eligible.append(
@@ -903,7 +932,9 @@ class ExpenseLimitService:
 
         return eligible
 
-    def _get_employee_approval_limit(self, org_id: UUID, employee: "Employee") -> Optional[Decimal]:
+    def _get_employee_approval_limit(
+        self, org_id: UUID, employee: "Employee"
+    ) -> Optional[Decimal]:
         """Get the maximum approval amount for an employee."""
         # Check employee-specific limit
         emp_limit = self.db.scalar(
@@ -952,7 +983,8 @@ class ExpenseLimitService:
         requester: "Employee",
     ) -> List["Employee"]:
         """Find employees who have this approver limit."""
-        from app.models.people.hr.employee import Employee as EmployeeModel, EmployeeStatus
+        from app.models.people.hr.employee import Employee as EmployeeModel
+        from app.models.people.hr.employee import EmployeeStatus
 
         if limit.scope_type == "EMPLOYEE":
             if limit.scope_id:
@@ -1024,10 +1056,14 @@ class ExpenseLimitService:
             query = query.where(ExpenseLimitEvaluation.result == result)
 
         if from_date:
-            query = query.where(func.date(ExpenseLimitEvaluation.evaluated_at) >= from_date)
+            query = query.where(
+                func.date(ExpenseLimitEvaluation.evaluated_at) >= from_date
+            )
 
         if to_date:
-            query = query.where(func.date(ExpenseLimitEvaluation.evaluated_at) <= to_date)
+            query = query.where(
+                func.date(ExpenseLimitEvaluation.evaluated_at) <= to_date
+            )
 
         query = query.order_by(ExpenseLimitEvaluation.evaluated_at.desc())
 
@@ -1073,7 +1109,9 @@ class ExpenseLimitService:
         )
 
         # Current quarter
-        quarter_start, quarter_end = self.get_period_bounds(LimitPeriodType.QUARTER, today)
+        quarter_start, quarter_end = self.get_period_bounds(
+            LimitPeriodType.QUARTER, today
+        )
         quarter_claimed, _ = self.calculate_period_usage(
             org_id, employee_id, LimitPeriodType.QUARTER, quarter_start, quarter_end
         )
@@ -1088,14 +1126,18 @@ class ExpenseLimitService:
         pending = self.db.execute(
             select(
                 func.count(ExpenseClaim.claim_id),
-                func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), Decimal("0")),
+                func.coalesce(
+                    func.sum(ExpenseClaim.total_claimed_amount), Decimal("0")
+                ),
             ).where(
                 ExpenseClaim.organization_id == org_id,
                 ExpenseClaim.employee_id == employee_id,
-                ExpenseClaim.status.in_([
-                    ExpenseClaimStatus.SUBMITTED,
-                    ExpenseClaimStatus.PENDING_APPROVAL,
-                ]),
+                ExpenseClaim.status.in_(
+                    [
+                        ExpenseClaimStatus.SUBMITTED,
+                        ExpenseClaimStatus.PENDING_APPROVAL,
+                    ]
+                ),
             )
         ).one()
 

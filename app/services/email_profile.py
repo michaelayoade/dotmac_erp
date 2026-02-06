@@ -7,13 +7,13 @@ Handles resolution of email profiles for different modules and organizations.
 from __future__ import annotations
 
 import logging
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
-from sqlalchemy import select, and_
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.email_profile import EmailProfile, ModuleEmailRouting, EmailModule
+from app.models.email_profile import EmailModule, EmailProfile, ModuleEmailRouting
 
 if TYPE_CHECKING:
     from app.services.email import SMTPConfig
@@ -58,8 +58,7 @@ class EmailProfileService:
         # Step 1: Try module-specific routing for this org
         if organization_id:
             routing = self.db.scalar(
-                select(ModuleEmailRouting)
-                .where(
+                select(ModuleEmailRouting).where(
                     ModuleEmailRouting.organization_id == organization_id,
                     ModuleEmailRouting.module == module,
                 )
@@ -70,15 +69,15 @@ class EmailProfileService:
                 if profile and profile.is_active:
                     logger.debug(
                         "Resolved email profile via module routing: %s -> %s",
-                        module.value, profile.name
+                        module.value,
+                        profile.name,
                     )
                     return profile
 
         # Step 2: Try organization's default profile
         if organization_id:
             org_default = self.db.scalar(
-                select(EmailProfile)
-                .where(
+                select(EmailProfile).where(
                     EmailProfile.organization_id == organization_id,
                     EmailProfile.is_default == True,
                     EmailProfile.is_active == True,
@@ -87,15 +86,13 @@ class EmailProfileService:
 
             if org_default:
                 logger.debug(
-                    "Resolved email profile via org default: %s",
-                    org_default.name
+                    "Resolved email profile via org default: %s", org_default.name
                 )
                 return org_default
 
         # Step 3: Try system default profile
         system_default = self.db.scalar(
-            select(EmailProfile)
-            .where(
+            select(EmailProfile).where(
                 EmailProfile.organization_id.is_(None),
                 EmailProfile.is_default == True,
                 EmailProfile.is_active == True,
@@ -104,8 +101,7 @@ class EmailProfileService:
 
         if system_default:
             logger.debug(
-                "Resolved email profile via system default: %s",
-                system_default.name
+                "Resolved email profile via system default: %s", system_default.name
             )
             return system_default
 
@@ -172,7 +168,7 @@ class EmailProfileService:
         """
         # Validate SMTP settings before creating profile
         if validate_smtp:
-            from app.services.email import SMTPConfig, validate_smtp_config
+            from app.services.email import validate_smtp_config
 
             config: SMTPConfig = {
                 "host": smtp_host,
@@ -198,8 +194,7 @@ class EmailProfileService:
                 org_filter = EmailProfile.organization_id.is_(None)
 
             existing_defaults = self.db.scalars(
-                select(EmailProfile)
-                .where(org_filter, EmailProfile.is_default == True)
+                select(EmailProfile).where(org_filter, EmailProfile.is_default == True)
             ).all()
 
             for existing in existing_defaults:
@@ -226,7 +221,9 @@ class EmailProfileService:
 
         logger.info(
             "Created email profile: %s (org=%s, default=%s)",
-            profile.name, organization_id, is_default
+            profile.name,
+            organization_id,
+            is_default,
         )
 
         return profile
@@ -249,8 +246,7 @@ class EmailProfileService:
 
         # Check if routing exists
         existing = self.db.scalar(
-            select(ModuleEmailRouting)
-            .where(
+            select(ModuleEmailRouting).where(
                 ModuleEmailRouting.organization_id == organization_id,
                 ModuleEmailRouting.module == module,
             )
@@ -260,8 +256,7 @@ class EmailProfileService:
             existing.email_profile_id = profile_id
             self.db.flush()
             logger.info(
-                "Updated module routing: %s -> profile %s",
-                module.value, profile_id
+                "Updated module routing: %s -> profile %s", module.value, profile_id
             )
             return existing
 
@@ -275,8 +270,7 @@ class EmailProfileService:
         self.db.flush()
 
         logger.info(
-            "Created module routing: %s -> profile %s",
-            module.value, profile_id
+            "Created module routing: %s -> profile %s", module.value, profile_id
         )
 
         return routing
@@ -288,8 +282,7 @@ class EmailProfileService:
     ) -> bool:
         """Remove a module routing (will fall back to org default)."""
         routing = self.db.scalar(
-            select(ModuleEmailRouting)
-            .where(
+            select(ModuleEmailRouting).where(
                 ModuleEmailRouting.organization_id == organization_id,
                 ModuleEmailRouting.module == module,
             )
@@ -314,8 +307,8 @@ class EmailProfileService:
         if organization_id:
             if include_system:
                 stmt = stmt.where(
-                    (EmailProfile.organization_id == organization_id) |
-                    (EmailProfile.organization_id.is_(None))
+                    (EmailProfile.organization_id == organization_id)
+                    | (EmailProfile.organization_id.is_(None))
                 )
             else:
                 stmt = stmt.where(EmailProfile.organization_id == organization_id)

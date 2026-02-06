@@ -23,7 +23,7 @@
     height: 100vh;
     max-height: 100vh;
     z-index: 40;
-    overflow-y: auto;
+    overflow: hidden;
     transform: translateX(0);
     transition: width 0.3s ease, transform 0.3s ease;
 }

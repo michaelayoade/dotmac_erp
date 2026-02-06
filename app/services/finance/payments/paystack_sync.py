@@ -3,9 +3,10 @@ Paystack Sync Service.
 
 Synchronizes Paystack transactions with bank statements for reconciliation.
 """
+
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Optional, cast
 from uuid import UUID, uuid4
@@ -13,6 +14,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.domain_settings import SettingDomain
 from app.models.finance.banking import (
     BankAccount,
     BankStatement,
@@ -20,7 +22,6 @@ from app.models.finance.banking import (
     BankStatementStatus,
     StatementLineType,
 )
-from app.models.domain_settings import SettingDomain
 from app.services.common import coerce_uuid
 from app.services.finance.payments.paystack_client import (
     PaystackClient,
@@ -577,7 +578,9 @@ class PaystackSyncService:
         user_id: Optional[UUID],
     ) -> BankStatement:
         """Get existing statement or create new one for the period."""
-        statement_number = f"PSK-{from_date.strftime('%Y%m%d')}-{to_date.strftime('%Y%m%d')}"
+        statement_number = (
+            f"PSK-{from_date.strftime('%Y%m%d')}-{to_date.strftime('%Y%m%d')}"
+        )
 
         existing = self.db.scalar(
             select(BankStatement).where(
@@ -595,7 +598,9 @@ class PaystackSyncService:
             .where(BankStatement.bank_account_id == account.bank_account_id)
             .order_by(BankStatement.statement_date.desc())
         )
-        opening_balance = last_statement.closing_balance if last_statement else Decimal("0")
+        opening_balance = (
+            last_statement.closing_balance if last_statement else Decimal("0")
+        )
 
         statement = BankStatement(
             statement_id=uuid4(),

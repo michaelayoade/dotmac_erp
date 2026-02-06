@@ -10,6 +10,7 @@ This migration creates:
 - Tables: task, task_dependency, milestone, resource_allocation, time_entry
 - Adds new fields to core_org.project (percent_complete, estimated_cost, actual_cost, etc.)
 """
+
 from alembic import op
 from app.alembic_utils import ensure_enum
 

@@ -7,6 +7,7 @@ Create Date: 2025-01-21
 This migration adds the organization_branding table to the core_org schema,
 enabling multi-tenant branding with custom colors, logos, and typography.
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -23,7 +24,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     bind = op.get_bind()
-    ensure_enum(bind, "border_radius_style", "sharp", "rounded", "pill", schema="core_org")
+    ensure_enum(
+        bind, "border_radius_style", "sharp", "rounded", "pill", schema="core_org"
+    )
     ensure_enum(bind, "button_style", "solid", "gradient", "outline", schema="core_org")
     ensure_enum(bind, "sidebar_style", "dark", "light", "brand", schema="core_org")
 
@@ -72,7 +75,9 @@ def upgrade() -> None:
         sa.Column(
             "border_radius",
             postgresql.ENUM(
-                "sharp", "rounded", "pill",
+                "sharp",
+                "rounded",
+                "pill",
                 name="border_radius_style",
                 schema="core_org",
                 create_type=False,
@@ -83,7 +88,9 @@ def upgrade() -> None:
         sa.Column(
             "button_style",
             postgresql.ENUM(
-                "solid", "gradient", "outline",
+                "solid",
+                "gradient",
+                "outline",
                 name="button_style",
                 schema="core_org",
                 create_type=False,
@@ -94,7 +101,9 @@ def upgrade() -> None:
         sa.Column(
             "sidebar_style",
             postgresql.ENUM(
-                "dark", "light", "brand",
+                "dark",
+                "light",
+                "brand",
                 name="sidebar_style",
                 schema="core_org",
                 create_type=False,
@@ -105,7 +114,9 @@ def upgrade() -> None:
         # Custom CSS injection
         sa.Column("custom_css", sa.Text, nullable=True),
         # Status and timestamps
-        sa.Column("is_active", sa.Boolean, nullable=False, server_default=sa.text("true")),
+        sa.Column(
+            "is_active", sa.Boolean, nullable=False, server_default=sa.text("true")
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -121,7 +132,9 @@ def upgrade() -> None:
         sa.Column(
             "created_by_id",
             postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("people.id", ondelete="SET NULL", name="fk_org_branding_created_by"),
+            sa.ForeignKey(
+                "people.id", ondelete="SET NULL", name="fk_org_branding_created_by"
+            ),
             nullable=True,
         ),
         schema="core_org",

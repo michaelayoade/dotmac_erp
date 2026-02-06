@@ -6,20 +6,22 @@ Handles present value calculations, amortization schedules, and interest accrual
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional
+from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.finance.lease.lease_contract import LeaseContract, LeaseClassification
-from app.models.finance.lease.lease_liability import LeaseLiability
 from app.models.finance.lease.lease_asset import LeaseAsset
+from app.models.finance.lease.lease_contract import LeaseContract
+from app.models.finance.lease.lease_liability import LeaseLiability
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -266,9 +268,7 @@ class LeaseCalculationService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Lease contract not found")
 
         liability = (
-            db.query(LeaseLiability)
-            .filter(LeaseLiability.lease_id == ls_id)
-            .first()
+            db.query(LeaseLiability).filter(LeaseLiability.lease_id == ls_id).first()
         )
 
         if not liability:
@@ -352,9 +352,7 @@ class LeaseCalculationService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Lease contract not found")
 
         liability = (
-            db.query(LeaseLiability)
-            .filter(LeaseLiability.lease_id == ls_id)
-            .first()
+            db.query(LeaseLiability).filter(LeaseLiability.lease_id == ls_id).first()
         )
 
         if not liability:
@@ -396,11 +394,7 @@ class LeaseCalculationService(ListResponseMixin):
         """
         ls_id = coerce_uuid(lease_id)
 
-        asset = (
-            db.query(LeaseAsset)
-            .filter(LeaseAsset.lease_id == ls_id)
-            .first()
-        )
+        asset = db.query(LeaseAsset).filter(LeaseAsset.lease_id == ls_id).first()
 
         if not asset:
             raise HTTPException(status_code=404, detail="Lease asset not found")

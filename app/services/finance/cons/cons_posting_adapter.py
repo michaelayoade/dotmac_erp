@@ -6,6 +6,7 @@ Posts consolidation elimination entries to the General Ledger.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -15,12 +16,21 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.finance.cons.consolidation_run import ConsolidationRun, ConsolidationStatus
+from app.models.finance.cons.consolidation_run import (
+    ConsolidationRun,
+    ConsolidationStatus,
+)
 from app.models.finance.cons.elimination_entry import EliminationEntry
 from app.models.finance.cons.legal_entity import LegalEntity
-from app.services.common import coerce_uuid
 from app.models.finance.gl.journal_entry import JournalType
-from app.services.finance.gl.journal import JournalService, JournalInput, JournalLineInput
+from app.services.common import coerce_uuid
+from app.services.finance.gl.journal import (
+    JournalInput,
+    JournalLineInput,
+    JournalService,
+)
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -82,7 +92,10 @@ class CONSPostingAdapter:
                 message="Consolidation run not found",
             )
 
-        if run.status not in [ConsolidationStatus.COMPLETED, ConsolidationStatus.APPROVED]:
+        if run.status not in [
+            ConsolidationStatus.COMPLETED,
+            ConsolidationStatus.APPROVED,
+        ]:
             return CONSPostingResult(
                 success=False,
                 message=f"Cannot post entries for run in {run.status} status",

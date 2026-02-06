@@ -10,7 +10,6 @@ import logging
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Optional
-from uuid import UUID
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -19,12 +18,12 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.hr.employee import Employee
 from app.models.people.payroll.employee_loan import EmployeeLoan, LoanStatus
-from app.models.people.payroll.loan_type import LoanType, LoanCategory, InterestMethod
+from app.models.people.payroll.loan_type import InterestMethod, LoanCategory, LoanType
 from app.models.person import Person
-from app.services.common import coerce_uuid, PaginationParams
-from app.services.people.payroll.loan_service import LoanService, LoanApplicationInput
+from app.services.common import coerce_uuid
+from app.services.people.payroll.loan_service import LoanApplicationInput, LoanService
 from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
+from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
 
@@ -62,13 +61,17 @@ class LoanWebService:
         loan_types = list(db.scalars(stmt).all())
 
         context = base_context(request, auth, "Loan Types", "payroll", db=db)
-        context.update({
-            "loan_types": loan_types,
-            "search": search or "",
-            "categories": [c.value for c in LoanCategory],
-        })
+        context.update(
+            {
+                "loan_types": loan_types,
+                "search": search or "",
+                "categories": [c.value for c in LoanCategory],
+            }
+        )
 
-        return templates.TemplateResponse(request, "people/payroll/loan_types.html", context)
+        return templates.TemplateResponse(
+            request, "people/payroll/loan_types.html", context
+        )
 
     def loan_type_form_response(
         self,
@@ -88,17 +91,27 @@ class LoanWebService:
                 raise HTTPException(status_code=404, detail="Loan type not found")
 
         context = base_context(
-            request, auth,
+            request,
+            auth,
             "Edit Loan Type" if loan_type else "New Loan Type",
-            "payroll", db=db
+            "payroll",
+            db=db,
         )
-        context.update({
-            "loan_type": loan_type,
-            "categories": [(c.value, c.value.replace("_", " ").title()) for c in LoanCategory],
-            "interest_methods": [(m.value, m.value.replace("_", " ").title()) for m in InterestMethod],
-        })
+        context.update(
+            {
+                "loan_type": loan_type,
+                "categories": [
+                    (c.value, c.value.replace("_", " ").title()) for c in LoanCategory
+                ],
+                "interest_methods": [
+                    (m.value, m.value.replace("_", " ").title()) for m in InterestMethod
+                ],
+            }
+        )
 
-        return templates.TemplateResponse(request, "people/payroll/loan_type_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/payroll/loan_type_form.html", context
+        )
 
     async def save_loan_type_response(
         self,
@@ -222,17 +235,21 @@ class LoanWebService:
         total_pages = (total + per_page - 1) // per_page if total else 1
 
         context = base_context(request, auth, "Employee Loans", "payroll", db=db)
-        context.update({
-            "loans": loans,
-            "search": search or "",
-            "status": status or "",
-            "statuses": [(s.value, s.value.replace("_", " ").title()) for s in LoanStatus],
-            "page": page,
-            "total_pages": total_pages,
-            "total": total,
-            "has_prev": page > 1,
-            "has_next": page < total_pages,
-        })
+        context.update(
+            {
+                "loans": loans,
+                "search": search or "",
+                "status": status or "",
+                "statuses": [
+                    (s.value, s.value.replace("_", " ").title()) for s in LoanStatus
+                ],
+                "page": page,
+                "total_pages": total_pages,
+                "total": total,
+                "has_prev": page > 1,
+                "has_next": page < total_pages,
+            }
+        )
 
         return templates.TemplateResponse(request, "people/payroll/loans.html", context)
 
@@ -269,16 +286,22 @@ class LoanWebService:
             paid = loan.principal_paid + loan.interest_paid
             progress_pct = float(paid / loan.total_repayable * 100)
 
-        context = base_context(request, auth, f"Loan {loan.loan_number}", "payroll", db=db)
-        context.update({
-            "loan": loan,
-            "progress_pct": progress_pct,
-            "can_approve": loan.status == LoanStatus.PENDING,
-            "can_disburse": loan.status == LoanStatus.APPROVED,
-            "can_cancel": loan.status in [LoanStatus.DRAFT, LoanStatus.PENDING],
-        })
+        context = base_context(
+            request, auth, f"Loan {loan.loan_number}", "payroll", db=db
+        )
+        context.update(
+            {
+                "loan": loan,
+                "progress_pct": progress_pct,
+                "can_approve": loan.status == LoanStatus.PENDING,
+                "can_disburse": loan.status == LoanStatus.APPROVED,
+                "can_cancel": loan.status in [LoanStatus.DRAFT, LoanStatus.PENDING],
+            }
+        )
 
-        return templates.TemplateResponse(request, "people/payroll/loan_detail.html", context)
+        return templates.TemplateResponse(
+            request, "people/payroll/loan_detail.html", context
+        )
 
     def loan_form_response(
         self,
@@ -315,13 +338,17 @@ class LoanWebService:
             selected_employee = db.get(Employee, emp_id)
 
         context = base_context(request, auth, "New Loan Application", "payroll", db=db)
-        context.update({
-            "loan_types": loan_types,
-            "employees": employees,
-            "selected_employee": selected_employee,
-        })
+        context.update(
+            {
+                "loan_types": loan_types,
+                "employees": employees,
+                "selected_employee": selected_employee,
+            }
+        )
 
-        return templates.TemplateResponse(request, "people/payroll/loan_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/payroll/loan_form.html", context
+        )
 
     async def create_loan_response(
         self,
@@ -368,7 +395,9 @@ class LoanWebService:
         loan = loan_service.create_loan(org_id, loan_input, person_id)
         db.commit()
 
-        return RedirectResponse(url=f"/people/payroll/loans/{loan.loan_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/payroll/loans/{loan.loan_id}", status_code=303
+        )
 
     def approve_loan_response(
         self,

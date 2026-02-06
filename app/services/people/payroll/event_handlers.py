@@ -17,30 +17,28 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Callable, Optional
 from datetime import datetime, timezone
-from uuid import UUID
+from typing import TYPE_CHECKING, Callable, Optional
 
 from sqlalchemy.orm import Session
 
 from app.models.people.hr.employee import Employee
-from app.models.people.payroll.salary_slip import SalarySlip
 from app.models.people.payroll.payroll_entry import PayrollEntry
+from app.models.people.payroll.salary_slip import SalarySlip
 from app.services.people.payroll.events import (
-    PayrollEvent,
     PayrollEventDispatcher,
-    SlipPosted,
-    SlipPaid,
-    RunPosted,
-    RunSubmitted,
     RunApproved,
     RunCancelled,
+    RunPosted,
+    RunSubmitted,
+    SlipPaid,
+    SlipPosted,
     payroll_dispatcher,
 )
 from app.services.people.payroll.payroll_notifications import PayrollNotificationService
 
 if TYPE_CHECKING:
-    from app.db import SessionLocal
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -258,6 +256,7 @@ class PayrollEventHandlers:
         try:
             with self._session_factory() as db:
                 from sqlalchemy import select
+
                 from app.models.person import Person
                 from app.models.rbac import PersonRole, Role
 
@@ -305,9 +304,7 @@ class PayrollEventHandlers:
                     float(s.net_pay or 0) for s in (run.salary_slips or [])
                 )
                 currency = (
-                    run.salary_slips[0].currency_code
-                    if run.salary_slips
-                    else "NGN"
+                    run.salary_slips[0].currency_code if run.salary_slips else "NGN"
                 )
 
                 notification_service = PayrollNotificationService(db)
@@ -412,6 +409,7 @@ class PayrollEventHandlers:
         try:
             with self._session_factory() as db:
                 from sqlalchemy import select
+
                 from app.models.person import Person
                 from app.models.rbac import PersonRole, Role
 
@@ -512,6 +510,7 @@ def register_payroll_handlers(
 
     if session_factory is None:
         from app.db import SessionLocal
+
         session_factory = SessionLocal
 
     if _handlers_registered:

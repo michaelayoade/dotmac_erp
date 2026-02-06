@@ -6,7 +6,7 @@ Provides view-focused data for lease web routes.
 
 from __future__ import annotations
 
-from datetime import date
+import logging
 from decimal import Decimal
 from typing import Optional
 
@@ -21,23 +21,15 @@ from app.models.finance.lease.lease_contract import (
 )
 from app.models.finance.lease.lease_liability import LeaseLiability
 from app.models.finance.lease.lease_payment_schedule import LeasePaymentSchedule
-from app.config import settings
 from app.services.common import coerce_uuid
-from app.services.finance.lease import lease_contract_service, lease_variable_payment_service
+from app.services.finance.lease import (
+    lease_contract_service,
+    lease_variable_payment_service,
+)
+from app.services.formatters import format_currency as _format_currency
+from app.services.formatters import format_date as _format_date
 
-
-def _format_date(value: Optional[date]) -> str:
-    return value.strftime("%Y-%m-%d") if value else ""
-
-
-def _format_currency(
-    amount: Optional[Decimal],
-    currency: str = settings.default_presentation_currency_code,
-) -> str:
-    if amount is None:
-        return ""
-    value = Decimal(str(amount))
-    return f"{currency} {value:,.2f}"
+logger = logging.getLogger(__name__)
 
 
 def _parse_status(value: Optional[str]) -> Optional[LeaseStatus]:

@@ -23,9 +23,9 @@
       </div>
 
       {% set modules = accessible_modules | default([]) %}
-      <div class="mt-8 grid gap-4 sm:grid-cols-2">
+      <div class="mt-8 grid gap-4 sm:grid-cols-2" x-data x-init="$el.querySelectorAll('a').forEach((a, i) => { a.style.opacity = '0'; a.style.transform = 'translateY(12px)'; setTimeout(() => { a.style.transition = 'opacity 0.4s ease, transform 0.4s ease'; a.style.opacity = '1'; a.style.transform = 'translateY(0)'; }, 80 * i); })">
         {% if "finance" in modules %}
-        <a href="/finance/dashboard" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-teal-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60">
+        <a href="/finance/dashboard" class="group rounded-xl border border-slate-200 bg-white p-5 transition-all duration-200 hover:border-teal-300 hover:shadow-lg hover:shadow-teal-500/10 hover:-translate-y-0.5 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:shadow-teal-500/20">
           <div class="flex items-center gap-3">
             <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-300">
               <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -47,7 +47,7 @@
         {% endif %}
 
         {% if "people" in modules %}
-        <a href="/people/hr/employees" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-violet-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60">
+        <a href="/people/hr/employees" class="group rounded-xl border border-slate-200 bg-white p-5 transition-all duration-200 hover:border-violet-300 hover:shadow-lg hover:shadow-violet-500/10 hover:-translate-y-0.5 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:shadow-violet-500/20">
           <div class="flex items-center gap-3">
             <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-300">
               <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -69,7 +69,7 @@
         {% endif %}
 
         {% if "self_service" in modules %}
-        <a href="/people/self/attendance" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-emerald-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60">
+        <a href="/people/self/attendance" class="group rounded-xl border border-slate-200 bg-white p-5 transition-all duration-200 hover:border-emerald-300 hover:shadow-lg hover:shadow-emerald-500/10 hover:-translate-y-0.5 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:shadow-emerald-500/20">
           <div class="flex items-center gap-3">
             <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300">
               <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -91,7 +91,7 @@
         {% endif %}
 
         {% if "inventory" in modules %}
-        <a href="/inventory/items" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-amber-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60">
+        <a href="/inventory/items" class="group rounded-xl border border-slate-200 bg-white p-5 transition-all duration-200 hover:border-amber-300 hover:shadow-lg hover:shadow-amber-500/10 hover:-translate-y-0.5 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:shadow-amber-500/20">
           <div class="flex items-center gap-3">
             <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300">
               <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -113,7 +113,7 @@
         {% endif %}
 
         {% if "fleet" in modules %}
-        <a href="/fleet" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-amber-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60">
+        <a href="/fleet" class="group rounded-xl border border-slate-200 bg-white p-5 transition-all duration-200 hover:border-orange-300 hover:shadow-lg hover:shadow-orange-500/10 hover:-translate-y-0.5 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:shadow-orange-500/20">
           <div class="flex items-center gap-3">
             <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-300">
               <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -135,7 +135,7 @@
         {% endif %}
 
         {% if "support" in modules %}
-        <a href="/support/tickets" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-amber-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60">
+        <a href="/support/tickets" class="group rounded-xl border border-slate-200 bg-white p-5 transition-all duration-200 hover:border-rose-300 hover:shadow-lg hover:shadow-rose-500/10 hover:-translate-y-0.5 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:shadow-rose-500/20">
           <div class="flex items-center gap-3">
             <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-300">
               <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -157,7 +157,7 @@
         {% endif %}
 
         {% if "procurement" in modules %}
-        <a href="/procurement" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-amber-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60">
+        <a href="/procurement" class="group rounded-xl border border-slate-200 bg-white p-5 transition-all duration-200 hover:border-emerald-300 hover:shadow-lg hover:shadow-emerald-500/10 hover:-translate-y-0.5 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:shadow-emerald-500/20">
           <div class="flex items-center gap-3">
             <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300">
               <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -179,9 +179,9 @@
         {% endif %}
 
         {% if "projects" in modules %}
-        <a href="/projects" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-amber-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60">
+        <a href="/projects" class="group rounded-xl border border-slate-200 bg-white p-5 transition-all duration-200 hover:border-blue-300 hover:shadow-lg hover:shadow-blue-500/10 hover:-translate-y-0.5 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:shadow-blue-500/20">
           <div class="flex items-center gap-3">
-            <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300">
               <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5h6m0 0l3 3m-3-3l-3 3m0 6h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
               </svg>
@@ -191,7 +191,7 @@
               <div class="text-xs text-slate-500 dark:text-slate-400">Tasks, time entries, and milestones</div>
             </div>
           </div>
-          <div class="mt-4 flex items-center text-sm font-medium text-slate-600 group-hover:text-slate-700 dark:text-slate-300 dark:group-hover:text-slate-200">
+          <div class="mt-4 flex items-center text-sm font-medium text-blue-600 group-hover:text-blue-700 dark:text-blue-300 dark:group-hover:text-blue-200">
             Open Projects
             <svg class="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
@@ -201,7 +201,7 @@
         {% endif %}
 
         {% if "expense" in modules %}
-        <a href="/expense" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-orange-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60">
+        <a href="/expense" class="group rounded-xl border border-slate-200 bg-white p-5 transition-all duration-200 hover:border-orange-300 hover:shadow-lg hover:shadow-orange-500/10 hover:-translate-y-0.5 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:shadow-orange-500/20">
           <div class="flex items-center gap-3">
             <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-300">
               <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -215,6 +215,29 @@
           </div>
           <div class="mt-4 flex items-center text-sm font-medium text-orange-600 group-hover:text-orange-700 dark:text-orange-300 dark:group-hover:text-orange-200">
             Open Expenses
+            <svg class="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+            </svg>
+          </div>
+        </a>
+        {% endif %}
+
+        {% if user and user.is_admin %}
+        <a href="/admin" class="group rounded-xl border border-slate-200 bg-white p-5 transition-all duration-200 hover:border-slate-400 hover:shadow-lg hover:shadow-slate-500/10 hover:-translate-y-0.5 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:shadow-slate-500/20">
+          <div class="flex items-center gap-3">
+            <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="text-base font-semibold text-slate-900 dark:text-white">Admin</div>
+              <div class="text-xs text-slate-500 dark:text-slate-400">Users, roles, settings, audit logs</div>
+            </div>
+          </div>
+          <div class="mt-4 flex items-center text-sm font-medium text-slate-600 group-hover:text-slate-700 dark:text-slate-300 dark:group-hover:text-slate-200">
+            Open Admin
             <svg class="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
             </svg>

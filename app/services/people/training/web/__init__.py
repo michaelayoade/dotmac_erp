@@ -6,21 +6,20 @@ Usage:
 """
 
 from .base import (
-    parse_uuid,
-    parse_date,
-    parse_time,
-    parse_int,
-    parse_decimal,
-    parse_program_status,
-    parse_event_status,
-    program_status_label,
-    event_status_label,
     EVENT_TYPES,
     TRAINING_TYPES,
+    event_status_label,
+    parse_date,
+    parse_decimal,
+    parse_event_status,
+    parse_int,
+    parse_program_status,
+    parse_time,
+    parse_uuid,
+    program_status_label,
 )
-
-from .program_web import ProgramWebService
 from .event_web import EventWebService
+from .program_web import ProgramWebService
 from .report_web import ReportWebService
 
 

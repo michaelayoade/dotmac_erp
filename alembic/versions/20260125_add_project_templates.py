@@ -4,6 +4,7 @@ Revision ID: 20260125_project_templates
 Revises: 20260124_task_asset_fks, 20260124_transfer_batch, 20260125_add_hr_checklist_jobdesc_erpnext_fields
 Create Date: 2026-01-25
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -120,13 +121,17 @@ def upgrade() -> None:
         sa.Column(
             "template_task_id",
             postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("pm.project_template_task.template_task_id", ondelete="CASCADE"),
+            sa.ForeignKey(
+                "pm.project_template_task.template_task_id", ondelete="CASCADE"
+            ),
             nullable=False,
         ),
         sa.Column(
             "depends_on_template_task_id",
             postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("pm.project_template_task.template_task_id", ondelete="CASCADE"),
+            sa.ForeignKey(
+                "pm.project_template_task.template_task_id", ondelete="CASCADE"
+            ),
             nullable=False,
         ),
         sa.Column(

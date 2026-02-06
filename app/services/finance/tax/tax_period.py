@@ -6,23 +6,26 @@ Manages tax reporting periods for various jurisdictions and tax types.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
-from dateutil.relativedelta import relativedelta
+from datetime import date
 from typing import Optional
 from uuid import UUID
 
+from dateutil.relativedelta import relativedelta
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.models.finance.tax.tax_jurisdiction import TaxJurisdiction
 from app.models.finance.tax.tax_period import (
     TaxPeriod,
-    TaxPeriodStatus,
     TaxPeriodFrequency,
+    TaxPeriodStatus,
 )
-from app.models.finance.tax.tax_jurisdiction import TaxJurisdiction
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -66,10 +69,14 @@ class TaxPeriodService(ListResponseMixin):
         jurisdiction_id = coerce_uuid(input.jurisdiction_id)
 
         # Validate jurisdiction exists
-        jurisdiction = db.query(TaxJurisdiction).filter(
-            TaxJurisdiction.jurisdiction_id == jurisdiction_id,
-            TaxJurisdiction.organization_id == org_id,
-        ).first()
+        jurisdiction = (
+            db.query(TaxJurisdiction)
+            .filter(
+                TaxJurisdiction.jurisdiction_id == jurisdiction_id,
+                TaxJurisdiction.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not jurisdiction:
             raise HTTPException(status_code=404, detail="Tax jurisdiction not found")
@@ -77,28 +84,33 @@ class TaxPeriodService(ListResponseMixin):
         # Validate dates
         if input.end_date < input.start_date:
             raise HTTPException(
-                status_code=400,
-                detail="End date must be after start date"
+                status_code=400, detail="End date must be after start date"
             )
 
         # Check for overlapping periods
-        existing = db.query(TaxPeriod).filter(
-            TaxPeriod.organization_id == org_id,
-            TaxPeriod.jurisdiction_id == jurisdiction_id,
-            TaxPeriod.start_date <= input.end_date,
-            TaxPeriod.end_date >= input.start_date,
-        ).first()
+        existing = (
+            db.query(TaxPeriod)
+            .filter(
+                TaxPeriod.organization_id == org_id,
+                TaxPeriod.jurisdiction_id == jurisdiction_id,
+                TaxPeriod.start_date <= input.end_date,
+                TaxPeriod.end_date >= input.start_date,
+            )
+            .first()
+        )
 
         if existing:
             raise HTTPException(
                 status_code=400,
-                detail=f"Period overlaps with existing period: {existing.period_name}"
+                detail=f"Period overlaps with existing period: {existing.period_name}",
             )
 
         period = TaxPeriod(
             organization_id=org_id,
             jurisdiction_id=jurisdiction_id,
-            fiscal_period_id=coerce_uuid(input.fiscal_period_id) if input.fiscal_period_id else None,
+            fiscal_period_id=coerce_uuid(input.fiscal_period_id)
+            if input.fiscal_period_id
+            else None,
             period_name=input.period_name,
             frequency=input.frequency,
             start_date=input.start_date,
@@ -216,10 +228,14 @@ class TaxPeriodService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(period_id)
 
-        period = db.query(TaxPeriod).filter(
-            TaxPeriod.period_id == period_id,
-            TaxPeriod.organization_id == org_id,
-        ).first()
+        period = (
+            db.query(TaxPeriod)
+            .filter(
+                TaxPeriod.period_id == period_id,
+                TaxPeriod.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not period:
             raise HTTPException(status_code=404, detail="Tax period not found")
@@ -227,13 +243,13 @@ class TaxPeriodService(ListResponseMixin):
         if period.status != TaxPeriodStatus.OPEN:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot file extension for period in {period.status.value} status"
+                detail=f"Cannot file extension for period in {period.status.value} status",
             )
 
         if extended_due_date <= period.due_date:
             raise HTTPException(
                 status_code=400,
-                detail="Extended due date must be after original due date"
+                detail="Extended due date must be after original due date",
             )
 
         period.is_extension_filed = True
@@ -264,10 +280,14 @@ class TaxPeriodService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(period_id)
 
-        period = db.query(TaxPeriod).filter(
-            TaxPeriod.period_id == period_id,
-            TaxPeriod.organization_id == org_id,
-        ).first()
+        period = (
+            db.query(TaxPeriod)
+            .filter(
+                TaxPeriod.period_id == period_id,
+                TaxPeriod.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not period:
             raise HTTPException(status_code=404, detail="Tax period not found")
@@ -275,7 +295,7 @@ class TaxPeriodService(ListResponseMixin):
         if period.status != TaxPeriodStatus.OPEN:
             raise HTTPException(
                 status_code=400,
-                detail=f"Period is already in {period.status.value} status"
+                detail=f"Period is already in {period.status.value} status",
             )
 
         period.status = TaxPeriodStatus.FILED
@@ -305,10 +325,14 @@ class TaxPeriodService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(period_id)
 
-        period = db.query(TaxPeriod).filter(
-            TaxPeriod.period_id == period_id,
-            TaxPeriod.organization_id == org_id,
-        ).first()
+        period = (
+            db.query(TaxPeriod)
+            .filter(
+                TaxPeriod.period_id == period_id,
+                TaxPeriod.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not period:
             raise HTTPException(status_code=404, detail="Tax period not found")
@@ -340,10 +364,14 @@ class TaxPeriodService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(period_id)
 
-        period = db.query(TaxPeriod).filter(
-            TaxPeriod.period_id == period_id,
-            TaxPeriod.organization_id == org_id,
-        ).first()
+        period = (
+            db.query(TaxPeriod)
+            .filter(
+                TaxPeriod.period_id == period_id,
+                TaxPeriod.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not period:
             raise HTTPException(status_code=404, detail="Tax period not found")
@@ -378,12 +406,16 @@ class TaxPeriodService(ListResponseMixin):
         jurisdiction_id = coerce_uuid(jurisdiction_id)
         check_date = as_of_date or date.today()
 
-        return db.query(TaxPeriod).filter(
-            TaxPeriod.organization_id == org_id,
-            TaxPeriod.jurisdiction_id == jurisdiction_id,
-            TaxPeriod.start_date <= check_date,
-            TaxPeriod.end_date >= check_date,
-        ).first()
+        return (
+            db.query(TaxPeriod)
+            .filter(
+                TaxPeriod.organization_id == org_id,
+                TaxPeriod.jurisdiction_id == jurisdiction_id,
+                TaxPeriod.start_date <= check_date,
+                TaxPeriod.end_date >= check_date,
+            )
+            .first()
+        )
 
     @staticmethod
     def get_overdue_periods(
@@ -420,9 +452,11 @@ class TaxPeriodService(ListResponseMixin):
     @staticmethod
     def get(db: Session, period_id: str) -> Optional[TaxPeriod]:
         """Get a tax period by ID."""
-        return db.query(TaxPeriod).filter(
-            TaxPeriod.period_id == coerce_uuid(period_id)
-        ).first()
+        return (
+            db.query(TaxPeriod)
+            .filter(TaxPeriod.period_id == coerce_uuid(period_id))
+            .first()
+        )
 
     @staticmethod
     def list(
@@ -475,7 +509,12 @@ class TaxPeriodService(ListResponseMixin):
                 TaxPeriod.end_date <= date(year, 12, 31),
             )
 
-        return query.order_by(TaxPeriod.start_date.desc()).offset(offset).limit(limit).all()
+        return (
+            query.order_by(TaxPeriod.start_date.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
 
 
 # Module-level instance

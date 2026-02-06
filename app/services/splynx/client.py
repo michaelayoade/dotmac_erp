@@ -7,7 +7,7 @@ Handles all HTTP communication with Splynx API for ISP billing data.
 import base64
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from typing import Any, Generator, Optional
 
@@ -289,7 +289,9 @@ class SplynxClient:
                 else:
                     raise
 
-        raise SplynxError(f"Request failed after {self.config.max_retries} attempts: {last_error}")
+        raise SplynxError(
+            f"Request failed after {self.config.max_retries} attempts: {last_error}"
+        )
 
     def _paginate(
         self,
@@ -535,7 +537,8 @@ class SplynxClient:
                 payment_type=int(item.get("payment_type", 0)),
                 receipt_number=item.get("receipt_number"),
                 comment=item.get("comment"),
-                reference=item.get("field_1") or item.get("field_2"),  # Bank ref often in field_1/2
+                reference=item.get("field_1")
+                or item.get("field_2"),  # Bank ref often in field_1/2
             )
 
     # =========================================================================

@@ -17,9 +17,12 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.models.finance.ar.customer import Customer, CustomerType
-from app.models.finance.ar.customer_payment import CustomerPayment, PaymentMethod, PaymentStatus
+from app.models.finance.ar.customer_payment import (
+    CustomerPayment,
+    PaymentMethod,
+    PaymentStatus,
+)
 from app.models.finance.ar.external_sync import EntityType, ExternalSource, ExternalSync
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.models.finance.ar.invoice_line import InvoiceLine
@@ -160,7 +163,9 @@ class SplynxSyncService:
 
         # Payment method -> ERP bank account mapping
         self._payment_method_cache: dict[int, SplynxPaymentMethod] = {}
-        self._bank_account_mapping: dict[int, UUID] = {}  # splynx_bank_id -> erp_bank_id
+        self._bank_account_mapping: dict[
+            int, UUID
+        ] = {}  # splynx_bank_id -> erp_bank_id
 
     @property
     def client(self) -> SplynxClient:
@@ -322,7 +327,9 @@ class SplynxSyncService:
         for customer in customers:
             # Extract Splynx ID from customer code
             try:
-                splynx_id = int(customer.customer_code.replace(f"{self.SOURCE_PREFIX}-", ""))
+                splynx_id = int(
+                    customer.customer_code.replace(f"{self.SOURCE_PREFIX}-", "")
+                )
                 self._customer_cache[splynx_id] = customer.customer_id
             except ValueError:
                 pass
@@ -500,18 +507,22 @@ class SplynxSyncService:
         external_id = str(splynx_customer.id)
 
         # Compute hash for change detection
-        data_hash = self._compute_hash({
-            "name": splynx_customer.name,
-            "email": splynx_customer.email,
-            "phone": splynx_customer.phone,
-            "status": splynx_customer.status,
-            "company": splynx_customer.company,
-            "street_1": splynx_customer.street_1,
-            "city": splynx_customer.city,
-        })
+        data_hash = self._compute_hash(
+            {
+                "name": splynx_customer.name,
+                "email": splynx_customer.email,
+                "phone": splynx_customer.phone,
+                "status": splynx_customer.status,
+                "company": splynx_customer.company,
+                "street_1": splynx_customer.street_1,
+                "city": splynx_customer.city,
+            }
+        )
 
         # Check if already synced and unchanged
-        if skip_unchanged and not self._has_changed(EntityType.CUSTOMER, external_id, data_hash):
+        if skip_unchanged and not self._has_changed(
+            EntityType.CUSTOMER, external_id, data_hash
+        ):
             result.skipped += 1
             return
 
@@ -553,7 +564,9 @@ class SplynxSyncService:
             customer = Customer(
                 organization_id=self.organization_id,
                 customer_code=customer_code,
-                customer_type=CustomerType.INDIVIDUAL if not splynx_customer.company else CustomerType.COMPANY,
+                customer_type=CustomerType.INDIVIDUAL
+                if not splynx_customer.company
+                else CustomerType.COMPANY,
                 legal_name=splynx_customer.name or splynx_customer.login,
                 trading_name=splynx_customer.company,
                 is_active=splynx_customer.status == "active",
@@ -661,16 +674,20 @@ class SplynxSyncService:
         external_id = str(splynx_invoice.id)
 
         # Compute hash for change detection
-        data_hash = self._compute_hash({
-            "number": splynx_invoice.number,
-            "total": str(splynx_invoice.total),
-            "total_due": str(splynx_invoice.total_due),
-            "status": splynx_invoice.status,
-            "date_created": splynx_invoice.date_created,
-        })
+        data_hash = self._compute_hash(
+            {
+                "number": splynx_invoice.number,
+                "total": str(splynx_invoice.total),
+                "total_due": str(splynx_invoice.total_due),
+                "status": splynx_invoice.status,
+                "date_created": splynx_invoice.date_created,
+            }
+        )
 
         # Check if already synced and unchanged
-        if skip_unchanged and not self._has_changed(EntityType.INVOICE, external_id, data_hash):
+        if skip_unchanged and not self._has_changed(
+            EntityType.INVOICE, external_id, data_hash
+        ):
             result.skipped += 1
             return
 
@@ -700,7 +717,9 @@ class SplynxSyncService:
         amount_paid = splynx_invoice.total - splynx_invoice.total_due
 
         # Map status
-        status = self._map_invoice_status(splynx_invoice.status, splynx_invoice.total_due)
+        status = self._map_invoice_status(
+            splynx_invoice.status, splynx_invoice.total_due
+        )
         invoice_number = self._make_invoice_number(splynx_invoice.id)
 
         if existing:
@@ -709,7 +728,9 @@ class SplynxSyncService:
             existing.amount_paid = amount_paid
             result.updated += 1
             # Record sync
-            self._record_sync(EntityType.INVOICE, external_id, existing.invoice_id, data_hash)
+            self._record_sync(
+                EntityType.INVOICE, external_id, existing.invoice_id, data_hash
+            )
         else:
             # Create new invoice
             invoice = Invoice(
@@ -731,7 +752,8 @@ class SplynxSyncService:
                 correlation_id=f"splynx-inv-{splynx_invoice.id}",
                 notes=splynx_invoice.note,
                 internal_notes=f"Imported from Splynx. Original ID: {splynx_invoice.id}",
-                created_by_user_id=created_by_user_id or self.organization_id,  # Fallback
+                created_by_user_id=created_by_user_id
+                or self.organization_id,  # Fallback
             )
             self.db.add(invoice)
             self.db.flush()
@@ -754,9 +776,13 @@ class SplynxSyncService:
 
             result.created += 1
             # Record sync
-            self._record_sync(EntityType.INVOICE, external_id, invoice.invoice_id, data_hash)
+            self._record_sync(
+                EntityType.INVOICE, external_id, invoice.invoice_id, data_hash
+            )
 
-    def _map_invoice_status(self, splynx_status: str, total_due: Decimal) -> InvoiceStatus:
+    def _map_invoice_status(
+        self, splynx_status: str, total_due: Decimal
+    ) -> InvoiceStatus:
         """Map Splynx invoice status to ERP status."""
         status_lower = splynx_status.lower()
         if status_lower == "paid" or total_due == Decimal("0"):
@@ -795,7 +821,9 @@ class SplynxSyncService:
                 date_to=date_to,
             ):
                 try:
-                    self._sync_single_payment(splynx_payment, result, created_by_user_id)
+                    self._sync_single_payment(
+                        splynx_payment, result, created_by_user_id
+                    )
                 except Exception as e:
                     result.errors.append(f"Payment {splynx_payment.id}: {str(e)}")
                     logger.exception("Error syncing payment %s", splynx_payment.id)
@@ -852,7 +880,9 @@ class SplynxSyncService:
             return
 
         # Get bank account for this payment method
-        bank_account_id = self._get_bank_account_for_payment(splynx_payment.payment_type)
+        bank_account_id = self._get_bank_account_for_payment(
+            splynx_payment.payment_type
+        )
         payment_method = self._map_payment_method(splynx_payment.payment_type)
         method_name = self._get_payment_method_name(splynx_payment.payment_type)
 
@@ -879,7 +909,8 @@ class SplynxSyncService:
             description=f"Splynx payment via {method_name}. {splynx_payment.comment or ''}".strip(),
             status=PaymentStatus.CLEARED,
             correlation_id=f"splynx-pmt-{splynx_payment.id}",
-            created_by_user_id=created_by_user_id or UUID("00000000-0000-0000-0000-000000000001"),
+            created_by_user_id=created_by_user_id
+            or UUID("00000000-0000-0000-0000-000000000001"),
         )
         self.db.add(payment)
         self.db.flush()  # Get payment_id
@@ -1061,7 +1092,9 @@ class SplynxSyncService:
         customers_result = self.sync_customers(date_from, date_to, created_by_user_id)
         invoices_result = self.sync_invoices(date_from, date_to, created_by_user_id)
         payments_result = self.sync_payments(date_from, date_to)
-        credit_notes_result = self.sync_credit_notes(date_from, date_to, created_by_user_id)
+        credit_notes_result = self.sync_credit_notes(
+            date_from, date_to, created_by_user_id
+        )
 
         duration = time.time() - start_time
         total_errors = (
@@ -1110,15 +1143,11 @@ class SplynxSyncService:
         Returns:
             Dict with reconciliation statistics
         """
-        from datetime import datetime
         import re
         from collections import defaultdict
-        from sqlalchemy import text, and_, or_
+        from datetime import datetime
 
-        from app.models.finance.banking.bank_statement import (
-            BankStatementLine,
-            StatementLineType,
-        )
+        from sqlalchemy import text
 
         logger.info("Starting Paystack payment reconciliation (dry_run=%s)", dry_run)
 
@@ -1173,7 +1202,9 @@ class SplynxSyncService:
             {"org_id": self.organization_id, "account_ids": paystack_account_ids},
         ).fetchall()
 
-        logger.info("Found %d payments with Paystack references", len(payments_with_refs))
+        logger.info(
+            "Found %d payments with Paystack references", len(payments_with_refs)
+        )
 
         # Build reference lookup for statement lines
         statement_refs = self.db.execute(
@@ -1247,7 +1278,8 @@ class SplynxSyncService:
             {
                 "org_id": self.organization_id,
                 "account_ids": paystack_account_ids,
-                "matched_ids": list(matched_payment_ids) or [UUID("00000000-0000-0000-0000-000000000000")],
+                "matched_ids": list(matched_payment_ids)
+                or [UUID("00000000-0000-0000-0000-000000000000")],
             },
         ).fetchall()
 
@@ -1269,7 +1301,8 @@ class SplynxSyncService:
             {
                 "org_id": self.organization_id,
                 "account_ids": paystack_account_ids,
-                "matched_ids": list(matched_line_ids) or [UUID("00000000-0000-0000-0000-000000000000")],
+                "matched_ids": list(matched_line_ids)
+                or [UUID("00000000-0000-0000-0000-000000000000")],
             },
         ).fetchall()
 
@@ -1295,7 +1328,9 @@ class SplynxSyncService:
             key = (payment.payment_date, amount_cents)
 
             if key in line_index and line_index[key]:
-                available_lines = [lid for lid in line_index[key] if lid not in matched_line_ids]
+                available_lines = [
+                    lid for lid in line_index[key] if lid not in matched_line_ids
+                ]
 
                 if len(available_lines) == 1:
                     # Unique match
@@ -1332,7 +1367,9 @@ class SplynxSyncService:
 
         # Tier 3: Customer-based matching for ambiguous payments
         # Group ambiguous payments by (customer_id, date, amount_cents)
-        customer_payment_groups: dict[tuple[UUID, object, int], list[Any]] = defaultdict(list)
+        customer_payment_groups: dict[tuple[UUID, object, int], list[Any]] = (
+            defaultdict(list)
+        )
         for payment in ambiguous_payments:
             if payment.payment_id in matched_payment_ids:
                 continue
@@ -1341,7 +1378,11 @@ class SplynxSyncService:
             customer_payment_groups[customer_key].append(payment)
 
         # For each customer with unique payment on date+amount, try to match
-        for (customer_id, pay_date, amount_cents), payments in customer_payment_groups.items():
+        for (
+            customer_id,
+            pay_date,
+            amount_cents,
+        ), payments in customer_payment_groups.items():
             if len(payments) != 1:
                 # Customer has multiple payments with same date+amount - still ambiguous
                 result["ambiguous_matches"] += len(payments)
@@ -1354,7 +1395,9 @@ class SplynxSyncService:
             # Check if there's an available bank line for this date+amount
             key = (pay_date, amount_cents)
             if key in line_index:
-                available_lines = [lid for lid in line_index[key] if lid not in matched_line_ids]
+                available_lines = [
+                    lid for lid in line_index[key] if lid not in matched_line_ids
+                ]
 
                 if available_lines:
                     # Take the first available line for this customer's unique payment
@@ -1430,11 +1473,14 @@ class SplynxSyncService:
         Returns:
             Dict with reconciliation statistics
         """
-        from datetime import datetime
         from collections import defaultdict
+        from datetime import datetime
+
         from sqlalchemy import text
 
-        logger.info("Starting %s payment reconciliation (dry_run=%s)", bank_name, dry_run)
+        logger.info(
+            "Starting %s payment reconciliation (dry_run=%s)", bank_name, dry_run
+        )
 
         result: BankReconcileResult = {
             "bank_name": bank_name,
@@ -1486,11 +1532,15 @@ class SplynxSyncService:
             {"org_id": self.organization_id, "account_ids": bank_account_ids},
         ).fetchall()
 
-        logger.info("Found %d unmatched statement lines for %s", len(statement_lines), bank_name)
+        logger.info(
+            "Found %d unmatched statement lines for %s", len(statement_lines), bank_name
+        )
 
         if not statement_lines:
             result["unmatched_payments"] = len(payments)
-            result["errors"].append(f"No unmatched bank statement lines for {bank_name}")
+            result["errors"].append(
+                f"No unmatched bank statement lines for {bank_name}"
+            )
             return result
 
         matched_payment_ids: set[UUID] = set()
@@ -1513,7 +1563,9 @@ class SplynxSyncService:
             key = (payment.payment_date, amount_cents)
 
             if key in line_index and line_index[key]:
-                available_lines = [lid for lid in line_index[key] if lid not in matched_line_ids]
+                available_lines = [
+                    lid for lid in line_index[key] if lid not in matched_line_ids
+                ]
 
                 if len(available_lines) == 1:
                     line_id = available_lines[0]
@@ -1548,7 +1600,9 @@ class SplynxSyncService:
         )
 
         # Tier 2: Customer-based matching
-        customer_payment_groups: dict[tuple[UUID, object, int], list[Any]] = defaultdict(list)
+        customer_payment_groups: dict[tuple[UUID, object, int], list[Any]] = (
+            defaultdict(list)
+        )
         for payment in ambiguous_payments:
             if payment.payment_id in matched_payment_ids:
                 continue
@@ -1556,7 +1610,11 @@ class SplynxSyncService:
             customer_key = (payment.customer_id, payment.payment_date, amount_cents)
             customer_payment_groups[customer_key].append(payment)
 
-        for (customer_id, pay_date, amount_cents), group_payments in customer_payment_groups.items():
+        for (
+            customer_id,
+            pay_date,
+            amount_cents,
+        ), group_payments in customer_payment_groups.items():
             if len(group_payments) != 1:
                 result["ambiguous_matches"] += len(group_payments)
                 continue
@@ -1567,7 +1625,9 @@ class SplynxSyncService:
 
             key = (pay_date, amount_cents)
             if key in line_index:
-                available_lines = [lid for lid in line_index[key] if lid not in matched_line_ids]
+                available_lines = [
+                    lid for lid in line_index[key] if lid not in matched_line_ids
+                ]
 
                 if available_lines:
                     line_id = available_lines[0]
@@ -1635,9 +1695,14 @@ class SplynxSyncService:
             Dict with match statistics
         """
         from datetime import datetime
+
         from sqlalchemy import text
 
-        logger.info("Starting bulk payment reconciliation for %s (dry_run=%s)", bank_name, dry_run)
+        logger.info(
+            "Starting bulk payment reconciliation for %s (dry_run=%s)",
+            bank_name,
+            dry_run,
+        )
 
         result: BulkReconcileResult = {
             "bank_name": bank_name,
@@ -1698,7 +1763,9 @@ class SplynxSyncService:
             {"org_id": self.organization_id, "account_ids": bank_account_ids},
         ).fetchall()
 
-        logger.info("Found %d potential bulk payment matches for %s", len(matches), bank_name)
+        logger.info(
+            "Found %d potential bulk payment matches for %s", len(matches), bank_name
+        )
 
         matched_line_ids: set[UUID] = set()
 
@@ -1791,9 +1858,14 @@ class SplynxSyncService:
             bank_result: BankReconcileResult | PaystackReconcileResult
 
             # Check if this is Paystack (use special method with reference matching)
-            if "paystack" in bank.account_name.lower() or "paystack" in bank.bank_name.lower():
+            if (
+                "paystack" in bank.account_name.lower()
+                or "paystack" in bank.bank_name.lower()
+            ):
                 bank_result = self.reconcile_paystack_payments(dry_run=dry_run)
-                totals["matched_by_reference"] += bank_result.get("matched_by_reference", 0)
+                totals["matched_by_reference"] += bank_result.get(
+                    "matched_by_reference", 0
+                )
             else:
                 bank_result = self.reconcile_bank_payments(
                     bank_account_ids=[bank_id],
@@ -1804,10 +1876,14 @@ class SplynxSyncService:
             results["banks"][bank.account_name] = bank_result
 
             # Update totals
-            totals["matched_by_date_amount"] += bank_result.get("matched_by_date_amount", 0)
+            totals["matched_by_date_amount"] += bank_result.get(
+                "matched_by_date_amount", 0
+            )
             totals["matched_by_customer"] += bank_result.get("matched_by_customer", 0)
             totals["ambiguous_matches"] += bank_result.get("ambiguous_matches", 0)
-            totals["total_matched_amount"] += bank_result.get("total_matched_amount", Decimal("0"))
+            totals["total_matched_amount"] += bank_result.get(
+                "total_matched_amount", Decimal("0")
+            )
 
         # Phase 2: Bulk payment matching for remaining unmatched
         # (Multiple Splynx payments on same day summing to one bank line)
@@ -1821,6 +1897,8 @@ class SplynxSyncService:
         results["bulk_matching"] = bulk_result
         totals["bulk_matches"] = bulk_result.get("bulk_matches", 0)
         totals["bulk_payments_matched"] = bulk_result.get("payments_matched", 0)
-        totals["total_matched_amount"] += bulk_result.get("total_matched_amount", Decimal("0"))
+        totals["total_matched_amount"] += bulk_result.get(
+            "total_matched_amount", Decimal("0")
+        )
 
         return results

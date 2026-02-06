@@ -23,8 +23,7 @@ def upgrade() -> None:
         return
 
     op.execute(
-        "ALTER TABLE public.alembic_version "
-        "ALTER COLUMN version_num TYPE VARCHAR(64)"
+        "ALTER TABLE public.alembic_version ALTER COLUMN version_num TYPE VARCHAR(64)"
     )
 
 
@@ -36,6 +35,5 @@ def downgrade() -> None:
         return
 
     op.execute(
-        "ALTER TABLE public.alembic_version "
-        "ALTER COLUMN version_num TYPE VARCHAR(32)"
+        "ALTER TABLE public.alembic_version ALTER COLUMN version_num TYPE VARCHAR(32)"
     )

@@ -3,6 +3,7 @@ Payroll → GL Integration Adapter.
 
 Creates GL journal entries from salary slips and payroll runs.
 """
+
 import logging
 import uuid
 from dataclasses import dataclass
@@ -12,14 +13,13 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.models.domain_settings import SettingDomain
 from app.models.people.payroll import (
-    SalarySlip,
-    SalarySlipStatus,
-    SalaryComponentType,
     PayrollEntry,
     PayrollEntryStatus,
+    SalarySlip,
+    SalarySlipStatus,
 )
-from app.models.domain_settings import SettingDomain
 from app.services.common import coerce_uuid
 from app.services.settings_cache import get_cached_setting
 
@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class GLPostingResult:
     """Result of posting to GL."""
+
     success: bool
     journal_entry_id: Optional[uuid.UUID] = None
     error_message: Optional[str] = None
@@ -75,26 +76,24 @@ class PayrollGLAdapter:
             slip = db.get(SalarySlip, slip_id)
             if not slip:
                 return GLPostingResult(
-                    success=False,
-                    error_message=f"Salary slip {slip_id} not found"
+                    success=False, error_message=f"Salary slip {slip_id} not found"
                 )
 
             if slip.organization_id != org_id:
                 return GLPostingResult(
                     success=False,
-                    error_message="Salary slip does not belong to this organization"
+                    error_message="Salary slip does not belong to this organization",
                 )
 
             if slip.status != SalarySlipStatus.APPROVED:
                 return GLPostingResult(
                     success=False,
-                    error_message=f"Salary slip must be APPROVED, current status: {slip.status}"
+                    error_message=f"Salary slip must be APPROVED, current status: {slip.status}",
                 )
 
             if slip.journal_entry_id is not None:
                 return GLPostingResult(
-                    success=False,
-                    error_message="Salary slip already posted to GL"
+                    success=False, error_message="Salary slip already posted to GL"
                 )
 
             # Get employee for cost center
@@ -102,9 +101,9 @@ class PayrollGLAdapter:
             cost_center_id = employee.cost_center_id if employee else None
 
             # Import GL services (deferred to avoid circular imports)
-            from app.services.finance.gl.journal import JournalService
-            from app.services.finance.gl import JournalInput, JournalLineInput
             from app.models.finance.gl.journal_entry import JournalType
+            from app.services.finance.gl import JournalInput, JournalLineInput
+            from app.services.finance.gl.journal import JournalService
 
             # Build journal entry lines
             lines: list[JournalLineInput] = []
@@ -113,13 +112,15 @@ class PayrollGLAdapter:
             for earning in slip.earnings:
                 component = earning.component
                 if component and component.expense_account_id:
-                    lines.append(JournalLineInput(
-                        account_id=component.expense_account_id,
-                        debit_amount=earning.amount,
-                        credit_amount=Decimal("0.00"),
-                        description=f"{component.component_name}: {slip.employee_name or slip.employee_id}",
-                        cost_center_id=cost_center_id,
-                    ))
+                    lines.append(
+                        JournalLineInput(
+                            account_id=component.expense_account_id,
+                            debit_amount=earning.amount,
+                            credit_amount=Decimal("0.00"),
+                            description=f"{component.component_name}: {slip.employee_name or slip.employee_id}",
+                            cost_center_id=cost_center_id,
+                        )
+                    )
                 else:
                     logger.warning(
                         f"Earning component {earning.component_id} has no expense account"
@@ -129,12 +130,14 @@ class PayrollGLAdapter:
             for deduction in slip.deductions:
                 component = deduction.component
                 if component and component.liability_account_id:
-                    lines.append(JournalLineInput(
-                        account_id=component.liability_account_id,
-                        debit_amount=Decimal("0.00"),
-                        credit_amount=deduction.amount,
-                        description=f"{component.component_name}: {slip.employee_name or slip.employee_id}",
-                    ))
+                    lines.append(
+                        JournalLineInput(
+                            account_id=component.liability_account_id,
+                            debit_amount=Decimal("0.00"),
+                            credit_amount=deduction.amount,
+                            description=f"{component.component_name}: {slip.employee_name or slip.employee_id}",
+                        )
+                    )
                 else:
                     logger.warning(
                         f"Deduction component {deduction.component_id} has no liability account"
@@ -142,22 +145,22 @@ class PayrollGLAdapter:
 
             # CREDIT: Net Pay (Payroll Payable account)
             payroll_payable_account_id = (
-                employee.default_payroll_payable_account_id
-                if employee else None
+                employee.default_payroll_payable_account_id if employee else None
             )
 
             if payroll_payable_account_id and slip.net_pay > 0:
-                lines.append(JournalLineInput(
-                    account_id=payroll_payable_account_id,
-                    debit_amount=Decimal("0.00"),
-                    credit_amount=slip.net_pay,
-                    description=f"Net Pay: {slip.employee_name or slip.employee_id}",
-                ))
+                lines.append(
+                    JournalLineInput(
+                        account_id=payroll_payable_account_id,
+                        debit_amount=Decimal("0.00"),
+                        credit_amount=slip.net_pay,
+                        description=f"Net Pay: {slip.employee_name or slip.employee_id}",
+                    )
+                )
 
             if not lines:
                 return GLPostingResult(
-                    success=False,
-                    error_message="No valid GL lines to post"
+                    success=False, error_message="No valid GL lines to post"
                 )
 
             # Validate debits = credits
@@ -186,9 +189,7 @@ class PayrollGLAdapter:
                 lines=lines,
             )
 
-            journal = JournalService.create_journal(
-                db, org_id, journal_input, user_id
-            )
+            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
 
             # Link journal to slip
             slip.journal_entry_id = journal.journal_entry_id
@@ -199,6 +200,7 @@ class PayrollGLAdapter:
                 from app.services.people.payroll.payroll_notifications import (
                     PayrollNotificationService,
                 )
+
                 notification_service = PayrollNotificationService(db)
                 employee = slip.employee
                 if employee:
@@ -260,23 +262,23 @@ class PayrollGLAdapter:
             payroll = db.get(PayrollEntry, payroll_entry_id)
             if not payroll:
                 return GLPostingResult(
-                    success=False,
-                    error_message="Payroll entry not found"
+                    success=False, error_message="Payroll entry not found"
                 )
 
             if payroll.status != PayrollEntryStatus.APPROVED:
                 return GLPostingResult(
                     success=False,
-                    error_message="Payroll must be APPROVED before posting"
+                    error_message="Payroll must be APPROVED before posting",
                 )
 
             # Get all approved slips in this run
-            slips = [s for s in payroll.salary_slips if s.status == SalarySlipStatus.APPROVED]
+            slips = [
+                s for s in payroll.salary_slips if s.status == SalarySlipStatus.APPROVED
+            ]
 
             if not slips:
                 return GLPostingResult(
-                    success=False,
-                    error_message="No approved salary slips to post"
+                    success=False, error_message="No approved salary slips to post"
                 )
 
             if consolidated:
@@ -312,7 +314,8 @@ class PayrollGLAdapter:
             return GLPostingResult(
                 success=failed_count == 0,
                 error_message=f"Posted {posted_count}, failed {failed_count}. Last error: {last_error}"
-                if failed_count > 0 else None,
+                if failed_count > 0
+                else None,
             )
 
         except Exception as e:
@@ -341,14 +344,12 @@ class PayrollGLAdapter:
             slip = db.get(SalarySlip, slip_id)
             if not slip or slip.status != SalarySlipStatus.POSTED:
                 return GLPostingResult(
-                    success=False,
-                    error_message="Salary slip not found or not posted"
+                    success=False, error_message="Salary slip not found or not posted"
                 )
 
             if not slip.journal_entry_id:
                 return GLPostingResult(
-                    success=False,
-                    error_message="No journal entry linked to reverse"
+                    success=False, error_message="No journal entry linked to reverse"
                 )
 
             from app.services.finance.gl.journal import JournalService
@@ -402,35 +403,33 @@ class PayrollGLAdapter:
         - 1 Credit line: Total net pay → org.salary_payable_account_id
         """
         from app.models.finance.core_org.organization import Organization
-        from app.services.finance.gl.journal import JournalService
-        from app.services.finance.gl import JournalInput, JournalLineInput
         from app.models.finance.gl.journal_entry import JournalType
+        from app.services.finance.gl import JournalInput, JournalLineInput
+        from app.services.finance.gl.journal import JournalService
 
         try:
             # Check if already posted
             if payroll.journal_entry_id is not None:
                 return GLPostingResult(
-                    success=False,
-                    error_message="Payroll run already posted to GL"
+                    success=False, error_message="Payroll run already posted to GL"
                 )
 
             # Load organization and validate GL accounts
             org = db.get(Organization, org_id)
             if not org:
                 return GLPostingResult(
-                    success=False,
-                    error_message="Organization not found"
+                    success=False, error_message="Organization not found"
                 )
 
             if not org.salaries_expense_account_id:
                 return GLPostingResult(
                     success=False,
-                    error_message="Salaries Expense account not configured. Go to Admin > Organizations to set it."
+                    error_message="Salaries Expense account not configured. Go to Admin > Organizations to set it.",
                 )
             if not org.salary_payable_account_id:
                 return GLPostingResult(
                     success=False,
-                    error_message="Salary Payable account not configured. Go to Admin > Organizations to set it."
+                    error_message="Salary Payable account not configured. Go to Admin > Organizations to set it.",
                 )
 
             # Aggregate totals
@@ -445,7 +444,9 @@ class PayrollGLAdapter:
 
             # Group deductions by component to aggregate amounts per liability account
             # Key: component_id, Value: (component_name, total_amount, liability_account_id)
-            deductions_by_component: dict[uuid.UUID, tuple[str, Decimal, uuid.UUID]] = {}
+            deductions_by_component: dict[
+                uuid.UUID, tuple[str, Decimal, uuid.UUID]
+            ] = {}
 
             for slip in slips:
                 for ded in slip.deductions:
@@ -480,31 +481,41 @@ class PayrollGLAdapter:
             period_ref = f"{period_month}/{period_year}"
 
             # DEBIT: Total Gross to Salaries Expense
-            lines.append(JournalLineInput(
-                account_id=org.salaries_expense_account_id,
-                debit_amount=total_gross,
-                credit_amount=Decimal("0.00"),
-                description=f"Payroll {period_ref} - Salaries Expense ({len(slips)} employees)",
-            ))
+            lines.append(
+                JournalLineInput(
+                    account_id=org.salaries_expense_account_id,
+                    debit_amount=total_gross,
+                    credit_amount=Decimal("0.00"),
+                    description=f"Payroll {period_ref} - Salaries Expense ({len(slips)} employees)",
+                )
+            )
 
             # CREDITS: Each deduction type to its liability account
-            for comp_id, (comp_name, amount, liability_acc_id) in deductions_by_component.items():
+            for comp_id, (
+                comp_name,
+                amount,
+                liability_acc_id,
+            ) in deductions_by_component.items():
                 if amount <= 0:
                     continue
-                lines.append(JournalLineInput(
-                    account_id=liability_acc_id,
-                    debit_amount=Decimal("0.00"),
-                    credit_amount=amount,
-                    description=f"Payroll {period_ref} - {comp_name}",
-                ))
+                lines.append(
+                    JournalLineInput(
+                        account_id=liability_acc_id,
+                        debit_amount=Decimal("0.00"),
+                        credit_amount=amount,
+                        description=f"Payroll {period_ref} - {comp_name}",
+                    )
+                )
 
             # CREDIT: Net Pay to Salary Payable
-            lines.append(JournalLineInput(
-                account_id=org.salary_payable_account_id,
-                debit_amount=Decimal("0.00"),
-                credit_amount=total_net,
-                description=f"Payroll {period_ref} - Net Pay ({len(slips)} employees)",
-            ))
+            lines.append(
+                JournalLineInput(
+                    account_id=org.salary_payable_account_id,
+                    debit_amount=Decimal("0.00"),
+                    credit_amount=total_net,
+                    description=f"Payroll {period_ref} - Net Pay ({len(slips)} employees)",
+                )
+            )
 
             # Validate debits = credits, allow small rounding adjustment if configured
             total_debits = sum((line.debit_amount for line in lines), Decimal("0"))
@@ -529,12 +540,18 @@ class PayrollGLAdapter:
                             JournalLineInput(
                                 account_id=rounding_account_id,
                                 debit_amount=Decimal("0.00") if diff > 0 else abs(diff),
-                                credit_amount=abs(diff) if diff > 0 else Decimal("0.00"),
+                                credit_amount=abs(diff)
+                                if diff > 0
+                                else Decimal("0.00"),
                                 description=f"Payroll {period_ref} - Rounding Adjustment",
                             )
                         )
-                        total_debits = sum((line.debit_amount for line in lines), Decimal("0"))
-                        total_credits = sum((line.credit_amount for line in lines), Decimal("0"))
+                        total_debits = sum(
+                            (line.debit_amount for line in lines), Decimal("0")
+                        )
+                        total_credits = sum(
+                            (line.credit_amount for line in lines), Decimal("0")
+                        )
                         diff = total_debits - total_credits
                 if diff != 0:
                     logger.error(
@@ -593,7 +610,9 @@ class PayrollGLAdapter:
             )
 
         except Exception as e:
-            logger.exception(f"Error posting consolidated payroll run {payroll.entry_id}")
+            logger.exception(
+                f"Error posting consolidated payroll run {payroll.entry_id}"
+            )
             db.rollback()
             return GLPostingResult(
                 success=False,

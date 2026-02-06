@@ -8,7 +8,6 @@ Handles secure file uploads for job applications with:
 """
 
 import logging
-import os
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -58,8 +57,7 @@ class ResumeService:
         self.upload_dir = Path(settings.resume_upload_dir)
         self.max_size = settings.resume_max_size_bytes
         self.allowed_extensions = {
-            ext.strip().lower()
-            for ext in settings.resume_allowed_extensions.split(",")
+            ext.strip().lower() for ext in settings.resume_allowed_extensions.split(",")
         }
 
     def validate_file(

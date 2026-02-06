@@ -3,9 +3,10 @@ PM Comment Service.
 
 Handles comments for projects and tasks.
 """
+
 import logging
 import uuid
-from typing import Iterable, List, Optional
+from typing import Iterable, List
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -58,7 +59,9 @@ class PMCommentService:
             organization_id=organization_id,
             entity_type=entity_type,
             entity_id=entity_id,
-            comment_type=PMCommentType.INTERNAL_NOTE if is_internal else PMCommentType.COMMENT,
+            comment_type=PMCommentType.INTERNAL_NOTE
+            if is_internal
+            else PMCommentType.COMMENT,
             content=content,
             author_id=author_id,
             is_internal=is_internal,
@@ -112,4 +115,3 @@ class PMCommentService:
 
 
 comment_service = PMCommentService()
-

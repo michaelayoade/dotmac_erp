@@ -6,6 +6,7 @@ Manages financial statement line items and generates statements per IAS 1.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import List, Optional
@@ -20,6 +21,8 @@ from app.models.finance.rpt.financial_statement_line import (
 )
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -284,7 +287,11 @@ class FinancialStatementService(ListResponseMixin):
         updated_lines = []
         for line_id, new_sequence in line_sequences:
             line = db.get(FinancialStatementLine, coerce_uuid(line_id))
-            if line and line.organization_id == org_id and line.statement_type == statement_type:
+            if (
+                line
+                and line.organization_id == org_id
+                and line.statement_type == statement_type
+            ):
                 line.sequence_number = new_sequence
                 updated_lines.append(line)
 
@@ -499,7 +506,9 @@ class FinancialStatementService(ListResponseMixin):
             )
 
         if statement_type:
-            query = query.filter(FinancialStatementLine.statement_type == statement_type)
+            query = query.filter(
+                FinancialStatementLine.statement_type == statement_type
+            )
 
         if parent_line_id:
             query = query.filter(

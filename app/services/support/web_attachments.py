@@ -63,7 +63,7 @@ class AttachmentWebService:
 
             db.commit()
 
-        except Exception as e:
+        except Exception:
             db.rollback()
             logger.exception("Failed to upload attachment")
             return RedirectResponse(
@@ -123,7 +123,7 @@ class AttachmentWebService:
         try:
             attachment_service.delete_attachment(db, org_id, aid)
             db.commit()
-        except Exception as e:
+        except Exception:
             db.rollback()
             logger.exception("Failed to delete attachment")
 

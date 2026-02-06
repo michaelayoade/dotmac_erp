@@ -1,6 +1,8 @@
 """
 Contact mapping (Customers/Suppliers) from ERPNext to DotMac ERP.
 """
+
+import logging
 from typing import Any
 
 from .base import (
@@ -12,6 +14,7 @@ from .base import (
     parse_datetime,
 )
 
+logger = logging.getLogger(__name__)
 
 # ERPNext customer_type to DotMac ERP
 CUSTOMER_TYPE_MAP = {

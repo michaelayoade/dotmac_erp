@@ -26,12 +26,15 @@ from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.services.common import coerce_uuid
 from app.services.finance.ap.posting.helpers import determine_debit_account
-from app.services.finance.gl.journal import JournalInput, JournalLineInput, JournalService
+from app.services.finance.gl.journal import (
+    JournalInput,
+    JournalLineInput,
+    JournalService,
+)
 from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
 from app.services.finance.platform.saga_factory import register_saga
 from app.services.finance.platform.saga_orchestrator import (
     SagaOrchestrator,
-    SagaResult,
     SagaStepDefinition,
     StepResult,
 )
@@ -43,6 +46,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class APPostingSagaResult:
     """Result from AP invoice posting saga."""
+
     success: bool
     journal_entry_id: Optional[UUID] = None
     posting_batch_id: Optional[UUID] = None
@@ -196,7 +200,6 @@ class APInvoicePostingSaga(SagaOrchestrator):
         context: dict[str, Any],
     ) -> StepResult:
         """Create and approve the GL journal entry."""
-        from app.services.finance.ap.ap_posting_adapter import APPostingAdapter
 
         org_id = coerce_uuid(payload["organization_id"])
         invoice_id = coerce_uuid(payload["invoice_id"])
@@ -308,20 +311,21 @@ class APInvoicePostingSaga(SagaOrchestrator):
         )
 
         try:
-            journal = JournalService.create_journal(
-                db, org_id, journal_input, user_id
-            )
+            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
 
             # Submit and approve
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
 
             # Commit the journal creation
             db.commit()
 
             logger.info(
                 "Created journal %s for invoice %s",
-                journal.journal_number, invoice.invoice_number
+                journal.journal_number,
+                invoice.invoice_number,
             )
 
             return StepResult(
@@ -371,7 +375,7 @@ class APInvoicePostingSaga(SagaOrchestrator):
             db.commit()
             logger.info("Voided journal %s during saga compensation", journal_id)
             return True
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to void journal %s", journal_id)
             return False
 
@@ -391,7 +395,9 @@ class APInvoicePostingSaga(SagaOrchestrator):
         invoice = db.get(SupplierInvoice, invoice_id)
         if not invoice:
             return StepResult(success=False, error="Supplier invoice not found")
-        idempotency_key = payload.get("idempotency_key") or f"{org_id}:AP:{invoice_id}:post:v1"
+        idempotency_key = (
+            payload.get("idempotency_key") or f"{org_id}:AP:{invoice_id}:post:v1"
+        )
 
         posting_request = PostingRequest(
             organization_id=org_id,
@@ -414,7 +420,8 @@ class APInvoicePostingSaga(SagaOrchestrator):
 
             logger.info(
                 "Posted journal %s to ledger, batch %s",
-                context["journal_number"], result.batch_id
+                context["journal_number"],
+                result.batch_id,
             )
 
             return StepResult(
@@ -469,17 +476,18 @@ class APInvoicePostingSaga(SagaOrchestrator):
             if result.success:
                 logger.info(
                     "Created reversal journal %s for saga compensation",
-                    result.reversal_journal_id
+                    result.reversal_journal_id,
                 )
                 return True
             else:
                 logger.error(
                     "Failed to create reversal for journal %s: %s",
-                    journal_id, result.message
+                    journal_id,
+                    result.message,
                 )
                 return False
 
-        except Exception as e:
+        except Exception:
             logger.exception("Reversal failed for journal %s", journal_id)
             return False
 
@@ -557,8 +565,7 @@ class APInvoicePostingSaga(SagaOrchestrator):
                 tax_transaction_ids.append(str(tax_txn.transaction_id))
             except Exception as e:
                 logger.warning(
-                    "Failed to create tax transaction for line %s: %s",
-                    line.line_id, e
+                    "Failed to create tax transaction for line %s: %s", line.line_id, e
                 )
                 # Continue - tax transaction failures are non-fatal
 
@@ -590,10 +597,12 @@ class APInvoicePostingSaga(SagaOrchestrator):
                     db.delete(tax_txn)
 
             db.commit()
-            logger.info("Voided %d tax transactions during saga compensation", len(tax_ids))
+            logger.info(
+                "Voided %d tax transactions during saga compensation", len(tax_ids)
+            )
             return True
 
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to void tax transactions")
             return False
 
@@ -624,10 +633,7 @@ class APInvoicePostingSaga(SagaOrchestrator):
 
         db.commit()
 
-        logger.info(
-            "Updated invoice %s status to POSTED",
-            invoice.invoice_number
-        )
+        logger.info("Updated invoice %s status to POSTED", invoice.invoice_number)
 
         return StepResult(
             success=True,
@@ -660,12 +666,13 @@ class APInvoicePostingSaga(SagaOrchestrator):
                 db.commit()
                 logger.info(
                     "Reverted invoice %s status to %s",
-                    invoice.invoice_number, original_status
+                    invoice.invoice_number,
+                    original_status,
                 )
 
             return True
 
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to revert invoice status")
             return False
 
@@ -728,8 +735,12 @@ def post_invoice_with_saga(
     if result.success:
         return APPostingSagaResult(
             success=True,
-            journal_entry_id=UUID(result.result.get("journal_entry_id")) if result.result.get("journal_entry_id") else None,
-            posting_batch_id=UUID(result.result.get("posting_batch_id")) if result.result.get("posting_batch_id") else None,
+            journal_entry_id=UUID(result.result.get("journal_entry_id"))
+            if result.result.get("journal_entry_id")
+            else None,
+            posting_batch_id=UUID(result.result.get("posting_batch_id"))
+            if result.result.get("posting_batch_id")
+            else None,
             message="Invoice posted successfully",
             saga_id=result.saga_id,
         )

@@ -3,24 +3,31 @@ Sales Order Service.
 
 Business logic for sales orders with fulfillment and invoicing.
 """
+
+import logging
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional, List
+from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models.finance.ar.sales_order import (
-    SalesOrder, SalesOrderLine, SOStatus, FulfillmentStatus,
-    Shipment, ShipmentLine,
-)
-from app.models.finance.ar.invoice import Invoice, InvoiceType, InvoiceStatus
+from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.models.finance.ar.invoice_line import InvoiceLine
+from app.models.finance.ar.sales_order import (
+    FulfillmentStatus,
+    SalesOrder,
+    SalesOrderLine,
+    Shipment,
+    ShipmentLine,
+    SOStatus,
+)
 from app.models.finance.core_config import SequenceType
 from app.services.common import coerce_uuid
 from app.services.finance.common import SyncNumberingService
+
+logger = logging.getLogger(__name__)
 
 
 class SalesOrderService:
@@ -42,7 +49,7 @@ class SalesOrderService:
         customer_id: str,
         order_date: date,
         created_by: str,
-    currency_code: str = settings.default_functional_currency_code,
+        currency_code: str = settings.default_functional_currency_code,
         exchange_rate: Decimal = Decimal("1"),
         customer_po_number: Optional[str] = None,
         reference: Optional[str] = None,
@@ -75,7 +82,9 @@ class SalesOrderService:
             promised_date=promised_date,
             currency_code=currency_code,
             exchange_rate=exchange_rate,
-            payment_terms_id=coerce_uuid(payment_terms_id) if payment_terms_id else None,
+            payment_terms_id=coerce_uuid(payment_terms_id)
+            if payment_terms_id
+            else None,
             ship_to_name=ship_to_name,
             ship_to_address=ship_to_address,
             ship_to_city=ship_to_city,
@@ -107,7 +116,9 @@ class SalesOrderService:
     def _add_lines(db: Session, so: SalesOrder, lines: List[dict]) -> None:
         """Add lines to sales order."""
         for idx, line_data in enumerate(lines, start=1):
-            quantity = Decimal(str(line_data.get("quantity_ordered", line_data.get("quantity", 1))))
+            quantity = Decimal(
+                str(line_data.get("quantity_ordered", line_data.get("quantity", 1)))
+            )
             unit_price = Decimal(str(line_data.get("unit_price", 0)))
             discount_percent = Decimal(str(line_data.get("discount_percent", 0)))
             discount_amount = Decimal(str(line_data.get("discount_amount", 0)))
@@ -123,7 +134,9 @@ class SalesOrderService:
             line = SalesOrderLine(
                 so_id=so.so_id,
                 line_number=idx,
-                item_id=coerce_uuid(line_data["item_id"]) if line_data.get("item_id") else None,
+                item_id=coerce_uuid(line_data["item_id"])
+                if line_data.get("item_id")
+                else None,
                 item_code=line_data.get("item_code"),
                 description=line_data["description"],
                 quantity_ordered=quantity,
@@ -131,12 +144,20 @@ class SalesOrderService:
                 unit_price=unit_price,
                 discount_percent=discount_percent,
                 discount_amount=discount_amount,
-                tax_code_id=coerce_uuid(line_data["tax_code_id"]) if line_data.get("tax_code_id") else None,
+                tax_code_id=coerce_uuid(line_data["tax_code_id"])
+                if line_data.get("tax_code_id")
+                else None,
                 tax_amount=tax_amount,
                 line_total=line_total,
-                revenue_account_id=coerce_uuid(line_data["revenue_account_id"]) if line_data.get("revenue_account_id") else None,
-                project_id=coerce_uuid(line_data["project_id"]) if line_data.get("project_id") else None,
-                cost_center_id=coerce_uuid(line_data["cost_center_id"]) if line_data.get("cost_center_id") else None,
+                revenue_account_id=coerce_uuid(line_data["revenue_account_id"])
+                if line_data.get("revenue_account_id")
+                else None,
+                project_id=coerce_uuid(line_data["project_id"])
+                if line_data.get("project_id")
+                else None,
+                cost_center_id=coerce_uuid(line_data["cost_center_id"])
+                if line_data.get("cost_center_id")
+                else None,
                 requested_date=line_data.get("requested_date"),
                 promised_date=line_data.get("promised_date"),
                 fulfillment_status=FulfillmentStatus.PENDING,
@@ -182,10 +203,15 @@ class SalesOrderService:
         db.flush()
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=db, organization_id=so.organization_id,
-                entity_type="SALES_ORDER", entity_id=so.order_id,
+                db=db,
+                organization_id=so.organization_id,
+                entity_type="SALES_ORDER",
+                entity_id=so.order_id,
                 event="ON_STATUS_CHANGE",
                 old_values={"status": "DRAFT"},
                 new_values={"status": "SUBMITTED"},
@@ -217,10 +243,15 @@ class SalesOrderService:
         db.flush()
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=db, organization_id=so.organization_id,
-                entity_type="SALES_ORDER", entity_id=so.order_id,
+                db=db,
+                organization_id=so.organization_id,
+                entity_type="SALES_ORDER",
+                entity_id=so.order_id,
                 event="ON_APPROVAL",
                 old_values={"status": "SUBMITTED"},
                 new_values={"status": "APPROVED"},
@@ -363,14 +394,20 @@ class SalesOrderService:
         so_id: str,
         created_by: str,
         invoice_date: Optional[date] = None,
-        line_quantities: Optional[List[dict]] = None,  # If None, invoice all shipped but not invoiced
+        line_quantities: Optional[
+            List[dict]
+        ] = None,  # If None, invoice all shipped but not invoiced
     ) -> Invoice:
         """Create invoice from shipped SO lines."""
         so = db.get(SalesOrder, coerce_uuid(so_id))
         if not so:
             raise ValueError("Sales order not found")
 
-        if so.status not in [SOStatus.IN_PROGRESS, SOStatus.SHIPPED, SOStatus.COMPLETED]:
+        if so.status not in [
+            SOStatus.IN_PROGRESS,
+            SOStatus.SHIPPED,
+            SOStatus.COMPLETED,
+        ]:
             raise ValueError(f"Cannot invoice SO in {so.status.value} status")
 
         user_id = coerce_uuid(created_by)
@@ -415,7 +452,11 @@ class SalesOrderService:
         tax = Decimal("0")
 
         for so_line, qty in lines_to_invoice:
-            ratio = qty / so_line.quantity_ordered if so_line.quantity_ordered else Decimal("1")
+            ratio = (
+                qty / so_line.quantity_ordered
+                if so_line.quantity_ordered
+                else Decimal("1")
+            )
             line_gross = qty * so_line.unit_price
             line_discount = so_line.discount_amount * ratio
             line_tax = so_line.tax_amount * ratio
@@ -450,7 +491,11 @@ class SalesOrderService:
         line_num = 0
         for so_line, qty in lines_to_invoice:
             line_num += 1
-            ratio = qty / so_line.quantity_ordered if so_line.quantity_ordered else Decimal("1")
+            ratio = (
+                qty / so_line.quantity_ordered
+                if so_line.quantity_ordered
+                else Decimal("1")
+            )
 
             iline = InvoiceLine(
                 invoice_id=invoice.invoice_id,
@@ -462,7 +507,9 @@ class SalesOrderService:
                 discount_amount=so_line.discount_amount * ratio,
                 tax_code_id=so_line.tax_code_id,
                 tax_amount=so_line.tax_amount * ratio,
-                line_total=(qty * so_line.unit_price) - (so_line.discount_amount * ratio) + (so_line.tax_amount * ratio),
+                line_total=(qty * so_line.unit_price)
+                - (so_line.discount_amount * ratio)
+                + (so_line.tax_amount * ratio),
                 revenue_account_id=so_line.revenue_account_id,
                 project_id=so_line.project_id,
                 cost_center_id=so_line.cost_center_id,

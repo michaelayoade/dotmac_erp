@@ -11,15 +11,18 @@ Includes multi-tier caching:
 
 from __future__ import annotations
 
+import logging
 from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from app.models.finance.core_org.organization import Organization
-from app.services.cache import cache_service, CacheKeys, CacheService
+from app.services.cache import CacheKeys, CacheService, cache_service
 from app.services.common import coerce_uuid
-from app.services.request_cache import request_cache, RequestCacheKeys
+from app.services.request_cache import RequestCacheKeys, request_cache
+
+logger = logging.getLogger(__name__)
 
 
 class OrgContextService:

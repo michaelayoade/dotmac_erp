@@ -8,6 +8,7 @@ This migration creates the remita_rrr table in the payments schema for
 tracking Remita Retrieval References (RRRs) used for government payments
 like PAYE, NHF, Pension, taxes, and fees.
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -132,7 +133,8 @@ def upgrade() -> None:
     # Create composite indexes if table exists and indexes don't
     if inspector.has_table("remita_rrr", schema="payments"):
         existing_indexes = {
-            idx["name"] for idx in inspector.get_indexes("remita_rrr", schema="payments")
+            idx["name"]
+            for idx in inspector.get_indexes("remita_rrr", schema="payments")
         }
 
         if "ix_remita_rrr_org_status" not in existing_indexes:
@@ -159,14 +161,19 @@ def downgrade() -> None:
     if inspector.has_table("remita_rrr", schema="payments"):
         # Drop indexes first (check if they exist)
         existing_indexes = {
-            idx["name"] for idx in inspector.get_indexes("remita_rrr", schema="payments")
+            idx["name"]
+            for idx in inspector.get_indexes("remita_rrr", schema="payments")
         }
 
         if "ix_remita_rrr_source" in existing_indexes:
-            op.drop_index("ix_remita_rrr_source", table_name="remita_rrr", schema="payments")
+            op.drop_index(
+                "ix_remita_rrr_source", table_name="remita_rrr", schema="payments"
+            )
 
         if "ix_remita_rrr_org_status" in existing_indexes:
-            op.drop_index("ix_remita_rrr_org_status", table_name="remita_rrr", schema="payments")
+            op.drop_index(
+                "ix_remita_rrr_org_status", table_name="remita_rrr", schema="payments"
+            )
 
         # Drop table
         op.drop_table("remita_rrr", schema="payments")

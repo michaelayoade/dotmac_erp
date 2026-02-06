@@ -10,16 +10,18 @@ from __future__ import annotations
 import logging
 from decimal import Decimal
 from typing import Any, Optional
-from uuid import UUID
 
 from fastapi import Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.models.people.perf import AppraisalStatus, KPIStatus
-from app.models.people.perf.appraisal_cycle import AppraisalCycleStatus
 from app.services.common import PaginationParams, coerce_uuid
-from app.services.people.hr import EmployeeFilters, OrganizationService, DepartmentFilters
+from app.services.people.hr import (
+    DepartmentFilters,
+    EmployeeFilters,
+    OrganizationService,
+)
 from app.services.people.perf import PerformanceService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
@@ -31,18 +33,18 @@ def _get_form_str(form: Any, key: str, default: str = "") -> str:
         return default
     return str(value).strip()
 
+
 from .base import (
-    logger,
-    parse_uuid,
-    parse_date,
-    parse_int,
-    parse_decimal,
-    parse_appraisal_status,
-    parse_kpi_status,
-    parse_cycle_status,
-    parse_bool,
     FEEDBACK_TYPES,
     KPI_MEASUREMENT_TYPES,
+    logger,
+    parse_appraisal_status,
+    parse_bool,
+    parse_date,
+    parse_decimal,
+    parse_int,
+    parse_kpi_status,
+    parse_uuid,
 )
 
 logger = logging.getLogger(__name__)
@@ -82,20 +84,24 @@ class PerfWebService:
 
         context = base_context(request, auth, "Appraisals", "perf", db=db)
         context["request"] = request
-        context.update({
-            "appraisals": result.items,
-            "status": status,
-            "employee_id": employee_id,
-            "cycle_id": cycle_id,
-            "manager_id": manager_id,
-            "statuses": [s.value for s in AppraisalStatus],
-            "page": result.page,
-            "total_pages": result.total_pages,
-            "total": result.total,
-            "has_prev": result.has_prev,
-            "has_next": result.has_next,
-        })
-        return templates.TemplateResponse(request, "people/perf/appraisals.html", context)
+        context.update(
+            {
+                "appraisals": result.items,
+                "status": status,
+                "employee_id": employee_id,
+                "cycle_id": cycle_id,
+                "manager_id": manager_id,
+                "statuses": [s.value for s in AppraisalStatus],
+                "page": result.page,
+                "total_pages": result.total_pages,
+                "total": result.total,
+                "has_prev": result.has_prev,
+                "has_next": result.has_next,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/appraisals.html", context
+        )
 
     def appraisal_new_form_response(
         self,
@@ -116,14 +122,18 @@ class PerfWebService:
 
         context = base_context(request, auth, "New Appraisal", "perf", db=db)
         context["request"] = request
-        context.update({
-            "appraisal": None,
-            "cycles": cycles,
-            "employees": employees,
-            "form_data": {},
-            "error": None,
-        })
-        return templates.TemplateResponse(request, "people/perf/appraisal_form.html", context)
+        context.update(
+            {
+                "appraisal": None,
+                "cycles": cycles,
+                "employees": employees,
+                "form_data": {},
+                "error": None,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/appraisal_form.html", context
+        )
 
     async def create_appraisal_response(
         self,
@@ -166,14 +176,22 @@ class PerfWebService:
             org_svc = OrganizationService(db, org_id)
             context = base_context(request, auth, "New Appraisal", "perf", db=db)
             context["request"] = request
-            context.update({
-                "appraisal": None,
-                "cycles": svc.list_cycles(org_id, pagination=PaginationParams(limit=100)).items,
-                "employees": org_svc.list_employees(EmployeeFilters(is_active=True), PaginationParams(limit=500)).items,
-                "form_data": dict(form_data),
-                "error": str(e),
-            })
-            return templates.TemplateResponse(request, "people/perf/appraisal_form.html", context)
+            context.update(
+                {
+                    "appraisal": None,
+                    "cycles": svc.list_cycles(
+                        org_id, pagination=PaginationParams(limit=100)
+                    ).items,
+                    "employees": org_svc.list_employees(
+                        EmployeeFilters(is_active=True), PaginationParams(limit=500)
+                    ).items,
+                    "form_data": dict(form_data),
+                    "error": str(e),
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/perf/appraisal_form.html", context
+            )
 
     def appraisal_detail_response(
         self,
@@ -192,14 +210,24 @@ class PerfWebService:
         except Exception:
             return RedirectResponse(url="/people/perf/appraisals", status_code=303)
 
-        context = base_context(request, auth, f"Appraisal - {appraisal.employee.full_name if appraisal.employee else 'Unknown'}", "perf", db=db)
+        context = base_context(
+            request,
+            auth,
+            f"Appraisal - {appraisal.employee.full_name if appraisal.employee else 'Unknown'}",
+            "perf",
+            db=db,
+        )
         context["request"] = request
-        context.update({
-            "appraisal": appraisal,
-            "success": success,
-            "error": None,
-        })
-        return templates.TemplateResponse(request, "people/perf/appraisal_detail.html", context)
+        context.update(
+            {
+                "appraisal": appraisal,
+                "success": success,
+                "error": None,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/appraisal_detail.html", context
+        )
 
     def appraisal_edit_form_response(
         self,
@@ -220,14 +248,22 @@ class PerfWebService:
 
         context = base_context(request, auth, "Edit Appraisal", "perf", db=db)
         context["request"] = request
-        context.update({
-            "appraisal": appraisal,
-            "cycles": svc.list_cycles(org_id, pagination=PaginationParams(limit=100)).items,
-            "employees": org_svc.list_employees(EmployeeFilters(is_active=True), PaginationParams(limit=500)).items,
-            "form_data": {},
-            "error": None,
-        })
-        return templates.TemplateResponse(request, "people/perf/appraisal_form.html", context)
+        context.update(
+            {
+                "appraisal": appraisal,
+                "cycles": svc.list_cycles(
+                    org_id, pagination=PaginationParams(limit=100)
+                ).items,
+                "employees": org_svc.list_employees(
+                    EmployeeFilters(is_active=True), PaginationParams(limit=500)
+                ).items,
+                "form_data": {},
+                "error": None,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/appraisal_form.html", context
+        )
 
     async def update_appraisal_response(
         self,
@@ -259,14 +295,22 @@ class PerfWebService:
             appraisal = svc.get_appraisal(org_id, coerce_uuid(appraisal_id))
             context = base_context(request, auth, "Edit Appraisal", "perf", db=db)
             context["request"] = request
-            context.update({
-                "appraisal": appraisal,
-                "cycles": svc.list_cycles(org_id, pagination=PaginationParams(limit=100)).items,
-                "employees": org_svc.list_employees(EmployeeFilters(is_active=True), PaginationParams(limit=500)).items,
-                "form_data": {},
-                "error": str(e),
-            })
-            return templates.TemplateResponse(request, "people/perf/appraisal_form.html", context)
+            context.update(
+                {
+                    "appraisal": appraisal,
+                    "cycles": svc.list_cycles(
+                        org_id, pagination=PaginationParams(limit=100)
+                    ).items,
+                    "employees": org_svc.list_employees(
+                        EmployeeFilters(is_active=True), PaginationParams(limit=500)
+                    ).items,
+                    "form_data": {},
+                    "error": str(e),
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/perf/appraisal_form.html", context
+            )
 
     def cancel_appraisal_response(
         self,
@@ -288,7 +332,9 @@ class PerfWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url=f"/people/perf/appraisals/{appraisal_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/perf/appraisals/{appraisal_id}", status_code=303
+        )
 
     def start_self_assessment_response(
         self,
@@ -310,7 +356,9 @@ class PerfWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url=f"/people/perf/appraisals/{appraisal_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/perf/appraisals/{appraisal_id}", status_code=303
+        )
 
     def self_assessment_form_response(
         self,
@@ -330,12 +378,16 @@ class PerfWebService:
 
         context = base_context(request, auth, "Self Assessment", "perf", db=db)
         context["request"] = request
-        context.update({
-            "appraisal": appraisal,
-            "form_data": {},
-            "error": None,
-        })
-        return templates.TemplateResponse(request, "people/perf/self_assessment_form.html", context)
+        context.update(
+            {
+                "appraisal": appraisal,
+                "form_data": {},
+                "error": None,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/self_assessment_form.html", context
+        )
 
     async def submit_self_assessment_response(
         self,
@@ -372,12 +424,16 @@ class PerfWebService:
             appraisal = svc.get_appraisal(org_id, coerce_uuid(appraisal_id))
             context = base_context(request, auth, "Self Assessment", "perf", db=db)
             context["request"] = request
-            context.update({
-                "appraisal": appraisal,
-                "form_data": dict(form_data),
-                "error": str(e),
-            })
-            return templates.TemplateResponse(request, "people/perf/self_assessment_form.html", context)
+            context.update(
+                {
+                    "appraisal": appraisal,
+                    "form_data": dict(form_data),
+                    "error": str(e),
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/perf/self_assessment_form.html", context
+            )
 
     def manager_review_form_response(
         self,
@@ -397,12 +453,16 @@ class PerfWebService:
 
         context = base_context(request, auth, "Manager Review", "perf", db=db)
         context["request"] = request
-        context.update({
-            "appraisal": appraisal,
-            "form_data": {},
-            "error": None,
-        })
-        return templates.TemplateResponse(request, "people/perf/manager_review_form.html", context)
+        context.update(
+            {
+                "appraisal": appraisal,
+                "form_data": {},
+                "error": None,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/manager_review_form.html", context
+        )
 
     async def submit_manager_review_response(
         self,
@@ -417,29 +477,40 @@ class PerfWebService:
         svc = PerformanceService(db)
 
         try:
-            manager_rating = parse_int(_get_form_str(form_data, "manager_rating") or None)
+            manager_rating = parse_int(
+                _get_form_str(form_data, "manager_rating") or None
+            )
             if manager_rating is None:
                 raise ValueError("Manager rating is required")
 
             manager_summary = _get_form_str(form_data, "manager_comments") or None
             strengths = _get_form_str(form_data, "strengths") or None
-            areas_for_improvement = _get_form_str(form_data, "areas_for_improvement") or None
+            areas_for_improvement = (
+                _get_form_str(form_data, "areas_for_improvement") or None
+            )
 
             if strengths or areas_for_improvement:
                 extra_parts = []
                 if strengths:
                     extra_parts.append(f"Strengths: {strengths}")
                 if areas_for_improvement:
-                    extra_parts.append(f"Areas for improvement: {areas_for_improvement}")
+                    extra_parts.append(
+                        f"Areas for improvement: {areas_for_improvement}"
+                    )
                 extra_text = "\n".join(extra_parts)
-                manager_summary = f"{manager_summary}\n\n{extra_text}" if manager_summary else extra_text
+                manager_summary = (
+                    f"{manager_summary}\n\n{extra_text}"
+                    if manager_summary
+                    else extra_text
+                )
 
             svc.submit_manager_review(
                 org_id,
                 coerce_uuid(appraisal_id),
                 manager_overall_rating=manager_rating,
                 manager_summary=manager_summary,
-                manager_recommendations=_get_form_str(form_data, "recommendations") or None,
+                manager_recommendations=_get_form_str(form_data, "recommendations")
+                or None,
             )
             db.commit()
             return RedirectResponse(
@@ -451,12 +522,16 @@ class PerfWebService:
             appraisal = svc.get_appraisal(org_id, coerce_uuid(appraisal_id))
             context = base_context(request, auth, "Manager Review", "perf", db=db)
             context["request"] = request
-            context.update({
-                "appraisal": appraisal,
-                "form_data": dict(form_data),
-                "error": str(e),
-            })
-            return templates.TemplateResponse(request, "people/perf/manager_review_form.html", context)
+            context.update(
+                {
+                    "appraisal": appraisal,
+                    "form_data": dict(form_data),
+                    "error": str(e),
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/perf/manager_review_form.html", context
+            )
 
     def calibration_form_response(
         self,
@@ -476,12 +551,16 @@ class PerfWebService:
 
         context = base_context(request, auth, "Calibration", "perf", db=db)
         context["request"] = request
-        context.update({
-            "appraisal": appraisal,
-            "form_data": {},
-            "error": None,
-        })
-        return templates.TemplateResponse(request, "people/perf/calibration_form.html", context)
+        context.update(
+            {
+                "appraisal": appraisal,
+                "form_data": {},
+                "error": None,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/calibration_form.html", context
+        )
 
     async def submit_calibration_response(
         self,
@@ -516,12 +595,16 @@ class PerfWebService:
             appraisal = svc.get_appraisal(org_id, coerce_uuid(appraisal_id))
             context = base_context(request, auth, "Calibration", "perf", db=db)
             context["request"] = request
-            context.update({
-                "appraisal": appraisal,
-                "form_data": dict(form_data),
-                "error": str(e),
-            })
-            return templates.TemplateResponse(request, "people/perf/calibration_form.html", context)
+            context.update(
+                {
+                    "appraisal": appraisal,
+                    "form_data": dict(form_data),
+                    "error": str(e),
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/perf/calibration_form.html", context
+            )
 
     # ─────────────────────────────────────────────────────────────────────────
     # Feedback
@@ -553,19 +636,21 @@ class PerfWebService:
         context = base_context(request, auth, "360° Feedback", "perf", db=db)
         context["request"] = request
         success = request.query_params.get("success")
-        context.update({
-            "feedback_list": result.items,
-            "appraisal_id": appraisal_id,
-            "feedback_type": feedback_type,
-            "submitted": submitted,
-            "feedback_types": FEEDBACK_TYPES,
-            "success": success,
-            "page": result.page,
-            "total_pages": result.total_pages,
-            "total": result.total,
-            "has_prev": result.has_prev,
-            "has_next": result.has_next,
-        })
+        context.update(
+            {
+                "feedback_list": result.items,
+                "appraisal_id": appraisal_id,
+                "feedback_type": feedback_type,
+                "submitted": submitted,
+                "feedback_types": FEEDBACK_TYPES,
+                "success": success,
+                "page": result.page,
+                "total_pages": result.total_pages,
+                "total": result.total,
+                "has_prev": result.has_prev,
+                "has_next": result.has_next,
+            }
+        )
         return templates.TemplateResponse(request, "people/perf/feedback.html", context)
 
     def request_feedback_form_response(
@@ -592,14 +677,18 @@ class PerfWebService:
 
         context = base_context(request, auth, "Request Feedback", "perf", db=db)
         context["request"] = request
-        context.update({
-            "appraisal": appraisal,
-            "employees": employees,
-            "feedback_types": FEEDBACK_TYPES,
-            "form_data": {},
-            "errors": {},
-        })
-        return templates.TemplateResponse(request, "people/perf/feedback_request_form.html", context)
+        context.update(
+            {
+                "appraisal": appraisal,
+                "employees": employees,
+                "feedback_types": FEEDBACK_TYPES,
+                "form_data": {},
+                "errors": {},
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/feedback_request_form.html", context
+        )
 
     async def create_feedback_request_response(
         self,
@@ -640,15 +729,21 @@ class PerfWebService:
             appraisal = svc.get_appraisal(org_id, coerce_uuid(appraisal_id))
             context = base_context(request, auth, "Request Feedback", "perf", db=db)
             context["request"] = request
-            context.update({
-                "appraisal": appraisal,
-                "employees": org_svc.list_employees(EmployeeFilters(is_active=True), PaginationParams(limit=500)).items,
-                "feedback_types": FEEDBACK_TYPES,
-                "form_data": dict(form_data),
-                "error": str(e),
-                "errors": {},
-            })
-            return templates.TemplateResponse(request, "people/perf/feedback_request_form.html", context)
+            context.update(
+                {
+                    "appraisal": appraisal,
+                    "employees": org_svc.list_employees(
+                        EmployeeFilters(is_active=True), PaginationParams(limit=500)
+                    ).items,
+                    "feedback_types": FEEDBACK_TYPES,
+                    "form_data": dict(form_data),
+                    "error": str(e),
+                    "errors": {},
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/perf/feedback_request_form.html", context
+            )
 
     def feedback_detail_response(
         self,
@@ -670,12 +765,16 @@ class PerfWebService:
 
         context = base_context(request, auth, "Feedback Details", "perf", db=db)
         context["request"] = request
-        context.update({
-            "feedback": feedback,
-            "success": success,
-            "error": error,
-        })
-        return templates.TemplateResponse(request, "people/perf/feedback_detail.html", context)
+        context.update(
+            {
+                "feedback": feedback,
+                "success": success,
+                "error": error,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/feedback_detail.html", context
+        )
 
     def submit_feedback_form_response(
         self,
@@ -701,12 +800,16 @@ class PerfWebService:
 
         context = base_context(request, auth, "Submit Feedback", "perf", db=db)
         context["request"] = request
-        context.update({
-            "feedback": feedback,
-            "form_data": {},
-            "errors": {},
-        })
-        return templates.TemplateResponse(request, "people/perf/feedback_submit_form.html", context)
+        context.update(
+            {
+                "feedback": feedback,
+                "form_data": {},
+                "errors": {},
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/feedback_submit_form.html", context
+        )
 
     async def submit_feedback_response(
         self,
@@ -724,9 +827,12 @@ class PerfWebService:
             svc.submit_feedback(
                 org_id,
                 coerce_uuid(feedback_id),
-                overall_rating=parse_int(_get_form_str(form_data, "overall_rating") or None),
+                overall_rating=parse_int(
+                    _get_form_str(form_data, "overall_rating") or None
+                ),
                 strengths=_get_form_str(form_data, "strengths") or None,
-                areas_for_improvement=_get_form_str(form_data, "areas_for_improvement") or None,
+                areas_for_improvement=_get_form_str(form_data, "areas_for_improvement")
+                or None,
                 general_comments=_get_form_str(form_data, "general_comments") or None,
             )
             db.commit()
@@ -739,13 +845,17 @@ class PerfWebService:
             feedback = svc.get_feedback(org_id, coerce_uuid(feedback_id))
             context = base_context(request, auth, "Submit Feedback", "perf", db=db)
             context["request"] = request
-            context.update({
-                "feedback": feedback,
-                "form_data": dict(form_data),
-                "error": str(e),
-                "errors": {},
-            })
-            return templates.TemplateResponse(request, "people/perf/feedback_submit_form.html", context)
+            context.update(
+                {
+                    "feedback": feedback,
+                    "form_data": dict(form_data),
+                    "error": str(e),
+                    "errors": {},
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/perf/feedback_submit_form.html", context
+            )
 
     def delete_feedback_response(
         self,
@@ -763,7 +873,9 @@ class PerfWebService:
             return RedirectResponse(url="/people/perf/feedback", status_code=303)
         except Exception:
             db.rollback()
-            return RedirectResponse(url=f"/people/perf/feedback/{feedback_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/perf/feedback/{feedback_id}", status_code=303
+            )
 
     # ─────────────────────────────────────────────────────────────────────────
     # Goals/KPIs
@@ -798,20 +910,22 @@ class PerfWebService:
 
         context = base_context(request, auth, "Goals & KPIs", "perf", db=db)
         context["request"] = request
-        context.update({
-            "kpis": result.items,
-            "status": status,
-            "search": search,
-            "employee_id": employee_id,
-            "start_date": start_date,
-            "end_date": end_date,
-            "statuses": [s.value for s in KPIStatus],
-            "page": result.page,
-            "total_pages": result.total_pages,
-            "total": result.total,
-            "has_prev": result.has_prev,
-            "has_next": result.has_next,
-        })
+        context.update(
+            {
+                "kpis": result.items,
+                "status": status,
+                "search": search,
+                "employee_id": employee_id,
+                "start_date": start_date,
+                "end_date": end_date,
+                "statuses": [s.value for s in KPIStatus],
+                "page": result.page,
+                "total_pages": result.total_pages,
+                "total": result.total,
+                "has_prev": result.has_prev,
+                "has_next": result.has_next,
+            }
+        )
         return templates.TemplateResponse(request, "people/perf/kpis.html", context)
 
     def goal_new_form_response(
@@ -835,14 +949,16 @@ class PerfWebService:
 
         context = base_context(request, auth, "New KPI", "perf", db=db)
         context["request"] = request
-        context.update({
-            "kpi": None,
-            "employees": employees,
-            "kras": kras,
-            "measurement_types": KPI_MEASUREMENT_TYPES,
-            "form_data": {"employee_id": employee_id} if employee_id else {},
-            "error": None,
-        })
+        context.update(
+            {
+                "kpi": None,
+                "employees": employees,
+                "kras": kras,
+                "measurement_types": KPI_MEASUREMENT_TYPES,
+                "form_data": {"employee_id": employee_id} if employee_id else {},
+                "error": None,
+            }
+        )
         return templates.TemplateResponse(request, "people/perf/kpi_form.html", context)
 
     async def create_goal_response(
@@ -869,10 +985,14 @@ class PerfWebService:
                 raise ValueError("Period start is required")
             if period_end is None:
                 raise ValueError("Period end is required")
-            target_value = parse_decimal(_get_form_str(form_data, "target_value") or None)
+            target_value = parse_decimal(
+                _get_form_str(form_data, "target_value") or None
+            )
             if target_value is None:
                 raise ValueError("Target value is required")
-            weightage = parse_decimal(_get_form_str(form_data, "weightage") or None) or Decimal("0")
+            weightage = parse_decimal(
+                _get_form_str(form_data, "weightage") or None
+            ) or Decimal("0")
             kpi = svc.create_kpi(
                 org_id,
                 employee_id=coerce_uuid(employee_id),
@@ -885,8 +1005,12 @@ class PerfWebService:
                 period_end=period_end,
                 target_value=target_value,
                 unit_of_measure=_get_form_str(form_data, "unit_of_measure") or None,
-                threshold_value=parse_decimal(_get_form_str(form_data, "threshold_value") or None),
-                stretch_value=parse_decimal(_get_form_str(form_data, "stretch_value") or None),
+                threshold_value=parse_decimal(
+                    _get_form_str(form_data, "threshold_value") or None
+                ),
+                stretch_value=parse_decimal(
+                    _get_form_str(form_data, "stretch_value") or None
+                ),
                 weightage=weightage,
                 notes=_get_form_str(form_data, "notes") or None,
             )
@@ -900,15 +1024,23 @@ class PerfWebService:
             org_svc = OrganizationService(db, org_id)
             context = base_context(request, auth, "New KPI", "perf", db=db)
             context["request"] = request
-            context.update({
-                "kpi": None,
-                "employees": org_svc.list_employees(EmployeeFilters(is_active=True), PaginationParams(limit=500)).items,
-                "kras": svc.list_kras(org_id, pagination=PaginationParams(limit=100)).items,
-                "measurement_types": KPI_MEASUREMENT_TYPES,
-                "form_data": dict(form_data),
-                "error": str(e),
-            })
-            return templates.TemplateResponse(request, "people/perf/kpi_form.html", context)
+            context.update(
+                {
+                    "kpi": None,
+                    "employees": org_svc.list_employees(
+                        EmployeeFilters(is_active=True), PaginationParams(limit=500)
+                    ).items,
+                    "kras": svc.list_kras(
+                        org_id, pagination=PaginationParams(limit=100)
+                    ).items,
+                    "measurement_types": KPI_MEASUREMENT_TYPES,
+                    "form_data": dict(form_data),
+                    "error": str(e),
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/perf/kpi_form.html", context
+            )
 
     def goal_detail_response(
         self,
@@ -929,12 +1061,16 @@ class PerfWebService:
 
         context = base_context(request, auth, kpi.kpi_name, "perf", db=db)
         context["request"] = request
-        context.update({
-            "kpi": kpi,
-            "success": success,
-            "error": None,
-        })
-        return templates.TemplateResponse(request, "people/perf/kpi_detail.html", context)
+        context.update(
+            {
+                "kpi": kpi,
+                "success": success,
+                "error": None,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/kpi_detail.html", context
+        )
 
     def goal_edit_form_response(
         self,
@@ -955,14 +1091,20 @@ class PerfWebService:
 
         context = base_context(request, auth, f"Edit {kpi.kpi_name}", "perf", db=db)
         context["request"] = request
-        context.update({
-            "kpi": kpi,
-            "employees": org_svc.list_employees(EmployeeFilters(is_active=True), PaginationParams(limit=500)).items,
-            "kras": svc.list_kras(org_id, pagination=PaginationParams(limit=100)).items,
-            "measurement_types": KPI_MEASUREMENT_TYPES,
-            "form_data": {},
-            "error": None,
-        })
+        context.update(
+            {
+                "kpi": kpi,
+                "employees": org_svc.list_employees(
+                    EmployeeFilters(is_active=True), PaginationParams(limit=500)
+                ).items,
+                "kras": svc.list_kras(
+                    org_id, pagination=PaginationParams(limit=100)
+                ).items,
+                "measurement_types": KPI_MEASUREMENT_TYPES,
+                "form_data": {},
+                "error": None,
+            }
+        )
         return templates.TemplateResponse(request, "people/perf/kpi_form.html", context)
 
     async def update_goal_response(
@@ -991,10 +1133,16 @@ class PerfWebService:
                 description=_get_form_str(form_data, "description") or None,
                 period_start=period_start,
                 period_end=period_end,
-                target_value=parse_decimal(_get_form_str(form_data, "target_value") or None),
+                target_value=parse_decimal(
+                    _get_form_str(form_data, "target_value") or None
+                ),
                 unit_of_measure=_get_form_str(form_data, "unit_of_measure") or None,
-                threshold_value=parse_decimal(_get_form_str(form_data, "threshold_value") or None),
-                stretch_value=parse_decimal(_get_form_str(form_data, "stretch_value") or None),
+                threshold_value=parse_decimal(
+                    _get_form_str(form_data, "threshold_value") or None
+                ),
+                stretch_value=parse_decimal(
+                    _get_form_str(form_data, "stretch_value") or None
+                ),
                 weightage=parse_decimal(_get_form_str(form_data, "weightage") or None),
                 notes=_get_form_str(form_data, "notes") or None,
             )
@@ -1009,15 +1157,23 @@ class PerfWebService:
             kpi = svc.get_kpi(org_id, coerce_uuid(kpi_id))
             context = base_context(request, auth, f"Edit {kpi.kpi_name}", "perf", db=db)
             context["request"] = request
-            context.update({
-                "kpi": kpi,
-                "employees": org_svc.list_employees(EmployeeFilters(is_active=True), PaginationParams(limit=500)).items,
-                "kras": svc.list_kras(org_id, pagination=PaginationParams(limit=100)).items,
-                "measurement_types": KPI_MEASUREMENT_TYPES,
-                "form_data": {},
-                "error": str(e),
-            })
-            return templates.TemplateResponse(request, "people/perf/kpi_form.html", context)
+            context.update(
+                {
+                    "kpi": kpi,
+                    "employees": org_svc.list_employees(
+                        EmployeeFilters(is_active=True), PaginationParams(limit=500)
+                    ).items,
+                    "kras": svc.list_kras(
+                        org_id, pagination=PaginationParams(limit=100)
+                    ).items,
+                    "measurement_types": KPI_MEASUREMENT_TYPES,
+                    "form_data": {},
+                    "error": str(e),
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/perf/kpi_form.html", context
+            )
 
     async def update_goal_progress_response(
         self,
@@ -1032,7 +1188,9 @@ class PerfWebService:
         svc = PerformanceService(db)
 
         try:
-            actual_value = parse_decimal(_get_form_str(form_data, "actual_value") or None)
+            actual_value = parse_decimal(
+                _get_form_str(form_data, "actual_value") or None
+            )
             if actual_value is None:
                 raise ValueError("Actual value is required")
             svc.update_kpi_progress(
@@ -1088,12 +1246,16 @@ class PerfWebService:
         cycles = svc.list_cycles(org_id, pagination=PaginationParams(limit=50)).items
 
         context = base_context(request, auth, "Ratings Distribution", "perf", db=db)
-        context.update({
-            "report": report,
-            "cycles": cycles,
-            "cycle_id": cycle_id,
-        })
-        return templates.TemplateResponse(request, "people/perf/reports/ratings.html", context)
+        context.update(
+            {
+                "report": report,
+                "cycles": cycles,
+                "cycle_id": cycle_id,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/reports/ratings.html", context
+        )
 
     def by_department_report_response(
         self,
@@ -1113,13 +1275,19 @@ class PerfWebService:
 
         cycles = svc.list_cycles(org_id, pagination=PaginationParams(limit=50)).items
 
-        context = base_context(request, auth, "Performance by Department", "perf", db=db)
-        context.update({
-            "report": report,
-            "cycles": cycles,
-            "cycle_id": cycle_id,
-        })
-        return templates.TemplateResponse(request, "people/perf/reports/by_department.html", context)
+        context = base_context(
+            request, auth, "Performance by Department", "perf", db=db
+        )
+        context.update(
+            {
+                "report": report,
+                "cycles": cycles,
+                "cycle_id": cycle_id,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/reports/by_department.html", context
+        )
 
     def kpi_achievement_report_response(
         self,
@@ -1148,14 +1316,18 @@ class PerfWebService:
         ).items
 
         context = base_context(request, auth, "KPI Achievement", "perf", db=db)
-        context.update({
-            "report": report,
-            "departments": departments,
-            "start_date": start_date or "",
-            "end_date": end_date or "",
-            "department_id": department_id,
-        })
-        return templates.TemplateResponse(request, "people/perf/reports/kpi_achievement.html", context)
+        context.update(
+            {
+                "report": report,
+                "departments": departments,
+                "start_date": start_date or "",
+                "end_date": end_date or "",
+                "department_id": department_id,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/reports/kpi_achievement.html", context
+        )
 
     def trends_report_response(
         self,
@@ -1180,9 +1352,13 @@ class PerfWebService:
         ).items
 
         context = base_context(request, auth, "Performance Trends", "perf", db=db)
-        context.update({
-            "report": report,
-            "departments": departments,
-            "department_id": department_id,
-        })
-        return templates.TemplateResponse(request, "people/perf/reports/trends.html", context)
+        context.update(
+            {
+                "report": report,
+                "departments": departments,
+                "department_id": department_id,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/reports/trends.html", context
+        )

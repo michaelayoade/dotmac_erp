@@ -14,8 +14,8 @@ from typing import BinaryIO, Optional
 
 from sqlalchemy.orm import Session
 
-from app.models.people.discipline import CaseDocument, DocumentType, DisciplinaryCase
 from app.errors import NotFoundError, ValidationError
+from app.models.people.discipline import CaseDocument, DisciplinaryCase, DocumentType
 
 logger = logging.getLogger(__name__)
 

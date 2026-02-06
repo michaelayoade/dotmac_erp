@@ -8,6 +8,7 @@ Sync services for HR entities:
 - Employee Grade
 - Employee
 """
+
 import logging
 import uuid
 from datetime import datetime
@@ -18,8 +19,6 @@ from sqlalchemy.orm import Session
 
 from app.models.people.hr.department import Department
 from app.models.people.hr.designation import Designation
-from app.models.people.hr.employment_type import EmploymentType
-from app.models.people.hr.employee_grade import EmployeeGrade
 from app.models.people.hr.employee import (
     AccommodationType,
     BloodGroup,
@@ -29,13 +28,15 @@ from app.models.people.hr.employee import (
     MaritalStatus,
     SalaryMode,
 )
+from app.models.people.hr.employee_grade import EmployeeGrade
+from app.models.people.hr.employment_type import EmploymentType
 from app.models.person import Person
 from app.services.erpnext.mappings.hr import (
     DepartmentMapping,
     DesignationMapping,
-    EmploymentTypeMapping,
     EmployeeGradeMapping,
     EmployeeMapping,
+    EmploymentTypeMapping,
 )
 
 from .base import BaseSyncService
@@ -246,7 +247,9 @@ class EmploymentTypeSyncService(BaseSyncService[EmploymentType]):
         )
         return emp_type
 
-    def update_entity(self, entity: EmploymentType, data: dict[str, Any]) -> EmploymentType:
+    def update_entity(
+        self, entity: EmploymentType, data: dict[str, Any]
+    ) -> EmploymentType:
         data.pop("_source_modified", None)
         data.pop("_source_name", None)
 
@@ -316,7 +319,9 @@ class EmployeeGradeSyncService(BaseSyncService[EmployeeGrade]):
         )
         return grade
 
-    def update_entity(self, entity: EmployeeGrade, data: dict[str, Any]) -> EmployeeGrade:
+    def update_entity(
+        self, entity: EmployeeGrade, data: dict[str, Any]
+    ) -> EmployeeGrade:
         data.pop("_source_modified", None)
         data.pop("_source_name", None)
 
@@ -422,7 +427,11 @@ class EmployeeSyncService(BaseSyncService[Employee]):
         the same email, we create distinct Person records.
         """
         employee_code = data.get("employee_code", "")
-        original_email = data.get("work_email") or data.get("personal_email") or data.get("_preferred_email")
+        original_email = (
+            data.get("work_email")
+            or data.get("personal_email")
+            or data.get("_preferred_email")
+        )
 
         # Try to find existing Person that's not already linked to an Employee
         if original_email:
@@ -473,7 +482,11 @@ class EmployeeSyncService(BaseSyncService[Employee]):
 
             if existing:
                 # Email already used by another employee, create unique version
-                email = f"{employee_code.lower()}+{original_email}" if employee_code else original_email
+                email = (
+                    f"{employee_code.lower()}+{original_email}"
+                    if employee_code
+                    else original_email
+                )
                 logger.debug(f"Email {original_email} already in use, using {email}")
             else:
                 email = original_email
@@ -528,7 +541,9 @@ class EmployeeSyncService(BaseSyncService[Employee]):
             grade_source, "Employee Grade", self._grade_sync_cache
         )
         reports_to_id = self._resolve_entity_id(
-            reports_source, "Employee", {}  # Don't cache manager lookups
+            reports_source,
+            "Employee",
+            {},  # Don't cache manager lookups
         )
 
         # Find or create person

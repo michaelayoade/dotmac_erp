@@ -16,32 +16,31 @@ Usage:
     from app.services.people.recruit.web import RecruitWebService
 """
 
+from .applicant_web import ApplicantWebService
 from .base import (
-    # Parsing utilities
-    parse_uuid,
-    parse_date,
-    parse_date_only,
-    parse_int,
-    parse_decimal,
-    parse_status,
+    # Constants
+    EMPLOYMENT_TYPES,
+    INTERVIEW_TYPES,
+    PAY_FREQUENCIES,
+    applicant_status_label,
+    format_currency,
     # Formatting utilities
     format_date,
     format_datetime,
-    format_currency,
+    interview_status_label,
     # Status labels
     job_opening_status_label,
-    applicant_status_label,
-    interview_status_label,
     offer_status_label,
-    # Constants
-    EMPLOYMENT_TYPES,
-    PAY_FREQUENCIES,
-    INTERVIEW_TYPES,
+    parse_date,
+    parse_date_only,
+    parse_decimal,
+    parse_int,
+    parse_status,
+    # Parsing utilities
+    parse_uuid,
 )
-
-from .job_opening_web import JobOpeningWebService
-from .applicant_web import ApplicantWebService
 from .interview_web import InterviewWebService
+from .job_opening_web import JobOpeningWebService
 from .offer_web import OfferWebService
 from .report_web import ReportWebService
 

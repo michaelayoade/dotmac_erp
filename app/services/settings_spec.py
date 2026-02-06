@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from typing import cast
 
@@ -6,6 +7,8 @@ from fastapi import HTTPException
 from app.models.domain_settings import SettingDomain, SettingValueType
 from app.services import domain_settings as settings_service
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -868,9 +871,11 @@ def resolve_value(
             )
         # In non-strict mode, log a warning but continue
         import logging
+
         logging.getLogger(__name__).warning(
             "Required setting %s/%s is missing (no DB value, no default)",
-            domain.value, key
+            domain.value,
+            key,
         )
 
     if raw is None:
@@ -901,13 +906,21 @@ def resolve_value(
                     f"Setting {domain.value}/{key} must be an integer, got: {value}"
                 )
             parsed = spec.default if isinstance(spec.default, int) else None
-        if spec.min_value is not None and parsed is not None and parsed < spec.min_value:
+        if (
+            spec.min_value is not None
+            and parsed is not None
+            and parsed < spec.min_value
+        ):
             if strict:
                 raise ValueError(
                     f"Setting {domain.value}/{key} must be >= {spec.min_value}, got: {parsed}"
                 )
             parsed = spec.default if isinstance(spec.default, int) else None
-        if spec.max_value is not None and parsed is not None and parsed > spec.max_value:
+        if (
+            spec.max_value is not None
+            and parsed is not None
+            and parsed > spec.max_value
+        ):
             if strict:
                 raise ValueError(
                     f"Setting {domain.value}/{key} must be <= {spec.max_value}, got: {parsed}"
@@ -957,7 +970,9 @@ def coerce_value(spec: SettingSpec, raw: object) -> tuple[object | None, str | N
     return raw, None
 
 
-def normalize_for_db(spec: SettingSpec, value: object) -> tuple[str | None, object | None]:
+def normalize_for_db(
+    spec: SettingSpec, value: object
+) -> tuple[str | None, object | None]:
     if spec.value_type == SettingValueType.boolean:
         bool_value = bool(value)
         return ("true" if bool_value else "false"), bool_value

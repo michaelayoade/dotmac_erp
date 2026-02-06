@@ -4,7 +4,8 @@ Tax seed helpers for country-specific defaults.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import logging
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from typing import Optional
@@ -12,7 +13,6 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.models.finance.core_fx.currency import Currency
 from app.models.finance.core_org.organization import Organization
 from app.models.finance.gl.account import Account, AccountType, NormalBalance
@@ -21,6 +21,7 @@ from app.models.finance.tax.tax_code import TaxCode, TaxType
 from app.models.finance.tax.tax_jurisdiction import TaxJurisdiction
 from app.services.common import coerce_uuid
 
+logger = logging.getLogger(__name__)
 
 NIGERIA_COUNTRY_CODE = "NGA"
 NIGERIA_JURISDICTION_CODE = "NG-FED"
@@ -448,7 +449,9 @@ def seed_default_tax_data(
     # Use organization's currency or country default
     currency_code = org.functional_currency_code or config.currency_code
     _ensure_currency(
-        db, currency_code, summary,
+        db,
+        currency_code,
+        summary,
         currency_name=config.currency_name,
         currency_symbol=config.currency_symbol,
     )
@@ -589,7 +592,11 @@ def seed_default_tax_data(
             )
 
         # Withholding tax code
-        if config.withholding_rate and config.withholding_code and config.withholding_name:
+        if (
+            config.withholding_rate
+            and config.withholding_code
+            and config.withholding_name
+        ):
             _ensure_tax_code(
                 db,
                 org_id,

@@ -6,15 +6,16 @@ Provides dashboard data and chart computations for the People module.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from datetime import date, timedelta
+from typing import TYPE_CHECKING, Any, Dict, List
 from uuid import UUID
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy import and_, extract, func, select, or_
+from sqlalchemy import and_, extract, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.models.people.attendance import Attendance
 from app.models.people.hr import (
     Department,
     Employee,
@@ -22,9 +23,8 @@ from app.models.people.hr import (
     EmploymentType,
 )
 from app.models.people.leave import LeaveApplication
-from app.models.people.attendance import Attendance
-from app.models.people.recruit import JobApplicant, JobOpening, Interview, JobOffer
 from app.models.people.payroll import SalarySlip
+from app.models.people.recruit import Interview, JobApplicant, JobOffer, JobOpening
 from app.models.person import Person
 from app.services.common import coerce_uuid
 from app.templates import templates
@@ -69,9 +69,7 @@ class PeopleDashboardService:
             "alerts": alerts,
         }
 
-        return templates.TemplateResponse(
-            request, "people/dashboard.html", context
-        )
+        return templates.TemplateResponse(request, "people/dashboard.html", context)
 
     def _get_dashboard_stats(self, db: Session, org_id: UUID) -> Dict[str, Any]:
         """Get aggregate statistics for the dashboard."""
@@ -79,138 +77,180 @@ class PeopleDashboardService:
         month_start = today.replace(day=1)
 
         # Employee counts
-        total_employees = db.scalar(
-            select(func.count(Employee.employee_id)).where(
-                and_(
-                    Employee.organization_id == org_id,
-                    Employee.is_deleted.is_(False),
+        total_employees = (
+            db.scalar(
+                select(func.count(Employee.employee_id)).where(
+                    and_(
+                        Employee.organization_id == org_id,
+                        Employee.is_deleted.is_(False),
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
-        active_employees = db.scalar(
-            select(func.count(Employee.employee_id)).where(
-                and_(
-                    Employee.organization_id == org_id,
-                    Employee.is_deleted.is_(False),
-                    Employee.status == EmployeeStatus.ACTIVE,
+        active_employees = (
+            db.scalar(
+                select(func.count(Employee.employee_id)).where(
+                    and_(
+                        Employee.organization_id == org_id,
+                        Employee.is_deleted.is_(False),
+                        Employee.status == EmployeeStatus.ACTIVE,
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         # New hires this month
-        new_hires_this_month = db.scalar(
-            select(func.count(Employee.employee_id)).where(
-                and_(
-                    Employee.organization_id == org_id,
-                    Employee.is_deleted.is_(False),
-                    Employee.date_of_joining >= month_start,
+        new_hires_this_month = (
+            db.scalar(
+                select(func.count(Employee.employee_id)).where(
+                    and_(
+                        Employee.organization_id == org_id,
+                        Employee.is_deleted.is_(False),
+                        Employee.date_of_joining >= month_start,
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         # Leave stats
-        on_leave_today = db.scalar(
-            select(func.count(LeaveApplication.application_id)).where(
-                and_(
-                    LeaveApplication.organization_id == org_id,
-                    LeaveApplication.status == "APPROVED",
-                    LeaveApplication.from_date <= today,
-                    LeaveApplication.to_date >= today,
+        on_leave_today = (
+            db.scalar(
+                select(func.count(LeaveApplication.application_id)).where(
+                    and_(
+                        LeaveApplication.organization_id == org_id,
+                        LeaveApplication.status == "APPROVED",
+                        LeaveApplication.from_date <= today,
+                        LeaveApplication.to_date >= today,
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
-        pending_leave_requests = db.scalar(
-            select(func.count(LeaveApplication.application_id)).where(
-                and_(
-                    LeaveApplication.organization_id == org_id,
-                    LeaveApplication.status == "SUBMITTED",
+        pending_leave_requests = (
+            db.scalar(
+                select(func.count(LeaveApplication.application_id)).where(
+                    and_(
+                        LeaveApplication.organization_id == org_id,
+                        LeaveApplication.status == "SUBMITTED",
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
-        approved_leave_this_month = db.scalar(
-            select(func.count(LeaveApplication.application_id)).where(
-                and_(
-                    LeaveApplication.organization_id == org_id,
-                    LeaveApplication.status == "APPROVED",
-                    LeaveApplication.from_date >= month_start,
+        approved_leave_this_month = (
+            db.scalar(
+                select(func.count(LeaveApplication.application_id)).where(
+                    and_(
+                        LeaveApplication.organization_id == org_id,
+                        LeaveApplication.status == "APPROVED",
+                        LeaveApplication.from_date >= month_start,
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         # Attendance stats for today
-        checked_in_today = db.scalar(
-            select(func.count(Attendance.attendance_id)).where(
-                and_(
-                    Attendance.organization_id == org_id,
-                    Attendance.attendance_date == today,
+        checked_in_today = (
+            db.scalar(
+                select(func.count(Attendance.attendance_id)).where(
+                    and_(
+                        Attendance.organization_id == org_id,
+                        Attendance.attendance_date == today,
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
-        late_today = db.scalar(
-            select(func.count(Attendance.attendance_id)).where(
-                and_(
-                    Attendance.organization_id == org_id,
-                    Attendance.attendance_date == today,
-                    Attendance.late_entry.is_(True),
+        late_today = (
+            db.scalar(
+                select(func.count(Attendance.attendance_id)).where(
+                    and_(
+                        Attendance.organization_id == org_id,
+                        Attendance.attendance_date == today,
+                        Attendance.late_entry.is_(True),
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         # Calculate attendance rate
         attendance_rate = 0
         late_rate = 0
         if active_employees > 0:
             attendance_rate = round((checked_in_today / active_employees) * 100)
-            late_rate = round((late_today / active_employees) * 100) if checked_in_today > 0 else 0
+            late_rate = (
+                round((late_today / active_employees) * 100)
+                if checked_in_today > 0
+                else 0
+            )
 
         absent_today = max(0, active_employees - checked_in_today - on_leave_today)
 
         # Recruitment stats
-        open_positions = db.scalar(
-            select(func.count(JobOpening.job_opening_id)).where(
-                and_(
-                    JobOpening.organization_id == org_id,
-                    JobOpening.status == "OPEN",
+        open_positions = (
+            db.scalar(
+                select(func.count(JobOpening.job_opening_id)).where(
+                    and_(
+                        JobOpening.organization_id == org_id,
+                        JobOpening.status == "OPEN",
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
-        active_applicants = db.scalar(
-            select(func.count(JobApplicant.applicant_id)).where(
-                and_(
-                    JobApplicant.organization_id == org_id,
-                    JobApplicant.status.in_(["NEW", "SCREENING", "SHORTLISTED"]),
+        active_applicants = (
+            db.scalar(
+                select(func.count(JobApplicant.applicant_id)).where(
+                    and_(
+                        JobApplicant.organization_id == org_id,
+                        JobApplicant.status.in_(["NEW", "SCREENING", "SHORTLISTED"]),
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
-        scheduled_interviews = db.scalar(
-            select(func.count(Interview.interview_id)).where(
-                and_(
-                    Interview.organization_id == org_id,
-                    Interview.status == "SCHEDULED",
-                    Interview.scheduled_to >= today,
+        scheduled_interviews = (
+            db.scalar(
+                select(func.count(Interview.interview_id)).where(
+                    and_(
+                        Interview.organization_id == org_id,
+                        Interview.status == "SCHEDULED",
+                        Interview.scheduled_to >= today,
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
-        pending_offers = db.scalar(
-            select(func.count(JobOffer.offer_id)).where(
-                and_(
-                    JobOffer.organization_id == org_id,
-                    JobOffer.status == "PENDING_APPROVAL",
+        pending_offers = (
+            db.scalar(
+                select(func.count(JobOffer.offer_id)).where(
+                    and_(
+                        JobOffer.organization_id == org_id,
+                        JobOffer.status == "PENDING_APPROVAL",
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         return {
             "total_employees": total_employees,
             "active_employees": active_employees,
-            "active_percentage": round((active_employees / total_employees) * 100) if total_employees > 0 else 0,
+            "active_percentage": round((active_employees / total_employees) * 100)
+            if total_employees > 0
+            else 0,
             "new_hires_this_month": new_hires_this_month,
             "on_leave_today": on_leave_today,
             "pending_leave_requests": pending_leave_requests,
@@ -234,7 +274,9 @@ class PeopleDashboardService:
         chart_data["headcount_trend"] = self._get_headcount_trend(db, org_id)
 
         # Department distribution
-        chart_data["department_distribution"] = self._get_department_distribution(db, org_id)
+        chart_data["department_distribution"] = self._get_department_distribution(
+            db, org_id
+        )
 
         # Status breakdown
         chart_data["status_breakdown"] = self._get_status_breakdown(db, org_id)
@@ -252,7 +294,9 @@ class PeopleDashboardService:
         chart_data["gender_distribution"] = self._get_gender_distribution(db, org_id)
 
         # Employment type distribution
-        chart_data["employment_type_distribution"] = self._get_employment_type_distribution(db, org_id)
+        chart_data["employment_type_distribution"] = (
+            self._get_employment_type_distribution(db, org_id)
+        )
 
         return chart_data
 
@@ -268,53 +312,70 @@ class PeopleDashboardService:
 
             # Count employees active at end of that month
             month_end = month_date.replace(day=28)  # Simplified
-            count = db.scalar(
-                select(func.count(Employee.employee_id)).where(
-                    and_(
-                        Employee.organization_id == org_id,
-                        Employee.is_deleted.is_(False),
-                        Employee.date_of_joining <= month_end,
-                        or_(
-                            Employee.date_of_leaving.is_(None),
-                            Employee.date_of_leaving > month_end,
-                        ),
+            count = (
+                db.scalar(
+                    select(func.count(Employee.employee_id)).where(
+                        and_(
+                            Employee.organization_id == org_id,
+                            Employee.is_deleted.is_(False),
+                            Employee.date_of_joining <= month_end,
+                            or_(
+                                Employee.date_of_leaving.is_(None),
+                                Employee.date_of_leaving > month_end,
+                            ),
+                        )
                     )
                 )
-            ) or 0
+                or 0
+            )
 
             # Count hires that month
-            hires = db.scalar(
-                select(func.count(Employee.employee_id)).where(
-                    and_(
-                        Employee.organization_id == org_id,
-                        extract("year", Employee.date_of_joining) == month_date.year,
-                        extract("month", Employee.date_of_joining) == month_date.month,
+            hires = (
+                db.scalar(
+                    select(func.count(Employee.employee_id)).where(
+                        and_(
+                            Employee.organization_id == org_id,
+                            extract("year", Employee.date_of_joining)
+                            == month_date.year,
+                            extract("month", Employee.date_of_joining)
+                            == month_date.month,
+                        )
                     )
                 )
-            ) or 0
+                or 0
+            )
 
             # Count exits that month
-            exits = db.scalar(
-                select(func.count(Employee.employee_id)).where(
-                    and_(
-                        Employee.organization_id == org_id,
-                        Employee.date_of_leaving.isnot(None),
-                        extract("year", Employee.date_of_leaving) == month_date.year,
-                        extract("month", Employee.date_of_leaving) == month_date.month,
+            exits = (
+                db.scalar(
+                    select(func.count(Employee.employee_id)).where(
+                        and_(
+                            Employee.organization_id == org_id,
+                            Employee.date_of_leaving.isnot(None),
+                            extract("year", Employee.date_of_leaving)
+                            == month_date.year,
+                            extract("month", Employee.date_of_leaving)
+                            == month_date.month,
+                        )
                     )
                 )
-            ) or 0
+                or 0
+            )
 
-            trend.append({
-                "month": month_name,
-                "count": count,
-                "hires": hires,
-                "exits": exits,
-            })
+            trend.append(
+                {
+                    "month": month_name,
+                    "count": count,
+                    "hires": hires,
+                    "exits": exits,
+                }
+            )
 
         return trend
 
-    def _get_department_distribution(self, db: Session, org_id: UUID) -> List[Dict[str, Any]]:
+    def _get_department_distribution(
+        self, db: Session, org_id: UUID
+    ) -> List[Dict[str, Any]]:
         """Get employee count by department."""
         results = db.execute(
             select(Department.department_name, func.count(Employee.employee_id))
@@ -357,11 +418,18 @@ class PeopleDashboardService:
         }
 
         return [
-            {"status": status_labels.get(status, str(status.value) if status else "Unknown"), "count": count}
+            {
+                "status": status_labels.get(
+                    status, str(status.value) if status else "Unknown"
+                ),
+                "count": count,
+            }
             for status, count in results
         ]
 
-    def _get_tenure_distribution(self, db: Session, org_id: UUID) -> List[Dict[str, Any]]:
+    def _get_tenure_distribution(
+        self, db: Session, org_id: UUID
+    ) -> List[Dict[str, Any]]:
         """Get employee count by tenure range."""
         today = date.today()
         ranges = [
@@ -377,17 +445,20 @@ class PeopleDashboardService:
             min_date = today - timedelta(days=max_years * 365)
             max_date = today - timedelta(days=min_years * 365)
 
-            count = db.scalar(
-                select(func.count(Employee.employee_id)).where(
-                    and_(
-                        Employee.organization_id == org_id,
-                        Employee.is_deleted.is_(False),
-                        Employee.status == EmployeeStatus.ACTIVE,
-                        Employee.date_of_joining > min_date,
-                        Employee.date_of_joining <= max_date,
+            count = (
+                db.scalar(
+                    select(func.count(Employee.employee_id)).where(
+                        and_(
+                            Employee.organization_id == org_id,
+                            Employee.is_deleted.is_(False),
+                            Employee.status == EmployeeStatus.ACTIVE,
+                            Employee.date_of_joining > min_date,
+                            Employee.date_of_joining <= max_date,
+                        )
                     )
                 )
-            ) or 0
+                or 0
+            )
 
             distribution.append({"range": label, "count": count})
 
@@ -409,20 +480,23 @@ class PeopleDashboardService:
             min_dob = today - timedelta(days=(max_age + 1) * 365)
             max_dob = today - timedelta(days=min_age * 365)
 
-            count = db.scalar(
-                select(func.count(Employee.employee_id))
-                .join(Person, Person.id == Employee.person_id)
-                .where(
-                    and_(
-                        Employee.organization_id == org_id,
-                        Employee.is_deleted.is_(False),
-                        Employee.status == EmployeeStatus.ACTIVE,
-                        Person.date_of_birth.isnot(None),
-                        Person.date_of_birth > min_dob,
-                        Person.date_of_birth <= max_dob,
+            count = (
+                db.scalar(
+                    select(func.count(Employee.employee_id))
+                    .join(Person, Person.id == Employee.person_id)
+                    .where(
+                        and_(
+                            Employee.organization_id == org_id,
+                            Employee.is_deleted.is_(False),
+                            Employee.status == EmployeeStatus.ACTIVE,
+                            Person.date_of_birth.isnot(None),
+                            Person.date_of_birth > min_dob,
+                            Person.date_of_birth <= max_dob,
+                        )
                     )
                 )
-            ) or 0
+                or 0
+            )
 
             distribution.append({"range": label, "count": count})
 
@@ -442,8 +516,7 @@ class PeopleDashboardService:
                 select(
                     func.coalesce(func.sum(SalarySlip.gross_pay), 0),
                     func.coalesce(func.sum(SalarySlip.net_pay), 0),
-                )
-                .where(
+                ).where(
                     and_(
                         SalarySlip.organization_id == org_id,
                         extract("year", SalarySlip.start_date) == month_date.year,
@@ -452,11 +525,13 @@ class PeopleDashboardService:
                 )
             ).one()
 
-            trend.append({
-                "month": month_name,
-                "gross": float(result[0] or 0),
-                "net": float(result[1] or 0),
-            })
+            trend.append(
+                {
+                    "month": month_name,
+                    "gross": float(result[0] or 0),
+                    "net": float(result[1] or 0),
+                }
+            )
 
         return trend
 
@@ -481,14 +556,18 @@ class PeopleDashboardService:
         hires = []
         for emp, person, dept in results:
             desig = emp.designation
-            hires.append({
-                "id": str(emp.employee_id),
-                "initials": f"{(person.first_name or '?')[0]}{(person.last_name or '?')[0]}".upper(),
-                "full_name": f"{person.first_name or ''} {person.last_name or ''}".strip(),
-                "designation": desig.designation_name if desig else "",
-                "department": dept.department_name if dept else "",
-                "date_of_joining": emp.date_of_joining.strftime("%b %d, %Y") if emp.date_of_joining else "",
-            })
+            hires.append(
+                {
+                    "id": str(emp.employee_id),
+                    "initials": f"{(person.first_name or '?')[0]}{(person.last_name or '?')[0]}".upper(),
+                    "full_name": f"{person.first_name or ''} {person.last_name or ''}".strip(),
+                    "designation": desig.designation_name if desig else "",
+                    "department": dept.department_name if dept else "",
+                    "date_of_joining": emp.date_of_joining.strftime("%b %d, %Y")
+                    if emp.date_of_joining
+                    else "",
+                }
+            )
 
         return hires
 
@@ -556,7 +635,9 @@ class PeopleDashboardService:
             for first, last, doj in results
         ]
 
-    def _get_gender_distribution(self, db: Session, org_id: UUID) -> List[Dict[str, Any]]:
+    def _get_gender_distribution(
+        self, db: Session, org_id: UUID
+    ) -> List[Dict[str, Any]]:
         """Get employee count by gender."""
         from app.models.people.hr.employee import Gender
 
@@ -581,16 +662,26 @@ class PeopleDashboardService:
         }
 
         return [
-            {"gender": gender_labels.get(gender, str(gender.value) if gender else "Unknown"), "count": count}
+            {
+                "gender": gender_labels.get(
+                    gender, str(gender.value) if gender else "Unknown"
+                ),
+                "count": count,
+            }
             for gender, count in results
             if gender
         ]
 
-    def _get_employment_type_distribution(self, db: Session, org_id: UUID) -> List[Dict[str, Any]]:
+    def _get_employment_type_distribution(
+        self, db: Session, org_id: UUID
+    ) -> List[Dict[str, Any]]:
         """Get employee count by employment type."""
         results = db.execute(
             select(EmploymentType.type_name, func.count(Employee.employee_id))
-            .join(Employee, Employee.employment_type_id == EmploymentType.employment_type_id)
+            .join(
+                Employee,
+                Employee.employment_type_id == EmploymentType.employment_type_id,
+            )
             .where(
                 and_(
                     Employee.organization_id == org_id,
@@ -602,41 +693,52 @@ class PeopleDashboardService:
             .order_by(func.count(Employee.employee_id).desc())
         ).all()
 
-        return [{"type": name or "Unspecified", "count": count} for name, count in results]
+        return [
+            {"type": name or "Unspecified", "count": count} for name, count in results
+        ]
 
     def _get_pending_approvals(self, db: Session, org_id: UUID) -> Dict[str, Any]:
         """Get counts of items pending approval."""
         # Pending leave requests
-        pending_leave = db.scalar(
-            select(func.count(LeaveApplication.application_id)).where(
-                and_(
-                    LeaveApplication.organization_id == org_id,
-                    LeaveApplication.status == "SUBMITTED",
+        pending_leave = (
+            db.scalar(
+                select(func.count(LeaveApplication.application_id)).where(
+                    and_(
+                        LeaveApplication.organization_id == org_id,
+                        LeaveApplication.status == "SUBMITTED",
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         # Pending job offers
-        pending_offers = db.scalar(
-            select(func.count(JobOffer.offer_id)).where(
-                and_(
-                    JobOffer.organization_id == org_id,
-                    JobOffer.status == "PENDING_APPROVAL",
+        pending_offers = (
+            db.scalar(
+                select(func.count(JobOffer.offer_id)).where(
+                    and_(
+                        JobOffer.organization_id == org_id,
+                        JobOffer.status == "PENDING_APPROVAL",
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         # Pending interviews (scheduled for today or past due)
         today = date.today()
-        pending_interviews = db.scalar(
-            select(func.count(Interview.interview_id)).where(
-                and_(
-                    Interview.organization_id == org_id,
-                    Interview.status == "SCHEDULED",
-                    Interview.scheduled_to <= today,
+        pending_interviews = (
+            db.scalar(
+                select(func.count(Interview.interview_id)).where(
+                    and_(
+                        Interview.organization_id == org_id,
+                        Interview.status == "SCHEDULED",
+                        Interview.scheduled_to <= today,
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         total = pending_leave + pending_offers + pending_interviews
 
@@ -653,73 +755,88 @@ class PeopleDashboardService:
         today = date.today()
 
         # Employees with probation ending soon (within 30 days)
-        probation_ending = db.scalar(
-            select(func.count(Employee.employee_id)).where(
-                and_(
-                    Employee.organization_id == org_id,
-                    Employee.is_deleted.is_(False),
-                    Employee.status == EmployeeStatus.ACTIVE,
-                    Employee.probation_end_date.isnot(None),
-                    Employee.confirmation_date.is_(None),  # Not yet confirmed
-                    Employee.probation_end_date >= today,
-                    Employee.probation_end_date <= today + timedelta(days=30),
+        probation_ending = (
+            db.scalar(
+                select(func.count(Employee.employee_id)).where(
+                    and_(
+                        Employee.organization_id == org_id,
+                        Employee.is_deleted.is_(False),
+                        Employee.status == EmployeeStatus.ACTIVE,
+                        Employee.probation_end_date.isnot(None),
+                        Employee.confirmation_date.is_(None),  # Not yet confirmed
+                        Employee.probation_end_date >= today,
+                        Employee.probation_end_date <= today + timedelta(days=30),
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         if probation_ending > 0:
-            alerts.append({
-                "type": "warning",
-                "icon": "clock",
-                "title": "Probation Review Due",
-                "message": f"{probation_ending} employee(s) probation period ending soon",
-                "url": "/people/hr/employees?filter=probation_ending",
-            })
+            alerts.append(
+                {
+                    "type": "warning",
+                    "icon": "clock",
+                    "title": "Probation Review Due",
+                    "message": f"{probation_ending} employee(s) probation period ending soon",
+                    "url": "/people/hr/employees?filter=probation_ending",
+                }
+            )
 
         # Employees who have resigned but are still active (in notice period)
-        in_notice = db.scalar(
-            select(func.count(Employee.employee_id)).where(
-                and_(
-                    Employee.organization_id == org_id,
-                    Employee.is_deleted.is_(False),
-                    Employee.status == EmployeeStatus.RESIGNED,
-                    Employee.date_of_leaving.isnot(None),
-                    Employee.date_of_leaving >= today,
+        in_notice = (
+            db.scalar(
+                select(func.count(Employee.employee_id)).where(
+                    and_(
+                        Employee.organization_id == org_id,
+                        Employee.is_deleted.is_(False),
+                        Employee.status == EmployeeStatus.RESIGNED,
+                        Employee.date_of_leaving.isnot(None),
+                        Employee.date_of_leaving >= today,
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         if in_notice > 0:
-            alerts.append({
-                "type": "info",
-                "icon": "document",
-                "title": "Notice Period",
-                "message": f"{in_notice} employee(s) serving notice period",
-                "url": "/people/hr/employees?status=resigned",
-            })
+            alerts.append(
+                {
+                    "type": "info",
+                    "icon": "document",
+                    "title": "Notice Period",
+                    "message": f"{in_notice} employee(s) serving notice period",
+                    "url": "/people/hr/employees?status=resigned",
+                }
+            )
 
         # Employees with missing critical info
-        missing_info = db.scalar(
-            select(func.count(Employee.employee_id))
-            .join(Person, Person.id == Employee.person_id)
-            .where(
-                and_(
-                    Employee.organization_id == org_id,
-                    Employee.is_deleted.is_(False),
-                    Employee.status == EmployeeStatus.ACTIVE,
-                    Person.date_of_birth.is_(None),
+        missing_info = (
+            db.scalar(
+                select(func.count(Employee.employee_id))
+                .join(Person, Person.id == Employee.person_id)
+                .where(
+                    and_(
+                        Employee.organization_id == org_id,
+                        Employee.is_deleted.is_(False),
+                        Employee.status == EmployeeStatus.ACTIVE,
+                        Person.date_of_birth.is_(None),
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         if missing_info > 0:
-            alerts.append({
-                "type": "info",
-                "icon": "user",
-                "title": "Incomplete Profiles",
-                "message": f"{missing_info} employee(s) with missing date of birth",
-                "url": "/people/hr/employees?filter=incomplete",
-            })
+            alerts.append(
+                {
+                    "type": "info",
+                    "icon": "user",
+                    "title": "Incomplete Profiles",
+                    "message": f"{missing_info} employee(s) with missing date of birth",
+                    "url": "/people/hr/employees?filter=incomplete",
+                }
+            )
 
         return alerts
 

@@ -6,7 +6,6 @@ Provides template response helpers for HR handbook management.
 
 import logging
 from datetime import date
-from typing import Optional
 from uuid import UUID
 
 from fastapi import Request, UploadFile
@@ -15,7 +14,6 @@ from sqlalchemy.orm import Session
 
 from app.models.people.hr.handbook import DocumentCategory, DocumentStatus
 from app.services.people.hr.handbook_service import (
-    HRDocumentNotFoundError,
     HRDocumentService,
     HRDocumentValidationError,
 )
@@ -78,10 +76,14 @@ class HRHandbookWebService:
         )
 
         # Get stats for documents requiring acknowledgment (batch query - no N+1)
-        docs_needing_stats = [doc.document_id for doc in documents if doc.requires_acknowledgment]
-        stats_map = service.get_batch_acknowledgment_stats(
-            org_id, docs_needing_stats
-        ) if docs_needing_stats else {}
+        docs_needing_stats = [
+            doc.document_id for doc in documents if doc.requires_acknowledgment
+        ]
+        stats_map = (
+            service.get_batch_acknowledgment_stats(org_id, docs_needing_stats)
+            if docs_needing_stats
+            else {}
+        )
 
         return templates.TemplateResponse(
             "people/hr/handbook/documents.html",
@@ -150,12 +152,23 @@ class HRHandbookWebService:
                     document_id,
                     title=str(form.get("title", "")),
                     description=str(form.get("description", "")) or None,
-                    effective_date=date.fromisoformat(str(form.get("effective_date"))) if form.get("effective_date") else None,
-                    expiry_date=date.fromisoformat(str(form.get("expiry_date"))) if form.get("expiry_date") else None,
+                    effective_date=date.fromisoformat(str(form.get("effective_date")))
+                    if form.get("effective_date")
+                    else None,
+                    expiry_date=date.fromisoformat(str(form.get("expiry_date")))
+                    if form.get("expiry_date")
+                    else None,
                     requires_acknowledgment=form.get("requires_acknowledgment") == "on",
-                    acknowledgment_deadline_days=int(str(form.get("acknowledgment_deadline_days"))) if form.get("acknowledgment_deadline_days") else None,
-                    applies_to_all_employees=form.get("applies_to_all_employees") == "on",
-                    status=DocumentStatus(str(form.get("status"))) if form.get("status") else None,
+                    acknowledgment_deadline_days=int(
+                        str(form.get("acknowledgment_deadline_days"))
+                    )
+                    if form.get("acknowledgment_deadline_days")
+                    else None,
+                    applies_to_all_employees=form.get("applies_to_all_employees")
+                    == "on",
+                    status=DocumentStatus(str(form.get("status")))
+                    if form.get("status")
+                    else None,
                     updated_by=user_id,
                 )
                 db.commit()
@@ -192,9 +205,15 @@ class HRHandbookWebService:
                     file_size_bytes=file_size,
                     content_type=file.content_type or "application/pdf",
                     content_hash=content_hash,
-                    effective_date=date.fromisoformat(str(form.get("effective_date"))) if form.get("effective_date") else date.today(),
+                    effective_date=date.fromisoformat(str(form.get("effective_date")))
+                    if form.get("effective_date")
+                    else date.today(),
                     requires_acknowledgment=form.get("requires_acknowledgment") == "on",
-                    acknowledgment_deadline_days=int(str(form.get("acknowledgment_deadline_days"))) if form.get("acknowledgment_deadline_days") else None,
+                    acknowledgment_deadline_days=int(
+                        str(form.get("acknowledgment_deadline_days"))
+                    )
+                    if form.get("acknowledgment_deadline_days")
+                    else None,
                     status=DocumentStatus(str(form.get("status", "DRAFT"))),
                     created_by=user_id,
                 )
@@ -206,7 +225,9 @@ class HRHandbookWebService:
                 )
 
         except HRDocumentValidationError as e:
-            document_opt = service.get_document(org_id, document_id) if document_id else None
+            document_opt = (
+                service.get_document(org_id, document_id) if document_id else None
+            )
             return templates.TemplateResponse(
                 "people/hr/handbook/document_form.html",
                 {
@@ -237,9 +258,9 @@ class HRHandbookWebService:
         acknowledgments, ack_total = service.list_document_acknowledgments(
             org_id, document_id, limit=50
         )
-        pending_employees = service.get_pending_employees(
-            org_id, document_id
-        )[:20]  # Limit to first 20
+        pending_employees = service.get_pending_employees(org_id, document_id)[
+            :20
+        ]  # Limit to first 20
 
         return templates.TemplateResponse(
             "people/hr/handbook/document_detail.html",

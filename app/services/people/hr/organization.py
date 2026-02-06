@@ -8,8 +8,10 @@ This service encapsulates organization structure business logic:
 
 Routes should call this service and control the transaction boundary.
 """
+
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, List, Optional
@@ -29,16 +31,17 @@ from app.models.people.hr import (
 )
 from app.services.common import PaginatedResult, PaginationParams, paginate
 
+from .employee_types import EmployeeFilters
+from .employees import EmployeeService
 from .errors import (
     CircularDepartmentError,
     DepartmentNotFoundError,
-    LocationNotFoundError,
     DesignationNotFoundError,
     EmployeeGradeNotFoundError,
     EmploymentTypeNotFoundError,
+    LocationNotFoundError,
     ValidationError,
 )
-from .employee_types import EmployeeFilters
 from .organization_types import (
     DepartmentCreateData,
     DepartmentFilters,
@@ -56,7 +59,8 @@ from .organization_types import (
     EmploymentTypeFilters,
     EmploymentTypeUpdateData,
 )
-from .employees import EmployeeService
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.auth import Principal
@@ -156,7 +160,10 @@ class OrganizationService:
         if entity_id is None:
             return
         record = self.db.get(model, entity_id)
-        if not record or getattr(record, "organization_id", None) != self.organization_id:
+        if (
+            not record
+            or getattr(record, "organization_id", None) != self.organization_id
+        ):
             raise ValidationError(f"{label} {entity_id} not found")
         if getattr(record, "is_deleted", False):
             raise ValidationError(f"{label} {entity_id} not found")
@@ -301,7 +308,9 @@ class OrganizationService:
                 f"Department with code '{data.department_code}' already exists"
             )
 
-        self._validate_org_reference(Department, data.parent_department_id, "Parent department")
+        self._validate_org_reference(
+            Department, data.parent_department_id, "Parent department"
+        )
         self._validate_org_reference(CostCenter, data.cost_center_id, "Cost center")
         self._validate_org_reference(Employee, data.head_id, "Department head")
 
@@ -357,7 +366,9 @@ class OrganizationService:
             department.description = data.description
 
         if data.parent_department_id is not None:
-            self._validate_org_reference(Department, data.parent_department_id, "Parent department")
+            self._validate_org_reference(
+                Department, data.parent_department_id, "Parent department"
+            )
             # Check for circular reference (including transitive cycles)
             if not self._validate_department_parent(
                 department_id, data.parent_department_id

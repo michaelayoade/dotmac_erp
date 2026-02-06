@@ -33,7 +33,9 @@ class TestItemsList:
         """Test that items list page loads successfully."""
         authenticated_page.goto(f"{base_url}/inv/items", wait_until="domcontentloaded")
 
-        expect(authenticated_page.locator("h1", has_text="Inventory Items").first).to_be_visible()
+        expect(
+            authenticated_page.locator("h1", has_text="Inventory Items").first
+        ).to_be_visible()
 
     def test_items_page_has_cta(self, authenticated_page: Page, base_url: str):
         """Ensure items page loads and shows the new item CTA."""
@@ -54,7 +56,7 @@ class TestItemsList:
             authenticated_page.keyboard.press("Enter")
             authenticated_page.wait_for_load_state("networkidle")
 
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_items_list_by_category(self, authenticated_page: Page, base_url: str):
         """Test items list category filter."""
@@ -115,7 +117,9 @@ class TestItemCreate:
         if field.count() > 0:
             expect(field.first).to_be_visible()
 
-    def test_item_create_has_description_field(self, authenticated_page: Page, base_url: str):
+    def test_item_create_has_description_field(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that item form has description field."""
         authenticated_page.goto(f"{base_url}/inv/items/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -126,7 +130,9 @@ class TestItemCreate:
         if field.count() > 0:
             expect(field.first).to_be_visible()
 
-    def test_item_create_has_unit_of_measure(self, authenticated_page: Page, base_url: str):
+    def test_item_create_has_unit_of_measure(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that item form has unit of measure field."""
         authenticated_page.goto(f"{base_url}/inv/items/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -170,7 +176,9 @@ class TestItemCreate:
             submit_btn.click()
             authenticated_page.wait_for_load_state("networkidle")
 
-    def test_item_create_with_unit_of_measure(self, authenticated_page: Page, base_url: str):
+    def test_item_create_with_unit_of_measure(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test item creation with unit of measure."""
         authenticated_page.goto(f"{base_url}/inv/items/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -203,7 +211,9 @@ class TestItemDetail:
 
             expect(authenticated_page).to_have_url(re.compile(r".*/inv/items/.*"))
 
-    def test_item_detail_shows_stock_info(self, authenticated_page: Page, base_url: str):
+    def test_item_detail_shows_stock_info(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that item detail shows stock information."""
         authenticated_page.goto(f"{base_url}/inv/items")
         authenticated_page.wait_for_load_state("networkidle")
@@ -292,7 +302,9 @@ class TestInventoryTransactions:
 
     def test_transactions_page_loads(self, authenticated_page: Page, base_url: str):
         """Ensure transactions page loads and shows content."""
-        authenticated_page.goto(f"{base_url}/inv/transactions", wait_until="domcontentloaded")
+        authenticated_page.goto(
+            f"{base_url}/inv/transactions", wait_until="domcontentloaded"
+        )
 
         expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
             "Inventory Transactions"
@@ -303,7 +315,9 @@ class TestInventoryTransactions:
         content = table.or_(empty_state)
         expect(content).to_be_visible()
 
-    def test_transactions_list_with_filters(self, authenticated_page: Page, base_url: str):
+    def test_transactions_list_with_filters(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test transactions list has filter options."""
         authenticated_page.goto(f"{base_url}/inv/transactions")
         authenticated_page.wait_for_load_state("networkidle")
@@ -351,7 +365,9 @@ class TestInventoryTransactions:
                     type_field.first.select_option(index=i)
                     break
 
-    def test_transaction_create_adjustment(self, authenticated_page: Page, base_url: str):
+    def test_transaction_create_adjustment(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test creating an adjustment transaction."""
         authenticated_page.goto(f"{base_url}/inv/transactions/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -401,7 +417,7 @@ class TestStockLevels:
         response = authenticated_page.goto(f"{base_url}/inv/stock-levels")
         if response.ok:
             authenticated_page.wait_for_load_state("networkidle")
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_stock_by_location(self, authenticated_page: Page, base_url: str):
         """Test stock levels by location view."""

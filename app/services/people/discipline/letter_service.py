@@ -30,7 +30,6 @@ from app.schemas.document_context import (
 )
 from app.services.automation.document_generator import (
     DocumentGeneratorService,
-    TemplateNotFoundError,
 )
 
 logger = logging.getLogger(__name__)

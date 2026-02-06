@@ -152,7 +152,7 @@
                 <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Description</h3>
                 {% if ticket.description %}
                 <div class="prose prose-slate dark:prose-invert max-w-none text-sm">
-                    {{ ticket.description | safe }}
+                    {{ ticket.description | sanitize_html }}
                 </div>
                 {% else %}
                 <p class="text-sm text-slate-400 dark:text-slate-500 italic">No description provided</p>
@@ -247,7 +247,7 @@
                     Resolution
                 </h3>
                 <div class="prose prose-slate dark:prose-invert max-w-none text-sm">
-                    {{ ticket.resolution | safe }}
+                    {{ ticket.resolution | sanitize_html }}
                 </div>
                 {% if ticket.resolution_date_formatted %}
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-3">
@@ -811,7 +811,7 @@
                             <p class="text-sm text-slate-600 dark:text-slate-400">{{ item.content }}</p>
                             {% else %}
                             <div class="text-sm text-slate-700 dark:text-slate-300 prose prose-sm dark:prose-invert max-w-none">
-                                {{ item.content | safe }}
+                                {{ item.content | sanitize_html }}
                             </div>
                             {% set item_attachments = comment_attachments.get(item.comment_id, []) if item.comment_id is defined else [] %}
                             {% if item_attachments %}

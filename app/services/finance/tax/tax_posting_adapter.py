@@ -7,6 +7,7 @@ provisions into journal entries and posts them to the general ledger.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -16,15 +17,21 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.finance.tax.tax_code import TaxCode
-from app.models.finance.tax.tax_transaction import TaxTransaction, TaxTransactionType
-from app.models.finance.tax.tax_jurisdiction import TaxJurisdiction
+from app.models.finance.gl.journal_entry import JournalType
 from app.models.finance.tax.deferred_tax_basis import DeferredTaxBasis
 from app.models.finance.tax.deferred_tax_movement import DeferredTaxMovement
+from app.models.finance.tax.tax_code import TaxCode
+from app.models.finance.tax.tax_jurisdiction import TaxJurisdiction
+from app.models.finance.tax.tax_transaction import TaxTransaction, TaxTransactionType
 from app.services.common import coerce_uuid
-from app.services.finance.gl.journal import JournalService, JournalInput, JournalLineInput
+from app.services.finance.gl.journal import (
+    JournalInput,
+    JournalLineInput,
+    JournalService,
+)
 from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
-from app.models.finance.gl.journal_entry import JournalType
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -106,7 +113,10 @@ class TAXPostingAdapter:
                     )
 
                 # Non-recoverable portion to expense
-                if transaction.non_recoverable_amount > 0 and tax_code.tax_expense_account_id:
+                if (
+                    transaction.non_recoverable_amount > 0
+                    and tax_code.tax_expense_account_id
+                ):
                     journal_lines.append(
                         JournalLineInput(
                             account_id=tax_code.tax_expense_account_id,
@@ -173,7 +183,9 @@ class TAXPostingAdapter:
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
 
         except HTTPException as e:
             return TAXPostingResult(
@@ -194,7 +206,9 @@ class TAXPostingAdapter:
         )
 
         try:
-            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+            posting_result = LedgerPostingService.post_journal_entry(
+                db, posting_request
+            )
 
             if not posting_result.success:
                 return TAXPostingResult(
@@ -334,7 +348,9 @@ class TAXPostingAdapter:
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
 
         except HTTPException as e:
             return TAXPostingResult(
@@ -355,7 +371,9 @@ class TAXPostingAdapter:
         )
 
         try:
-            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+            posting_result = LedgerPostingService.post_journal_entry(
+                db, posting_request
+            )
 
             if not posting_result.success:
                 return TAXPostingResult(
@@ -411,12 +429,16 @@ class TAXPostingAdapter:
         # Load movement
         movement = db.get(DeferredTaxMovement, mov_id)
         if not movement:
-            return TAXPostingResult(success=False, message="Deferred tax movement not found")
+            return TAXPostingResult(
+                success=False, message="Deferred tax movement not found"
+            )
 
         # Load basis and jurisdiction
         basis = db.get(DeferredTaxBasis, movement.basis_id)
         if not basis or basis.organization_id != org_id:
-            return TAXPostingResult(success=False, message="Deferred tax basis not found")
+            return TAXPostingResult(
+                success=False, message="Deferred tax basis not found"
+            )
 
         jurisdiction = db.get(TaxJurisdiction, basis.jurisdiction_id)
         if not jurisdiction:
@@ -563,7 +585,9 @@ class TAXPostingAdapter:
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
 
         except HTTPException as e:
             return TAXPostingResult(
@@ -584,7 +608,9 @@ class TAXPostingAdapter:
         )
 
         try:
-            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+            posting_result = LedgerPostingService.post_journal_entry(
+                db, posting_request
+            )
 
             if not posting_result.success:
                 return TAXPostingResult(

@@ -95,7 +95,6 @@ class IPSASWebService:
         from app.services.finance.ipsas.appropriation_service import (
             AppropriationService,
         )
-
         from app.services.finance.ipsas.fund_service import FundService
 
         svc = AppropriationService(self.db)
@@ -238,9 +237,7 @@ class IPSASWebService:
             "status_filter": status,
         }
 
-    def virement_detail_context(
-        self, organization_id: UUID, virement_id: UUID
-    ) -> dict:
+    def virement_detail_context(self, organization_id: UUID, virement_id: UUID) -> dict:
         """Build context for virement detail page."""
         from app.services.finance.ipsas.appropriation_service import (
             AppropriationService,

@@ -3,6 +3,7 @@ Payroll Notification Service.
 
 Handles notifications for payroll events (payslip posted, paid, etc.).
 """
+
 import logging
 from typing import Optional
 from uuid import UUID
@@ -66,7 +67,9 @@ class PayrollNotificationService:
                 f"Your payslip for {slip.start_date.strftime('%B %Y')} "
                 f"is now available. Net pay: {slip.currency_code} {slip.net_pay:,.2f}"
             ),
-            channel=NotificationChannel.BOTH if queue_email else NotificationChannel.IN_APP,
+            channel=NotificationChannel.BOTH
+            if queue_email
+            else NotificationChannel.IN_APP,
             action_url=f"/people/self/payslips/{slip.slip_id}",
         )
 
@@ -80,6 +83,7 @@ class PayrollNotificationService:
         if queue_email:
             try:
                 from app.tasks.payroll import send_payslip_email
+
                 send_payslip_email.delay(
                     str(slip.slip_id),
                     str(slip.organization_id),

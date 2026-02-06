@@ -14,10 +14,16 @@ from contextvars import ContextVar
 from typing import Any, Callable, Optional, TypeVar
 from uuid import UUID
 
+logger = logging.getLogger(__name__)
+
 # Context variables for request-scoped logging context
 _log_context_org_id: ContextVar[Optional[str]] = ContextVar("log_org_id", default=None)
-_log_context_user_id: ContextVar[Optional[str]] = ContextVar("log_user_id", default=None)
-_log_context_correlation_id: ContextVar[Optional[str]] = ContextVar("log_correlation_id", default=None)
+_log_context_user_id: ContextVar[Optional[str]] = ContextVar(
+    "log_user_id", default=None
+)
+_log_context_correlation_id: ContextVar[Optional[str]] = ContextVar(
+    "log_correlation_id", default=None
+)
 
 
 def set_log_context(
@@ -129,7 +135,7 @@ def get_logger(name: str) -> ContextualLogger:
 
 
 # Type variable for decorated functions
-F = TypeVar('F', bound=Callable[..., Any])
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 def log_slow_operation(
@@ -148,6 +154,7 @@ def log_slow_operation(
         def expensive_query(...):
             ...
     """
+
     def decorator(func: F) -> F:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -166,10 +173,11 @@ def log_slow_operation(
                         func.__name__,
                         elapsed_ms,
                         threshold_ms,
-                        org_id[:8] if isinstance(org_id, str) else "?"
+                        org_id[:8] if isinstance(org_id, str) else "?",
                     )
 
         return wrapper  # type: ignore
+
     return decorator
 
 
@@ -191,19 +199,25 @@ def log_service_call(
         def create_invoice(...):
             ...
     """
+
     def decorator(func: F) -> F:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             log = logger or logging.getLogger(func.__module__)
             context = get_log_context()
             org_id = context.get("org_id")
-            org_prefix = f"org={org_id[:8]}" if isinstance(org_id, str) and org_id else ""
+            org_prefix = (
+                f"org={org_id[:8]}" if isinstance(org_id, str) and org_id else ""
+            )
 
             # Log entry
             if log_args:
                 log.debug(
                     "%s | Calling %s args=%r kwargs=%r",
-                    org_prefix, func.__name__, args[1:], kwargs  # Skip self/cls
+                    org_prefix,
+                    func.__name__,
+                    args[1:],
+                    kwargs,  # Skip self/cls
                 )
             else:
                 log.debug("%s | Calling %s", org_prefix, func.__name__)
@@ -216,12 +230,17 @@ def log_service_call(
                 if log_result:
                     log.debug(
                         "%s | %s completed in %.1fms result=%r",
-                        org_prefix, func.__name__, elapsed_ms, result
+                        org_prefix,
+                        func.__name__,
+                        elapsed_ms,
+                        result,
                     )
                 else:
                     log.debug(
                         "%s | %s completed in %.1fms",
-                        org_prefix, func.__name__, elapsed_ms
+                        org_prefix,
+                        func.__name__,
+                        elapsed_ms,
                     )
 
                 return result
@@ -230,11 +249,15 @@ def log_service_call(
                 elapsed_ms = (time.perf_counter() - start_time) * 1000
                 log.exception(
                     "%s | %s failed after %.1fms: %s",
-                    org_prefix, func.__name__, elapsed_ms, e
+                    org_prefix,
+                    func.__name__,
+                    elapsed_ms,
+                    e,
                 )
                 raise
 
         return wrapper  # type: ignore
+
     return decorator
 
 
@@ -254,6 +277,7 @@ def log_db_error(
         def create_invoice(...):
             ...
     """
+
     def decorator(func: F) -> F:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -266,11 +290,12 @@ def log_db_error(
                     "Database error in %s org=%s: %s",
                     operation,
                     context.get("org_id", "?"),
-                    e
+                    e,
                 )
                 raise
 
         return wrapper  # type: ignore
+
     return decorator
 
 

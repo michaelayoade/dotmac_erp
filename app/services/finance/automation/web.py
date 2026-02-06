@@ -6,8 +6,8 @@ Provides view-focused data for automation web routes.
 
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime
-from decimal import Decimal
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -15,54 +15,42 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.automation import (
-    RecurringTemplate,
-    RecurringLog,
-    RecurringEntityType,
-    RecurringFrequency,
-    RecurringStatus,
-    RecurringLogStatus,
-    WorkflowRule,
-    WorkflowExecution,
-    WorkflowEntityType,
-    TriggerEvent,
     ActionType,
-    ExecutionStatus,
     CustomFieldDefinition,
     CustomFieldEntityType,
     CustomFieldType,
     DocumentTemplate,
+    ExecutionStatus,
+    RecurringEntityType,
+    RecurringFrequency,
+    RecurringLog,
+    RecurringLogStatus,
+    RecurringStatus,
+    RecurringTemplate,
     TemplateType,
-)
-from app.services.finance.automation.recurring import (
-    recurring_service,
-    RecurringTemplateInput,
-)
-from app.services.finance.automation.workflow import (
-    workflow_service,
-    WorkflowRuleInput,
-)
-from app.services.finance.automation.custom_fields import (
-    custom_fields_service,
-    CustomFieldInput,
+    TriggerEvent,
+    WorkflowEntityType,
+    WorkflowExecution,
+    WorkflowRule,
 )
 from app.services.common import coerce_uuid
+from app.services.finance.automation.custom_fields import (
+    CustomFieldInput,
+    custom_fields_service,
+)
+from app.services.finance.automation.recurring import (
+    RecurringTemplateInput,
+    recurring_service,
+)
+from app.services.finance.automation.workflow import (
+    WorkflowRuleInput,
+    workflow_service,
+)
+from app.services.formatters import format_date as _format_date
+from app.services.formatters import format_datetime as _format_datetime
+from app.services.formatters import parse_date as _parse_date
 
-
-def _format_date(value: Optional[date]) -> str:
-    return value.strftime("%Y-%m-%d") if value else ""
-
-
-def _format_datetime(value: Optional[datetime]) -> str:
-    return value.strftime("%Y-%m-%d %H:%M") if value else ""
-
-
-def _parse_date(value: Optional[str]) -> Optional[date]:
-    if not value:
-        return None
-    try:
-        return datetime.strptime(value, "%Y-%m-%d").date()
-    except ValueError:
-        return None
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -811,6 +799,7 @@ class AutomationWebService:
 
     def build_workflow_input(self, form_data: dict) -> WorkflowRuleInput:
         """Build WorkflowRuleInput from form data."""
+
         def _parse_json_field(value: Any, default: Optional[dict]) -> Optional[dict]:
             if value in (None, "", {}):
                 return default

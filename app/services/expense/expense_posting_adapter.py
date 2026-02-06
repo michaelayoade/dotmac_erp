@@ -7,29 +7,29 @@ posting them to the general ledger for AP processing.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
-import uuid as uuid_lib
 
 from fastapi import HTTPException
 from sqlalchemy import func, select, text
-from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.orm import Session
 
 from app.models.expense.cash_advance import CashAdvance, CashAdvanceStatus
 from app.models.expense.expense_claim import (
+    ExpenseCategory,
     ExpenseClaim,
     ExpenseClaimItem,
     ExpenseClaimStatus,
-    ExpenseCategory,
 )
 from app.models.expense.expense_claim_action import (
     ExpenseClaimAction,
-    ExpenseClaimActionType,
     ExpenseClaimActionStatus,
+    ExpenseClaimActionType,
 )
 from app.models.finance.ap.supplier import Supplier, SupplierType
 from app.models.finance.ap.supplier_invoice import (
@@ -40,8 +40,14 @@ from app.models.finance.ap.supplier_invoice import (
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.finance.gl.journal_entry import JournalType
 from app.services.common import coerce_uuid
-from app.services.finance.gl.journal import JournalService, JournalInput, JournalLineInput
+from app.services.finance.gl.journal import (
+    JournalInput,
+    JournalLineInput,
+    JournalService,
+)
 from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -72,7 +78,9 @@ class ExpensePostingAdapter:
     """
 
     # Default account codes (fallback if org settings not configured)
-    DEFAULT_EMPLOYEE_PAYABLE_ACCOUNT_CODE = "2110"  # Current Liabilities - Accrued Expenses
+    DEFAULT_EMPLOYEE_PAYABLE_ACCOUNT_CODE = (
+        "2110"  # Current Liabilities - Accrued Expenses
+    )
 
     @staticmethod
     def _action_key(claim_id: UUID, action: ExpenseClaimActionType) -> str:
@@ -114,11 +122,15 @@ class ExpensePostingAdapter:
         if (result.rowcount or 0) > 0:
             return True
 
-        existing = db.query(ExpenseClaimAction).filter(
-            ExpenseClaimAction.organization_id == org_id,
-            ExpenseClaimAction.claim_id == claim_id,
-            ExpenseClaimAction.action_type == action,
-        ).first()
+        existing = (
+            db.query(ExpenseClaimAction)
+            .filter(
+                ExpenseClaimAction.organization_id == org_id,
+                ExpenseClaimAction.claim_id == claim_id,
+                ExpenseClaimAction.action_type == action,
+            )
+            .first()
+        )
         if not existing:
             return False
         if existing.status == ExpenseClaimActionStatus.FAILED:
@@ -135,11 +147,15 @@ class ExpensePostingAdapter:
         action: ExpenseClaimActionType,
         status: ExpenseClaimActionStatus,
     ) -> None:
-        record = db.query(ExpenseClaimAction).filter(
-            ExpenseClaimAction.organization_id == org_id,
-            ExpenseClaimAction.claim_id == claim_id,
-            ExpenseClaimAction.action_type == action,
-        ).first()
+        record = (
+            db.query(ExpenseClaimAction)
+            .filter(
+                ExpenseClaimAction.organization_id == org_id,
+                ExpenseClaimAction.claim_id == claim_id,
+                ExpenseClaimAction.action_type == action,
+            )
+            .first()
+        )
         if record:
             record.status = status
             db.flush()
@@ -188,7 +204,9 @@ class ExpensePostingAdapter:
         # Load claim with items
         claim = db.get(ExpenseClaim, c_id)
         if not claim or claim.organization_id != org_id:
-            return ExpensePostingResult(success=False, message="Expense claim not found")
+            return ExpensePostingResult(
+                success=False, message="Expense claim not found"
+            )
 
         if claim.status != ExpenseClaimStatus.APPROVED:
             return ExpensePostingResult(
@@ -243,7 +261,9 @@ class ExpensePostingAdapter:
 
         # Debit lines (expense accounts from categories/overrides)
         for item in items:
-            account_id = ExpensePostingAdapter._determine_expense_account(db, org_id, item)
+            account_id = ExpensePostingAdapter._determine_expense_account(
+                db, org_id, item
+            )
             if not account_id:
                 return ExpensePostingResult(
                     success=False,
@@ -305,7 +325,9 @@ class ExpensePostingAdapter:
 
             # Submit and approve automatically for expense posting
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
 
         except HTTPException as e:
             ExpensePostingAdapter._set_action_status(
@@ -341,7 +363,9 @@ class ExpensePostingAdapter:
             )
 
             try:
-                posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+                posting_result = LedgerPostingService.post_journal_entry(
+                    db, posting_request
+                )
 
                 if not posting_result.success:
                     ExpensePostingAdapter._set_action_status(
@@ -423,7 +447,9 @@ class ExpensePostingAdapter:
             # Load claim
             claim = db.get(ExpenseClaim, c_id)
             if not claim or claim.organization_id != org_id:
-                return ExpensePostingResult(success=False, message="Expense claim not found")
+                return ExpensePostingResult(
+                    success=False, message="Expense claim not found"
+                )
 
             if claim.status != ExpenseClaimStatus.APPROVED:
                 return ExpensePostingResult(
@@ -490,10 +516,12 @@ class ExpensePostingAdapter:
                 due_date=claim.claim_date,  # Immediate payment expected
                 currency_code=claim.currency_code,
                 exchange_rate=Decimal("1.0"),
-                subtotal_amount=claim.total_approved_amount or claim.total_claimed_amount,
+                subtotal_amount=claim.total_approved_amount
+                or claim.total_claimed_amount,
                 tax_amount=Decimal("0"),
                 total_amount=claim.total_approved_amount or claim.total_claimed_amount,
-                functional_currency_amount=claim.total_approved_amount or claim.total_claimed_amount,
+                functional_currency_amount=claim.total_approved_amount
+                or claim.total_claimed_amount,
                 amount_paid=Decimal("0"),
                 amount_due=claim.total_approved_amount or claim.total_claimed_amount,
                 status=SupplierInvoiceStatus.DRAFT,
@@ -510,7 +538,9 @@ class ExpensePostingAdapter:
 
             # Create invoice lines from claim items
             for idx, item in enumerate(claim.items, start=1):
-                account_id = ExpensePostingAdapter._determine_expense_account(db, org_id, item)
+                account_id = ExpensePostingAdapter._determine_expense_account(
+                    db, org_id, item
+                )
 
                 line = SupplierInvoiceLine(
                     organization_id=org_id,
@@ -673,7 +703,9 @@ class ExpensePostingAdapter:
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
         except HTTPException as e:
             return ExpensePostingResult(
                 success=False, message=f"Journal creation failed: {e.detail}"
@@ -699,7 +731,9 @@ class ExpensePostingAdapter:
             )
 
             try:
-                posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+                posting_result = LedgerPostingService.post_journal_entry(
+                    db, posting_request
+                )
                 if not posting_result.success:
                     return ExpensePostingResult(
                         success=False,
@@ -774,9 +808,14 @@ class ExpensePostingAdapter:
 
         claim = db.get(ExpenseClaim, c_id)
         if not claim or claim.organization_id != org_id:
-            return ExpensePostingResult(success=False, message="Expense claim not found")
+            return ExpensePostingResult(
+                success=False, message="Expense claim not found"
+            )
 
-        if advance.status not in {CashAdvanceStatus.DISBURSED, CashAdvanceStatus.PARTIALLY_SETTLED}:
+        if advance.status not in {
+            CashAdvanceStatus.DISBURSED,
+            CashAdvanceStatus.PARTIALLY_SETTLED,
+        }:
             return ExpensePostingResult(
                 success=False,
                 message=f"Cash advance must be DISBURSED or PARTIALLY_SETTLED (current: {advance.status.value})",
@@ -827,7 +866,9 @@ class ExpensePostingAdapter:
             item_amount = item.approved_amount or item.claimed_amount
             allocate_amount = min(item_amount, remaining_to_allocate)
 
-            account_id = ExpensePostingAdapter._determine_expense_account(db, org_id, item)
+            account_id = ExpensePostingAdapter._determine_expense_account(
+                db, org_id, item
+            )
             if account_id:
                 journal_lines.append(
                     JournalLineInput(
@@ -874,7 +915,9 @@ class ExpensePostingAdapter:
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
         except HTTPException as e:
             return ExpensePostingResult(
                 success=False, message=f"Journal creation failed: {e.detail}"
@@ -910,7 +953,9 @@ class ExpensePostingAdapter:
             )
 
             try:
-                posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+                posting_result = LedgerPostingService.post_journal_entry(
+                    db, posting_request
+                )
                 if not posting_result.success:
                     return ExpensePostingResult(
                         success=False,
@@ -964,9 +1009,10 @@ class ExpensePostingAdapter:
 
         # Priority 3: Organization default (from settings)
         from app.models.finance.core_org.organization import Organization
+
         org = db.get(Organization, organization_id)
-        if org and hasattr(org, 'default_expense_account_id'):
-            return getattr(org, 'default_expense_account_id', None)
+        if org and hasattr(org, "default_expense_account_id"):
+            return getattr(org, "default_expense_account_id", None)
 
         return None
 
@@ -976,11 +1022,12 @@ class ExpensePostingAdapter:
         organization_id: UUID,
     ) -> Optional[UUID]:
         """Get the employee payable account for the organization."""
-        from app.models.finance.gl.account import Account
         from sqlalchemy import select
 
         # Try organization settings first
         from app.models.finance.core_org.organization import Organization
+        from app.models.finance.gl.account import Account
+
         org = db.get(Organization, organization_id)
         if org and hasattr(org, "employee_payable_account_id"):
             acc_id: Optional[UUID] = getattr(org, "employee_payable_account_id", None)
@@ -989,11 +1036,16 @@ class ExpensePostingAdapter:
 
         # Fall back to finding by code pattern
         account = db.scalar(
-            select(Account).where(
+            select(Account)
+            .where(
                 Account.organization_id == organization_id,
-                Account.account_code.like("211%"),  # Common pattern for accrued expenses
+                Account.account_code.like(
+                    "211%"
+                ),  # Common pattern for accrued expenses
                 Account.is_active == True,
-            ).order_by(Account.account_code).limit(1)
+            )
+            .order_by(Account.account_code)
+            .limit(1)
         )
         return account.account_id if account else None
 
@@ -1003,11 +1055,12 @@ class ExpensePostingAdapter:
         organization_id: UUID,
     ) -> Optional[UUID]:
         """Get the employee advance account for the organization."""
-        from app.models.finance.gl.account import Account
         from sqlalchemy import select
 
         # Try organization settings first
         from app.models.finance.core_org.organization import Organization
+        from app.models.finance.gl.account import Account
+
         org = db.get(Organization, organization_id)
         if org and hasattr(org, "employee_advance_account_id"):
             acc_id: Optional[UUID] = getattr(org, "employee_advance_account_id", None)
@@ -1016,11 +1069,14 @@ class ExpensePostingAdapter:
 
         # Fall back to finding by name/code pattern
         account = db.scalar(
-            select(Account).where(
+            select(Account)
+            .where(
                 Account.organization_id == organization_id,
                 Account.account_name.ilike("%advance%"),
                 Account.is_active == True,
-            ).order_by(Account.account_code).limit(1)
+            )
+            .order_by(Account.account_code)
+            .limit(1)
         )
         return account.account_id if account else None
 
@@ -1067,7 +1123,9 @@ class ExpensePostingAdapter:
             legal_name=employee.full_name,
             trading_name=employee.full_name,
             ap_control_account_id=payable_account_id,
-            primary_contact={"email": employee.work_email} if employee.work_email else None,
+            primary_contact={"email": employee.work_email}
+            if employee.work_email
+            else None,
             currency_code="NGN",
             is_active=True,
             created_by_user_id=user_id,
@@ -1076,7 +1134,6 @@ class ExpensePostingAdapter:
         db.flush()
 
         return supplier
-
 
     @staticmethod
     def post_expense_reimbursement(
@@ -1127,7 +1184,9 @@ class ExpensePostingAdapter:
         # Load expense claim
         claim = db.get(ExpenseClaim, c_id)
         if not claim or claim.organization_id != org_id:
-            return ExpensePostingResult(success=False, message="Expense claim not found")
+            return ExpensePostingResult(
+                success=False, message="Expense claim not found"
+            )
 
         # Validate claim is in PAID status
         if claim.status != ExpenseClaimStatus.PAID:
@@ -1209,7 +1268,9 @@ class ExpensePostingAdapter:
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
 
         except HTTPException as e:
             return ExpensePostingResult(
@@ -1231,7 +1292,9 @@ class ExpensePostingAdapter:
         )
 
         try:
-            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+            posting_result = LedgerPostingService.post_journal_entry(
+                db, posting_request
+            )
 
             if not posting_result.success:
                 return ExpensePostingResult(
@@ -1356,7 +1419,9 @@ class ExpensePostingAdapter:
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
 
         except HTTPException as e:
             return ExpensePostingResult(
@@ -1378,7 +1443,9 @@ class ExpensePostingAdapter:
         )
 
         try:
-            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+            posting_result = LedgerPostingService.post_journal_entry(
+                db, posting_request
+            )
 
             if not posting_result.success:
                 return ExpensePostingResult(
@@ -1449,16 +1516,24 @@ class ExpensePostingAdapter:
         # Load expense claim
         claim = db.get(ExpenseClaim, c_id)
         if not claim or claim.organization_id != org_id:
-            return ExpensePostingResult(success=False, message="Expense claim not found")
+            return ExpensePostingResult(
+                success=False, message="Expense claim not found"
+            )
 
         # Get original journal to get the amount
         original_journal = db.get(JournalEntry, orig_journal_id)
         if not original_journal:
-            return ExpensePostingResult(success=False, message="Original journal not found")
+            return ExpensePostingResult(
+                success=False, message="Original journal not found"
+            )
 
         # Get the reimbursement amount from original journal
         reversal_amount = sum(
-            (line.debit_amount for line in original_journal.lines if line.debit_amount > 0),
+            (
+                line.debit_amount
+                for line in original_journal.lines
+                if line.debit_amount > 0
+            ),
             Decimal("0"),
         )
 
@@ -1468,12 +1543,18 @@ class ExpensePostingAdapter:
         # Get bank account and its GL account
         bank_account = db.get(BankAccount, bank_id)
         if not bank_account or not bank_account.gl_account_id:
-            return ExpensePostingResult(success=False, message="Bank account not found or has no GL account")
+            return ExpensePostingResult(
+                success=False, message="Bank account not found or has no GL account"
+            )
 
         # Get employee payable account
-        payable_account_id = ExpensePostingAdapter._get_employee_payable_account(db, org_id)
+        payable_account_id = ExpensePostingAdapter._get_employee_payable_account(
+            db, org_id
+        )
         if not payable_account_id:
-            return ExpensePostingResult(success=False, message="Employee payable account not configured")
+            return ExpensePostingResult(
+                success=False, message="Employee payable account not configured"
+            )
 
         # Build reversal journal lines (opposite of original)
         journal_lines = [
@@ -1502,7 +1583,8 @@ class ExpensePostingAdapter:
             journal_type=JournalType.STANDARD,
             entry_date=posting_date,
             posting_date=posting_date,
-            description=f"Reversal: Expense Reimbursement {claim.claim_number}" + (f" - {reason}" if reason else ""),
+            description=f"Reversal: Expense Reimbursement {claim.claim_number}"
+            + (f" - {reason}" if reason else ""),
             reference=f"REV-{claim.claim_number}",
             currency_code="NGN",
             exchange_rate=Decimal("1.0"),
@@ -1516,7 +1598,9 @@ class ExpensePostingAdapter:
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
 
         except HTTPException as e:
             return ExpensePostingResult(
@@ -1537,7 +1621,9 @@ class ExpensePostingAdapter:
         )
 
         try:
-            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+            posting_result = LedgerPostingService.post_journal_entry(
+                db, posting_request
+            )
 
             if not posting_result.success:
                 return ExpensePostingResult(
@@ -1596,9 +1682,8 @@ class ExpensePostingAdapter:
         Returns:
             ExpensePostingResult with reversal journal entry details
         """
-        from app.models.finance.banking.bank_account import BankAccount
-        from app.models.finance.gl.journal_entry import JournalEntry
         from app.models.domain_settings import SettingDomain
+        from app.models.finance.banking.bank_account import BankAccount
         from app.services.settings_spec import resolve_value
 
         org_id = coerce_uuid(organization_id)
@@ -1606,17 +1691,25 @@ class ExpensePostingAdapter:
         bank_id = coerce_uuid(bank_account_id)
 
         if fee_amount <= Decimal("0"):
-            return ExpensePostingResult(success=False, message="No fee amount to reverse")
+            return ExpensePostingResult(
+                success=False, message="No fee amount to reverse"
+            )
 
         # Get bank account and its GL account
         bank_account = db.get(BankAccount, bank_id)
         if not bank_account or not bank_account.gl_account_id:
-            return ExpensePostingResult(success=False, message="Bank account not found or has no GL account")
+            return ExpensePostingResult(
+                success=False, message="Bank account not found or has no GL account"
+            )
 
         # Get fee expense account from settings
-        fee_account_id = resolve_value(db, SettingDomain.payments, "paystack_transfer_fee_account_id")
+        fee_account_id = resolve_value(
+            db, SettingDomain.payments, "paystack_transfer_fee_account_id"
+        )
         if not fee_account_id:
-            return ExpensePostingResult(success=False, message="Fee expense account not configured")
+            return ExpensePostingResult(
+                success=False, message="Fee expense account not configured"
+            )
 
         fee_account_uuid = coerce_uuid(fee_account_id)
 
@@ -1660,11 +1753,14 @@ class ExpensePostingAdapter:
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
 
         except HTTPException as e:
             return ExpensePostingResult(
-                success=False, message=f"Fee reversal journal creation failed: {e.detail}"
+                success=False,
+                message=f"Fee reversal journal creation failed: {e.detail}",
             )
 
         # Post to ledger
@@ -1681,7 +1777,9 @@ class ExpensePostingAdapter:
         )
 
         try:
-            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+            posting_result = LedgerPostingService.post_journal_entry(
+                db, posting_request
+            )
 
             if not posting_result.success:
                 return ExpensePostingResult(

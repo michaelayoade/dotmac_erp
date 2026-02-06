@@ -4,6 +4,7 @@ Base Export Service for pushing DotMac ERP changes to ERPNext.
 During the transition period, changes made in DotMac need to be reflected
 back in ERPNext to maintain consistency until the full migration is complete.
 """
+
 import logging
 import uuid
 from abc import ABC, abstractmethod

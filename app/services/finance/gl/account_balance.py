@@ -10,22 +10,21 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
-import uuid as uuid_lib
 
 from fastapi import HTTPException
 from sqlalchemy import and_, func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.models.finance.gl.account_balance import AccountBalance, BalanceType
-from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
-from app.models.finance.gl.fiscal_period import FiscalPeriod
 from app.models.finance.gl.account import Account
+from app.models.finance.gl.account_balance import AccountBalance, BalanceType
+from app.models.finance.gl.fiscal_period import FiscalPeriod
+from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
 from app.services.common import coerce_uuid
-from app.services.response import ListResponseMixin
 from app.services.finance.platform.org_context import org_context_service
+from app.services.response import ListResponseMixin
 
 if TYPE_CHECKING:
     from app.schemas.finance.gl import TrialBalanceRead
@@ -112,10 +111,14 @@ class AccountBalanceService(ListResponseMixin):
                     AccountBalance.fiscal_period_id == period_id,
                     AccountBalance.balance_type == balance_type,
                     AccountBalance.currency_code == currency_code,
-                    AccountBalance.business_unit_id == (coerce_uuid(business_unit_id) if business_unit_id else None),
-                    AccountBalance.cost_center_id == (coerce_uuid(cost_center_id) if cost_center_id else None),
-                    AccountBalance.project_id == (coerce_uuid(project_id) if project_id else None),
-                    AccountBalance.segment_id == (coerce_uuid(segment_id) if segment_id else None),
+                    AccountBalance.business_unit_id
+                    == (coerce_uuid(business_unit_id) if business_unit_id else None),
+                    AccountBalance.cost_center_id
+                    == (coerce_uuid(cost_center_id) if cost_center_id else None),
+                    AccountBalance.project_id
+                    == (coerce_uuid(project_id) if project_id else None),
+                    AccountBalance.segment_id
+                    == (coerce_uuid(segment_id) if segment_id else None),
                 )
             )
             .first()
@@ -138,7 +141,9 @@ class AccountBalanceService(ListResponseMixin):
                 fiscal_period_id=period_id,
                 balance_type=balance_type,
                 currency_code=currency_code,
-                business_unit_id=coerce_uuid(business_unit_id) if business_unit_id else None,
+                business_unit_id=coerce_uuid(business_unit_id)
+                if business_unit_id
+                else None,
                 cost_center_id=coerce_uuid(cost_center_id) if cost_center_id else None,
                 project_id=coerce_uuid(project_id) if project_id else None,
                 segment_id=coerce_uuid(segment_id) if segment_id else None,
@@ -203,10 +208,14 @@ class AccountBalanceService(ListResponseMixin):
                     AccountBalance.fiscal_period_id == coerce_uuid(fiscal_period_id),
                     AccountBalance.balance_type == balance_type,
                     AccountBalance.currency_code == currency_code,
-                    AccountBalance.business_unit_id == (coerce_uuid(business_unit_id) if business_unit_id else None),
-                    AccountBalance.cost_center_id == (coerce_uuid(cost_center_id) if cost_center_id else None),
-                    AccountBalance.project_id == (coerce_uuid(project_id) if project_id else None),
-                    AccountBalance.segment_id == (coerce_uuid(segment_id) if segment_id else None),
+                    AccountBalance.business_unit_id
+                    == (coerce_uuid(business_unit_id) if business_unit_id else None),
+                    AccountBalance.cost_center_id
+                    == (coerce_uuid(cost_center_id) if cost_center_id else None),
+                    AccountBalance.project_id
+                    == (coerce_uuid(project_id) if project_id else None),
+                    AccountBalance.segment_id
+                    == (coerce_uuid(segment_id) if segment_id else None),
                 )
             )
             .first()
@@ -243,12 +252,18 @@ class AccountBalanceService(ListResponseMixin):
             query = (
                 db.query(
                     AccountBalance.account_id,
-                    func.sum(AccountBalance.opening_debit - AccountBalance.opening_credit).label("opening_balance"),
+                    func.sum(
+                        AccountBalance.opening_debit - AccountBalance.opening_credit
+                    ).label("opening_balance"),
                     func.sum(AccountBalance.period_debit).label("period_debit"),
                     func.sum(AccountBalance.period_credit).label("period_credit"),
-                    func.sum(AccountBalance.closing_debit - AccountBalance.closing_credit).label("closing_balance"),
+                    func.sum(
+                        AccountBalance.closing_debit - AccountBalance.closing_credit
+                    ).label("closing_balance"),
                     func.sum(AccountBalance.net_balance).label("net_balance"),
-                    func.sum(AccountBalance.transaction_count).label("transaction_count"),
+                    func.sum(AccountBalance.transaction_count).label(
+                        "transaction_count"
+                    ),
                 )
                 .filter(
                     and_(
@@ -261,7 +276,9 @@ class AccountBalanceService(ListResponseMixin):
             )
 
             if account_ids:
-                query = query.filter(AccountBalance.account_id.in_([coerce_uuid(a) for a in account_ids]))
+                query = query.filter(
+                    AccountBalance.account_id.in_([coerce_uuid(a) for a in account_ids])
+                )
 
             results = query.all()
 
@@ -276,7 +293,9 @@ class AccountBalanceService(ListResponseMixin):
                     account_code=acct_map.get(r.account_id, ""),
                     fiscal_period_id=period_id,
                     balance_type=balance_type.value,
-                    currency_code=org_context_service.get_functional_currency(db, org_id),
+                    currency_code=org_context_service.get_functional_currency(
+                        db, org_id
+                    ),
                     opening_balance=r.opening_balance or Decimal("0"),
                     period_debit=r.period_debit or Decimal("0"),
                     period_credit=r.period_credit or Decimal("0"),
@@ -398,7 +417,9 @@ class AccountBalanceService(ListResponseMixin):
                     account_id=r.account_id,
                     fiscal_period_id=period_id,
                     balance_type=balance_type,
-                    currency_code=org_context_service.get_functional_currency(db, org_id),
+                    currency_code=org_context_service.get_functional_currency(
+                        db, org_id
+                    ),
                     business_unit_id=r.business_unit_id,
                     cost_center_id=r.cost_center_id,
                     project_id=r.project_id,
@@ -648,8 +669,9 @@ class AccountBalanceService(ListResponseMixin):
         Returns:
             TrialBalanceResult object
         """
-        from app.schemas.finance.gl import TrialBalanceRead, TrialBalanceLineRead
         from datetime import date as date_type
+
+        from app.schemas.finance.gl import TrialBalanceLineRead, TrialBalanceRead
 
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(fiscal_period_id)
@@ -692,14 +714,18 @@ class AccountBalanceService(ListResponseMixin):
                 credit_balance = abs(closing)
                 total_credit += abs(closing)
 
-            lines.append(TrialBalanceLineRead(
-                account_id=balance.account_id,
-                account_code=acct.account_code,
-                account_name=acct.account_name,
-                account_type=str(acct.account_type.value) if acct.account_type else "POSTING",
-                debit_balance=debit_balance,
-                credit_balance=credit_balance,
-            ))
+            lines.append(
+                TrialBalanceLineRead(
+                    account_id=balance.account_id,
+                    account_code=acct.account_code,
+                    account_name=acct.account_name,
+                    account_type=str(acct.account_type.value)
+                    if acct.account_type
+                    else "POSTING",
+                    debit_balance=debit_balance,
+                    credit_balance=credit_balance,
+                )
+            )
 
         return TrialBalanceRead(
             fiscal_period_id=period_id,

@@ -5,6 +5,7 @@ Revises: add_payroll_expense_account
 Create Date: 2026-01-31
 
 """
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -24,7 +25,10 @@ def upgrade() -> None:
     if not inspector.has_table("salary_slip", schema="payroll"):
         return
 
-    existing = {uc["name"] for uc in inspector.get_unique_constraints("salary_slip", schema="payroll")}
+    existing = {
+        uc["name"]
+        for uc in inspector.get_unique_constraints("salary_slip", schema="payroll")
+    }
     if CONSTRAINT_NAME not in existing:
         op.create_unique_constraint(
             CONSTRAINT_NAME,
@@ -41,6 +45,11 @@ def downgrade() -> None:
     if not inspector.has_table("salary_slip", schema="payroll"):
         return
 
-    existing = {uc["name"] for uc in inspector.get_unique_constraints("salary_slip", schema="payroll")}
+    existing = {
+        uc["name"]
+        for uc in inspector.get_unique_constraints("salary_slip", schema="payroll")
+    }
     if CONSTRAINT_NAME in existing:
-        op.drop_constraint(CONSTRAINT_NAME, "salary_slip", schema="payroll", type_="unique")
+        op.drop_constraint(
+            CONSTRAINT_NAME, "salary_slip", schema="payroll", type_="unique"
+        )

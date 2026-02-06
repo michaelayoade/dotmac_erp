@@ -10,6 +10,7 @@ This migration adds:
 - Additional ticket fields: category_id, team_id, is_deleted
 - Creates supporting tables: ticket_category, support_team, ticket_comment, ticket_attachment
 """
+
 from alembic import op
 
 revision = "20260124_add_customer_relationships"

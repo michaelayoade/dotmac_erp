@@ -23,8 +23,8 @@ from sqlalchemy.orm import Session
 from app.models.people.attendance import (
     Attendance,
     AttendanceStatus,
-    ShiftType,
     ShiftAssignment,
+    ShiftType,
 )
 
 logger = logging.getLogger(__name__)
@@ -111,7 +111,10 @@ class AttendancePayrollAdapter:
         """Get the employee's assigned shift for a specific date."""
         stmt = (
             select(ShiftType)
-            .join(ShiftAssignment, ShiftAssignment.shift_type_id == ShiftType.shift_type_id)
+            .join(
+                ShiftAssignment,
+                ShiftAssignment.shift_type_id == ShiftType.shift_type_id,
+            )
             .where(
                 ShiftAssignment.organization_id == organization_id,
                 ShiftAssignment.employee_id == employee_id,
@@ -259,7 +262,8 @@ class AttendancePayrollAdapter:
 
         # Calculate expected hours for the period (excluding weekends)
         working_days_in_period = sum(
-            1 for d in self._date_range(period_start, period_end)
+            1
+            for d in self._date_range(period_start, period_end)
             if d.weekday() < 5  # Exclude weekends
         )
         summary.expected_working_hours = (

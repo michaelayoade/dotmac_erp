@@ -6,9 +6,10 @@ Manages price lists, pricing tiers, and resolves effective prices for items.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import List, Optional
 from uuid import UUID
 
@@ -20,6 +21,8 @@ from app.models.inventory.item import Item
 from app.models.inventory.price_list import PriceList, PriceListItem, PriceListType
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -97,12 +100,16 @@ class PriceListService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         # Check for duplicate code
-        existing = db.query(PriceList).filter(
-            and_(
-                PriceList.organization_id == org_id,
-                PriceList.price_list_code == input.price_list_code,
+        existing = (
+            db.query(PriceList)
+            .filter(
+                and_(
+                    PriceList.organization_id == org_id,
+                    PriceList.price_list_code == input.price_list_code,
+                )
             )
-        ).first()
+            .first()
+        )
 
         if existing:
             raise HTTPException(
@@ -168,7 +175,10 @@ class PriceListService(ListResponseMixin):
             ).update({"is_default": False})
 
         for key, value in updates.items():
-            if hasattr(price_list, key) and key not in ["price_list_id", "organization_id"]:
+            if hasattr(price_list, key) and key not in [
+                "price_list_id",
+                "organization_id",
+            ]:
                 setattr(price_list, key, value)
 
         db.commit()
@@ -210,13 +220,17 @@ class PriceListService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Item not found")
 
         # Check for existing item with same quantity break
-        existing = db.query(PriceListItem).filter(
-            and_(
-                PriceListItem.price_list_id == pl_id,
-                PriceListItem.item_id == itm_id,
-                PriceListItem.min_quantity == input.min_quantity,
+        existing = (
+            db.query(PriceListItem)
+            .filter(
+                and_(
+                    PriceListItem.price_list_id == pl_id,
+                    PriceListItem.item_id == itm_id,
+                    PriceListItem.min_quantity == input.min_quantity,
+                )
             )
-        ).first()
+            .first()
+        )
 
         if existing:
             # Update existing
@@ -324,8 +338,14 @@ class PriceListService(ListResponseMixin):
                 PriceList.organization_id == org_id,
                 PriceList.price_list_type == price_list_type,
                 PriceList.is_active == True,
-                or_(PriceList.effective_from.is_(None), PriceList.effective_from <= check_date),
-                or_(PriceList.effective_to.is_(None), PriceList.effective_to >= check_date),
+                or_(
+                    PriceList.effective_from.is_(None),
+                    PriceList.effective_from <= check_date,
+                ),
+                or_(
+                    PriceList.effective_to.is_(None),
+                    PriceList.effective_to >= check_date,
+                ),
             )
         )
 
@@ -333,25 +353,40 @@ class PriceListService(ListResponseMixin):
             pl_query = pl_query.filter(PriceList.currency_code == currency_code)
 
         if price_list_id:
-            pl_query = pl_query.filter(PriceList.price_list_id == coerce_uuid(price_list_id))
+            pl_query = pl_query.filter(
+                PriceList.price_list_id == coerce_uuid(price_list_id)
+            )
         else:
-            pl_query = pl_query.order_by(PriceList.is_default.desc(), PriceList.priority.desc())
+            pl_query = pl_query.order_by(
+                PriceList.is_default.desc(), PriceList.priority.desc()
+            )
 
         price_lists = pl_query.all()
 
         # Try each price list in order
         for pl in price_lists:
             # Find matching item price with quantity break
-            item_prices = db.query(PriceListItem).filter(
-                and_(
-                    PriceListItem.price_list_id == pl.price_list_id,
-                    PriceListItem.item_id == itm_id,
-                    PriceListItem.is_active == True,
-                    PriceListItem.min_quantity <= quantity,
-                    or_(PriceListItem.effective_from.is_(None), PriceListItem.effective_from <= check_date),
-                    or_(PriceListItem.effective_to.is_(None), PriceListItem.effective_to >= check_date),
+            item_prices = (
+                db.query(PriceListItem)
+                .filter(
+                    and_(
+                        PriceListItem.price_list_id == pl.price_list_id,
+                        PriceListItem.item_id == itm_id,
+                        PriceListItem.is_active == True,
+                        PriceListItem.min_quantity <= quantity,
+                        or_(
+                            PriceListItem.effective_from.is_(None),
+                            PriceListItem.effective_from <= check_date,
+                        ),
+                        or_(
+                            PriceListItem.effective_to.is_(None),
+                            PriceListItem.effective_to >= check_date,
+                        ),
+                    )
                 )
-            ).order_by(PriceListItem.min_quantity.desc()).first()
+                .order_by(PriceListItem.min_quantity.desc())
+                .first()
+            )
 
             if item_prices:
                 # Calculate net price after discounts
@@ -382,7 +417,9 @@ class PriceListService(ListResponseMixin):
                 )
                 if base_price:
                     marked_up = base_price * (1 + pl.markup_percent / 100)
-                    marked_up = marked_up.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    marked_up = marked_up.quantize(
+                        Decimal("0.01"), rounding=ROUND_HALF_UP
+                    )
 
                     return ResolvedPrice(
                         item_id=itm_id,
@@ -436,16 +473,27 @@ class PriceListService(ListResponseMixin):
         check_date: date,
     ) -> Optional[Decimal]:
         """Get price from base price list."""
-        item_price = db.query(PriceListItem).filter(
-            and_(
-                PriceListItem.price_list_id == base_price_list_id,
-                PriceListItem.item_id == item_id,
-                PriceListItem.is_active == True,
-                PriceListItem.min_quantity <= quantity,
-                or_(PriceListItem.effective_from.is_(None), PriceListItem.effective_from <= check_date),
-                or_(PriceListItem.effective_to.is_(None), PriceListItem.effective_to >= check_date),
+        item_price = (
+            db.query(PriceListItem)
+            .filter(
+                and_(
+                    PriceListItem.price_list_id == base_price_list_id,
+                    PriceListItem.item_id == item_id,
+                    PriceListItem.is_active == True,
+                    PriceListItem.min_quantity <= quantity,
+                    or_(
+                        PriceListItem.effective_from.is_(None),
+                        PriceListItem.effective_from <= check_date,
+                    ),
+                    or_(
+                        PriceListItem.effective_to.is_(None),
+                        PriceListItem.effective_to >= check_date,
+                    ),
+                )
             )
-        ).order_by(PriceListItem.min_quantity.desc()).first()
+            .order_by(PriceListItem.min_quantity.desc())
+            .first()
+        )
 
         return item_price.unit_price if item_price else None
 
@@ -474,7 +522,9 @@ class PriceListService(ListResponseMixin):
         query = db.query(PriceList)
 
         if organization_id:
-            query = query.filter(PriceList.organization_id == coerce_uuid(organization_id))
+            query = query.filter(
+                PriceList.organization_id == coerce_uuid(organization_id)
+            )
 
         if price_list_type:
             query = query.filter(PriceList.price_list_type == price_list_type)

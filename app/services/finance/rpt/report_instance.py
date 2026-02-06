@@ -6,22 +6,28 @@ Manages report generation, execution, and output storage.
 
 from __future__ import annotations
 
+import json
+import logging
+import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import json
-import os
-from typing import Any, List, Optional, cast
+from typing import Any, Optional, cast
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.finance.rpt.report_instance import ReportInstance, ReportStatus
 from app.models.finance.rpt.report_definition import ReportDefinition, ReportType
-from app.services.finance.rpt.report_definition import ReportDefinitionInput, report_definition_service
+from app.models.finance.rpt.report_instance import ReportInstance, ReportStatus
 from app.services.common import coerce_uuid
-from app.services.response import ListResponseMixin
+from app.services.finance.rpt.report_definition import (
+    ReportDefinitionInput,
+    report_definition_service,
+)
 from app.services.finance.rpt.web import reports_web_service
+from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -94,7 +100,10 @@ class ReportInstanceService(ListResponseMixin):
             )
 
         # Validate output format
-        if definition.supported_formats and request.output_format not in definition.supported_formats:
+        if (
+            definition.supported_formats
+            and request.output_format not in definition.supported_formats
+        ):
             raise HTTPException(
                 status_code=400,
                 detail=f"Output format {request.output_format} not supported for this report",
@@ -380,7 +389,9 @@ class ReportInstanceService(ListResponseMixin):
                 detail=f"Report instance is {instance.status.value}, output not available",
             )
 
-        if not instance.output_file_path or not os.path.exists(instance.output_file_path):
+        if not instance.output_file_path or not os.path.exists(
+            instance.output_file_path
+        ):
             raise HTTPException(status_code=404, detail="Report output not found")
 
         with open(instance.output_file_path, "r", encoding="utf-8") as handle:
@@ -397,7 +408,9 @@ class ReportInstanceService(ListResponseMixin):
         if request.report_def_id:
             definition = db.get(ReportDefinition, request.report_def_id)
             if not definition or definition.organization_id != organization_id:
-                raise HTTPException(status_code=404, detail="Report definition not found")
+                raise HTTPException(
+                    status_code=404, detail="Report definition not found"
+                )
             return definition
 
         if request.report_code:
@@ -599,7 +612,9 @@ class ReportInstanceService(ListResponseMixin):
                 budget_code=parameters.get("budget_code"),
             )
 
-        raise HTTPException(status_code=400, detail=f"Unsupported report code {report_code}")
+        raise HTTPException(
+            status_code=400, detail=f"Unsupported report code {report_code}"
+        )
 
     @staticmethod
     def get_queued_reports(
@@ -666,8 +681,7 @@ class ReportInstanceService(ListResponseMixin):
         generating = len([i for i in instances if i.status == ReportStatus.GENERATING])
 
         generation_times = [
-            i.generation_time_ms for i in instances
-            if i.generation_time_ms is not None
+            i.generation_time_ms for i in instances if i.generation_time_ms is not None
         ]
         avg_generation_time = (
             sum(generation_times) / len(generation_times) if generation_times else 0
@@ -710,11 +724,13 @@ class ReportInstanceService(ListResponseMixin):
             .filter(
                 ReportInstance.organization_id == org_id,
                 ReportInstance.generated_at < cutoff_date,
-                ReportInstance.status.in_([
-                    ReportStatus.COMPLETED,
-                    ReportStatus.FAILED,
-                    ReportStatus.CANCELLED,
-                ]),
+                ReportInstance.status.in_(
+                    [
+                        ReportStatus.COMPLETED,
+                        ReportStatus.FAILED,
+                        ReportStatus.CANCELLED,
+                    ]
+                ),
             )
             .all()
         )

@@ -21,8 +21,12 @@ class Settings:
 
     # Avatar settings
     avatar_upload_dir: str = os.getenv("AVATAR_UPLOAD_DIR", "static/avatars")
-    avatar_max_size_bytes: int = int(os.getenv("AVATAR_MAX_SIZE_BYTES", str(2 * 1024 * 1024)))  # 2MB
-    avatar_allowed_types: str = os.getenv("AVATAR_ALLOWED_TYPES", "image/jpeg,image/png,image/gif,image/webp")
+    avatar_max_size_bytes: int = int(
+        os.getenv("AVATAR_MAX_SIZE_BYTES", str(2 * 1024 * 1024))
+    )  # 2MB
+    avatar_allowed_types: str = os.getenv(
+        "AVATAR_ALLOWED_TYPES", "image/jpeg,image/png,image/gif,image/webp"
+    )
     avatar_url_prefix: str = os.getenv("AVATAR_URL_PREFIX", "/static/avatars")
 
     # Branding asset uploads
@@ -111,7 +115,7 @@ class Settings:
     # CRM Integration (crm.dotmac.io)
     # ==========================================================================
     # CRM API base URL
-    crm_api_url: str = os.getenv("CRM_API_URL", "https://crm.dotmac.io/api/v1")
+    crm_api_url: str = os.getenv("CRM_API_URL", "")
     # CRM API authentication token
     crm_api_token: str | None = os.getenv("CRM_API_TOKEN") or None
     # CRM webhook secret for validating incoming webhooks
@@ -123,9 +127,13 @@ class Settings:
     # CRM max retries for failed requests
     crm_max_retries: int = int(os.getenv("CRM_MAX_RETRIES", "3"))
     # CRM inventory webhook URL (for pushing inventory updates TO CRM)
-    crm_inventory_webhook_url: str | None = os.getenv("CRM_INVENTORY_WEBHOOK_URL") or None
+    crm_inventory_webhook_url: str | None = (
+        os.getenv("CRM_INVENTORY_WEBHOOK_URL") or None
+    )
     # Push inventory changes when stock changes by this percentage (0 = push all changes)
-    crm_inventory_push_threshold_percent: int = int(os.getenv("CRM_INVENTORY_PUSH_THRESHOLD_PERCENT", "10"))
+    crm_inventory_push_threshold_percent: int = int(
+        os.getenv("CRM_INVENTORY_PUSH_THRESHOLD_PERCENT", "10")
+    )
 
     # ==========================================================================
     # Remita Integration (RRR for government payments)
@@ -141,7 +149,7 @@ class Settings:
     # Splynx Integration (ISP billing - selfcare.dotmac.ng)
     # ==========================================================================
     # Splynx API base URL
-    splynx_api_url: str = os.getenv("SPLYNX_API_URL", "https://selfcare.dotmac.ng")
+    splynx_api_url: str = os.getenv("SPLYNX_API_URL", "")
     # Splynx API key (first part of Basic auth)
     splynx_api_key: str = os.getenv("SPLYNX_API_KEY", "")
     # Splynx API secret (second part of Basic auth)

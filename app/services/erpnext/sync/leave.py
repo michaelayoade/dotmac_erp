@@ -6,6 +6,7 @@ Sync services for Leave entities:
 - Leave Allocation
 - Leave Application
 """
+
 import logging
 import uuid
 from datetime import datetime
@@ -15,13 +16,16 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.people.leave.leave_type import LeaveType, LeaveTypePolicy
 from app.models.people.leave.leave_allocation import LeaveAllocation
-from app.models.people.leave.leave_application import LeaveApplication, LeaveApplicationStatus
+from app.models.people.leave.leave_application import (
+    LeaveApplication,
+    LeaveApplicationStatus,
+)
+from app.models.people.leave.leave_type import LeaveType, LeaveTypePolicy
 from app.services.erpnext.mappings.leave import (
-    LeaveTypeMapping,
     LeaveAllocationMapping,
     LeaveApplicationMapping,
+    LeaveTypeMapping,
 )
 
 from .base import BaseSyncService
@@ -195,15 +199,23 @@ class LeaveAllocationSyncService(BaseSyncService[LeaveAllocation]):
         )
         return allocation
 
-    def update_entity(self, entity: LeaveAllocation, data: dict[str, Any]) -> LeaveAllocation:
+    def update_entity(
+        self, entity: LeaveAllocation, data: dict[str, Any]
+    ) -> LeaveAllocation:
         data.pop("_employee_source_name", None)
         data.pop("_leave_type_source_name", None)
         data.pop("_source_modified", None)
         data.pop("_source_name", None)
 
-        entity.new_leaves_allocated = data.get("new_leaves_allocated", entity.new_leaves_allocated)
-        entity.carry_forward_leaves = data.get("carry_forward_leaves", entity.carry_forward_leaves)
-        entity.total_leaves_allocated = data.get("total_leaves_allocated", entity.total_leaves_allocated)
+        entity.new_leaves_allocated = data.get(
+            "new_leaves_allocated", entity.new_leaves_allocated
+        )
+        entity.carry_forward_leaves = data.get(
+            "carry_forward_leaves", entity.carry_forward_leaves
+        )
+        entity.total_leaves_allocated = data.get(
+            "total_leaves_allocated", entity.total_leaves_allocated
+        )
         entity.is_active = data.get("is_active", True)
         entity.updated_by_id = self.user_id
         return entity
@@ -313,7 +325,9 @@ class LeaveApplicationSyncService(BaseSyncService[LeaveApplication]):
         )
         return application
 
-    def update_entity(self, entity: LeaveApplication, data: dict[str, Any]) -> LeaveApplication:
+    def update_entity(
+        self, entity: LeaveApplication, data: dict[str, Any]
+    ) -> LeaveApplication:
         data.pop("_employee_source_name", None)
         data.pop("_leave_type_source_name", None)
         data.pop("_approver_user", None)

@@ -5,6 +5,8 @@ Maps ERPNext Material Request DocTypes to DotMac inv schema:
 - Material Request → inv.material_request (header)
 - Material Request Item → inv.material_request_item (line items)
 """
+
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -17,6 +19,7 @@ from .base import (
     parse_decimal,
 )
 
+logger = logging.getLogger(__name__)
 
 # ERPNext Material Request status to DotMac MaterialRequestStatus
 MATERIAL_REQUEST_STATUS_MAP = {
@@ -74,32 +77,34 @@ class MaterialRequestMapping(DocTypeMapping):
     source_doctype: str = "Material Request"
     target_table: str = "inv.material_request"
     unique_key: str = "name"
-    fields: list[FieldMapping] = field(default_factory=lambda: [
-        FieldMapping("name", "_source_name", required=True),
-        FieldMapping(
-            "material_request_type",
-            "request_type",
-            required=True,
-            transformer=map_material_request_type,
-        ),
-        FieldMapping(
-            "status",
-            "status",
-            required=True,
-            transformer=map_material_request_status,
-        ),
-        FieldMapping("schedule_date", "schedule_date", transformer=parse_date),
-        # Reference fields - will be resolved in sync service
-        FieldMapping("set_warehouse", "_warehouse_source_name"),
-        FieldMapping("requested_by", "_requested_by_user"),  # User email
-        # Remarks/notes
-        FieldMapping(
-            "reason",
-            "remarks",
-            transformer=lambda v: clean_string(v, 2000),
-        ),
-        FieldMapping("modified", "_source_modified", transformer=parse_datetime),
-    ])
+    fields: list[FieldMapping] = field(
+        default_factory=lambda: [
+            FieldMapping("name", "_source_name", required=True),
+            FieldMapping(
+                "material_request_type",
+                "request_type",
+                required=True,
+                transformer=map_material_request_type,
+            ),
+            FieldMapping(
+                "status",
+                "status",
+                required=True,
+                transformer=map_material_request_status,
+            ),
+            FieldMapping("schedule_date", "schedule_date", transformer=parse_date),
+            # Reference fields - will be resolved in sync service
+            FieldMapping("set_warehouse", "_warehouse_source_name"),
+            FieldMapping("requested_by", "_requested_by_user"),  # User email
+            # Remarks/notes
+            FieldMapping(
+                "reason",
+                "remarks",
+                transformer=lambda v: clean_string(v, 2000),
+            ),
+            FieldMapping("modified", "_source_modified", transformer=parse_datetime),
+        ]
+    )
 
     def transform_record(self, record: dict[str, Any]) -> dict[str, Any]:
         """Transform with request number generation."""
@@ -135,28 +140,32 @@ class MaterialRequestItemMapping(DocTypeMapping):
     source_doctype: str = "Material Request Item"
     target_table: str = "inv.material_request_item"
     unique_key: str = "name"
-    fields: list[FieldMapping] = field(default_factory=lambda: [
-        FieldMapping("name", "_source_name", required=True),
-        # Item reference - will be resolved via SyncEntity
-        FieldMapping("item_code", "_item_source_name", required=True),
-        # Warehouse reference
-        FieldMapping("warehouse", "_warehouse_source_name"),
-        # Quantities
-        FieldMapping("qty", "requested_qty", required=True, transformer=parse_decimal),
-        FieldMapping(
-            "ordered_qty",
-            "ordered_qty",
-            default=0,
-            transformer=parse_decimal,
-        ),
-        FieldMapping("stock_uom", "uom", transformer=lambda v: clean_string(v, 20)),
-        # Schedule date
-        FieldMapping("schedule_date", "schedule_date", transformer=parse_date),
-        # Cross-module links
-        FieldMapping("project", "_project_source_name"),
-        # Modified timestamp
-        FieldMapping("modified", "_source_modified", transformer=parse_datetime),
-    ])
+    fields: list[FieldMapping] = field(
+        default_factory=lambda: [
+            FieldMapping("name", "_source_name", required=True),
+            # Item reference - will be resolved via SyncEntity
+            FieldMapping("item_code", "_item_source_name", required=True),
+            # Warehouse reference
+            FieldMapping("warehouse", "_warehouse_source_name"),
+            # Quantities
+            FieldMapping(
+                "qty", "requested_qty", required=True, transformer=parse_decimal
+            ),
+            FieldMapping(
+                "ordered_qty",
+                "ordered_qty",
+                default=0,
+                transformer=parse_decimal,
+            ),
+            FieldMapping("stock_uom", "uom", transformer=lambda v: clean_string(v, 20)),
+            # Schedule date
+            FieldMapping("schedule_date", "schedule_date", transformer=parse_date),
+            # Cross-module links
+            FieldMapping("project", "_project_source_name"),
+            # Modified timestamp
+            FieldMapping("modified", "_source_modified", transformer=parse_datetime),
+        ]
+    )
 
     def transform_record(self, record: dict[str, Any]) -> dict[str, Any]:
         """Transform with default quantity handling."""

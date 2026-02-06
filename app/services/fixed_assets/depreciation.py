@@ -6,9 +6,10 @@ Manages depreciation runs, calculations, and posting to GL.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 from uuid import UUID
 
@@ -18,10 +19,15 @@ from sqlalchemy.orm import Session
 
 from app.models.fixed_assets.asset import Asset, AssetStatus
 from app.models.fixed_assets.asset_category import AssetCategory, DepreciationMethod
-from app.models.fixed_assets.depreciation_run import DepreciationRun, DepreciationRunStatus
+from app.models.fixed_assets.depreciation_run import (
+    DepreciationRun,
+    DepreciationRunStatus,
+)
 from app.models.fixed_assets.depreciation_schedule import DepreciationSchedule
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -105,7 +111,9 @@ class DepreciationService(ListResponseMixin):
             return Decimal("0")
 
         # Calculate annual rate
-        annual_rate = (Decimal("1") / Decimal(useful_life_months / 12)) * rate_multiplier
+        annual_rate = (
+            Decimal("1") / Decimal(useful_life_months / 12)
+        ) * rate_multiplier
         monthly_rate = annual_rate / Decimal("12")
 
         depreciation = net_book_value * monthly_rate * Decimal(periods)
@@ -135,13 +143,17 @@ class DepreciationService(ListResponseMixin):
         remaining_years = (remaining_life_months + 11) // 12  # Round up
 
         # Sum of years = n(n+1)/2
-        sum_of_years = Decimal(useful_life_years * (useful_life_years + 1)) / Decimal("2")
+        sum_of_years = Decimal(useful_life_years * (useful_life_years + 1)) / Decimal(
+            "2"
+        )
 
         if sum_of_years == 0:
             return Decimal("0")
 
         depreciable_amount = cost_basis - residual_value
-        annual_depreciation = (Decimal(remaining_years) / sum_of_years) * depreciable_amount
+        annual_depreciation = (
+            Decimal(remaining_years) / sum_of_years
+        ) * depreciable_amount
         monthly_depreciation = annual_depreciation / Decimal("12")
 
         return (monthly_depreciation * Decimal(periods)).quantize(
@@ -319,7 +331,10 @@ class DepreciationService(ListResponseMixin):
         if not run or run.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Depreciation run not found")
 
-        if run.status not in [DepreciationRunStatus.DRAFT, DepreciationRunStatus.FAILED]:
+        if run.status not in [
+            DepreciationRunStatus.DRAFT,
+            DepreciationRunStatus.FAILED,
+        ]:
             raise HTTPException(
                 status_code=400,
                 detail=f"Cannot calculate run with status '{run.status.value}'",
@@ -469,7 +484,9 @@ class DepreciationService(ListResponseMixin):
             for schedule in schedules:
                 asset = db.get(Asset, schedule.asset_id)
                 if asset:
-                    asset.accumulated_depreciation = schedule.accumulated_depreciation_closing
+                    asset.accumulated_depreciation = (
+                        schedule.accumulated_depreciation_closing
+                    )
                     asset.net_book_value = schedule.net_book_value_closing
                     asset.remaining_life_months = schedule.remaining_life_months_closing
 

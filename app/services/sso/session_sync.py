@@ -12,7 +12,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.auth import Session as AuthSession, SessionStatus
+from app.models.auth import Session as AuthSession
+from app.models.auth import SessionStatus
 from app.services.common import coerce_uuid
 
 logger = logging.getLogger(__name__)
@@ -223,7 +224,9 @@ class SSOSessionSync:
                 session.ip_address = ip_address
             if user_agent:
                 # Truncate user agent to avoid DB field overflow
-                session.user_agent = user_agent[:512] if len(user_agent) > 512 else user_agent
+                session.user_agent = (
+                    user_agent[:512] if len(user_agent) > 512 else user_agent
+                )
 
             self.auth_db.commit()
             return True

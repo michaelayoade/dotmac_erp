@@ -7,27 +7,30 @@ with inventory items are posted.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone as tz
-from decimal import Decimal, ROUND_HALF_UP
+from datetime import datetime
+from datetime import timezone as tz
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.finance.ar.invoice import Invoice, InvoiceType
+from app.models.finance.ar.invoice import Invoice
 from app.models.finance.ar.invoice_line import InvoiceLine
-from app.models.finance.gl.fiscal_period import FiscalPeriod
-from app.models.inventory.item import Item, CostingMethod
-from app.models.inventory.item_category import ItemCategory
 from app.models.inventory.inventory_transaction import TransactionType
+from app.models.inventory.item import CostingMethod, Item
+from app.models.inventory.item_category import ItemCategory
 from app.services.common import coerce_uuid
 from app.services.finance.gl.journal import JournalLineInput
 from app.services.inventory.transaction import (
     InventoryTransactionService,
     TransactionInput,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -147,21 +150,30 @@ class ARInventoryIntegration:
         if item.costing_method == CostingMethod.STANDARD_COST:
             unit_cost = item.standard_cost or Decimal("0")
             total_cost = quantity * unit_cost
-            return CostingResult(unit_cost=unit_cost, total_cost=total_cost, lot_id=lot_id)
+            return CostingResult(
+                unit_cost=unit_cost, total_cost=total_cost, lot_id=lot_id
+            )
 
         elif item.costing_method == CostingMethod.WEIGHTED_AVERAGE:
             unit_cost = item.average_cost or Decimal("0")
             total_cost = quantity * unit_cost
-            return CostingResult(unit_cost=unit_cost, total_cost=total_cost, lot_id=lot_id)
+            return CostingResult(
+                unit_cost=unit_cost, total_cost=total_cost, lot_id=lot_id
+            )
 
         elif item.costing_method == CostingMethod.FIFO:
             # For FIFO, we need to calculate from lots
-            lots = db.query(InventoryLot).filter(
-                InventoryLot.item_id == item.item_id,
-                InventoryLot.quantity_on_hand > 0,
-                InventoryLot.is_active == True,
-                InventoryLot.is_quarantined == False,
-            ).order_by(InventoryLot.received_date.asc()).all()
+            lots = (
+                db.query(InventoryLot)
+                .filter(
+                    InventoryLot.item_id == item.item_id,
+                    InventoryLot.quantity_on_hand > 0,
+                    InventoryLot.is_active == True,
+                    InventoryLot.is_quarantined == False,
+                )
+                .order_by(InventoryLot.received_date.asc())
+                .all()
+            )
 
             remaining = quantity
             total_cost = Decimal("0")
@@ -180,11 +192,19 @@ class ARInventoryIntegration:
 
             if remaining > 0:
                 # Not enough inventory - use last known cost for remainder
-                last_cost = lots[-1].unit_cost if lots else (item.last_purchase_cost or Decimal("0"))
+                last_cost = (
+                    lots[-1].unit_cost
+                    if lots
+                    else (item.last_purchase_cost or Decimal("0"))
+                )
                 total_cost += remaining * last_cost
 
-            unit_cost = (total_cost / quantity).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
-            return CostingResult(unit_cost=unit_cost, total_cost=total_cost, lot_id=first_lot_id)
+            unit_cost = (total_cost / quantity).quantize(
+                Decimal("0.000001"), rounding=ROUND_HALF_UP
+            )
+            return CostingResult(
+                unit_cost=unit_cost, total_cost=total_cost, lot_id=first_lot_id
+            )
 
         elif item.costing_method == CostingMethod.SPECIFIC_IDENTIFICATION:
             # Must have specific lot
@@ -193,18 +213,24 @@ class ARInventoryIntegration:
                 if specific_lot:
                     unit_cost = specific_lot.unit_cost
                     total_cost = quantity * unit_cost
-                    return CostingResult(unit_cost=unit_cost, total_cost=total_cost, lot_id=lot_id)
+                    return CostingResult(
+                        unit_cost=unit_cost, total_cost=total_cost, lot_id=lot_id
+                    )
 
             # Fallback to average cost
             unit_cost = item.average_cost or Decimal("0")
             total_cost = quantity * unit_cost
-            return CostingResult(unit_cost=unit_cost, total_cost=total_cost, lot_id=lot_id)
+            return CostingResult(
+                unit_cost=unit_cost, total_cost=total_cost, lot_id=lot_id
+            )
 
         else:
             # Default to average cost
             unit_cost = item.average_cost or item.last_purchase_cost or Decimal("0")
             total_cost = quantity * unit_cost
-            return CostingResult(unit_cost=unit_cost, total_cost=total_cost, lot_id=lot_id)
+            return CostingResult(
+                unit_cost=unit_cost, total_cost=total_cost, lot_id=lot_id
+            )
 
     @staticmethod
     def process_invoice_inventory(
@@ -333,7 +359,9 @@ class ARInventoryIntegration:
                 inventory_account_id = item.inventory_account_id
 
                 # Fall back to category accounts
-                if (not cogs_account_id or not inventory_account_id) and item.category_id:
+                if (
+                    not cogs_account_id or not inventory_account_id
+                ) and item.category_id:
                     category = db.get(ItemCategory, item.category_id)
                     if category:
                         if not cogs_account_id:
@@ -406,7 +434,9 @@ class ARInventoryIntegration:
             except HTTPException as e:
                 errors.append(f"Line {line.line_number}: {e.detail}")
             except Exception as e:
-                errors.append(f"Line {line.line_number}: Inventory transaction failed - {str(e)}")
+                errors.append(
+                    f"Line {line.line_number}: Inventory transaction failed - {str(e)}"
+                )
 
         # Determine success
         success = len(errors) == 0

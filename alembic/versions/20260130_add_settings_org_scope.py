@@ -23,7 +23,8 @@ depends_on = None
 def upgrade() -> None:
     # Create the setting_scope enum type
     setting_scope_enum = postgresql.ENUM(
-        "GLOBAL", "ORG_SPECIFIC",
+        "GLOBAL",
+        "ORG_SPECIFIC",
         name="setting_scope",
         create_type=False,
     )

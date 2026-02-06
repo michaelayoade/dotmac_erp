@@ -6,6 +6,7 @@ Provides bulk operations for AR invoice documents.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from uuid import UUID
 
@@ -15,6 +16,8 @@ from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 from app.schemas.bulk_actions import BulkActionResult
 from app.services.bulk_actions import BulkActionService
 from app.services.finance.ar.invoice import ARInvoiceService
+
+logger = logging.getLogger(__name__)
 
 
 class ARInvoiceBulkService(BulkActionService[Invoice]):
@@ -141,7 +144,9 @@ class ARInvoiceBulkService(BulkActionService[Invoice]):
         if failed_count > 0:
             return BulkActionResult.partial(success_count, failed_count, errors)
 
-        return BulkActionResult.success(success_count, f"Approved {success_count} invoices")
+        return BulkActionResult.success(
+            success_count, f"Approved {success_count} invoices"
+        )
 
     async def bulk_post(self, ids: list[UUID]) -> BulkActionResult:
         """
@@ -184,7 +189,9 @@ class ARInvoiceBulkService(BulkActionService[Invoice]):
         if failed_count > 0:
             return BulkActionResult.partial(success_count, failed_count, errors)
 
-        return BulkActionResult.success(success_count, f"Posted {success_count} invoices to ledger")
+        return BulkActionResult.success(
+            success_count, f"Posted {success_count} invoices to ledger"
+        )
 
 
 def get_ar_invoice_bulk_service(

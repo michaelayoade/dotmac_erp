@@ -6,8 +6,9 @@ Manages asset records, categorization, and lifecycle status.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
 from typing import Any, List, Optional
 from uuid import UUID
@@ -16,12 +17,14 @@ from fastapi import HTTPException
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
+from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.models.fixed_assets.asset import Asset, AssetStatus
 from app.models.fixed_assets.asset_category import AssetCategory, DepreciationMethod
-from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.services.common import coerce_uuid
 from app.services.finance.platform.sequence import SequenceService
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -222,7 +225,9 @@ class AssetCategoryService(ListResponseMixin):
         category.useful_life_months = input.useful_life_months
         category.residual_value_percent = input.residual_value_percent
         category.asset_account_id = input.asset_account_id
-        category.accumulated_depreciation_account_id = input.accumulated_depreciation_account_id
+        category.accumulated_depreciation_account_id = (
+            input.accumulated_depreciation_account_id
+        )
         category.depreciation_expense_account_id = input.depreciation_expense_account_id
         category.gain_loss_disposal_account_id = input.gain_loss_disposal_account_id
         category.revaluation_surplus_account_id = input.revaluation_surplus_account_id
@@ -302,20 +307,22 @@ class AssetService(ListResponseMixin):
             )
 
         # Generate asset number
-        asset_number = SequenceService.get_next_number(
-            db, org_id, SequenceType.ASSET
-        )
+        asset_number = SequenceService.get_next_number(db, org_id, SequenceType.ASSET)
 
         # Calculate functional currency cost
         exchange_rate = input.exchange_rate or Decimal("1.0")
         functional_cost = input.acquisition_cost * exchange_rate
 
         # Use category defaults if not specified
-        depreciation_method = input.depreciation_method or category.depreciation_method.value
+        depreciation_method = (
+            input.depreciation_method or category.depreciation_method.value
+        )
         useful_life = input.useful_life_months or category.useful_life_months
         residual_value = input.residual_value
         if residual_value is None:
-            residual_value = input.acquisition_cost * (category.residual_value_percent / Decimal("100"))
+            residual_value = input.acquisition_cost * (
+                category.residual_value_percent / Decimal("100")
+            )
 
         # Calculate initial net book value
         net_book_value = input.acquisition_cost
@@ -496,7 +503,7 @@ class AssetService(ListResponseMixin):
         if asset.status != AssetStatus.ACTIVE:
             raise HTTPException(
                 status_code=400,
-                detail=f"Only ACTIVE assets can be marked fully depreciated",
+                detail="Only ACTIVE assets can be marked fully depreciated",
             )
 
         asset.status = AssetStatus.FULLY_DEPRECIATED
@@ -589,9 +596,7 @@ class AssetService(ListResponseMixin):
         query = db.query(Asset)
 
         if organization_id:
-            query = query.filter(
-                Asset.organization_id == coerce_uuid(organization_id)
-            )
+            query = query.filter(Asset.organization_id == coerce_uuid(organization_id))
 
         if category_id:
             query = query.filter(Asset.category_id == coerce_uuid(category_id))

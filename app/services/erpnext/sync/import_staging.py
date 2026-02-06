@@ -3,20 +3,21 @@ Staging Import Service - Import validated staging data to production.
 
 Moves data from staging tables to production after validation passes.
 """
+
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.person import Person
 from app.models.people.hr.department import Department
 from app.models.people.hr.designation import Designation
-from app.models.people.hr.employment_type import EmploymentType
-from app.models.people.hr.employee_grade import EmployeeGrade
 from app.models.people.hr.employee import Employee, EmployeeStatus, Gender
+from app.models.people.hr.employee_grade import EmployeeGrade
+from app.models.people.hr.employment_type import EmploymentType
+from app.models.person import Person
 from app.models.sync import SyncEntity, SyncStatus
 from app.models.sync.staging import (
     StagingDepartment,
@@ -95,7 +96,9 @@ class StagingImportService:
             raise ValueError(f"Batch not found: {batch_id}")
 
         if batch.status not in ("VALIDATED", "SYNCED"):
-            raise ValueError(f"Batch must be validated before import. Status: {batch.status}")
+            raise ValueError(
+                f"Batch must be validated before import. Status: {batch.status}"
+            )
 
         # Check for invalid records
         invalid_count = self._count_invalid_records(batch_id)
@@ -148,36 +151,60 @@ class StagingImportService:
     def _count_invalid_records(self, batch_id: uuid.UUID) -> int:
         """Count invalid records in batch."""
         count = 0
-        count += self.db.query(StagingDepartment).filter(
-            StagingDepartment.batch_id == batch_id,
-            StagingDepartment.validation_status == StagingStatus.INVALID,
-        ).count()
-        count += self.db.query(StagingDesignation).filter(
-            StagingDesignation.batch_id == batch_id,
-            StagingDesignation.validation_status == StagingStatus.INVALID,
-        ).count()
-        count += self.db.query(StagingEmploymentType).filter(
-            StagingEmploymentType.batch_id == batch_id,
-            StagingEmploymentType.validation_status == StagingStatus.INVALID,
-        ).count()
-        count += self.db.query(StagingEmployeeGrade).filter(
-            StagingEmployeeGrade.batch_id == batch_id,
-            StagingEmployeeGrade.validation_status == StagingStatus.INVALID,
-        ).count()
-        count += self.db.query(StagingEmployee).filter(
-            StagingEmployee.batch_id == batch_id,
-            StagingEmployee.validation_status == StagingStatus.INVALID,
-        ).count()
+        count += (
+            self.db.query(StagingDepartment)
+            .filter(
+                StagingDepartment.batch_id == batch_id,
+                StagingDepartment.validation_status == StagingStatus.INVALID,
+            )
+            .count()
+        )
+        count += (
+            self.db.query(StagingDesignation)
+            .filter(
+                StagingDesignation.batch_id == batch_id,
+                StagingDesignation.validation_status == StagingStatus.INVALID,
+            )
+            .count()
+        )
+        count += (
+            self.db.query(StagingEmploymentType)
+            .filter(
+                StagingEmploymentType.batch_id == batch_id,
+                StagingEmploymentType.validation_status == StagingStatus.INVALID,
+            )
+            .count()
+        )
+        count += (
+            self.db.query(StagingEmployeeGrade)
+            .filter(
+                StagingEmployeeGrade.batch_id == batch_id,
+                StagingEmployeeGrade.validation_status == StagingStatus.INVALID,
+            )
+            .count()
+        )
+        count += (
+            self.db.query(StagingEmployee)
+            .filter(
+                StagingEmployee.batch_id == batch_id,
+                StagingEmployee.validation_status == StagingStatus.INVALID,
+            )
+            .count()
+        )
         return count
 
     def _populate_caches(self):
         """Pre-populate caches with existing production data."""
         # Load existing sync entities to map source names to production IDs
-        sync_entities = self.db.query(SyncEntity).filter(
-            SyncEntity.organization_id == self.organization_id,
-            SyncEntity.source_system == "erpnext",
-            SyncEntity.sync_status == SyncStatus.SYNCED,
-        ).all()
+        sync_entities = (
+            self.db.query(SyncEntity)
+            .filter(
+                SyncEntity.organization_id == self.organization_id,
+                SyncEntity.source_system == "erpnext",
+                SyncEntity.sync_status == SyncStatus.SYNCED,
+            )
+            .all()
+        )
 
         for se in sync_entities:
             if se.target_id is None:
@@ -201,12 +228,16 @@ class StagingImportService:
         target_id: uuid.UUID,
     ) -> SyncEntity:
         """Create or update a sync entity record."""
-        existing = self.db.query(SyncEntity).filter(
-            SyncEntity.organization_id == self.organization_id,
-            SyncEntity.source_system == "erpnext",
-            SyncEntity.source_doctype == source_doctype,
-            SyncEntity.source_name == source_name,
-        ).first()
+        existing = (
+            self.db.query(SyncEntity)
+            .filter(
+                SyncEntity.organization_id == self.organization_id,
+                SyncEntity.source_system == "erpnext",
+                SyncEntity.source_doctype == source_doctype,
+                SyncEntity.source_name == source_name,
+            )
+            .first()
+        )
 
         if existing:
             existing.target_id = target_id
@@ -232,12 +263,16 @@ class StagingImportService:
         result = ImportResult()
         logger.info("Importing departments...")
 
-        records = self.db.query(StagingDepartment).filter(
-            StagingDepartment.batch_id == batch_id,
-            StagingDepartment.organization_id == self.organization_id,
-            StagingDepartment.validation_status == StagingStatus.VALID,
-            StagingDepartment.imported_at.is_(None),
-        ).all()
+        records = (
+            self.db.query(StagingDepartment)
+            .filter(
+                StagingDepartment.batch_id == batch_id,
+                StagingDepartment.organization_id == self.organization_id,
+                StagingDepartment.validation_status == StagingStatus.VALID,
+                StagingDepartment.imported_at.is_(None),
+            )
+            .all()
+        )
 
         result.total = len(records)
 
@@ -247,7 +282,9 @@ class StagingImportService:
                 # Check if already exists
                 if staging.source_name in self._dept_cache:
                     staging.validation_status = StagingStatus.SKIPPED
-                    staging.imported_department_id = self._dept_cache[staging.source_name]
+                    staging.imported_department_id = self._dept_cache[
+                        staging.source_name
+                    ]
                     result.skipped += 1
                     continue
 
@@ -285,12 +322,16 @@ class StagingImportService:
             if staging.parent_department_name and staging.imported_department_id:
                 parent_id = self._dept_cache.get(staging.parent_department_name)
                 if parent_id:
-                    dept_record = self.db.get(Department, staging.imported_department_id)
+                    dept_record = self.db.get(
+                        Department, staging.imported_department_id
+                    )
                     if dept_record:
                         dept_record.parent_department_id = parent_id
 
         self.db.flush()
-        logger.info(f"Departments imported: {result.imported}, skipped: {result.skipped}")
+        logger.info(
+            f"Departments imported: {result.imported}, skipped: {result.skipped}"
+        )
         return result
 
     def _import_designations(self, batch_id: uuid.UUID) -> ImportResult:
@@ -298,12 +339,16 @@ class StagingImportService:
         result = ImportResult()
         logger.info("Importing designations...")
 
-        records = self.db.query(StagingDesignation).filter(
-            StagingDesignation.batch_id == batch_id,
-            StagingDesignation.organization_id == self.organization_id,
-            StagingDesignation.validation_status == StagingStatus.VALID,
-            StagingDesignation.imported_at.is_(None),
-        ).all()
+        records = (
+            self.db.query(StagingDesignation)
+            .filter(
+                StagingDesignation.batch_id == batch_id,
+                StagingDesignation.organization_id == self.organization_id,
+                StagingDesignation.validation_status == StagingStatus.VALID,
+                StagingDesignation.imported_at.is_(None),
+            )
+            .all()
+        )
 
         result.total = len(records)
 
@@ -311,7 +356,9 @@ class StagingImportService:
             try:
                 if staging.source_name in self._desg_cache:
                     staging.validation_status = StagingStatus.SKIPPED
-                    staging.imported_designation_id = self._desg_cache[staging.source_name]
+                    staging.imported_designation_id = self._desg_cache[
+                        staging.source_name
+                    ]
                     result.skipped += 1
                     continue
 
@@ -343,7 +390,9 @@ class StagingImportService:
                 result.add_error(f"{staging.source_name}: {str(e)}")
 
         self.db.flush()
-        logger.info(f"Designations imported: {result.imported}, skipped: {result.skipped}")
+        logger.info(
+            f"Designations imported: {result.imported}, skipped: {result.skipped}"
+        )
         return result
 
     def _import_employment_types(self, batch_id: uuid.UUID) -> ImportResult:
@@ -351,12 +400,16 @@ class StagingImportService:
         result = ImportResult()
         logger.info("Importing employment types...")
 
-        records = self.db.query(StagingEmploymentType).filter(
-            StagingEmploymentType.batch_id == batch_id,
-            StagingEmploymentType.organization_id == self.organization_id,
-            StagingEmploymentType.validation_status == StagingStatus.VALID,
-            StagingEmploymentType.imported_at.is_(None),
-        ).all()
+        records = (
+            self.db.query(StagingEmploymentType)
+            .filter(
+                StagingEmploymentType.batch_id == batch_id,
+                StagingEmploymentType.organization_id == self.organization_id,
+                StagingEmploymentType.validation_status == StagingStatus.VALID,
+                StagingEmploymentType.imported_at.is_(None),
+            )
+            .all()
+        )
 
         result.total = len(records)
 
@@ -364,7 +417,9 @@ class StagingImportService:
             try:
                 if staging.source_name in self._emptype_cache:
                     staging.validation_status = StagingStatus.SKIPPED
-                    staging.imported_employment_type_id = self._emptype_cache[staging.source_name]
+                    staging.imported_employment_type_id = self._emptype_cache[
+                        staging.source_name
+                    ]
                     result.skipped += 1
                     continue
 
@@ -392,11 +447,15 @@ class StagingImportService:
                 result.imported += 1
 
             except Exception as e:
-                logger.error(f"Error importing employment type {staging.source_name}: {e}")
+                logger.error(
+                    f"Error importing employment type {staging.source_name}: {e}"
+                )
                 result.add_error(f"{staging.source_name}: {str(e)}")
 
         self.db.flush()
-        logger.info(f"Employment types imported: {result.imported}, skipped: {result.skipped}")
+        logger.info(
+            f"Employment types imported: {result.imported}, skipped: {result.skipped}"
+        )
         return result
 
     def _import_employee_grades(self, batch_id: uuid.UUID) -> ImportResult:
@@ -404,12 +463,16 @@ class StagingImportService:
         result = ImportResult()
         logger.info("Importing employee grades...")
 
-        records = self.db.query(StagingEmployeeGrade).filter(
-            StagingEmployeeGrade.batch_id == batch_id,
-            StagingEmployeeGrade.organization_id == self.organization_id,
-            StagingEmployeeGrade.validation_status == StagingStatus.VALID,
-            StagingEmployeeGrade.imported_at.is_(None),
-        ).all()
+        records = (
+            self.db.query(StagingEmployeeGrade)
+            .filter(
+                StagingEmployeeGrade.batch_id == batch_id,
+                StagingEmployeeGrade.organization_id == self.organization_id,
+                StagingEmployeeGrade.validation_status == StagingStatus.VALID,
+                StagingEmployeeGrade.imported_at.is_(None),
+            )
+            .all()
+        )
 
         result.total = len(records)
 
@@ -446,11 +509,15 @@ class StagingImportService:
                 result.imported += 1
 
             except Exception as e:
-                logger.error(f"Error importing employee grade {staging.source_name}: {e}")
+                logger.error(
+                    f"Error importing employee grade {staging.source_name}: {e}"
+                )
                 result.add_error(f"{staging.source_name}: {str(e)}")
 
         self.db.flush()
-        logger.info(f"Employee grades imported: {result.imported}, skipped: {result.skipped}")
+        logger.info(
+            f"Employee grades imported: {result.imported}, skipped: {result.skipped}"
+        )
         return result
 
     def _import_employees(
@@ -462,12 +529,16 @@ class StagingImportService:
         result = ImportResult()
         logger.info("Importing employees...")
 
-        records = self.db.query(StagingEmployee).filter(
-            StagingEmployee.batch_id == batch_id,
-            StagingEmployee.organization_id == self.organization_id,
-            StagingEmployee.validation_status == StagingStatus.VALID,
-            StagingEmployee.imported_at.is_(None),
-        ).all()
+        records = (
+            self.db.query(StagingEmployee)
+            .filter(
+                StagingEmployee.batch_id == batch_id,
+                StagingEmployee.organization_id == self.organization_id,
+                StagingEmployee.validation_status == StagingStatus.VALID,
+                StagingEmployee.imported_at.is_(None),
+            )
+            .all()
+        )
 
         result.total = len(records)
 
@@ -482,12 +553,18 @@ class StagingImportService:
 
                 # Also check if employee already exists by employee_code
                 # (handles orphaned records from previous failed syncs)
-                existing_emp = self.db.query(Employee).filter(
-                    Employee.organization_id == self.organization_id,
-                    Employee.employee_code == staging.employee_code[:20],
-                ).first()
+                existing_emp = (
+                    self.db.query(Employee)
+                    .filter(
+                        Employee.organization_id == self.organization_id,
+                        Employee.employee_code == staging.employee_code[:20],
+                    )
+                    .first()
+                )
                 if existing_emp:
-                    logger.info(f"Employee {staging.employee_code} already exists, skipping")
+                    logger.info(
+                        f"Employee {staging.employee_code} already exists, skipping"
+                    )
                     # Add to cache and create sync entity to track it
                     self._emp_cache[staging.source_name] = existing_emp.employee_id
                     staging.validation_status = StagingStatus.SKIPPED
@@ -508,11 +585,15 @@ class StagingImportService:
                     email = f"{staging.employee_code.lower()}@sync.internal"
 
                 if not email:
-                    result.add_error(f"{staging.source_name}: No email and placeholder generation disabled")
+                    result.add_error(
+                        f"{staging.source_name}: No email and placeholder generation disabled"
+                    )
                     continue
 
                 # Find or create Person (also checks for existing employee link)
-                person_id, existing_employee_id = self._find_or_create_person(staging, email)
+                person_id, existing_employee_id = self._find_or_create_person(
+                    staging, email
+                )
 
                 # If Person is already linked to an Employee, skip
                 if existing_employee_id:
@@ -591,7 +672,9 @@ class StagingImportService:
                     date_of_leaving=staging.date_of_leaving,
                     status=status,
                     bank_name=staging.bank_name[:100] if staging.bank_name else None,
-                    bank_account_number=staging.bank_ac_no[:50] if staging.bank_ac_no else None,
+                    bank_account_number=staging.bank_ac_no[:50]
+                    if staging.bank_ac_no
+                    else None,
                 )
                 self.db.add(employee)
                 self.db.flush()
@@ -645,9 +728,9 @@ class StagingImportService:
 
         if person:
             # Check if this Person is already linked to an Employee
-            existing_employee = self.db.query(Employee).filter(
-                Employee.person_id == person.id
-            ).first()
+            existing_employee = (
+                self.db.query(Employee).filter(Employee.person_id == person.id).first()
+            )
 
             if existing_employee:
                 return person.id, existing_employee.employee_id

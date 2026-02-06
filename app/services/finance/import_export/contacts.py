@@ -4,18 +4,20 @@ Contacts Importer (Customers and Suppliers).
 Imports customer and vendor data from Zoho Books CSV exports.
 """
 
-import re
+import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.finance.ar.customer import Customer, CustomerType, RiskCategory
 from app.models.finance.ap.supplier import Supplier, SupplierType
+from app.models.finance.ar.customer import Customer, CustomerType, RiskCategory
 from app.models.finance.gl.account import Account
 
 from .base import BaseImporter, FieldMapping, ImportConfig
+
+logger = logging.getLogger(__name__)
 
 
 class CustomerImporter(BaseImporter[Customer]):
@@ -51,14 +53,29 @@ class CustomerImporter(BaseImporter[Customer]):
             FieldMapping("First Name", "first_name", required=False),
             FieldMapping("Last Name", "last_name", required=False),
             FieldMapping("Phone", "phone", required=False),
-            FieldMapping("Currency Code", "currency_code", required=False, default="NGN"),
-            FieldMapping("Status", "is_active", required=False,
-                         transformer=lambda v: v != "Inactive", default=True),
-            FieldMapping("Credit Limit", "credit_limit", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Payment Terms", "payment_terms_days", required=False,
-                         transformer=lambda v: int(v) if v and v.isdigit() else 30,
-                         default=30),
+            FieldMapping(
+                "Currency Code", "currency_code", required=False, default="NGN"
+            ),
+            FieldMapping(
+                "Status",
+                "is_active",
+                required=False,
+                transformer=lambda v: v != "Inactive",
+                default=True,
+            ),
+            FieldMapping(
+                "Credit Limit",
+                "credit_limit",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Payment Terms",
+                "payment_terms_days",
+                required=False,
+                transformer=lambda v: int(v) if v and v.isdigit() else 30,
+                default=30,
+            ),
             # Billing address fields
             FieldMapping("Billing Attention", "billing_attention", required=False),
             FieldMapping("Billing Address", "billing_street", required=False),
@@ -162,7 +179,9 @@ class CustomerImporter(BaseImporter[Customer]):
 
         return customer
 
-    def _build_address(self, row: Dict[str, Any], prefix: str) -> Optional[Dict[str, Any]]:
+    def _build_address(
+        self, row: Dict[str, Any], prefix: str
+    ) -> Optional[Dict[str, Any]]:
         """Build address JSONB from row data."""
         address = {
             "attention": row.get(f"{prefix}_attention"),
@@ -212,17 +231,37 @@ class SupplierImporter(BaseImporter[Supplier]):
             FieldMapping("Phone", "phone", required=False),
             FieldMapping("MobilePhone", "mobile_phone", required=False),
             FieldMapping("EmailID", "email", required=False),
-            FieldMapping("Currency Code", "currency_code", required=False, default="NGN"),
-            FieldMapping("Status", "is_active", required=False,
-                         transformer=lambda v: v != "Inactive", default=True),
-            FieldMapping("Payment Terms", "payment_terms_days", required=False,
-                         transformer=lambda v: int(v) if v and str(v).isdigit() else 30,
-                         default=30),
-            FieldMapping("Taxable", "taxable", required=False,
-                         transformer=self.parse_boolean, default=False),
+            FieldMapping(
+                "Currency Code", "currency_code", required=False, default="NGN"
+            ),
+            FieldMapping(
+                "Status",
+                "is_active",
+                required=False,
+                transformer=lambda v: v != "Inactive",
+                default=True,
+            ),
+            FieldMapping(
+                "Payment Terms",
+                "payment_terms_days",
+                required=False,
+                transformer=lambda v: int(v) if v and str(v).isdigit() else 30,
+                default=30,
+            ),
+            FieldMapping(
+                "Taxable",
+                "taxable",
+                required=False,
+                transformer=self.parse_boolean,
+                default=False,
+            ),
             FieldMapping("Tax Name", "tax_name", required=False),
-            FieldMapping("Tax Percentage", "tax_percentage", required=False,
-                         transformer=self.parse_decimal),
+            FieldMapping(
+                "Tax Percentage",
+                "tax_percentage",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
             # Billing address fields
             FieldMapping("Billing Attention", "billing_attention", required=False),
             FieldMapping("Billing Address", "billing_street", required=False),
@@ -267,7 +306,9 @@ class SupplierImporter(BaseImporter[Supplier]):
 
     def create_entity(self, row: Dict[str, Any]) -> Supplier:
         """Create a new supplier from transformed row data."""
-        display_name = str(row.get("display_name") or row.get("contact_name") or "").strip()
+        display_name = str(
+            row.get("display_name") or row.get("contact_name") or ""
+        ).strip()
         company_name = str(row.get("company_name", "") or "").strip()
 
         # Determine supplier type
@@ -320,7 +361,9 @@ class SupplierImporter(BaseImporter[Supplier]):
 
         return supplier
 
-    def _build_address(self, row: Dict[str, Any], prefix: str) -> Optional[Dict[str, Any]]:
+    def _build_address(
+        self, row: Dict[str, Any], prefix: str
+    ) -> Optional[Dict[str, Any]]:
         """Build address JSONB from row data."""
         address = {
             "attention": row.get(f"{prefix}_attention"),

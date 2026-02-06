@@ -19,10 +19,10 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import Column, Integer, String, UniqueConstraint, select, func
+from sqlalchemy import Integer, String, UniqueConstraint, func, select
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from app.db import Base
 

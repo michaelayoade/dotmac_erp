@@ -271,7 +271,9 @@ class RemitaRRRService:
         rrr_record.payment_channel = payment_channel
 
         self.db.flush()
-        logger.info(f"RRR {rrr_record.rrr} manually marked as paid: {payment_reference}")
+        logger.info(
+            f"RRR {rrr_record.rrr} manually marked as paid: {payment_reference}"
+        )
 
         # Trigger source update
         self._handle_paid(rrr_record)
@@ -298,9 +300,7 @@ class RemitaRRRService:
                 )
         except Exception as e:
             # Log but don't fail the RRR update
-            logger.exception(
-                f"Failed to update source for RRR {rrr_record.rrr}: {e}"
-            )
+            logger.exception(f"Failed to update source for RRR {rrr_record.rrr}: {e}")
 
     def mark_expired(self, rrr_id: UUID) -> RemitaRRR:
         """
@@ -371,9 +371,7 @@ class RemitaRRRService:
         Returns:
             List of RemitaRRR records
         """
-        stmt = select(RemitaRRR).where(
-            RemitaRRR.organization_id == organization_id
-        )
+        stmt = select(RemitaRRR).where(RemitaRRR.organization_id == organization_id)
 
         if status:
             stmt = stmt.where(RemitaRRR.status == status)
@@ -408,11 +406,15 @@ class RemitaRRRService:
         Returns:
             List of RemitaRRR records linked to the source
         """
-        stmt = select(RemitaRRR).where(
-            RemitaRRR.organization_id == organization_id,
-            RemitaRRR.source_type == source_type,
-            RemitaRRR.source_id == source_id,
-        ).order_by(RemitaRRR.created_at.desc())
+        stmt = (
+            select(RemitaRRR)
+            .where(
+                RemitaRRR.organization_id == organization_id,
+                RemitaRRR.source_type == source_type,
+                RemitaRRR.source_id == source_id,
+            )
+            .order_by(RemitaRRR.created_at.desc())
+        )
 
         return list(self.db.scalars(stmt).all())
 

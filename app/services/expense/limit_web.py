@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from decimal import Decimal
 from typing import Optional
@@ -16,6 +17,8 @@ from app.services.common import PaginationParams, coerce_uuid
 from app.services.expense import ExpenseLimitService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
+
+logger = logging.getLogger(__name__)
 
 
 def _safe_form_text(value: object | None, default: str = "") -> str:
@@ -112,7 +115,9 @@ class ExpenseLimitWebService:
                 "errors": {},
             }
         )
-        return templates.TemplateResponse(request, "expense/limits/rule_form.html", context)
+        return templates.TemplateResponse(
+            request, "expense/limits/rule_form.html", context
+        )
 
     async def create_limit_rule_response(
         self,
@@ -217,7 +222,9 @@ class ExpenseLimitWebService:
                     "errors": errors,
                 }
             )
-            return templates.TemplateResponse(request, "expense/limits/rule_form.html", context)
+            return templates.TemplateResponse(
+                request, "expense/limits/rule_form.html", context
+            )
 
         try:
             if limit_amount_value is None or effective_from_date is None:
@@ -266,7 +273,9 @@ class ExpenseLimitWebService:
                     "errors": errors,
                 }
             )
-            return templates.TemplateResponse(request, "expense/limits/rule_form.html", context)
+            return templates.TemplateResponse(
+                request, "expense/limits/rule_form.html", context
+            )
 
     def edit_limit_rule_form_response(
         self,
@@ -297,7 +306,9 @@ class ExpenseLimitWebService:
                 "errors": {},
             }
         )
-        return templates.TemplateResponse(request, "expense/limits/rule_form.html", context)
+        return templates.TemplateResponse(
+            request, "expense/limits/rule_form.html", context
+        )
 
     async def update_limit_rule_response(
         self,
@@ -356,7 +367,9 @@ class ExpenseLimitWebService:
 
         if errors:
             rule = service.get_rule(org_id, rule_id)
-            context = base_context(request, auth, f"Edit Rule: {rule.rule_code}", "limits")
+            context = base_context(
+                request, auth, f"Edit Rule: {rule.rule_code}", "limits"
+            )
             context.update(
                 {
                     "rule": rule,
@@ -367,7 +380,9 @@ class ExpenseLimitWebService:
                     "errors": errors,
                 }
             )
-            return templates.TemplateResponse(request, "expense/limits/rule_form.html", context)
+            return templates.TemplateResponse(
+                request, "expense/limits/rule_form.html", context
+            )
 
         try:
             service.update_rule(org_id, rule_id, **update_data)
@@ -377,7 +392,9 @@ class ExpenseLimitWebService:
             db.rollback()
             rule = service.get_rule(org_id, rule_id)
             errors["_form"] = str(e)
-            context = base_context(request, auth, f"Edit Rule: {rule.rule_code}", "limits")
+            context = base_context(
+                request, auth, f"Edit Rule: {rule.rule_code}", "limits"
+            )
             context.update(
                 {
                     "rule": rule,
@@ -388,7 +405,9 @@ class ExpenseLimitWebService:
                     "errors": errors,
                 }
             )
-            return templates.TemplateResponse(request, "expense/limits/rule_form.html", context)
+            return templates.TemplateResponse(
+                request, "expense/limits/rule_form.html", context
+            )
 
     def delete_limit_rule_response(
         self,
@@ -455,7 +474,9 @@ class ExpenseLimitWebService:
                 },
             }
         )
-        return templates.TemplateResponse(request, "expense/limits/approvers.html", context)
+        return templates.TemplateResponse(
+            request, "expense/limits/approvers.html", context
+        )
 
     def new_approver_limit_form_response(
         self,
@@ -476,7 +497,9 @@ class ExpenseLimitWebService:
                 "errors": {},
             }
         )
-        return templates.TemplateResponse(request, "expense/limits/approver_form.html", context)
+        return templates.TemplateResponse(
+            request, "expense/limits/approver_form.html", context
+        )
 
     async def create_approver_limit_response(
         self,
@@ -516,7 +539,9 @@ class ExpenseLimitWebService:
             except Exception:
                 errors["max_approval_amount"] = "Invalid amount"
         if max_amount_value is None:
-            errors["max_approval_amount"] = errors.get("max_approval_amount") or "Required"
+            errors["max_approval_amount"] = (
+                errors.get("max_approval_amount") or "Required"
+            )
 
         scope_options = self._get_scope_options(db, org_id)
 
@@ -536,7 +561,9 @@ class ExpenseLimitWebService:
                     "errors": errors,
                 }
             )
-            return templates.TemplateResponse(request, "expense/limits/approver_form.html", context)
+            return templates.TemplateResponse(
+                request, "expense/limits/approver_form.html", context
+            )
 
         try:
             if max_amount_value is None:
@@ -569,7 +596,9 @@ class ExpenseLimitWebService:
                     "errors": errors,
                 }
             )
-            return templates.TemplateResponse(request, "expense/limits/approver_form.html", context)
+            return templates.TemplateResponse(
+                request, "expense/limits/approver_form.html", context
+            )
 
     def delete_approver_limit_response(
         self,
@@ -701,7 +730,9 @@ class ExpenseLimitWebService:
                 },
             }
         )
-        return templates.TemplateResponse(request, "expense/limits/evaluations.html", context)
+        return templates.TemplateResponse(
+            request, "expense/limits/evaluations.html", context
+        )
 
     @staticmethod
     def _get_scope_options(db: Session, org_id: UUID) -> dict:
@@ -714,7 +745,9 @@ class ExpenseLimitWebService:
 
         grades = list(
             db.query(EmployeeGrade)
-            .filter(EmployeeGrade.organization_id == org_id, EmployeeGrade.is_active == True)
+            .filter(
+                EmployeeGrade.organization_id == org_id, EmployeeGrade.is_active == True
+            )
             .order_by(EmployeeGrade.rank.desc())
             .all()
         )
@@ -728,7 +761,9 @@ class ExpenseLimitWebService:
 
         designations = list(
             db.query(Designation)
-            .filter(Designation.organization_id == org_id, Designation.is_active == True)
+            .filter(
+                Designation.organization_id == org_id, Designation.is_active == True
+            )
             .order_by(Designation.designation_name)
             .all()
         )

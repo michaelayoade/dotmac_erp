@@ -6,29 +6,31 @@ Manages customer payment creation, posting, and allocation to invoices.
 
 from __future__ import annotations
 
+import logging
+import uuid as uuid_lib
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
-import uuid as uuid_lib
 
 from fastapi import HTTPException
-from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
-from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 from app.models.finance.ar.customer_payment import (
     CustomerPayment,
     PaymentMethod,
     PaymentStatus,
 )
+from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 from app.models.finance.ar.payment_allocation import PaymentAllocation
 from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.services.common import coerce_uuid
 from app.services.finance.platform.sequence import SequenceService
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -55,7 +57,9 @@ class CustomerPaymentInput:
     description: Optional[str] = None
     correlation_id: Optional[str] = None
     # Withholding Tax (WHT) - when customer deducts WHT before paying
-    gross_amount: Optional[Decimal] = None  # If not provided, defaults to amount (no WHT)
+    gross_amount: Optional[Decimal] = (
+        None  # If not provided, defaults to amount (no WHT)
+    )
     wht_code_id: Optional[UUID] = None  # WHT tax code applied
     wht_amount: Decimal = field(default_factory=lambda: Decimal("0"))  # WHT deducted
     wht_certificate_number: Optional[str] = None  # Certificate received from customer
@@ -153,7 +157,9 @@ class CustomerPaymentService(ListResponseMixin):
             gross_amount = input.gross_amount
             # Validate: gross = net + wht
             expected_wht = gross_amount - net_amount
-            if wht_amount > Decimal("0") and abs(expected_wht - wht_amount) > Decimal("0.01"):
+            if wht_amount > Decimal("0") and abs(expected_wht - wht_amount) > Decimal(
+                "0.01"
+            ):
                 raise HTTPException(
                     status_code=400,
                     detail=f"WHT amount ({wht_amount}) doesn't match gross - net ({expected_wht})",
@@ -232,7 +238,6 @@ class CustomerPaymentService(ListResponseMixin):
         Returns:
             Updated CustomerPayment
         """
-        from app.services.finance.ar.ar_posting_adapter import ARPostingAdapter
 
         org_id = coerce_uuid(organization_id)
         pay_id = coerce_uuid(payment_id)
@@ -260,9 +265,16 @@ class CustomerPaymentService(ListResponseMixin):
         original_status = payment.status
 
         # Create journal entry manually since we don't have APPROVED status
-        from app.services.finance.gl.journal import JournalService, JournalInput, JournalLineInput
-        from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
         from app.models.finance.gl.journal_entry import JournalType
+        from app.services.finance.gl.journal import (
+            JournalInput,
+            JournalLineInput,
+            JournalService,
+        )
+        from app.services.finance.gl.ledger_posting import (
+            LedgerPostingService,
+            PostingRequest,
+        )
 
         customer = db.get(Customer, payment.customer_id)
         if not customer:
@@ -295,6 +307,7 @@ class CustomerPaymentService(ListResponseMixin):
             wht_receivable_account_id = None
             if payment.wht_code_id:
                 from app.models.finance.tax.tax_code import TaxCode
+
                 wht_code = db.get(TaxCode, payment.wht_code_id)
                 if wht_code:
                     # Use the tax_paid_account_id as WHT Receivable
@@ -348,7 +361,9 @@ class CustomerPaymentService(ListResponseMixin):
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
         except HTTPException as e:
             raise HTTPException(
                 status_code=400,
@@ -385,13 +400,13 @@ class CustomerPaymentService(ListResponseMixin):
 
         # Create tax transaction for WHT if applicable
         if wht_amount > Decimal("0") and payment.wht_code_id:
-            from app.services.finance.tax.tax_transaction import (
-                tax_transaction_service,
-                TaxTransactionInput,
-            )
-            from app.models.finance.tax.tax_transaction import TaxTransactionType
             from app.models.finance.gl.fiscal_period import FiscalPeriod
             from app.models.finance.tax.tax_code import TaxCode
+            from app.models.finance.tax.tax_transaction import TaxTransactionType
+            from app.services.finance.tax.tax_transaction import (
+                TaxTransactionInput,
+                tax_transaction_service,
+            )
 
             fiscal_period = (
                 db.query(FiscalPeriod)
@@ -467,9 +482,7 @@ class CustomerPaymentService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Payment not found")
 
         if payment.status == PaymentStatus.VOID:
-            raise HTTPException(
-                status_code=400, detail="Payment is already voided"
-            )
+            raise HTTPException(status_code=400, detail="Payment is already voided")
 
         # Reverse allocations if payment was cleared
         if payment.status == PaymentStatus.CLEARED:
@@ -630,7 +643,9 @@ class CustomerPaymentService(ListResponseMixin):
         if input.gross_amount is not None:
             gross_amount = input.gross_amount
             expected_wht = gross_amount - net_amount
-            if wht_amount > Decimal("0") and abs(expected_wht - wht_amount) > Decimal("0.01"):
+            if wht_amount > Decimal("0") and abs(expected_wht - wht_amount) > Decimal(
+                "0.01"
+            ):
                 raise HTTPException(
                     status_code=400,
                     detail=f"WHT amount ({wht_amount}) doesn't match gross - net ({expected_wht})",

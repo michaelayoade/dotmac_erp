@@ -6,6 +6,7 @@ Manages report definitions/templates for financial and operational reporting.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import List, Optional
 from uuid import UUID
@@ -16,6 +17,8 @@ from sqlalchemy.orm import Session
 from app.models.finance.rpt.report_definition import ReportDefinition, ReportType
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

@@ -3,24 +3,25 @@ IFRS Settings Web Service.
 
 Provides context and update functions for settings UI pages.
 """
-import uuid
+
 import logging
+import uuid
 from typing import Any, Optional, cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.domain_settings import SettingDomain
-from app.models.finance.core_config import SequenceType, ResetFrequency
+from app.models.finance.core_config import ResetFrequency, SequenceType
 from app.models.finance.core_org import Organization
-from app.services.settings_spec import (
-    DOMAIN_SETTINGS_SERVICE,
-    list_specs,
-    resolve_value,
-    get_spec,
-)
 from app.schemas.settings import DomainSettingUpdate
 from app.services.email import SMTPConfig
+from app.services.settings_spec import (
+    DOMAIN_SETTINGS_SERVICE,
+    get_spec,
+    list_specs,
+    resolve_value,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -98,9 +99,7 @@ class SettingsWebService:
     ) -> dict[str, Any]:
         """Get organization profile for editing."""
         result = await db.execute(
-            select(Organization).where(
-                Organization.organization_id == organization_id
-            )
+            select(Organization).where(Organization.organization_id == organization_id)
         )
         org = result.scalar_one_or_none()
         if not org:
@@ -121,9 +120,7 @@ class SettingsWebService:
     ) -> tuple[bool, Optional[str]]:
         """Update organization profile."""
         result = await db.execute(
-            select(Organization).where(
-                Organization.organization_id == organization_id
-            )
+            select(Organization).where(Organization.organization_id == organization_id)
         )
         org = result.scalar_one_or_none()
         if not org:
@@ -192,19 +189,27 @@ class SettingsWebService:
         if len(existing_types) < len(SequenceType):
             for seq_type in SequenceType:
                 if seq_type not in existing_types:
-                    await numbering_service.get_or_create_sequence(organization_id, seq_type)
+                    await numbering_service.get_or_create_sequence(
+                        organization_id, seq_type
+                    )
             await db.commit()
             sequences = await numbering_service.get_all_sequences(organization_id)
 
         # Build sequence data with labels and previews
         sequence_data = []
         for seq in sequences:
-            sequence_data.append({
-                "sequence": seq,
-                "label": SEQUENCE_TYPE_LABELS.get(seq.sequence_type, seq.sequence_type.value),
-                "preview": numbering_service.preview_format(seq),
-                "reset_label": RESET_FREQUENCY_LABELS.get(seq.reset_frequency, seq.reset_frequency.value),
-            })
+            sequence_data.append(
+                {
+                    "sequence": seq,
+                    "label": SEQUENCE_TYPE_LABELS.get(
+                        seq.sequence_type, seq.sequence_type.value
+                    ),
+                    "preview": numbering_service.preview_format(seq),
+                    "reset_label": RESET_FREQUENCY_LABELS.get(
+                        seq.reset_frequency, seq.reset_frequency.value
+                    ),
+                }
+            )
 
         return {
             "sequences": sequence_data,
@@ -234,7 +239,9 @@ class SettingsWebService:
 
         return {
             "sequence": sequence,
-            "label": SEQUENCE_TYPE_LABELS.get(sequence.sequence_type, sequence.sequence_type.value),
+            "label": SEQUENCE_TYPE_LABELS.get(
+                sequence.sequence_type, sequence.sequence_type.value
+            ),
             "preview": numbering_service.preview_format(sequence),
             "reset_frequencies": ResetFrequency,
             "reset_labels": RESET_FREQUENCY_LABELS,
@@ -306,7 +313,9 @@ class SettingsWebService:
 
     # ========== Email Settings ==========
 
-    def get_email_settings_context(self, db, organization_id: uuid.UUID) -> dict[str, Any]:
+    def get_email_settings_context(
+        self, db, organization_id: uuid.UUID
+    ) -> dict[str, Any]:
         """Get email settings for the form."""
         specs = list_specs(SettingDomain.email)
         settings = {}
@@ -337,7 +346,6 @@ class SettingsWebService:
         # Validate SMTP settings before persisting changes
         from app.services.email import _get_smtp_config, validate_smtp_config
         from app.services.settings_spec import coerce_value
-
 
         candidate_config: dict[str, object] = dict(_get_smtp_config(db))
         has_smtp_change = False
@@ -381,7 +389,10 @@ class SettingsWebService:
                 candidate_key = smtp_field_map[key]
                 if key in smtp_validation_keys:
                     smtp_fields_seen = True
-                if key in smtp_validation_keys and candidate_config.get(candidate_key) != coerced:
+                if (
+                    key in smtp_validation_keys
+                    and candidate_config.get(candidate_key) != coerced
+                ):
                     has_smtp_change = True
                 candidate_config[candidate_key] = coerced
 
@@ -467,13 +478,15 @@ class SettingsWebService:
 
         for spec in specs:
             value = resolve_value(db, SettingDomain.features, spec.key)
-            features.append({
-                "key": spec.key,
-                "label": spec.key.replace("enable_", "").replace("_", " ").title(),
-                "description": feature_descriptions.get(spec.key, ""),
-                "enabled": bool(value),
-                "default": spec.default,
-            })
+            features.append(
+                {
+                    "key": spec.key,
+                    "label": spec.key.replace("enable_", "").replace("_", " ").title(),
+                    "description": feature_descriptions.get(spec.key, ""),
+                    "enabled": bool(value),
+                    "default": spec.default,
+                }
+            )
 
         return {"features": features}
 
@@ -544,6 +557,7 @@ class SettingsWebService:
     ) -> dict[str, Any]:
         """Get payroll settings for the form."""
         from sqlalchemy import select
+
         from app.models.finance.gl.account import Account
         from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 
@@ -560,17 +574,23 @@ class SettingsWebService:
                 "has_value": value is not None and value != "",
             }
 
-        expense_accounts = db.execute(
-            select(Account)
-            .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-            .where(
-                Account.organization_id == organization_id,
-                AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
-                Account.is_active.is_(True),
-                Account.is_posting_allowed.is_(True),
+        expense_accounts = (
+            db.execute(
+                select(Account)
+                .join(
+                    AccountCategory, Account.category_id == AccountCategory.category_id
+                )
+                .where(
+                    Account.organization_id == organization_id,
+                    AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
+                    Account.is_active.is_(True),
+                    Account.is_posting_allowed.is_(True),
+                )
+                .order_by(Account.account_code)
             )
-            .order_by(Account.account_code)
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         return {
             "settings": settings,
@@ -627,7 +647,11 @@ class SettingsWebService:
     ) -> dict[str, Any]:
         """Get payments settings for the form."""
         from sqlalchemy import select
-        from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus
+
+        from app.models.finance.banking.bank_account import (
+            BankAccount,
+            BankAccountStatus,
+        )
         from app.models.finance.gl.account import Account
         from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 
@@ -645,43 +669,58 @@ class SettingsWebService:
             }
 
         # Get active bank accounts from Banking module (for reconciliation features)
-        bank_accounts = db.execute(
-            select(BankAccount)
-            .where(
-                BankAccount.organization_id == organization_id,
-                BankAccount.status == BankAccountStatus.active,
+        bank_accounts = (
+            db.execute(
+                select(BankAccount)
+                .where(
+                    BankAccount.organization_id == organization_id,
+                    BankAccount.status == BankAccountStatus.active,
+                )
+                .order_by(BankAccount.account_name)
             )
-            .order_by(BankAccount.account_name)
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         # Get GL bank/cash accounts from Chart of Accounts
         # Try multiple approaches: is_cash_equivalent, subledger_type, or account code pattern (12xx)
         from sqlalchemy import or_
-        gl_bank_accounts = db.execute(
-            select(Account)
-            .where(
-                Account.organization_id == organization_id,
-                Account.is_active.is_(True),
-                or_(
-                    Account.is_cash_equivalent.is_(True),
-                    Account.subledger_type == "BANK",
-                    Account.account_code.like("12%"),
-                ),
+
+        gl_bank_accounts = (
+            db.execute(
+                select(Account)
+                .where(
+                    Account.organization_id == organization_id,
+                    Account.is_active.is_(True),
+                    or_(
+                        Account.is_cash_equivalent.is_(True),
+                        Account.subledger_type == "BANK",
+                        Account.account_code.like("12%"),
+                    ),
+                )
+                .order_by(Account.account_code)
             )
-            .order_by(Account.account_code)
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         # Get expense accounts for fee account dropdown
-        expense_accounts = db.execute(
-            select(Account)
-            .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-            .where(
-                Account.organization_id == organization_id,
-                AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
-                Account.is_active.is_(True),
+        expense_accounts = (
+            db.execute(
+                select(Account)
+                .join(
+                    AccountCategory, Account.category_id == AccountCategory.category_id
+                )
+                .where(
+                    Account.organization_id == organization_id,
+                    AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
+                    Account.is_active.is_(True),
+                )
+                .order_by(Account.account_code)
             )
-            .order_by(Account.account_code)
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         return {
             "settings": settings,

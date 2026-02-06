@@ -7,6 +7,7 @@ Provides view-focused data for admin web routes.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional, TypedDict
 from urllib.parse import urlencode
@@ -17,20 +18,25 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app.models.auth import AuthProvider, Session as AuthSession, SessionStatus, UserCredential
-from app.models.audit import AuditActorType, AuditEvent
-from app.models.domain_settings import DomainSetting, SettingDomain, SettingValueType
 from app.config import settings
+from app.models.audit import AuditActorType, AuditEvent
+from app.models.auth import AuthProvider, SessionStatus, UserCredential
+from app.models.auth import Session as AuthSession
+from app.models.domain_settings import DomainSetting, SettingDomain, SettingValueType
 from app.models.finance.core_org.organization import Organization
-from app.models.person import Person, PersonStatus
 from app.models.people.hr.employee import Employee
+from app.models.person import Person, PersonStatus
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
-from app.models.scheduler import ScheduleType, ScheduledTask
+from app.models.scheduler import ScheduledTask, ScheduleType
+from app.models.finance.audit.audit_log import AuditAction, AuditLog
+from app.services.audit_dispatcher import fire_audit_event
 from app.services.auth_flow import hash_password
 from app.services.common import coerce_uuid
+from app.services.formatters import format_datetime as _format_datetime
 from app.templates import templates
-from app.web.deps import brand_context, WebAuthContext
+from app.web.deps import WebAuthContext, brand_context
 
+logger = logging.getLogger(__name__)
 
 DEFAULT_PAGE_SIZE = 20
 
@@ -47,10 +53,6 @@ class Pagination(TypedDict):
     pages: list[int | str]
 
 
-def _format_datetime(value: Optional[datetime]) -> str:
-    return value.strftime("%Y-%m-%d %H:%M") if value else ""
-
-
 def _truncate(value: str, max_length: int = 120) -> str:
     if len(value) <= max_length:
         return value
@@ -61,7 +63,9 @@ def _safe_json_dump(value: object) -> str:
     return json.dumps(value, ensure_ascii=True, separators=(",", ":"))
 
 
-def _build_pagination(page: int, total_pages: int, total: int, per_page: int) -> Pagination:
+def _build_pagination(
+    page: int, total_pages: int, total: int, per_page: int
+) -> Pagination:
     start = (page - 1) * per_page + 1 if total > 0 else 0
     end = min(page * per_page, total)
 
@@ -211,7 +215,9 @@ def _clean_name(value: str | None) -> str:
     return "" if cleaned.lower() in {"none", "null"} else cleaned
 
 
-def _derive_display_name(first_name: str | None, last_name: str | None, display_name: str | None) -> str | None:
+def _derive_display_name(
+    first_name: str | None, last_name: str | None, display_name: str | None
+) -> str | None:
     display = _clean_name(display_name)
     if display:
         return display
@@ -253,7 +259,8 @@ class AdminWebService:
             .filter(AuthSession.status == SessionStatus.active)
             .filter(AuthSession.revoked_at.is_(None))
             .filter(AuthSession.expires_at > now)
-            .scalar() or 0
+            .scalar()
+            or 0
         )
         unique_users_today = (
             db.query(func.count(func.distinct(AuthSession.person_id)))
@@ -275,23 +282,24 @@ class AdminWebService:
 
         # Recent users (last 5)
         recent_users_query = (
-            db.query(Person)
-            .order_by(Person.created_at.desc())
-            .limit(5)
-            .all()
+            db.query(Person).order_by(Person.created_at.desc()).limit(5).all()
         )
 
         recent_users = []
         for person in recent_users_query:
             name = person.name or person.email or "Unknown"
-            initials = "".join(word[0].upper() for word in name.split()[:2]) if name else "?"
-            recent_users.append({
-                "id": str(person.id),
-                "name": name,
-                "email": person.email,
-                "initials": initials,
-                "status": "active" if person.is_active else "inactive",
-            })
+            initials = (
+                "".join(word[0].upper() for word in name.split()[:2]) if name else "?"
+            )
+            recent_users.append(
+                {
+                    "id": str(person.id),
+                    "name": name,
+                    "email": person.email,
+                    "initials": initials,
+                    "status": "active" if person.is_active else "inactive",
+                }
+            )
 
         stats = {
             "total_users": total_users,
@@ -345,10 +353,7 @@ class AdminWebService:
 
         # Get paginated results
         persons = (
-            query.order_by(Person.created_at.desc())
-            .offset(offset)
-            .limit(limit)
-            .all()
+            query.order_by(Person.created_at.desc()).offset(offset).limit(limit).all()
         )
 
         # Get roles and last active for each user
@@ -385,19 +390,25 @@ class AdminWebService:
         users = []
         for person in persons:
             name = person.name or person.email or "Unknown"
-            initials = "".join(word[0].upper() for word in name.split()[:2]) if name else "?"
-            users.append({
-                "id": str(person.id),
-                "name": name,
-                "email": person.email,
-                "phone": person.phone,
-                "initials": initials,
-                "email_verified": person.email_verified,
-                "status": person.status.value if person.status else "active",
-                "roles": person_roles_map.get(person.id, []),
-                "last_active": last_active_map.get(person.id),
-                "created_at": person.created_at.strftime("%b %d, %Y") if person.created_at else "",
-            })
+            initials = (
+                "".join(word[0].upper() for word in name.split()[:2]) if name else "?"
+            )
+            users.append(
+                {
+                    "id": str(person.id),
+                    "name": name,
+                    "email": person.email,
+                    "phone": person.phone,
+                    "initials": initials,
+                    "email_verified": person.email_verified,
+                    "status": person.status.value if person.status else "active",
+                    "roles": person_roles_map.get(person.id, []),
+                    "last_active": last_active_map.get(person.id),
+                    "created_at": person.created_at.strftime("%b %d, %Y")
+                    if person.created_at
+                    else "",
+                }
+            )
 
         pagination = _build_pagination(page, total_pages, total, limit)
 
@@ -412,14 +423,21 @@ class AdminWebService:
     def user_form_context(db: Session, user_id: Optional[str] = None) -> dict:
         """Get context for user create/edit form."""
         # Get organizations
-        organizations = db.query(Organization).filter(Organization.is_active.is_(True)).all()
+        organizations = (
+            db.query(Organization).filter(Organization.is_active.is_(True)).all()
+        )
         org_list = [
-            {"id": str(org.organization_id), "name": org.legal_name or org.trading_name or org.organization_code}
+            {
+                "id": str(org.organization_id),
+                "name": org.legal_name or org.trading_name or org.organization_code,
+            }
             for org in organizations
         ]
 
         # Get roles
-        roles = db.query(Role).filter(Role.is_active.is_(True)).order_by(Role.name).all()
+        roles = (
+            db.query(Role).filter(Role.is_active.is_(True)).order_by(Role.name).all()
+        )
         role_list = [
             {"id": str(role.id), "name": role.name, "description": role.description}
             for role in roles
@@ -456,9 +474,13 @@ class AdminWebService:
                 "phone": person.phone,
                 "email_verified": person.email_verified,
                 "status": person.status.value if person.status else "active",
-                "organization_id": str(person.organization_id) if person.organization_id else None,
+                "organization_id": str(person.organization_id)
+                if person.organization_id
+                else None,
                 "username": credential.username if credential else None,
-                "must_change_password": credential.must_change_password if credential else False,
+                "must_change_password": credential.must_change_password
+                if credential
+                else False,
                 "role_ids": [str(role.id) for role in user_roles],
             }
 
@@ -533,7 +555,9 @@ class AdminWebService:
 
         try:
             person_status = PersonStatus(status) if status else PersonStatus.active
-            derived_display_name = _derive_display_name(first_name, last_name, display_name)
+            derived_display_name = _derive_display_name(
+                first_name, last_name, display_name
+            )
 
             person = Person(
                 first_name=first_name,
@@ -562,9 +586,25 @@ class AdminWebService:
             # Assign roles
             for role_id in role_ids:
                 if role_id:
-                    db.add(PersonRole(person_id=person.id, role_id=coerce_uuid(role_id)))
+                    db.add(
+                        PersonRole(person_id=person.id, role_id=coerce_uuid(role_id))
+                    )
 
             db.commit()
+            # Audit: user created
+            fire_audit_event(
+                db=db,
+                organization_id=person.organization_id,
+                table_schema="auth",
+                table_name="user",
+                record_id=str(person.id),
+                action=AuditAction.INSERT,
+                new_values={
+                    "username": username,
+                    "email": email,
+                    "roles": role_ids,
+                },
+            )
             return person, None
 
         except Exception as e:
@@ -633,7 +673,9 @@ class AdminWebService:
 
         try:
             person_status = PersonStatus(status) if status else PersonStatus.active
-            derived_display_name = _derive_display_name(first_name, last_name, display_name)
+            derived_display_name = _derive_display_name(
+                first_name, last_name, display_name
+            )
 
             person.first_name = first_name
             person.last_name = last_name
@@ -700,8 +742,31 @@ class AdminWebService:
 
             if roles_changed and session_ids_to_invalidate:
                 from app.services.auth_dependencies import invalidate_session_cache
+
                 for session_id in session_ids_to_invalidate:
                     invalidate_session_cache(session_id)
+
+            # Audit: user updated
+            fire_audit_event(
+                db=db,
+                organization_id=person.organization_id,
+                table_schema="auth",
+                table_name="user",
+                record_id=str(person.id),
+                action=AuditAction.UPDATE,
+                new_values={"email": email, "username": username, "status": status},
+            )
+            if roles_changed:
+                fire_audit_event(
+                    db=db,
+                    organization_id=person.organization_id,
+                    table_schema="rbac",
+                    table_name="role_assignment",
+                    record_id=str(person.id),
+                    action=AuditAction.UPDATE,
+                    old_values={"role_ids": sorted(current_role_ids)},
+                    new_values={"role_ids": sorted(normalized_role_ids)},
+                )
 
             return person, None
 
@@ -731,7 +796,9 @@ class AdminWebService:
 
             # Delete related records
             db.query(PersonRole).filter(PersonRole.person_id == person.id).delete()
-            db.query(UserCredential).filter(UserCredential.person_id == person.id).delete()
+            db.query(UserCredential).filter(
+                UserCredential.person_id == person.id
+            ).delete()
             db.query(AuthSession).filter(AuthSession.person_id == person.id).delete()
 
             db.delete(person)
@@ -782,12 +849,7 @@ class AdminWebService:
             query = query.filter(Role.is_active == status_flag)
 
         total_count = query.with_entities(func.count(Role.id)).scalar() or 0
-        roles = (
-            query.order_by(Role.name)
-            .limit(limit)
-            .offset(offset)
-            .all()
-        )
+        roles = query.order_by(Role.name).limit(limit).offset(offset).all()
 
         role_ids = [role.id for role in roles]
         permission_counts: dict[UUID, int] = {}
@@ -950,11 +1012,13 @@ class AdminWebService:
             if module not in permissions_by_module:
                 permissions_by_module[module] = []
 
-            permissions_by_module[module].append({
-                "key": perm.key,
-                "description": perm.description,
-                "action": key_parts[-1] if len(key_parts) > 1 else "access",
-            })
+            permissions_by_module[module].append(
+                {
+                    "key": perm.key,
+                    "description": perm.description,
+                    "action": key_parts[-1] if len(key_parts) > 1 else "access",
+                }
+            )
 
         # Sort modules by name
         permissions_by_module = dict(sorted(permissions_by_module.items()))
@@ -963,7 +1027,8 @@ class AdminWebService:
         member_count = (
             db.query(func.count(PersonRole.id))
             .filter(PersonRole.role_id == role.id)
-            .scalar() or 0
+            .scalar()
+            or 0
         )
 
         # Get role members with details (up to 50)
@@ -980,16 +1045,16 @@ class AdminWebService:
         for person in members_query:
             name = person.name or person.email or "Unknown"
             initials = (
-                "".join(word[0].upper() for word in name.split()[:2])
-                if name
-                else "?"
+                "".join(word[0].upper() for word in name.split()[:2]) if name else "?"
             )
-            members.append({
-                "id": str(person.id),
-                "name": name,
-                "email": person.email,
-                "initials": initials,
-            })
+            members.append(
+                {
+                    "id": str(person.id),
+                    "name": name,
+                    "email": person.email,
+                    "initials": initials,
+                }
+            )
 
         # Module display names
         module_names = {
@@ -1109,10 +1174,7 @@ class AdminWebService:
 
         # Check if name already exists for another role
         existing = (
-            db.query(Role)
-            .filter(Role.name == name)
-            .filter(Role.id != role.id)
-            .first()
+            db.query(Role).filter(Role.name == name).filter(Role.id != role.id).first()
         )
         if existing:
             return None, "A role with this name already exists"
@@ -1209,12 +1271,7 @@ class AdminWebService:
             query = query.filter(Permission.is_active == status_flag)
 
         total_count = query.with_entities(func.count(Permission.id)).scalar() or 0
-        permissions = (
-            query.order_by(Permission.key)
-            .limit(limit)
-            .offset(offset)
-            .all()
-        )
+        permissions = query.order_by(Permission.key).limit(limit).offset(offset).all()
 
         # Get role counts for each permission
         perm_ids = [p.id for p in permissions]
@@ -1520,11 +1577,15 @@ class AdminWebService:
             default_org = db.get(Organization, coerce_uuid(default_org_id))
             if default_org:
                 default_functional_currency_code = default_org.functional_currency_code
-                default_presentation_currency_code = default_org.presentation_currency_code
+                default_presentation_currency_code = (
+                    default_org.presentation_currency_code
+                )
         if not default_functional_currency_code:
             default_functional_currency_code = settings.default_functional_currency_code
         if not default_presentation_currency_code:
-            default_presentation_currency_code = settings.default_presentation_currency_code
+            default_presentation_currency_code = (
+                settings.default_presentation_currency_code
+            )
         if organization_id:
             org = db.get(Organization, coerce_uuid(organization_id))
             if org:
@@ -1552,7 +1613,9 @@ class AdminWebService:
                     "registration_number": org.registration_number or "",
                     "tax_identification_number": org.tax_identification_number or "",
                     "incorporation_date": (
-                        org.incorporation_date.isoformat() if org.incorporation_date else ""
+                        org.incorporation_date.isoformat()
+                        if org.incorporation_date
+                        else ""
                     ),
                     "jurisdiction_country_code": org.jurisdiction_country_code or "",
                     "functional_currency_code": org.functional_currency_code,
@@ -1560,23 +1623,33 @@ class AdminWebService:
                     "fiscal_year_end_month": org.fiscal_year_end_month,
                     "fiscal_year_end_day": org.fiscal_year_end_day,
                     "parent_organization_id": (
-                        str(org.parent_organization_id) if org.parent_organization_id else ""
+                        str(org.parent_organization_id)
+                        if org.parent_organization_id
+                        else ""
                     ),
                     "consolidation_method": (
-                        org.consolidation_method.value if org.consolidation_method else ""
+                        org.consolidation_method.value
+                        if org.consolidation_method
+                        else ""
                     ),
                     "ownership_percentage": (
-                        str(org.ownership_percentage) if org.ownership_percentage else ""
+                        str(org.ownership_percentage)
+                        if org.ownership_percentage
+                        else ""
                     ),
                     "is_active": org.is_active,
                     "user_count": user_count,
                     "subsidiaries_count": subsidiaries_count,
                     # Payroll GL account settings
                     "salaries_expense_account_id": (
-                        str(org.salaries_expense_account_id) if org.salaries_expense_account_id else ""
+                        str(org.salaries_expense_account_id)
+                        if org.salaries_expense_account_id
+                        else ""
                     ),
                     "salary_payable_account_id": (
-                        str(org.salary_payable_account_id) if org.salary_payable_account_id else ""
+                        str(org.salary_payable_account_id)
+                        if org.salary_payable_account_id
+                        else ""
                     ),
                 }
 
@@ -1590,14 +1663,19 @@ class AdminWebService:
         liability_accounts = []
         if organization_id:
             from app.models.finance.gl.account import Account
-            from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
+            from app.models.finance.gl.account_category import (
+                AccountCategory,
+                IFRSCategory,
+            )
 
             org_uuid = coerce_uuid(organization_id)
 
             # Get expense accounts (IFRS category = EXPENSES)
             expense_accts = (
                 db.query(Account)
-                .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+                .join(
+                    AccountCategory, Account.category_id == AccountCategory.category_id
+                )
                 .filter(
                     Account.organization_id == org_uuid,
                     Account.is_active.is_(True),
@@ -1619,7 +1697,9 @@ class AdminWebService:
             # Get liability accounts (IFRS category = LIABILITIES)
             liability_accts = (
                 db.query(Account)
-                .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+                .join(
+                    AccountCategory, Account.category_id == AccountCategory.category_id
+                )
                 .filter(
                     Account.organization_id == org_uuid,
                     Account.is_active.is_(True),
@@ -1708,7 +1788,9 @@ class AdminWebService:
                 organization_code=organization_code,
                 legal_name=legal_name,
                 trading_name=trading_name if trading_name else None,
-                registration_number=registration_number if registration_number else None,
+                registration_number=registration_number
+                if registration_number
+                else None,
                 tax_identification_number=(
                     tax_identification_number if tax_identification_number else None
                 ),
@@ -1775,7 +1857,10 @@ class AdminWebService:
             return None, "An organization with this code already exists"
 
         # Prevent setting self as parent
-        if parent_organization_id and coerce_uuid(parent_organization_id) == org.organization_id:
+        if (
+            parent_organization_id
+            and coerce_uuid(parent_organization_id) == org.organization_id
+        ):
             return None, "An organization cannot be its own parent"
 
         try:
@@ -1813,7 +1898,9 @@ class AdminWebService:
             org.organization_code = organization_code
             org.legal_name = legal_name
             org.trading_name = trading_name if trading_name else None
-            org.registration_number = registration_number if registration_number else None
+            org.registration_number = (
+                registration_number if registration_number else None
+            )
             org.tax_identification_number = (
                 tax_identification_number if tax_identification_number else None
             )
@@ -1935,7 +2022,9 @@ class AdminWebService:
                 "value_type": setting.value_type.value,
                 "is_secret": setting.is_secret,
                 "is_active": setting.is_active,
-                "updated_at": _format_datetime(setting.updated_at or setting.created_at),
+                "updated_at": _format_datetime(
+                    setting.updated_at or setting.created_at
+                ),
             }
             for setting in settings
         ]
@@ -2024,7 +2113,10 @@ class AdminWebService:
             .first()
         )
         if existing:
-            return None, f"A setting with key '{key}' already exists in domain '{domain}'"
+            return (
+                None,
+                f"A setting with key '{key}' already exists in domain '{domain}'",
+            )
 
         try:
             # Parse and store value based on type
@@ -2037,7 +2129,9 @@ class AdminWebService:
                 except json.JSONDecodeError as e:
                     return None, f"Invalid JSON value: {str(e)}"
             elif value_type_enum == SettingValueType.boolean:
-                value_text = "true" if value.lower() in ("true", "1", "yes", "on") else "false"
+                value_text = (
+                    "true" if value.lower() in ("true", "1", "yes", "on") else "false"
+                )
             elif value_type_enum == SettingValueType.integer:
                 try:
                     int(value) if value else 0
@@ -2101,7 +2195,10 @@ class AdminWebService:
             .first()
         )
         if existing:
-            return None, f"A setting with key '{key}' already exists in domain '{domain}'"
+            return (
+                None,
+                f"A setting with key '{key}' already exists in domain '{domain}'",
+            )
 
         try:
             # Parse and store value based on type
@@ -2114,7 +2211,9 @@ class AdminWebService:
                 except json.JSONDecodeError as e:
                     return None, f"Invalid JSON value: {str(e)}"
             elif value_type_enum == SettingValueType.boolean:
-                value_text = "true" if value.lower() in ("true", "1", "yes", "on") else "false"
+                value_text = (
+                    "true" if value.lower() in ("true", "1", "yes", "on") else "false"
+                )
             elif value_type_enum == SettingValueType.integer:
                 try:
                     int(value) if value else 0
@@ -2259,12 +2358,7 @@ class AdminWebService:
             query = query.filter(ScheduledTask.enabled == status_flag)
 
         total_count = query.with_entities(func.count(ScheduledTask.id)).scalar() or 0
-        tasks = (
-            query.order_by(ScheduledTask.name)
-            .limit(limit)
-            .offset(offset)
-            .all()
-        )
+        tasks = query.order_by(ScheduledTask.name).limit(limit).offset(offset).all()
 
         tasks_view = []
         for task in tasks:
@@ -2318,8 +2412,12 @@ class AdminWebService:
                     "task_name": task.task_name,
                     "schedule_type": task.schedule_type.value,
                     "interval_seconds": task.interval_seconds,
-                    "args_json": json.dumps(task.args_json, indent=2) if task.args_json else "",
-                    "kwargs_json": json.dumps(task.kwargs_json, indent=2) if task.kwargs_json else "",
+                    "args_json": json.dumps(task.args_json, indent=2)
+                    if task.args_json
+                    else "",
+                    "kwargs_json": json.dumps(task.kwargs_json, indent=2)
+                    if task.kwargs_json
+                    else "",
                     "enabled": task.enabled,
                     "last_run_at": _format_datetime(task.last_run_at),
                 }
@@ -3016,7 +3114,9 @@ class AdminWebService:
         auth_or_redirect = self._require_admin_web_auth(request, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
-        context = self.permissions_context(db=db, search=search, status=status, page=page)
+        context = self.permissions_context(
+            db=db, search=search, status=status, page=page
+        )
         return self._render_admin_template(
             request,
             "admin/permissions.html",
@@ -3237,7 +3337,9 @@ class AdminWebService:
         auth_or_redirect = self._require_admin_web_auth(request, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
-        context = self.organizations_context(db=db, search=search, status=status, page=page)
+        context = self.organizations_context(
+            db=db, search=search, status=status, page=page
+        )
         return self._render_admin_template(
             request,
             "admin/organizations.html",
@@ -3474,7 +3576,9 @@ class AdminWebService:
         auth_or_redirect = self._require_admin_web_auth(request, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
-        context = self.settings_context(db=db, search=search, domain=domain, status=status, page=page)
+        context = self.settings_context(
+            db=db, search=search, domain=domain, status=status, page=page
+        )
         return self._render_admin_template(
             request,
             "admin/settings.html",
@@ -3867,6 +3971,144 @@ class AdminWebService:
         if error:
             raise HTTPException(status_code=400, detail=error)
         return RedirectResponse(url="/admin/tasks?deleted=1", status_code=302)
+
+    # =========================================================================
+    # Data Changes (AuditLog) Viewer
+    # =========================================================================
+
+    @staticmethod
+    def data_changes_context(
+        db: Session,
+        organization_id: Optional[UUID],
+        module: Optional[str],
+        entity: Optional[str],
+        action: Optional[str],
+        search: Optional[str],
+        page: int,
+        limit: int = DEFAULT_PAGE_SIZE,
+    ) -> dict:
+        offset = (page - 1) * limit
+
+        query = db.query(AuditLog)
+
+        if organization_id:
+            query = query.filter(AuditLog.organization_id == organization_id)
+
+        if module:
+            query = query.filter(AuditLog.table_schema == module)
+
+        if entity:
+            query = query.filter(AuditLog.table_name == entity)
+
+        if action:
+            try:
+                action_enum = AuditAction(action)
+                query = query.filter(AuditLog.action == action_enum)
+            except ValueError:
+                pass
+
+        search_value = search.strip() if search else ""
+        if search_value:
+            search_pattern = f"%{search_value}%"
+            query = query.filter(
+                or_(
+                    AuditLog.record_id.ilike(search_pattern),
+                    AuditLog.reason.ilike(search_pattern),
+                    AuditLog.correlation_id.ilike(search_pattern),
+                )
+            )
+
+        total_count = query.with_entities(func.count(AuditLog.audit_id)).scalar() or 0
+        logs = (
+            query.order_by(AuditLog.occurred_at.desc())
+            .limit(limit)
+            .offset(offset)
+            .all()
+        )
+
+        logs_view = []
+        for log in logs:
+            changed = log.changed_fields or []
+            logs_view.append(
+                {
+                    "audit_id": str(log.audit_id),
+                    "occurred_at": _format_datetime(log.occurred_at),
+                    "table_schema": log.table_schema,
+                    "table_name": log.table_name,
+                    "record_id": log.record_id,
+                    "action": log.action.value if log.action else "",
+                    "changed_fields": changed,
+                    "old_values": log.old_values or {},
+                    "new_values": log.new_values or {},
+                    "user_id": str(log.user_id) if log.user_id else None,
+                    "ip_address": log.ip_address,
+                    "reason": log.reason,
+                    "correlation_id": log.correlation_id,
+                    "has_hash": bool(log.hash_chain),
+                }
+            )
+
+        # Collect distinct modules and entities for filter dropdowns
+        modules = sorted(
+            {
+                row[0]
+                for row in db.query(AuditLog.table_schema).distinct().all()
+                if row[0]
+            }
+        )
+        entities = sorted(
+            {row[0] for row in db.query(AuditLog.table_name).distinct().all() if row[0]}
+        )
+
+        total_pages = max(1, (total_count + limit - 1) // limit)
+        pagination = _build_pagination(page, total_pages, total_count, limit)
+
+        return {
+            "logs": logs_view,
+            "pagination": pagination,
+            "search": search_value,
+            "module_filter": module or "",
+            "entity_filter": entity or "",
+            "action_filter": action or "",
+            "modules": modules,
+            "entities": entities,
+            "actions": [a.value for a in AuditAction],
+        }
+
+    def data_changes_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+        page: int,
+        module: str,
+        entity: str,
+        action: str,
+        search: str,
+    ) -> HTMLResponse | RedirectResponse:
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+        context = self.data_changes_context(
+            db=db,
+            organization_id=auth_or_redirect.organization_id
+            if hasattr(auth_or_redirect, "organization_id")
+            else None,
+            module=module or None,
+            entity=entity or None,
+            action=action or None,
+            search=search,
+            page=page,
+        )
+        return self._render_admin_template(
+            request,
+            "admin/data_changes.html",
+            auth_or_redirect,
+            "Data Changes",
+            "Data Changes",
+            "data_changes",
+            context,
+        )
 
 
 admin_web_service = AdminWebService()

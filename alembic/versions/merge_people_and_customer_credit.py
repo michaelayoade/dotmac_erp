@@ -8,7 +8,6 @@ This migration merges two parallel development branches:
 - create_people_schemas: People/HR module schemas
 - add_customer_credit_hold: Customer credit hold column
 """
-from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "merge_people_and_customer_credit"

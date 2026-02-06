@@ -16,7 +16,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.auth import Session as AuthSession, SessionStatus, UserCredential
+from app.models.auth import Session as AuthSession
+from app.models.auth import SessionStatus, UserCredential
 from app.models.finance.core_org.cost_center import CostCenter
 from app.models.finance.core_org.location import Location
 from app.models.people.hr import (
@@ -28,29 +29,25 @@ from app.models.people.hr import (
     EmploymentType,
 )
 from app.models.people.hr.employee import SalaryMode
-from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
+from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
 from app.models.person import Gender, Person
-from app.services.common import coerce_uuid, PaginationParams
+from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.attendance.attendance_service import AttendanceService
 from app.services.people.hr import (
-    EmployeeService,
-    OrganizationService,
-    EmployeeFilters,
-    EmployeeCreateData,
-    EmployeeUpdateData,
-    TerminationData,
     DepartmentFilters,
-    DepartmentCreateData,
-    DepartmentUpdateData,
     DesignationFilters,
-    DesignationCreateData,
-    DesignationUpdateData,
-    EmploymentTypeFilters,
+    EmployeeCreateData,
+    EmployeeFilters,
     EmployeeGradeFilters,
+    EmployeeService,
+    EmployeeUpdateData,
+    EmploymentTypeFilters,
+    OrganizationService,
+    TerminationData,
 )
 from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
+from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
 
@@ -137,11 +134,13 @@ class HRWebService:
                 if person
                 else ""
             )
-            managers.append({
-                "employee_id": mgr.employee_id,
-                "employee_code": mgr.employee_code,
-                "full_name": full_name,
-            })
+            managers.append(
+                {
+                    "employee_id": mgr.employee_id,
+                    "employee_code": mgr.employee_code,
+                    "full_name": full_name,
+                }
+            )
 
         # Build employee view data - relationships already loaded via eager_load
         employees_view = []
@@ -151,17 +150,21 @@ class HRWebService:
             desig = emp.designation
             status_value = emp.status.value if emp.status else "UNKNOWN"
 
-            employees_view.append({
-                "employee_id": emp.employee_id,
-                "employee_code": emp.employee_code,
-                "person_name": f"{person.first_name or ''} {person.last_name or ''}".strip() if person else "",
-                "email": person.email if person else "",
-                "department_name": dept.department_name if dept else "",
-                "designation_name": desig.designation_name if desig else "",
-                "date_of_joining": emp.date_of_joining,
-                "status": status_value,
-                "status_class": self._status_class(emp.status),
-            })
+            employees_view.append(
+                {
+                    "employee_id": emp.employee_id,
+                    "employee_code": emp.employee_code,
+                    "person_name": f"{person.first_name or ''} {person.last_name or ''}".strip()
+                    if person
+                    else "",
+                    "email": person.email if person else "",
+                    "department_name": dept.department_name if dept else "",
+                    "designation_name": desig.designation_name if desig else "",
+                    "date_of_joining": emp.date_of_joining,
+                    "status": status_value,
+                    "status_class": self._status_class(emp.status),
+                }
+            )
 
         context = {
             **base_context(request, auth, "Employees", "employees"),
@@ -272,7 +275,9 @@ class HRWebService:
         ctc = self._parse_decimal(ctc_raw)
         salary_mode = self._parse_salary_mode(salary_mode_raw)
 
-        if (not linked_person_id and (not first_name or not last_name or not email)) or not date_of_joining:
+        if (
+            not linked_person_id and (not first_name or not last_name or not email)
+        ) or not date_of_joining:
             errors = {
                 "first_name": "Required" if not first_name else "",
                 "last_name": "Required" if not last_name else "",
@@ -449,11 +454,17 @@ class HRWebService:
             employee_number=employee_code if employee_code else None,
             department_id=coerce_uuid(department_id) if department_id else None,
             designation_id=coerce_uuid(designation_id) if designation_id else None,
-            employment_type_id=coerce_uuid(employment_type_id) if employment_type_id else None,
+            employment_type_id=coerce_uuid(employment_type_id)
+            if employment_type_id
+            else None,
             grade_id=coerce_uuid(grade_id) if grade_id else None,
             reports_to_id=coerce_uuid(reports_to_id) if reports_to_id else None,
-            assigned_location_id=coerce_uuid(assigned_location_id) if assigned_location_id else None,
-            default_shift_type_id=coerce_uuid(default_shift_type_id) if default_shift_type_id else None,
+            assigned_location_id=coerce_uuid(assigned_location_id)
+            if assigned_location_id
+            else None,
+            default_shift_type_id=coerce_uuid(default_shift_type_id)
+            if default_shift_type_id
+            else None,
             cost_center_id=coerce_uuid(cost_center_id) if cost_center_id else None,
             date_of_joining=joining_date,
             probation_end_date=probation_date,
@@ -568,11 +579,17 @@ class HRWebService:
             employee_number=employee_code if employee_code else None,
             department_id=coerce_uuid(department_id) if department_id else None,
             designation_id=coerce_uuid(designation_id) if designation_id else None,
-            employment_type_id=coerce_uuid(employment_type_id) if employment_type_id else None,
+            employment_type_id=coerce_uuid(employment_type_id)
+            if employment_type_id
+            else None,
             grade_id=coerce_uuid(grade_id) if grade_id else None,
             reports_to_id=coerce_uuid(reports_to_id) if reports_to_id else None,
-            assigned_location_id=coerce_uuid(assigned_location_id) if assigned_location_id else None,
-            default_shift_type_id=coerce_uuid(default_shift_type_id) if default_shift_type_id else None,
+            assigned_location_id=coerce_uuid(assigned_location_id)
+            if assigned_location_id
+            else None,
+            default_shift_type_id=coerce_uuid(default_shift_type_id)
+            if default_shift_type_id
+            else None,
             cost_center_id=coerce_uuid(cost_center_id) if cost_center_id else None,
             date_of_joining=joining_date,
             probation_end_date=probation_date,
@@ -617,7 +634,9 @@ class HRWebService:
         svc = EmployeeService(db, org_id)
         svc.activate_employee(employee_id)
         db.commit()
-        return RedirectResponse(url=f"/people/hr/employees/{employee_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/hr/employees/{employee_id}", status_code=303
+        )
 
     async def suspend_employee_response(
         self,
@@ -636,7 +655,9 @@ class HRWebService:
         svc = EmployeeService(db, org_id)
         svc.suspend_employee(employee_id, reason=reason or None)
         db.commit()
-        return RedirectResponse(url=f"/people/hr/employees/{employee_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/hr/employees/{employee_id}", status_code=303
+        )
 
     def set_employee_on_leave_response(
         self,
@@ -649,7 +670,9 @@ class HRWebService:
         svc = EmployeeService(db, org_id)
         svc.set_on_leave(employee_id)
         db.commit()
-        return RedirectResponse(url=f"/people/hr/employees/{employee_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/hr/employees/{employee_id}", status_code=303
+        )
 
     async def resign_employee_response(
         self,
@@ -672,15 +695,21 @@ class HRWebService:
         if leaving_date:
             svc.resign_employee(employee_id, leaving_date)
             db.commit()
-            return RedirectResponse(url=f"/people/hr/employees/{employee_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/hr/employees/{employee_id}", status_code=303
+            )
 
         employee = svc.get_employee(employee_id)
         context = self._employee_detail_context(request, auth, db, employee)
-        context.update({
-            "employee": employee,
-            "error": "Please provide a valid resignation date.",
-        })
-        return templates.TemplateResponse(request, "people/hr/employee_detail.html", context)
+        context.update(
+            {
+                "employee": employee,
+                "error": "Please provide a valid resignation date.",
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/hr/employee_detail.html", context
+        )
 
     async def terminate_employee_response(
         self,
@@ -710,15 +739,21 @@ class HRWebService:
                 ),
             )
             db.commit()
-            return RedirectResponse(url=f"/people/hr/employees/{employee_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/hr/employees/{employee_id}", status_code=303
+            )
 
         employee = svc.get_employee(employee_id)
         context = self._employee_detail_context(request, auth, db, employee)
-        context.update({
-            "employee": employee,
-            "error": "Please provide a valid termination date.",
-        })
-        return templates.TemplateResponse(request, "people/hr/employee_detail.html", context)
+        context.update(
+            {
+                "employee": employee,
+                "error": "Please provide a valid termination date.",
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/hr/employee_detail.html", context
+        )
 
     async def toggle_user_credential_response(
         self,
@@ -739,11 +774,15 @@ class HRWebService:
 
         if not employee.person_id:
             context = self._employee_detail_context(request, auth, db, employee)
-            context.update({
-                "employee": employee,
-                "error": "This employee is not linked to a user account.",
-            })
-            return templates.TemplateResponse(request, "people/hr/employee_detail.html", context)
+            context.update(
+                {
+                    "employee": employee,
+                    "error": "This employee is not linked to a user account.",
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/hr/employee_detail.html", context
+            )
 
         credential = (
             db.query(UserCredential)
@@ -753,11 +792,15 @@ class HRWebService:
         )
         if not credential:
             context = self._employee_detail_context(request, auth, db, employee)
-            context.update({
-                "employee": employee,
-                "error": "User credential not found for this employee.",
-            })
-            return templates.TemplateResponse(request, "people/hr/employee_detail.html", context)
+            context.update(
+                {
+                    "employee": employee,
+                    "error": "User credential not found for this employee.",
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/hr/employee_detail.html", context
+            )
 
         credential.is_active = not bool(credential.is_active)
 
@@ -781,6 +824,7 @@ class HRWebService:
 
             if session_ids:
                 from app.services.auth_dependencies import invalidate_session_cache
+
                 for session_id in session_ids:
                     invalidate_session_cache(session_id)
         else:
@@ -802,8 +846,16 @@ class HRWebService:
         org_id = coerce_uuid(auth.organization_id)
 
         person = db.get(Person, employee.person_id)
-        dept = db.get(Department, employee.department_id) if employee.department_id else None
-        desig = db.get(Designation, employee.designation_id) if employee.designation_id else None
+        dept = (
+            db.get(Department, employee.department_id)
+            if employee.department_id
+            else None
+        )
+        desig = (
+            db.get(Designation, employee.designation_id)
+            if employee.designation_id
+            else None
+        )
         grade = db.get(EmployeeGrade, employee.grade_id) if employee.grade_id else None
         emp_type = (
             db.get(EmploymentType, employee.employment_type_id)
@@ -866,7 +918,9 @@ class HRWebService:
         from app.services.people.hr.lifecycle import LifecycleService
 
         lifecycle_svc = LifecycleService(db)
-        onboarding = lifecycle_svc.get_onboarding_for_employee(org_id, employee.employee_id)
+        onboarding = lifecycle_svc.get_onboarding_for_employee(
+            org_id, employee.employee_id
+        )
 
         return {
             **base_context(request, auth, "Employee Details", "employees"),
@@ -966,11 +1020,15 @@ class HRWebService:
             EmployeeGradeFilters(is_active=True),
             PaginationParams(limit=DROPDOWN_LIMIT),
         ).items
-        managers = EmployeeService(db, org_id).list_employees(
-            EmployeeFilters(status=EmployeeStatus.ACTIVE),
-            PaginationParams(limit=DROPDOWN_LIMIT),
-            eager_load=True,
-        ).items
+        managers = (
+            EmployeeService(db, org_id)
+            .list_employees(
+                EmployeeFilters(status=EmployeeStatus.ACTIVE),
+                PaginationParams(limit=DROPDOWN_LIMIT),
+                eager_load=True,
+            )
+            .items
+        )
         cost_centers = (
             db.query(CostCenter)
             .filter(
@@ -989,11 +1047,15 @@ class HRWebService:
             .order_by(Location.location_name)
             .all()
         )
-        shift_types = AttendanceService(db).list_shift_types(
-            org_id,
-            is_active=True,
-            pagination=PaginationParams(limit=DROPDOWN_LIMIT),
-        ).items
+        shift_types = (
+            AttendanceService(db)
+            .list_shift_types(
+                org_id,
+                is_active=True,
+                pagination=PaginationParams(limit=DROPDOWN_LIMIT),
+            )
+            .items
+        )
         user_rows = (
             db.query(UserCredential, Person)
             .join(Person, UserCredential.person_id == Person.id)
@@ -1109,11 +1171,15 @@ class HRWebService:
             EmployeeGradeFilters(is_active=True),
             PaginationParams(limit=DROPDOWN_LIMIT),
         ).items
-        managers = EmployeeService(db, org_id).list_employees(
-            EmployeeFilters(status=EmployeeStatus.ACTIVE),
-            PaginationParams(limit=DROPDOWN_LIMIT),
-            eager_load=True,
-        ).items
+        managers = (
+            EmployeeService(db, org_id)
+            .list_employees(
+                EmployeeFilters(status=EmployeeStatus.ACTIVE),
+                PaginationParams(limit=DROPDOWN_LIMIT),
+                eager_load=True,
+            )
+            .items
+        )
         cost_centers = (
             db.query(CostCenter)
             .filter(
@@ -1132,11 +1198,15 @@ class HRWebService:
             .order_by(Location.location_name)
             .all()
         )
-        shift_types = AttendanceService(db).list_shift_types(
-            org_id,
-            is_active=True,
-            pagination=PaginationParams(limit=DROPDOWN_LIMIT),
-        ).items
+        shift_types = (
+            AttendanceService(db)
+            .list_shift_types(
+                org_id,
+                is_active=True,
+                pagination=PaginationParams(limit=DROPDOWN_LIMIT),
+            )
+            .items
+        )
         user_rows = (
             db.query(UserCredential, Person)
             .join(Person, UserCredential.person_id == Person.id)
@@ -1217,7 +1287,11 @@ class HRWebService:
             "departments": result.items,
             "employee_counts": dept_employee_counts,
             "search": search or "",
-            "is_active": "true" if is_active is True else "false" if is_active is False else "",
+            "is_active": "true"
+            if is_active is True
+            else "false"
+            if is_active is False
+            else "",
             "page": page,
             "total_pages": result.total_pages,
             "total": result.total,
@@ -1252,7 +1326,11 @@ class HRWebService:
             DepartmentFilters(is_active=True),
             PaginationParams(limit=DROPDOWN_LIMIT),
         ).items
-        parent_options = [d for d in all_depts if not department or d.department_id != department.department_id]
+        parent_options = [
+            d
+            for d in all_depts
+            if not department or d.department_id != department.department_id
+        ]
 
         # Get active employees for department head dropdown
         employee_options = emp_svc.list_employees(

@@ -6,12 +6,14 @@ Provides API-focused handlers for auth flow routes.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+import logging
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from app.models.auth import AuthProvider, Session as AuthSession, SessionStatus, UserCredential
+from app.models.auth import AuthProvider, SessionStatus, UserCredential
+from app.models.auth import Session as AuthSession
 from app.models.person import Person
 from app.schemas.auth_flow import (
     AvatarUploadResponse,
@@ -34,6 +36,8 @@ from app.services.auth_flow import (
 )
 from app.services.common import coerce_uuid
 from app.services.email import send_password_reset_email
+
+logger = logging.getLogger(__name__)
 
 
 class AuthFlowApiService:
@@ -76,7 +80,9 @@ class AuthFlowApiService:
 
         return self.get_me(auth, db)
 
-    async def upload_avatar(self, file: UploadFile, auth: dict, db: Session) -> AvatarUploadResponse:
+    async def upload_avatar(
+        self, file: UploadFile, auth: dict, db: Session
+    ) -> AvatarUploadResponse:
         person = db.get(Person, coerce_uuid(auth["person_id"]))
         if not person:
             raise HTTPException(status_code=404, detail="User not found")
@@ -130,7 +136,9 @@ class AuthFlowApiService:
             total=len(sessions),
         )
 
-    def revoke_session(self, session_id: str, auth: dict, db: Session) -> SessionRevokeResponse:
+    def revoke_session(
+        self, session_id: str, auth: dict, db: Session
+    ) -> SessionRevokeResponse:
         now = datetime.now(timezone.utc)
         session = (
             db.query(AuthSession)
@@ -151,7 +159,9 @@ class AuthFlowApiService:
 
         return SessionRevokeResponse(revoked_at=now)
 
-    def revoke_all_other_sessions(self, auth: dict, db: Session) -> SessionRevokeResponse:
+    def revoke_all_other_sessions(
+        self, auth: dict, db: Session
+    ) -> SessionRevokeResponse:
         current_session_id = auth.get("session_id")
         if current_session_id:
             current_session_id = coerce_uuid(current_session_id)
@@ -175,7 +185,9 @@ class AuthFlowApiService:
 
         return SessionRevokeResponse(revoked_at=now, revoked_count=len(sessions))
 
-    def change_password(self, payload, auth: dict, db: Session) -> PasswordChangeResponse:
+    def change_password(
+        self, payload, auth: dict, db: Session
+    ) -> PasswordChangeResponse:
         credential = (
             db.query(UserCredential)
             .filter(UserCredential.person_id == coerce_uuid(auth["person_id"]))
@@ -190,7 +202,9 @@ class AuthFlowApiService:
             raise HTTPException(status_code=401, detail="Current password is incorrect")
 
         if payload.current_password == payload.new_password:
-            raise HTTPException(status_code=400, detail="New password must be different")
+            raise HTTPException(
+                status_code=400, detail="New password must be different"
+            )
 
         now = datetime.now(timezone.utc)
         credential.password_hash = hash_password(payload.new_password)
@@ -229,7 +243,9 @@ class AuthFlowApiService:
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         if payload.current_password == payload.new_password:
-            raise HTTPException(status_code=400, detail="New password must be different")
+            raise HTTPException(
+                status_code=400, detail="New password must be different"
+            )
 
         credential.password_hash = hash_password(payload.new_password)
         credential.password_updated_at = now

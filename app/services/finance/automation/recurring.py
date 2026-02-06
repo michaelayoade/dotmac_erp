@@ -7,11 +7,11 @@ Handles recurring template management and transaction generation.
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
+from dateutil.relativedelta import relativedelta
 from fastapi import HTTPException
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session

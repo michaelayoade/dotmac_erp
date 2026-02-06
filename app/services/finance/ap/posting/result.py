@@ -2,9 +2,12 @@
 AP Posting Result - Outcome of AP posting operations.
 """
 
+import logging
 from dataclasses import dataclass
 from typing import Optional
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

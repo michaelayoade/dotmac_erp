@@ -44,7 +44,10 @@ def upgrade() -> None:
     # --- AP Schema: Supplier Invoice Dashboard ---
     # Speeds up bill list pages with status filtering and date ordering
     if inspector.has_table("supplier_invoice", schema="ap"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("supplier_invoice", schema="ap")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("supplier_invoice", schema="ap")
+        }
         if "idx_supplier_invoice_org_status_created" not in indexes:
             op.create_index(
                 "idx_supplier_invoice_org_status_created",
@@ -56,7 +59,10 @@ def upgrade() -> None:
     # --- Public Schema: Notification User Feed ---
     # Speeds up user notification feed (bell icon dropdown)
     if inspector.has_table("notification", schema="public"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("notification", schema="public")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("notification", schema="public")
+        }
         if "idx_notification_recipient_created" not in indexes:
             op.create_index(
                 "idx_notification_recipient_created",
@@ -77,7 +83,10 @@ def upgrade() -> None:
     # --- Payroll Schema: Payroll Entry Status ---
     # Speeds up payroll approval queue and status filtering
     if inspector.has_table("payroll_entry", schema="payroll"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("payroll_entry", schema="payroll")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("payroll_entry", schema="payroll")
+        }
         if "idx_payroll_entry_org_status" not in indexes:
             op.create_index(
                 "idx_payroll_entry_org_status",
@@ -89,7 +98,10 @@ def upgrade() -> None:
     # --- Payroll Schema: Salary Slip Batch Processing ---
     # Speeds up loading all slips for a payroll entry
     if inspector.has_table("salary_slip", schema="payroll"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("salary_slip", schema="payroll")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("salary_slip", schema="payroll")
+        }
         if "idx_salary_slip_payroll_entry" not in indexes:
             op.create_index(
                 "idx_salary_slip_payroll_entry",
@@ -106,31 +118,65 @@ def downgrade() -> None:
 
     # --- Drop Payroll Schema Indexes ---
     if inspector.has_table("salary_slip", schema="payroll"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("salary_slip", schema="payroll")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("salary_slip", schema="payroll")
+        }
         if "idx_salary_slip_payroll_entry" in indexes:
-            op.drop_index("idx_salary_slip_payroll_entry", table_name="salary_slip", schema="payroll")
+            op.drop_index(
+                "idx_salary_slip_payroll_entry",
+                table_name="salary_slip",
+                schema="payroll",
+            )
 
     if inspector.has_table("payroll_entry", schema="payroll"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("payroll_entry", schema="payroll")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("payroll_entry", schema="payroll")
+        }
         if "idx_payroll_entry_org_status" in indexes:
-            op.drop_index("idx_payroll_entry_org_status", table_name="payroll_entry", schema="payroll")
+            op.drop_index(
+                "idx_payroll_entry_org_status",
+                table_name="payroll_entry",
+                schema="payroll",
+            )
 
     # --- Drop Public Schema Indexes ---
     if inspector.has_table("notification", schema="public"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("notification", schema="public")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("notification", schema="public")
+        }
         if "idx_notification_org_created" in indexes:
-            op.drop_index("idx_notification_org_created", table_name="notification", schema="public")
+            op.drop_index(
+                "idx_notification_org_created",
+                table_name="notification",
+                schema="public",
+            )
         if "idx_notification_recipient_created" in indexes:
-            op.drop_index("idx_notification_recipient_created", table_name="notification", schema="public")
+            op.drop_index(
+                "idx_notification_recipient_created",
+                table_name="notification",
+                schema="public",
+            )
 
     # --- Drop AP Schema Index ---
     if inspector.has_table("supplier_invoice", schema="ap"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("supplier_invoice", schema="ap")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("supplier_invoice", schema="ap")
+        }
         if "idx_supplier_invoice_org_status_created" in indexes:
-            op.drop_index("idx_supplier_invoice_org_status_created", table_name="supplier_invoice", schema="ap")
+            op.drop_index(
+                "idx_supplier_invoice_org_status_created",
+                table_name="supplier_invoice",
+                schema="ap",
+            )
 
     # --- Drop AR Schema Index ---
     if inspector.has_table("invoice", schema="ar"):
         indexes = {idx["name"] for idx in inspector.get_indexes("invoice", schema="ar")}
         if "idx_invoice_org_status_created" in indexes:
-            op.drop_index("idx_invoice_org_status_created", table_name="invoice", schema="ar")
+            op.drop_index(
+                "idx_invoice_org_status_created", table_name="invoice", schema="ar"
+            )

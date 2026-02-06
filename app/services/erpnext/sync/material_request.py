@@ -4,6 +4,7 @@ ERPNext Material Request Sync Service.
 Syncs Material Request DocType to inv.material_request table with items.
 Supports cross-module links to Projects, Support Tickets, and Tasks.
 """
+
 import logging
 import uuid
 from datetime import datetime
@@ -21,8 +22,8 @@ from app.models.inventory import (
 )
 from app.models.sync import SyncEntity
 from app.services.erpnext.mappings.material_request import (
-    MaterialRequestMapping,
     MaterialRequestItemMapping,
+    MaterialRequestMapping,
 )
 
 from .base import BaseSyncService

@@ -6,23 +6,25 @@ Manages PO creation, approval, and status tracking.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, List, Optional
 from uuid import UUID
-import uuid as uuid_lib
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.finance.ap.purchase_order import PurchaseOrder, POStatus
+from app.models.finance.ap.purchase_order import POStatus, PurchaseOrder
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.services.common import coerce_uuid
 from app.services.finance.platform.sequence import SequenceService
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -91,16 +93,22 @@ class PurchaseOrderService(ListResponseMixin):
         supplier_id = coerce_uuid(input.supplier_id)
 
         # Validate supplier exists
-        supplier = db.query(Supplier).filter(
-            Supplier.supplier_id == supplier_id,
-            Supplier.organization_id == org_id,
-        ).first()
+        supplier = (
+            db.query(Supplier)
+            .filter(
+                Supplier.supplier_id == supplier_id,
+                Supplier.organization_id == org_id,
+            )
+            .first()
+        )
         if not supplier:
             raise HTTPException(status_code=404, detail="Supplier not found")
 
         # Validate lines
         if not input.lines:
-            raise HTTPException(status_code=400, detail="Purchase order must have at least one line")
+            raise HTTPException(
+                status_code=400, detail="Purchase order must have at least one line"
+            )
 
         # Generate PO number
         po_number = SequenceService.get_next_number(
@@ -193,27 +201,36 @@ class PurchaseOrderService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         po_id = coerce_uuid(po_id)
 
-        po = db.query(PurchaseOrder).filter(
-            PurchaseOrder.po_id == po_id,
-            PurchaseOrder.organization_id == org_id,
-        ).first()
+        po = (
+            db.query(PurchaseOrder)
+            .filter(
+                PurchaseOrder.po_id == po_id,
+                PurchaseOrder.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
 
         if po.status != POStatus.DRAFT:
             raise HTTPException(
-                status_code=400,
-                detail=f"Cannot submit PO in {po.status.value} status"
+                status_code=400, detail=f"Cannot submit PO in {po.status.value} status"
             )
 
         po.status = POStatus.PENDING_APPROVAL
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=db, organization_id=org_id, entity_type="PURCHASE_ORDER",
-                entity_id=po_id, event="ON_STATUS_CHANGE",
+                db=db,
+                organization_id=org_id,
+                entity_type="PURCHASE_ORDER",
+                entity_id=po_id,
+                event="ON_STATUS_CHANGE",
                 old_values={"status": "DRAFT"},
                 new_values={"status": "PENDING_APPROVAL"},
                 user_id=coerce_uuid(submitted_by_user_id),
@@ -252,25 +269,28 @@ class PurchaseOrderService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         po_id = coerce_uuid(po_id)
 
-        po = db.query(PurchaseOrder).filter(
-            PurchaseOrder.po_id == po_id,
-            PurchaseOrder.organization_id == org_id,
-        ).first()
+        po = (
+            db.query(PurchaseOrder)
+            .filter(
+                PurchaseOrder.po_id == po_id,
+                PurchaseOrder.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
 
         if po.status != POStatus.PENDING_APPROVAL:
             raise HTTPException(
-                status_code=400,
-                detail=f"Cannot approve PO in {po.status.value} status"
+                status_code=400, detail=f"Cannot approve PO in {po.status.value} status"
             )
 
         # SoD check
         if po.created_by_user_id == approved_by_user_id:
             raise HTTPException(
                 status_code=400,
-                detail="Approver cannot be the same as creator (Segregation of Duties)"
+                detail="Approver cannot be the same as creator (Segregation of Duties)",
             )
 
         po.status = POStatus.APPROVED
@@ -278,10 +298,16 @@ class PurchaseOrderService(ListResponseMixin):
         po.approved_at = datetime.now(timezone.utc)
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=db, organization_id=org_id, entity_type="PURCHASE_ORDER",
-                entity_id=po_id, event="ON_APPROVAL",
+                db=db,
+                organization_id=org_id,
+                entity_type="PURCHASE_ORDER",
+                entity_id=po_id,
+                event="ON_APPROVAL",
                 old_values={"status": "PENDING_APPROVAL"},
                 new_values={"status": "APPROVED"},
                 user_id=coerce_uuid(approved_by_user_id),
@@ -318,34 +344,43 @@ class PurchaseOrderService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         po_id = coerce_uuid(po_id)
 
-        po = db.query(PurchaseOrder).filter(
-            PurchaseOrder.po_id == po_id,
-            PurchaseOrder.organization_id == org_id,
-        ).first()
+        po = (
+            db.query(PurchaseOrder)
+            .filter(
+                PurchaseOrder.po_id == po_id,
+                PurchaseOrder.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
 
         if po.status in [POStatus.RECEIVED, POStatus.CLOSED]:
             raise HTTPException(
-                status_code=400,
-                detail=f"Cannot cancel PO in {po.status.value} status"
+                status_code=400, detail=f"Cannot cancel PO in {po.status.value} status"
             )
 
         if po.amount_received > 0:
             raise HTTPException(
-                status_code=400,
-                detail="Cannot cancel PO with received goods"
+                status_code=400, detail="Cannot cancel PO with received goods"
             )
 
         po.status = POStatus.CANCELLED
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=db, organization_id=org_id, entity_type="PURCHASE_ORDER",
-                entity_id=po_id, event="ON_STATUS_CHANGE",
-                old_values={}, new_values={"status": "CANCELLED"},
+                db=db,
+                organization_id=org_id,
+                entity_type="PURCHASE_ORDER",
+                entity_id=po_id,
+                event="ON_STATUS_CHANGE",
+                old_values={},
+                new_values={"status": "CANCELLED"},
             )
         except Exception:
             pass
@@ -375,10 +410,14 @@ class PurchaseOrderService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         po_id = coerce_uuid(po_id)
 
-        po = db.query(PurchaseOrder).filter(
-            PurchaseOrder.po_id == po_id,
-            PurchaseOrder.organization_id == org_id,
-        ).first()
+        po = (
+            db.query(PurchaseOrder)
+            .filter(
+                PurchaseOrder.po_id == po_id,
+                PurchaseOrder.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
@@ -411,9 +450,13 @@ class PurchaseOrderService(ListResponseMixin):
         """
         po_id = coerce_uuid(po_id)
 
-        po = db.query(PurchaseOrder).filter(
-            PurchaseOrder.po_id == po_id,
-        ).first()
+        po = (
+            db.query(PurchaseOrder)
+            .filter(
+                PurchaseOrder.po_id == po_id,
+            )
+            .first()
+        )
 
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
@@ -434,9 +477,11 @@ class PurchaseOrderService(ListResponseMixin):
     @staticmethod
     def get(db: Session, po_id: str) -> Optional[PurchaseOrder]:
         """Get a purchase order by ID."""
-        return db.query(PurchaseOrder).filter(
-            PurchaseOrder.po_id == coerce_uuid(po_id)
-        ).first()
+        return (
+            db.query(PurchaseOrder)
+            .filter(PurchaseOrder.po_id == coerce_uuid(po_id))
+            .first()
+        )
 
     @staticmethod
     def get_by_number(
@@ -445,10 +490,14 @@ class PurchaseOrderService(ListResponseMixin):
         po_number: str,
     ) -> Optional[PurchaseOrder]:
         """Get a purchase order by number."""
-        return db.query(PurchaseOrder).filter(
-            PurchaseOrder.organization_id == coerce_uuid(organization_id),
-            PurchaseOrder.po_number == po_number,
-        ).first()
+        return (
+            db.query(PurchaseOrder)
+            .filter(
+                PurchaseOrder.organization_id == coerce_uuid(organization_id),
+                PurchaseOrder.po_number == po_number,
+            )
+            .first()
+        )
 
     @staticmethod
     def get_po_lines(db: Session, po_id: str) -> List[PurchaseOrderLine]:
@@ -495,9 +544,7 @@ class PurchaseOrderService(ListResponseMixin):
             )
 
         if supplier_id:
-            query = query.filter(
-                PurchaseOrder.supplier_id == coerce_uuid(supplier_id)
-            )
+            query = query.filter(PurchaseOrder.supplier_id == coerce_uuid(supplier_id))
 
         if status:
             query = query.filter(PurchaseOrder.status == status)
@@ -508,7 +555,12 @@ class PurchaseOrderService(ListResponseMixin):
         if to_date:
             query = query.filter(PurchaseOrder.po_date <= to_date)
 
-        return query.order_by(PurchaseOrder.po_date.desc()).offset(offset).limit(limit).all()
+        return (
+            query.order_by(PurchaseOrder.po_date.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
 
 
 # Module-level instance

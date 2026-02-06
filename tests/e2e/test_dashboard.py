@@ -70,14 +70,22 @@ class TestDashboardMetrics:
     """Test dashboard metrics display and verification."""
 
     @pytest.mark.e2e
-    def test_dashboard_has_financial_metrics(self, authenticated_page: Page, base_url: str):
+    def test_dashboard_has_financial_metrics(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test dashboard displays financial metrics."""
         authenticated_page.goto(f"{base_url}/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
 
-        expect(authenticated_page.get_by_test_id("dashboard-stat-total-revenue")).to_be_visible()
-        expect(authenticated_page.get_by_test_id("dashboard-stat-total-expenses")).to_be_visible()
-        expect(authenticated_page.get_by_test_id("dashboard-stat-net-income")).to_be_visible()
+        expect(
+            authenticated_page.get_by_test_id("dashboard-stat-total-revenue")
+        ).to_be_visible()
+        expect(
+            authenticated_page.get_by_test_id("dashboard-stat-total-expenses")
+        ).to_be_visible()
+        expect(
+            authenticated_page.get_by_test_id("dashboard-stat-net-income")
+        ).to_be_visible()
 
     @pytest.mark.e2e
     def test_dashboard_cash_flow_summary(self, authenticated_page: Page, base_url: str):
@@ -100,12 +108,16 @@ class TestDashboardMetrics:
         expect(aging_overview.get_by_text("Aging Overview")).to_be_visible()
 
     @pytest.mark.e2e
-    def test_dashboard_open_invoices_metric(self, authenticated_page: Page, base_url: str):
+    def test_dashboard_open_invoices_metric(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test dashboard shows open invoices."""
         authenticated_page.goto(f"{base_url}/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
 
-        expect(authenticated_page.get_by_test_id("dashboard-stat-open-invoices")).to_be_visible()
+        expect(
+            authenticated_page.get_by_test_id("dashboard-stat-open-invoices")
+        ).to_be_visible()
 
 
 class TestDashboardDrillDown:
@@ -161,7 +173,9 @@ class TestDashboardCharts:
         assert charts.count() > 0
 
     @pytest.mark.e2e
-    def test_dashboard_cash_flow_period_label(self, authenticated_page: Page, base_url: str):
+    def test_dashboard_cash_flow_period_label(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test cash flow period label displays."""
         authenticated_page.goto(f"{base_url}/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
@@ -179,7 +193,9 @@ class TestDashboardQuickActions:
         authenticated_page.goto(f"{base_url}/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
 
-        expect(authenticated_page.get_by_test_id("dashboard-quick-actions")).to_be_visible()
+        expect(
+            authenticated_page.get_by_test_id("dashboard-quick-actions")
+        ).to_be_visible()
 
     @pytest.mark.e2e
     def test_new_invoice_quick_action(self, authenticated_page: Page, base_url: str):

@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 from app.models.domain_settings import SettingDomain, SettingValueType
 from app.schemas.settings import DomainSettingUpdate
 from app.services import settings_spec
-from app.services.response import list_response
 from app.services.domain_settings import _log_setting_attempt_failed
+from app.services.response import list_response
 
 
 def _domain_allowed_keys(domain: SettingDomain) -> str:
@@ -72,9 +72,7 @@ def _normalize_spec_setting(
             attempted_value=value,
             is_secret=spec.is_secret,
         )
-        raise HTTPException(
-            status_code=400, detail=f"Value must be one of: {allowed}"
-        )
+        raise HTTPException(status_code=400, detail=f"Value must be one of: {allowed}")
 
     if spec.value_type == SettingValueType.integer:
         try:
@@ -88,7 +86,9 @@ def _normalize_spec_setting(
                 attempted_value=value,
                 is_secret=spec.is_secret,
             )
-            raise HTTPException(status_code=400, detail="Value must be an integer") from exc
+            raise HTTPException(
+                status_code=400, detail="Value must be an integer"
+            ) from exc
         if spec.min_value is not None and parsed < spec.min_value:
             _log_setting_attempt_failed(
                 action="UPDATE",
@@ -149,7 +149,9 @@ def _list_domain_settings_response(
     limit: int,
     offset: int,
 ):
-    items = _list_domain_settings(db, domain, is_active, order_by, order_dir, limit, offset)
+    items = _list_domain_settings(
+        db, domain, is_active, order_by, order_dir, limit, offset
+    )
     return list_response(items, limit, offset)
 
 
@@ -348,6 +350,7 @@ def get_payments_setting(db: Session, key: str):
 # Settings Export/Import
 # =============================================================================
 
+
 def export_settings(
     db: Session,
     domains: list[SettingDomain] | None = None,
@@ -391,12 +394,14 @@ def export_settings(
             continue
 
         domain_settings = {}
-        settings_list = service.list(
-            db, None, True, "key", "asc", 1000, 0
-        )
+        settings_list = service.list(db, None, True, "key", "asc", 1000, 0)
 
         for setting in settings_list:
-            value = setting.value_json if setting.value_json is not None else setting.value_text
+            value = (
+                setting.value_json
+                if setting.value_json is not None
+                else setting.value_text
+            )
 
             # Mask secrets unless explicitly requested
             if setting.is_secret and not include_secrets:
@@ -447,11 +452,13 @@ def import_settings(
     # Validate version
     version = data.get("version", "unknown")
     if version != "1.0":
-        result["errors"].append({
-            "domain": None,
-            "key": None,
-            "error": f"Unsupported export version: {version}",
-        })
+        result["errors"].append(
+            {
+                "domain": None,
+                "key": None,
+                "error": f"Unsupported export version: {version}",
+            }
+        )
         return result
 
     settings_data = data.get("settings", {})
@@ -463,11 +470,13 @@ def import_settings(
         try:
             domain = SettingDomain(domain_str)
         except ValueError:
-            result["errors"].append({
-                "domain": domain_str,
-                "key": None,
-                "error": f"Unknown domain: {domain_str}",
-            })
+            result["errors"].append(
+                {
+                    "domain": domain_str,
+                    "key": None,
+                    "error": f"Unknown domain: {domain_str}",
+                }
+            )
             continue
 
         # Filter by requested domains
@@ -476,59 +485,71 @@ def import_settings(
 
         service = settings_spec.DOMAIN_SETTINGS_SERVICE.get(domain)
         if not service:
-            result["errors"].append({
-                "domain": domain_str,
-                "key": None,
-                "error": "Domain service not configured",
-            })
+            result["errors"].append(
+                {
+                    "domain": domain_str,
+                    "key": None,
+                    "error": "Domain service not configured",
+                }
+            )
             continue
 
         for key, setting_data in domain_settings.items():
             # Get spec for validation
             spec = settings_spec.get_spec(domain, key)
             if not spec:
-                result["skipped"].append({
-                    "domain": domain_str,
-                    "key": key,
-                    "reason": "Unknown setting key",
-                })
+                result["skipped"].append(
+                    {
+                        "domain": domain_str,
+                        "key": key,
+                        "reason": "Unknown setting key",
+                    }
+                )
                 continue
 
             # Skip secrets if requested
             is_secret = setting_data.get("is_secret", False)
             if is_secret and skip_secrets:
-                result["skipped"].append({
-                    "domain": domain_str,
-                    "key": key,
-                    "reason": "Secret value skipped (skip_secrets=True)",
-                })
+                result["skipped"].append(
+                    {
+                        "domain": domain_str,
+                        "key": key,
+                        "reason": "Secret value skipped (skip_secrets=True)",
+                    }
+                )
                 continue
 
             # Skip masked values
             value = setting_data.get("value")
             if value == "***EXPORTED_SECRET_MASKED***":
-                result["skipped"].append({
-                    "domain": domain_str,
-                    "key": key,
-                    "reason": "Masked secret value",
-                })
+                result["skipped"].append(
+                    {
+                        "domain": domain_str,
+                        "key": key,
+                        "reason": "Masked secret value",
+                    }
+                )
                 continue
 
             if dry_run:
                 # Just validate
                 _, error = settings_spec.coerce_value(spec, value)
                 if error:
-                    result["errors"].append({
-                        "domain": domain_str,
-                        "key": key,
-                        "error": error,
-                    })
+                    result["errors"].append(
+                        {
+                            "domain": domain_str,
+                            "key": key,
+                            "error": error,
+                        }
+                    )
                 else:
-                    result["imported"].append({
-                        "domain": domain_str,
-                        "key": key,
-                        "status": "validated (dry_run)",
-                    })
+                    result["imported"].append(
+                        {
+                            "domain": domain_str,
+                            "key": key,
+                            "status": "validated (dry_run)",
+                        }
+                    )
             else:
                 # Actually import
                 try:
@@ -539,23 +560,29 @@ def import_settings(
                     )
                     normalized = _normalize_spec_setting(domain, key, payload)
                     service.upsert_by_key(db, key, normalized)
-                    result["imported"].append({
-                        "domain": domain_str,
-                        "key": key,
-                        "status": "imported",
-                    })
+                    result["imported"].append(
+                        {
+                            "domain": domain_str,
+                            "key": key,
+                            "status": "imported",
+                        }
+                    )
                 except HTTPException as e:
-                    result["errors"].append({
-                        "domain": domain_str,
-                        "key": key,
-                        "error": str(e.detail),
-                    })
+                    result["errors"].append(
+                        {
+                            "domain": domain_str,
+                            "key": key,
+                            "error": str(e.detail),
+                        }
+                    )
                 except Exception as e:
-                    result["errors"].append({
-                        "domain": domain_str,
-                        "key": key,
-                        "error": str(e),
-                    })
+                    result["errors"].append(
+                        {
+                            "domain": domain_str,
+                            "key": key,
+                            "error": str(e),
+                        }
+                    )
 
     if not dry_run and result["imported"]:
         db.commit()

@@ -6,6 +6,7 @@ Handles fair value revaluations under the revaluation model.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -21,6 +22,8 @@ from app.models.fixed_assets.asset_category import AssetCategory
 from app.models.fixed_assets.asset_revaluation import AssetRevaluation
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -131,7 +134,9 @@ class AssetRevaluationService(ListResponseMixin):
             # Revaluation increase
             # First, reverse any prior deficit recognized in P&L
             if cumulative_deficit_in_pl > 0:
-                prior_deficit_reversed = min(surplus_or_deficit, cumulative_deficit_in_pl)
+                prior_deficit_reversed = min(
+                    surplus_or_deficit, cumulative_deficit_in_pl
+                )
                 surplus_to_equity = surplus_or_deficit - prior_deficit_reversed
             else:
                 surplus_to_equity = surplus_or_deficit
@@ -348,9 +353,7 @@ class AssetRevaluationService(ListResponseMixin):
         query = db.query(AssetRevaluation)
 
         if asset_id:
-            query = query.filter(
-                AssetRevaluation.asset_id == coerce_uuid(asset_id)
-            )
+            query = query.filter(AssetRevaluation.asset_id == coerce_uuid(asset_id))
         elif organization_id:
             # Need to join to filter by org
             query = query.join(

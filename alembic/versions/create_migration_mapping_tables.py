@@ -11,6 +11,7 @@ Tables:
 - company_org_map: Maps People company strings to Books organization UUIDs
 - id_mapping: Maps old integer IDs to new UUIDs for all migrated entities
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID

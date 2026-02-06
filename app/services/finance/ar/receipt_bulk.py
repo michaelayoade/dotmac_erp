@@ -6,6 +6,7 @@ Provides bulk operations for AR receipt documents.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from uuid import UUID
 
@@ -14,6 +15,8 @@ from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer_payment import CustomerPayment, PaymentStatus
 from app.services.bulk_actions import BulkActionService
+
+logger = logging.getLogger(__name__)
 
 
 class ARReceiptBulkService(BulkActionService[CustomerPayment]):

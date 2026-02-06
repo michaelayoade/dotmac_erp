@@ -19,11 +19,22 @@
     <!-- Self-hosted Typography: DM Sans, Fraunces, JetBrains Mono -->
     <link href="/static/css/fonts.css" rel="stylesheet">
     {% set favicon_url = (org_branding.favicon_url if org_branding is defined and org_branding and org_branding.favicon_url else (brand_data.favicon_url if brand_data and brand_data.favicon_url else "/static/favicon.svg")) %}
-    <link rel="icon" href="{{ favicon_url }}" type="image/svg+xml">
-    <link rel="alternate icon" href="{{ favicon_url }}" type="image/svg+xml">
+    {% set favicon_path = (favicon_url.split("?")[0] if favicon_url else "") %}
+    {% set favicon_ext = (favicon_path.split(".")[-1].lower() if favicon_path else "svg") %}
+    {% set favicon_type = (
+        "image/svg+xml" if favicon_ext == "svg"
+        else "image/png" if favicon_ext == "png"
+        else "image/x-icon" if favicon_ext == "ico"
+        else "image/jpeg" if favicon_ext in ["jpg", "jpeg"]
+        else "image/webp" if favicon_ext == "webp"
+        else "image/gif" if favicon_ext == "gif"
+        else "image/png"
+    ) %}
+    <link rel="icon" href="{{ favicon_url }}" type="{{ favicon_type }}">
+    <link rel="alternate icon" href="{{ favicon_url }}" type="{{ favicon_type }}">
 
     <!-- Compiled Tailwind CSS -->
-    <link href="/static/css/app.css?v=20260129c" rel="stylesheet">
+    <link href="/static/css/app.css?v=20260205a" rel="stylesheet">
     <link href="/static/css/font-overrides.css" rel="stylesheet">
 
     <!-- HTMX (local) -->
@@ -36,13 +47,16 @@
     <!-- Command palette (must load before Alpine initializes components) -->
     <script defer src="/static/js/command-palette.js"></script>
 
+    <!-- File upload component (must load before Alpine initializes components) -->
+    <script defer src="/static/js/file-upload.js"></script>
+
     <!-- Alpine.js with Collapse plugin (local) -->
     <script defer src="/static/js/vendor/alpine-collapse.js"></script>
     <script defer src="/static/js/vendor/alpine.js"></script>
 
     <!-- Chart.js for dashboard visualizations (local) -->
     <script src="/static/js/vendor/chart.js"></script>
-    <script src="/static/js/charts.js"></script>
+    <script src="/static/js/charts.js?v=20260205b"></script>
 
     {% block head %}{% endblock %}
     {% block page_styles %}{% endblock %}

@@ -6,30 +6,32 @@ Manages goods receipt creation, inspection, and acceptance/rejection.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
-from typing import Any, List, Optional
+from typing import List, Optional
 from uuid import UUID
-import uuid as uuid_lib
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.goods_receipt import GoodsReceipt, ReceiptStatus
 from app.models.finance.ap.goods_receipt_line import GoodsReceiptLine
-from app.models.finance.ap.purchase_order import PurchaseOrder, POStatus
+from app.models.finance.ap.purchase_order import POStatus, PurchaseOrder
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.core_config.numbering_sequence import SequenceType
-from app.models.inventory.item import Item
 from app.models.inventory.inventory_transaction import TransactionType
+from app.models.inventory.item import Item
 from app.services.common import coerce_uuid
+from app.services.finance.platform.sequence import SequenceService
 from app.services.inventory.transaction import (
     InventoryTransactionService,
     TransactionInput,
 )
-from app.services.finance.platform.sequence import SequenceService
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -96,10 +98,14 @@ class GoodsReceiptService(ListResponseMixin):
         po_id = coerce_uuid(input.po_id)
 
         # Validate PO exists and is in receivable status
-        po = db.query(PurchaseOrder).filter(
-            PurchaseOrder.po_id == po_id,
-            PurchaseOrder.organization_id == org_id,
-        ).first()
+        po = (
+            db.query(PurchaseOrder)
+            .filter(
+                PurchaseOrder.po_id == po_id,
+                PurchaseOrder.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
@@ -107,12 +113,14 @@ class GoodsReceiptService(ListResponseMixin):
         if po.status not in [POStatus.APPROVED, POStatus.PARTIALLY_RECEIVED]:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot receive goods for PO in {po.status.value} status"
+                detail=f"Cannot receive goods for PO in {po.status.value} status",
             )
 
         # Validate lines
         if not input.lines:
-            raise HTTPException(status_code=400, detail="Goods receipt must have at least one line")
+            raise HTTPException(
+                status_code=400, detail="Goods receipt must have at least one line"
+            )
 
         # Validate all PO lines exist and belong to this PO
         po_line_ids = {line.line_id for line in po.lines}
@@ -120,7 +128,7 @@ class GoodsReceiptService(ListResponseMixin):
             if coerce_uuid(line_input.po_line_id) not in po_line_ids:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"PO line {line_input.po_line_id} not found in this purchase order"
+                    detail=f"PO line {line_input.po_line_id} not found in this purchase order",
                 )
 
         # Generate receipt number
@@ -148,9 +156,11 @@ class GoodsReceiptService(ListResponseMixin):
             po_line_id = coerce_uuid(line_input.po_line_id)
 
             # Get the PO line
-            po_line = db.query(PurchaseOrderLine).filter(
-                PurchaseOrderLine.line_id == po_line_id
-            ).first()
+            po_line = (
+                db.query(PurchaseOrderLine)
+                .filter(PurchaseOrderLine.line_id == po_line_id)
+                .first()
+            )
             if not po_line:
                 raise HTTPException(
                     status_code=404,
@@ -162,7 +172,7 @@ class GoodsReceiptService(ListResponseMixin):
             if line_input.quantity_received > remaining_qty:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Quantity received ({line_input.quantity_received}) exceeds remaining quantity ({remaining_qty}) for line {po_line.line_number}"
+                    detail=f"Quantity received ({line_input.quantity_received}) exceeds remaining quantity ({remaining_qty}) for line {po_line.line_number}",
                 )
 
             line = GoodsReceiptLine(
@@ -209,10 +219,14 @@ class GoodsReceiptService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         receipt_id = coerce_uuid(receipt_id)
 
-        receipt = db.query(GoodsReceipt).filter(
-            GoodsReceipt.receipt_id == receipt_id,
-            GoodsReceipt.organization_id == org_id,
-        ).first()
+        receipt = (
+            db.query(GoodsReceipt)
+            .filter(
+                GoodsReceipt.receipt_id == receipt_id,
+                GoodsReceipt.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not receipt:
             raise HTTPException(status_code=404, detail="Goods receipt not found")
@@ -220,7 +234,7 @@ class GoodsReceiptService(ListResponseMixin):
         if receipt.status != ReceiptStatus.RECEIVED:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot start inspection for receipt in {receipt.status.value} status"
+                detail=f"Cannot start inspection for receipt in {receipt.status.value} status",
             )
 
         receipt.status = ReceiptStatus.INSPECTING
@@ -251,10 +265,14 @@ class GoodsReceiptService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         receipt_id = coerce_uuid(receipt_id)
 
-        receipt = db.query(GoodsReceipt).filter(
-            GoodsReceipt.receipt_id == receipt_id,
-            GoodsReceipt.organization_id == org_id,
-        ).first()
+        receipt = (
+            db.query(GoodsReceipt)
+            .filter(
+                GoodsReceipt.receipt_id == receipt_id,
+                GoodsReceipt.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not receipt:
             raise HTTPException(status_code=404, detail="Goods receipt not found")
@@ -262,7 +280,7 @@ class GoodsReceiptService(ListResponseMixin):
         if receipt.status not in [ReceiptStatus.RECEIVED, ReceiptStatus.INSPECTING]:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot complete inspection for receipt in {receipt.status.value} status"
+                detail=f"Cannot complete inspection for receipt in {receipt.status.value} status",
             )
 
         # Process inspection results
@@ -273,22 +291,28 @@ class GoodsReceiptService(ListResponseMixin):
         total_rejected = Decimal("0")
 
         for result in inspection_results:
-            line = db.query(GoodsReceiptLine).filter(
-                GoodsReceiptLine.line_id == coerce_uuid(result.line_id),
-                GoodsReceiptLine.receipt_id == receipt_id,
-            ).first()
+            line = (
+                db.query(GoodsReceiptLine)
+                .filter(
+                    GoodsReceiptLine.line_id == coerce_uuid(result.line_id),
+                    GoodsReceiptLine.receipt_id == receipt_id,
+                )
+                .first()
+            )
 
             if not line:
                 raise HTTPException(
-                    status_code=400,
-                    detail=f"Receipt line {result.line_id} not found"
+                    status_code=400, detail=f"Receipt line {result.line_id} not found"
                 )
 
             # Validate quantities
-            if result.quantity_accepted + result.quantity_rejected != line.quantity_received:
+            if (
+                result.quantity_accepted + result.quantity_rejected
+                != line.quantity_received
+            ):
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Accepted + rejected quantities must equal received quantity for line {line.line_number}"
+                    detail=f"Accepted + rejected quantities must equal received quantity for line {line.line_number}",
                 )
 
             line.quantity_accepted = result.quantity_accepted
@@ -319,7 +343,9 @@ class GoodsReceiptService(ListResponseMixin):
         # Create inventory transactions for accepted lines (if any)
         if receipt.status in [ReceiptStatus.ACCEPTED, ReceiptStatus.PARTIAL]:
             if receipt.received_by_user_id is None:
-                raise HTTPException(status_code=400, detail="Receipt has no received_by_user_id")
+                raise HTTPException(
+                    status_code=400, detail="Receipt has no received_by_user_id"
+                )
             GoodsReceiptService._create_inventory_transactions_for_receipt(
                 db=db,
                 organization_id=org_id,
@@ -352,10 +378,14 @@ class GoodsReceiptService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         receipt_id = coerce_uuid(receipt_id)
 
-        receipt = db.query(GoodsReceipt).filter(
-            GoodsReceipt.receipt_id == receipt_id,
-            GoodsReceipt.organization_id == org_id,
-        ).first()
+        receipt = (
+            db.query(GoodsReceipt)
+            .filter(
+                GoodsReceipt.receipt_id == receipt_id,
+                GoodsReceipt.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not receipt:
             raise HTTPException(status_code=404, detail="Goods receipt not found")
@@ -363,7 +393,7 @@ class GoodsReceiptService(ListResponseMixin):
         if receipt.status not in [ReceiptStatus.RECEIVED, ReceiptStatus.INSPECTING]:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot accept receipt in {receipt.status.value} status"
+                detail=f"Cannot accept receipt in {receipt.status.value} status",
             )
 
         # Accept all lines
@@ -375,7 +405,9 @@ class GoodsReceiptService(ListResponseMixin):
 
         # Create inventory transactions for accepted lines
         if receipt.received_by_user_id is None:
-            raise HTTPException(status_code=400, detail="Receipt has no received_by_user_id")
+            raise HTTPException(
+                status_code=400, detail="Receipt has no received_by_user_id"
+            )
         GoodsReceiptService._create_inventory_transactions_for_receipt(
             db=db,
             organization_id=org_id,
@@ -435,9 +467,11 @@ class GoodsReceiptService(ListResponseMixin):
                 continue
 
             # Get the PO line to check for item_id
-            po_line = db.query(PurchaseOrderLine).filter(
-                PurchaseOrderLine.line_id == line.po_line_id
-            ).first()
+            po_line = (
+                db.query(PurchaseOrderLine)
+                .filter(PurchaseOrderLine.line_id == line.po_line_id)
+                .first()
+            )
 
             if not po_line or not po_line.item_id:
                 # Skip non-inventory lines
@@ -458,7 +492,9 @@ class GoodsReceiptService(ListResponseMixin):
             # Create inventory receipt transaction
             try:
                 # Convert date to datetime for transaction
-                from datetime import datetime as dt, timezone as tz
+                from datetime import datetime as dt
+                from datetime import timezone as tz
+
                 transaction_datetime = dt.combine(
                     receipt.receipt_date,
                     dt.min.time(),
@@ -517,25 +553,29 @@ class GoodsReceiptService(ListResponseMixin):
     def _reverse_po_quantities(db: Session, receipt: GoodsReceipt) -> None:
         """Reverse PO line quantities for a rejected receipt."""
         for line in receipt.lines:
-            po_line = db.query(PurchaseOrderLine).filter(
-                PurchaseOrderLine.line_id == line.po_line_id
-            ).first()
+            po_line = (
+                db.query(PurchaseOrderLine)
+                .filter(PurchaseOrderLine.line_id == line.po_line_id)
+                .first()
+            )
             if po_line:
                 po_line.quantity_received -= line.quantity_received
 
         # Recalculate PO status
-        po = db.query(PurchaseOrder).filter(
-            PurchaseOrder.po_id == receipt.po_id
-        ).first()
+        po = (
+            db.query(PurchaseOrder).filter(PurchaseOrder.po_id == receipt.po_id).first()
+        )
         if po:
             GoodsReceiptService._update_po_status(db, po)
 
     @staticmethod
     def get(db: Session, receipt_id: str) -> Optional[GoodsReceipt]:
         """Get a goods receipt by ID."""
-        return db.query(GoodsReceipt).filter(
-            GoodsReceipt.receipt_id == coerce_uuid(receipt_id)
-        ).first()
+        return (
+            db.query(GoodsReceipt)
+            .filter(GoodsReceipt.receipt_id == coerce_uuid(receipt_id))
+            .first()
+        )
 
     @staticmethod
     def get_by_number(
@@ -544,10 +584,14 @@ class GoodsReceiptService(ListResponseMixin):
         receipt_number: str,
     ) -> Optional[GoodsReceipt]:
         """Get a goods receipt by number."""
-        return db.query(GoodsReceipt).filter(
-            GoodsReceipt.organization_id == coerce_uuid(organization_id),
-            GoodsReceipt.receipt_number == receipt_number,
-        ).first()
+        return (
+            db.query(GoodsReceipt)
+            .filter(
+                GoodsReceipt.organization_id == coerce_uuid(organization_id),
+                GoodsReceipt.receipt_number == receipt_number,
+            )
+            .first()
+        )
 
     @staticmethod
     def get_receipt_lines(db: Session, receipt_id: str) -> List[GoodsReceiptLine]:
@@ -612,9 +656,7 @@ class GoodsReceiptService(ListResponseMixin):
             )
 
         if supplier_id:
-            query = query.filter(
-                GoodsReceipt.supplier_id == coerce_uuid(supplier_id)
-            )
+            query = query.filter(GoodsReceipt.supplier_id == coerce_uuid(supplier_id))
 
         if po_id:
             query = query.filter(GoodsReceipt.po_id == coerce_uuid(po_id))
@@ -628,7 +670,12 @@ class GoodsReceiptService(ListResponseMixin):
         if to_date:
             query = query.filter(GoodsReceipt.receipt_date <= to_date)
 
-        return query.order_by(GoodsReceipt.receipt_date.desc()).offset(offset).limit(limit).all()
+        return (
+            query.order_by(GoodsReceipt.receipt_date.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
 
 
 # Module-level instance

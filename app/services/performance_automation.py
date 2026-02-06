@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import and_, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.hr.employee import Employee, EmployeeStatus
@@ -45,7 +45,9 @@ class PerformanceAutomationService:
     # Cycle Phase Transitions
     # ─────────────────────────────────────────────────────────────────────────────
 
-    def get_cycles_ready_for_transition(self) -> list[tuple[AppraisalCycle, AppraisalCycleStatus]]:
+    def get_cycles_ready_for_transition(
+        self,
+    ) -> list[tuple[AppraisalCycle, AppraisalCycleStatus]]:
         """
         Find cycles that should transition to the next phase based on deadlines.
 
@@ -141,10 +143,12 @@ class PerformanceAutomationService:
             appraisals = self.db.scalars(
                 select(Appraisal).where(
                     Appraisal.cycle_id == cycle.cycle_id,
-                    Appraisal.status.in_([
-                        AppraisalStatus.DRAFT,
-                        AppraisalStatus.SELF_ASSESSMENT,
-                    ]),
+                    Appraisal.status.in_(
+                        [
+                            AppraisalStatus.DRAFT,
+                            AppraisalStatus.SELF_ASSESSMENT,
+                        ]
+                    ),
                 )
             ).all()
 
@@ -160,10 +164,12 @@ class PerformanceAutomationService:
             appraisals = self.db.scalars(
                 select(Appraisal).where(
                     Appraisal.cycle_id == cycle.cycle_id,
-                    Appraisal.status.in_([
-                        AppraisalStatus.PENDING_REVIEW,
-                        AppraisalStatus.UNDER_REVIEW,
-                    ]),
+                    Appraisal.status.in_(
+                        [
+                            AppraisalStatus.PENDING_REVIEW,
+                            AppraisalStatus.UNDER_REVIEW,
+                        ]
+                    ),
                 )
             ).all()
 
@@ -179,10 +185,12 @@ class PerformanceAutomationService:
             appraisals = self.db.scalars(
                 select(Appraisal).where(
                     Appraisal.cycle_id == cycle.cycle_id,
-                    Appraisal.status.notin_([
-                        AppraisalStatus.COMPLETED,
-                        AppraisalStatus.CANCELLED,
-                    ]),
+                    Appraisal.status.notin_(
+                        [
+                            AppraisalStatus.COMPLETED,
+                            AppraisalStatus.CANCELLED,
+                        ]
+                    ),
                 )
             ).all()
 
@@ -234,8 +242,8 @@ class PerformanceAutomationService:
         if not cycle.include_probation_employees:
             query = query.where(
                 # Either no probation end date or probation already ended
-                (Employee.probation_end_date.is_(None)) |
-                (Employee.probation_end_date < today)
+                (Employee.probation_end_date.is_(None))
+                | (Employee.probation_end_date < today)
             )
 
         # Exclude employees who already have an appraisal in this cycle
@@ -323,11 +331,14 @@ class PerformanceAutomationService:
         Returns:
             Dict with progress statistics
         """
-        total = self.db.scalar(
-            select(func.count(Appraisal.appraisal_id)).where(
-                Appraisal.cycle_id == cycle.cycle_id,
+        total = (
+            self.db.scalar(
+                select(func.count(Appraisal.appraisal_id)).where(
+                    Appraisal.cycle_id == cycle.cycle_id,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         if total == 0:
             return {
@@ -350,22 +361,19 @@ class PerformanceAutomationService:
         completed_count = status_counts.get(AppraisalStatus.COMPLETED.value, 0)
 
         # Self-assessment phase: DRAFT/SELF_ASSESSMENT not yet submitted
-        self_assessment_pending = (
-            status_counts.get(AppraisalStatus.DRAFT.value, 0) +
-            status_counts.get(AppraisalStatus.SELF_ASSESSMENT.value, 0)
-        )
+        self_assessment_pending = status_counts.get(
+            AppraisalStatus.DRAFT.value, 0
+        ) + status_counts.get(AppraisalStatus.SELF_ASSESSMENT.value, 0)
 
         # Manager review phase: PENDING_REVIEW/UNDER_REVIEW
-        manager_review_pending = (
-            status_counts.get(AppraisalStatus.PENDING_REVIEW.value, 0) +
-            status_counts.get(AppraisalStatus.UNDER_REVIEW.value, 0)
-        )
+        manager_review_pending = status_counts.get(
+            AppraisalStatus.PENDING_REVIEW.value, 0
+        ) + status_counts.get(AppraisalStatus.UNDER_REVIEW.value, 0)
 
         # Calibration phase: PENDING_CALIBRATION/CALIBRATION
-        calibration_pending = (
-            status_counts.get(AppraisalStatus.PENDING_CALIBRATION.value, 0) +
-            status_counts.get(AppraisalStatus.CALIBRATION.value, 0)
-        )
+        calibration_pending = status_counts.get(
+            AppraisalStatus.PENDING_CALIBRATION.value, 0
+        ) + status_counts.get(AppraisalStatus.CALIBRATION.value, 0)
 
         return {
             "cycle_id": str(cycle.cycle_id),
@@ -376,14 +384,23 @@ class PerformanceAutomationService:
                 "self_assessment_pending": self_assessment_pending,
                 "self_assessment_completed_pct": round(
                     (total - self_assessment_pending) / total * 100, 1
-                ) if total > 0 else 0,
+                )
+                if total > 0
+                else 0,
                 "manager_review_pending": manager_review_pending,
                 "manager_review_completed_pct": round(
-                    (total - self_assessment_pending - manager_review_pending) / total * 100, 1
-                ) if total > 0 else 0,
+                    (total - self_assessment_pending - manager_review_pending)
+                    / total
+                    * 100,
+                    1,
+                )
+                if total > 0
+                else 0,
                 "calibration_pending": calibration_pending,
                 "completed_count": completed_count,
-                "completed_pct": round(completed_count / total * 100, 1) if total > 0 else 0,
+                "completed_pct": round(completed_count / total * 100, 1)
+                if total > 0
+                else 0,
             },
         }
 
@@ -400,15 +417,20 @@ class PerformanceAutomationService:
         Returns:
             True if cycle can be completed
         """
-        incomplete = self.db.scalar(
-            select(func.count(Appraisal.appraisal_id)).where(
-                Appraisal.cycle_id == cycle.cycle_id,
-                Appraisal.status.notin_([
-                    AppraisalStatus.COMPLETED,
-                    AppraisalStatus.CANCELLED,
-                ]),
+        incomplete = (
+            self.db.scalar(
+                select(func.count(Appraisal.appraisal_id)).where(
+                    Appraisal.cycle_id == cycle.cycle_id,
+                    Appraisal.status.notin_(
+                        [
+                            AppraisalStatus.COMPLETED,
+                            AppraisalStatus.CANCELLED,
+                        ]
+                    ),
+                )
             )
-        ) or 0
+            or 0
+        )
 
         return incomplete == 0
 
@@ -437,11 +459,13 @@ class PerformanceAutomationService:
         deadlines: list[dict] = []
 
         query = select(AppraisalCycle).where(
-            AppraisalCycle.status.in_([
-                AppraisalCycleStatus.ACTIVE,
-                AppraisalCycleStatus.REVIEW,
-                AppraisalCycleStatus.CALIBRATION,
-            ]),
+            AppraisalCycle.status.in_(
+                [
+                    AppraisalCycleStatus.ACTIVE,
+                    AppraisalCycleStatus.REVIEW,
+                    AppraisalCycleStatus.CALIBRATION,
+                ]
+            ),
         )
 
         if org_id:
@@ -457,13 +481,15 @@ class PerformanceAutomationService:
                 and today <= cycle.self_assessment_deadline <= deadline_date
             ):
                 days_remaining = (cycle.self_assessment_deadline - today).days
-                deadlines.append({
-                    "cycle_id": str(cycle.cycle_id),
-                    "cycle_name": cycle.cycle_name,
-                    "deadline_type": "self_assessment",
-                    "deadline_date": str(cycle.self_assessment_deadline),
-                    "days_remaining": days_remaining,
-                })
+                deadlines.append(
+                    {
+                        "cycle_id": str(cycle.cycle_id),
+                        "cycle_name": cycle.cycle_name,
+                        "deadline_type": "self_assessment",
+                        "deadline_date": str(cycle.self_assessment_deadline),
+                        "days_remaining": days_remaining,
+                    }
+                )
 
             if (
                 cycle.status == AppraisalCycleStatus.REVIEW
@@ -471,13 +497,15 @@ class PerformanceAutomationService:
                 and today <= cycle.manager_review_deadline <= deadline_date
             ):
                 days_remaining = (cycle.manager_review_deadline - today).days
-                deadlines.append({
-                    "cycle_id": str(cycle.cycle_id),
-                    "cycle_name": cycle.cycle_name,
-                    "deadline_type": "manager_review",
-                    "deadline_date": str(cycle.manager_review_deadline),
-                    "days_remaining": days_remaining,
-                })
+                deadlines.append(
+                    {
+                        "cycle_id": str(cycle.cycle_id),
+                        "cycle_name": cycle.cycle_name,
+                        "deadline_type": "manager_review",
+                        "deadline_date": str(cycle.manager_review_deadline),
+                        "days_remaining": days_remaining,
+                    }
+                )
 
             if (
                 cycle.status == AppraisalCycleStatus.CALIBRATION
@@ -485,12 +513,14 @@ class PerformanceAutomationService:
                 and today <= cycle.calibration_deadline <= deadline_date
             ):
                 days_remaining = (cycle.calibration_deadline - today).days
-                deadlines.append({
-                    "cycle_id": str(cycle.cycle_id),
-                    "cycle_name": cycle.cycle_name,
-                    "deadline_type": "calibration",
-                    "deadline_date": str(cycle.calibration_deadline),
-                    "days_remaining": days_remaining,
-                })
+                deadlines.append(
+                    {
+                        "cycle_id": str(cycle.cycle_id),
+                        "cycle_name": cycle.cycle_name,
+                        "deadline_type": "calibration",
+                        "deadline_date": str(cycle.calibration_deadline),
+                        "days_remaining": days_remaining,
+                    }
+                )
 
         return sorted(deadlines, key=lambda x: x["days_remaining"])

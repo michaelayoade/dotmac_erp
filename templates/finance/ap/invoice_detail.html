@@ -197,13 +197,16 @@
 <div class="space-y-6">
     {# Main Invoice Document Card #}
     <div class="document-card">
+        {% include "partials/_document_header.html" with {
+            "doc_title": "Supplier Invoice",
+            "doc_number": invoice.invoice_number,
+            "doc_status": invoice.status | replace('_', ' ') | title
+        } %}
         <div class="document-header">
             <div class="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                    <div class="document-title">Supplier Invoice</div>
-                    <div class="document-number">{{ invoice.invoice_number }}</div>
                     {% if invoice.supplier_invoice_number %}
-                    <div class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    <div class="text-sm text-slate-500 dark:text-slate-400">
                         Supplier Ref: <span class="font-medium">{{ invoice.supplier_invoice_number }}</span>
                     </div>
                     {% endif %}

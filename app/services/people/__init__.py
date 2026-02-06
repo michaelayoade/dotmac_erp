@@ -16,16 +16,17 @@ Integration services:
 - integrations.payroll_gl_adapter: Posts payroll entries to GL
 - integrations.expense_ap_adapter: Creates AP invoices from expense claims
 """
+
+from .attendance import AttendanceService
+from .expense import ExpenseService
 from .hr import (
     EmployeeService,
     OrganizationService,
 )
 from .leave import LeaveService
-from .attendance import AttendanceService
+from .perf import PerformanceService
 from .recruit import RecruitmentService
 from .training import TrainingService
-from .perf import PerformanceService
-from .expense import ExpenseService
 
 __all__ = [
     # HR Core

@@ -5,19 +5,20 @@ Maps ERPNext Expense DocTypes to DotMac expense schema:
 - Expense Claim Type → expense.expense_category
 - Expense Claim → expense.expense_claim (with items)
 """
-from decimal import Decimal
+
+import logging
 from typing import Any
 
 from .base import (
     DocTypeMapping,
     FieldMapping,
     clean_string,
-    default_currency,
     parse_date,
     parse_datetime,
     parse_decimal,
 )
 
+logger = logging.getLogger(__name__)
 
 # ERPNext Expense Claim status to DotMac ExpenseClaimStatus
 EXPENSE_STATUS_MAP = {
@@ -164,7 +165,8 @@ class ExpenseClaimMapping(DocTypeMapping):
                     target="purpose",
                     required=False,
                     default="Expense Reimbursement",
-                    transformer=lambda v: clean_string(v, 500) or "Expense Reimbursement",
+                    transformer=lambda v: clean_string(v, 500)
+                    or "Expense Reimbursement",
                 ),
                 # Cost center reference
                 FieldMapping(

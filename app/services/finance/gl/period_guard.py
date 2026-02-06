@@ -7,14 +7,13 @@ Enforces audit locks and reopen session validation.
 
 from __future__ import annotations
 
+import calendar
+import logging
+import uuid as uuid_lib
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from typing import Optional
 from uuid import UUID
-
-import calendar
-import logging
-import uuid as uuid_lib
 
 from fastapi import HTTPException
 from sqlalchemy import and_
@@ -157,7 +156,9 @@ class PeriodGuardService(ListResponseMixin):
             fiscal_period_id=period.fiscal_period_id,
             period_status=period.status.value,
             message="Period is open for posting",
-            reopen_session_id=period.last_reopen_session_id if period.status == PeriodStatus.REOPENED else None,
+            reopen_session_id=period.last_reopen_session_id
+            if period.status == PeriodStatus.REOPENED
+            else None,
         )
 
     @staticmethod
@@ -225,7 +226,9 @@ class PeriodGuardService(ListResponseMixin):
         month_name = calendar.month_name[month]
         _, last_day = calendar.monthrange(year, month)
 
-        logger.info("Auto-creating fiscal period %s %s for org %s", month_name, year, org_id)
+        logger.info(
+            "Auto-creating fiscal period %s %s for org %s", month_name, year, org_id
+        )
         period = FiscalPeriod(
             fiscal_period_id=uuid_lib.uuid4(),
             organization_id=org_id,
@@ -358,9 +361,7 @@ class PeriodGuardService(ListResponseMixin):
         Returns:
             Current FiscalPeriod or None
         """
-        return PeriodGuardService.get_period_for_date(
-            db, organization_id, date.today()
-        )
+        return PeriodGuardService.get_period_for_date(db, organization_id, date.today())
 
     @staticmethod
     def open_period(
@@ -395,7 +396,7 @@ class PeriodGuardService(ListResponseMixin):
         if period.status != PeriodStatus.FUTURE:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot open period with status '{period.status.value}'"
+                detail=f"Cannot open period with status '{period.status.value}'",
             )
 
         period.status = PeriodStatus.OPEN
@@ -438,7 +439,7 @@ class PeriodGuardService(ListResponseMixin):
         if period.status not in {PeriodStatus.OPEN, PeriodStatus.REOPENED}:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot soft-close period with status '{period.status.value}'"
+                detail=f"Cannot soft-close period with status '{period.status.value}'",
             )
 
         period.status = PeriodStatus.SOFT_CLOSED
@@ -481,10 +482,14 @@ class PeriodGuardService(ListResponseMixin):
         if not period or period.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Fiscal period not found")
 
-        if period.status not in {PeriodStatus.SOFT_CLOSED, PeriodStatus.OPEN, PeriodStatus.REOPENED}:
+        if period.status not in {
+            PeriodStatus.SOFT_CLOSED,
+            PeriodStatus.OPEN,
+            PeriodStatus.REOPENED,
+        }:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot hard-close period with status '{period.status.value}'"
+                detail=f"Cannot hard-close period with status '{period.status.value}'",
             )
 
         period.status = PeriodStatus.HARD_CLOSED
@@ -533,7 +538,7 @@ class PeriodGuardService(ListResponseMixin):
         if period.status != PeriodStatus.SOFT_CLOSED:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot reopen period with status '{period.status.value}'"
+                detail=f"Cannot reopen period with status '{period.status.value}'",
             )
 
         # Generate new reopen session ID
@@ -584,15 +589,11 @@ class PeriodGuardService(ListResponseMixin):
 
         if period.status != PeriodStatus.REOPENED:
             raise HTTPException(
-                status_code=400,
-                detail="Period is not in reopened status"
+                status_code=400, detail="Period is not in reopened status"
             )
 
         if period.last_reopen_session_id != session_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid reopen session ID"
-            )
+            raise HTTPException(status_code=400, detail="Invalid reopen session ID")
 
         period.status = PeriodStatus.SOFT_CLOSED
         period.soft_closed_at = datetime.now(timezone.utc)

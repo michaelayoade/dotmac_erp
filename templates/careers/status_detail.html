@@ -89,6 +89,12 @@
             {% elif status.status == 'INTERVIEW_SCHEDULED' %}
             <p class="text-sm text-slate-600 dark:text-slate-400">
                 An interview has been scheduled. Please check your email for details.
+                If you don't receive the email, check your spam folder or contact us
+                {% if org.contact_email %}
+                at <a href="mailto:{{ org.contact_email }}" class="font-medium text-teal-700 hover:underline dark:text-teal-300">{{ org.contact_email }}</a>.
+                {% else %}
+                to confirm the schedule.
+                {% endif %}
             </p>
             {% elif status.status == 'INTERVIEW_COMPLETED' %}
             <p class="text-sm text-slate-600 dark:text-slate-400">

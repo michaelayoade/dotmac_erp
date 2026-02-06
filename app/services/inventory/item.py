@@ -6,8 +6,8 @@ Manages items, categories, and item-level configuration.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from datetime import datetime
 from decimal import Decimal
 from typing import Any, List, Optional
 from uuid import UUID
@@ -16,10 +16,12 @@ from fastapi import HTTPException
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
-from app.models.inventory.item import Item, ItemType, CostingMethod
+from app.models.inventory.item import CostingMethod, Item, ItemType
 from app.models.inventory.item_category import ItemCategory
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -218,6 +220,7 @@ class ItemCategoryService(ListResponseMixin):
 
         # Check if category has active items
         from app.models.inventory.item import Item
+
         active_items_count = (
             db.query(Item)
             .filter(

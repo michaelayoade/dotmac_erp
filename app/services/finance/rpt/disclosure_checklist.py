@@ -6,6 +6,7 @@ Manages IFRS disclosure requirements tracking and completion status.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -22,6 +23,8 @@ from app.models.finance.rpt.disclosure_checklist import (
 )
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -171,7 +174,10 @@ class DisclosureChecklistService(ListResponseMixin):
         if not item or item.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Disclosure item not found")
 
-        if item.status not in [DisclosureStatus.NOT_STARTED, DisclosureStatus.IN_PROGRESS]:
+        if item.status not in [
+            DisclosureStatus.NOT_STARTED,
+            DisclosureStatus.IN_PROGRESS,
+        ]:
             raise HTTPException(
                 status_code=400,
                 detail=f"Cannot start item in {item.status} status",
@@ -301,7 +307,10 @@ class DisclosureChecklistService(ListResponseMixin):
         if not item or item.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Disclosure item not found")
 
-        if item.status not in [DisclosureStatus.COMPLETED, DisclosureStatus.NOT_APPLICABLE]:
+        if item.status not in [
+            DisclosureStatus.COMPLETED,
+            DisclosureStatus.NOT_APPLICABLE,
+        ]:
             raise HTTPException(
                 status_code=400,
                 detail=f"Can only review completed or N/A items, current: {item.status}",
@@ -392,23 +401,35 @@ class DisclosureChecklistService(ListResponseMixin):
         )
 
         total = len(items)
-        not_started = len([i for i in items if i.status == DisclosureStatus.NOT_STARTED])
-        in_progress = len([i for i in items if i.status == DisclosureStatus.IN_PROGRESS])
+        not_started = len(
+            [i for i in items if i.status == DisclosureStatus.NOT_STARTED]
+        )
+        in_progress = len(
+            [i for i in items if i.status == DisclosureStatus.IN_PROGRESS]
+        )
         completed = len([i for i in items if i.status == DisclosureStatus.COMPLETED])
-        not_applicable = len([i for i in items if i.status == DisclosureStatus.NOT_APPLICABLE])
+        not_applicable = len(
+            [i for i in items if i.status == DisclosureStatus.NOT_APPLICABLE]
+        )
         reviewed = len([i for i in items if i.status == DisclosureStatus.REVIEWED])
 
         # Mandatory items not completed
-        mandatory_incomplete = len([
-            i for i in items
-            if i.is_mandatory and i.status in [DisclosureStatus.NOT_STARTED, DisclosureStatus.IN_PROGRESS]
-        ])
+        mandatory_incomplete = len(
+            [
+                i
+                for i in items
+                if i.is_mandatory
+                and i.status
+                in [DisclosureStatus.NOT_STARTED, DisclosureStatus.IN_PROGRESS]
+            ]
+        )
 
         # Completion % = (completed + reviewed + N/A) / total
         completion_count = completed + reviewed + not_applicable
         completion_pct = (
             Decimal(completion_count * 100 / total).quantize(Decimal("0.01"))
-            if total > 0 else Decimal("0")
+            if total > 0
+            else Decimal("0")
         )
 
         return DisclosureSummary(
@@ -448,11 +469,13 @@ class DisclosureChecklistService(ListResponseMixin):
                 func.count(DisclosureChecklist.checklist_id).label("total"),
                 func.sum(
                     func.cast(
-                        DisclosureChecklist.status.in_([
-                            DisclosureStatus.COMPLETED,
-                            DisclosureStatus.REVIEWED,
-                            DisclosureStatus.NOT_APPLICABLE,
-                        ]),
+                        DisclosureChecklist.status.in_(
+                            [
+                                DisclosureStatus.COMPLETED,
+                                DisclosureStatus.REVIEWED,
+                                DisclosureStatus.NOT_APPLICABLE,
+                            ]
+                        ),
                         Integer,
                     )
                 ).label("completed"),
@@ -470,7 +493,11 @@ class DisclosureChecklistService(ListResponseMixin):
         for row in results:
             total = row.total or 0
             completed = row.completed or 0
-            pct = Decimal(completed * 100 / total).quantize(Decimal("0.01")) if total > 0 else Decimal("0")
+            pct = (
+                Decimal(completed * 100 / total).quantize(Decimal("0.01"))
+                if total > 0
+                else Decimal("0")
+            )
             summaries.append(
                 StandardSummary(
                     ifrs_standard=row.ifrs_standard,
@@ -508,10 +535,12 @@ class DisclosureChecklistService(ListResponseMixin):
                 DisclosureChecklist.organization_id == org_id,
                 DisclosureChecklist.fiscal_period_id == period_id,
                 DisclosureChecklist.is_mandatory == True,
-                DisclosureChecklist.status.in_([
-                    DisclosureStatus.NOT_STARTED,
-                    DisclosureStatus.IN_PROGRESS,
-                ]),
+                DisclosureChecklist.status.in_(
+                    [
+                        DisclosureStatus.NOT_STARTED,
+                        DisclosureStatus.IN_PROGRESS,
+                    ]
+                ),
             )
             .order_by(
                 DisclosureChecklist.ifrs_standard,
@@ -583,7 +612,9 @@ class DisclosureChecklistService(ListResponseMixin):
         # Update parent references
         for i, source in enumerate(source_items):
             if source.parent_checklist_id and source.parent_checklist_id in id_map:
-                created_items[i].parent_checklist_id = id_map[source.parent_checklist_id]
+                created_items[i].parent_checklist_id = id_map[
+                    source.parent_checklist_id
+                ]
 
         db.commit()
 

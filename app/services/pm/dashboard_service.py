@@ -3,12 +3,14 @@ Dashboard Service - PM Module.
 
 Business logic for project dashboards and reporting.
 """
+
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, Optional
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
@@ -19,11 +21,12 @@ from app.models.pm import (
     MilestoneStatus,
     ResourceAllocation,
     Task,
-    TaskPriority,
     TaskStatus,
     TimeEntry,
 )
 from app.services.common import NotFoundError
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.auth import Principal
@@ -71,7 +74,9 @@ class DashboardService:
             "project_code": project.project_code,
             "project_name": project.project_name,
             "status": project.status.value,
-            "priority": project.project_priority.value if project.project_priority else "MEDIUM",
+            "priority": project.project_priority.value
+            if project.project_priority
+            else "MEDIUM",
             "percent_complete": project.percent_complete,
             "start_date": project.start_date,
             "end_date": project.end_date,
@@ -95,9 +100,9 @@ class DashboardService:
         )
 
         # Total tasks
-        total_tasks = self.db.scalar(
-            select(func.count(Task.task_id)).where(base_where)
-        ) or 0
+        total_tasks = (
+            self.db.scalar(select(func.count(Task.task_id)).where(base_where)) or 0
+        )
 
         # Tasks by status
         status_counts = self.db.execute(
@@ -116,13 +121,16 @@ class DashboardService:
         tasks_by_priority = {p.value: c for p, c in priority_counts}
 
         # Overdue tasks
-        overdue_tasks = self.db.scalar(
-            select(func.count(Task.task_id)).where(
-                base_where,
-                Task.due_date < date.today(),
-                Task.status.notin_([TaskStatus.COMPLETED, TaskStatus.CANCELLED]),
+        overdue_tasks = (
+            self.db.scalar(
+                select(func.count(Task.task_id)).where(
+                    base_where,
+                    Task.due_date < date.today(),
+                    Task.status.notin_([TaskStatus.COMPLETED, TaskStatus.CANCELLED]),
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Completion rate
         completed = tasks_by_status.get(TaskStatus.COMPLETED.value, 0)
@@ -327,9 +335,10 @@ class DashboardService:
         base_where = Project.organization_id == self.organization_id
 
         # Total projects
-        total = self.db.scalar(
-            select(func.count(Project.project_id)).where(base_where)
-        ) or 0
+        total = (
+            self.db.scalar(select(func.count(Project.project_id)).where(base_where))
+            or 0
+        )
 
         # Projects by status
         status_counts = self.db.execute(

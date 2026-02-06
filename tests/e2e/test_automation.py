@@ -8,7 +8,6 @@ Tests for automation features:
 - Document Templates
 """
 
-import re
 from uuid import uuid4
 
 import pytest
@@ -34,7 +33,7 @@ class TestRecurringTransactionsList:
         response = authenticated_page.goto(f"{base_url}/automation/recurring")
         if response.ok:
             authenticated_page.wait_for_load_state("networkidle")
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_recurring_templates_has_new_button(self, authenticated_page, base_url):
         """Test recurring templates has new button."""
@@ -107,7 +106,9 @@ class TestRecurringTemplateCreate:
 class TestRecurringTemplateEdit:
     """Tests for editing recurring templates."""
 
-    def test_recurring_template_edit_page_accessible(self, authenticated_page, base_url):
+    def test_recurring_template_edit_page_accessible(
+        self, authenticated_page, base_url
+    ):
         """Test recurring template edit is accessible."""
         authenticated_page.goto(f"{base_url}/automation/recurring")
         authenticated_page.wait_for_load_state("networkidle")
@@ -171,7 +172,7 @@ class TestRecurringLogs:
         response = authenticated_page.goto(f"{base_url}/automation/recurring/logs")
         if response.ok:
             authenticated_page.wait_for_load_state("networkidle")
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
 
 # =============================================================================
@@ -188,7 +189,7 @@ class TestWorkflowRulesList:
         response = authenticated_page.goto(f"{base_url}/automation/workflows")
         if response.ok:
             authenticated_page.wait_for_load_state("networkidle")
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_workflow_rules_has_new_button(self, authenticated_page, base_url):
         """Test workflow rules has new button."""
@@ -263,10 +264,12 @@ class TestWorkflowExecutions:
 
     def test_workflow_executions_list_page_loads(self, authenticated_page, base_url):
         """Test workflow executions list page loads."""
-        response = authenticated_page.goto(f"{base_url}/automation/workflows/executions")
+        response = authenticated_page.goto(
+            f"{base_url}/automation/workflows/executions"
+        )
         if response.ok:
             authenticated_page.wait_for_load_state("networkidle")
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
 
 # =============================================================================
@@ -283,7 +286,7 @@ class TestCustomFieldsList:
         response = authenticated_page.goto(f"{base_url}/automation/custom-fields")
         if response.ok:
             authenticated_page.wait_for_load_state("networkidle")
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_custom_fields_has_new_button(self, authenticated_page, base_url):
         """Test custom fields has new button."""
@@ -386,7 +389,7 @@ class TestDocumentTemplatesList:
         response = authenticated_page.goto(f"{base_url}/automation/templates")
         if response.ok:
             authenticated_page.wait_for_load_state("networkidle")
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_templates_has_new_button(self, authenticated_page, base_url):
         """Test templates has new button."""

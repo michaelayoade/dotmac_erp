@@ -10,10 +10,10 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import and_, or_, func, select
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -25,9 +25,9 @@ from app.models.finance.banking.bank_statement import (
 )
 from app.models.finance.banking.payee import Payee, PayeeType
 from app.models.finance.banking.transaction_rule import (
-    TransactionRule,
-    RuleType,
     RuleAction,
+    RuleType,
+    TransactionRule,
 )
 from app.services.common import coerce_uuid
 
@@ -163,9 +163,7 @@ class TransactionCategorizationService:
         batch_result = BatchCategorizationResult(total_lines=len(lines))
 
         for line in lines:
-            result = self.categorize_line(
-                db, organization_id, line, check_duplicates
-            )
+            result = self.categorize_line(db, organization_id, line, check_duplicates)
             batch_result.results.append(result)
 
             if result.is_duplicate:
@@ -210,7 +208,10 @@ class TransactionCategorizationService:
         if duplicate:
             # Check if descriptions are similar (simple check)
             if line.description and duplicate.description:
-                if self._similarity_score(line.description, duplicate.description) > 0.8:
+                if (
+                    self._similarity_score(line.description, duplicate.description)
+                    > 0.8
+                ):
                     return duplicate
             # If no description, match on reference
             elif line.bank_reference and duplicate.bank_reference:
@@ -316,7 +317,9 @@ class TransactionCategorizationService:
                         confidence=confidence,
                         match_reason=reason,
                         action=rule.action,
-                        split_config=rule.split_config if rule.action == RuleAction.SPLIT else None,
+                        split_config=rule.split_config
+                        if rule.action == RuleAction.SPLIT
+                        else None,
                     )
                     suggestions.append(suggestion)
 
@@ -425,9 +428,15 @@ class TransactionCategorizationService:
 
         # Check transaction type if specified
         if trans_type:
-            if trans_type == "credit" and line.transaction_type != StatementLineType.credit:
+            if (
+                trans_type == "credit"
+                and line.transaction_type != StatementLineType.credit
+            ):
                 return None
-            if trans_type == "debit" and line.transaction_type != StatementLineType.debit:
+            if (
+                trans_type == "debit"
+                and line.transaction_type != StatementLineType.debit
+            ):
                 return None
 
         if min_amount <= line.amount <= max_amount:
@@ -602,8 +611,15 @@ class TransactionCategorizationService:
             return None
 
         allowed_fields = [
-            "payee_name", "payee_type", "name_patterns", "default_account_id",
-            "default_tax_code_id", "supplier_id", "customer_id", "notes", "is_active",
+            "payee_name",
+            "payee_type",
+            "name_patterns",
+            "default_account_id",
+            "default_tax_code_id",
+            "supplier_id",
+            "customer_id",
+            "notes",
+            "is_active",
         ]
 
         for key, value in kwargs.items():
@@ -639,12 +655,7 @@ class TransactionCategorizationService:
                 )
             )
 
-        return (
-            query.order_by(Payee.payee_name)
-            .offset(offset)
-            .limit(limit)
-            .all()
-        )
+        return query.order_by(Payee.payee_name).offset(offset).limit(limit).all()
 
     def increment_payee_match(
         self,
@@ -735,10 +746,22 @@ class TransactionCategorizationService:
             return None
 
         allowed_fields = [
-            "rule_name", "description", "rule_type", "conditions", "action",
-            "target_account_id", "tax_code_id", "bank_account_id", "payee_id",
-            "priority", "auto_apply", "min_confidence", "applies_to_credits",
-            "applies_to_debits", "split_config", "is_active",
+            "rule_name",
+            "description",
+            "rule_type",
+            "conditions",
+            "action",
+            "target_account_id",
+            "tax_code_id",
+            "bank_account_id",
+            "payee_id",
+            "priority",
+            "auto_apply",
+            "min_confidence",
+            "applies_to_credits",
+            "applies_to_debits",
+            "split_config",
+            "is_active",
         ]
 
         for key, value in kwargs.items():

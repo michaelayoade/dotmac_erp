@@ -3,6 +3,7 @@ Assignment Service - Vehicle assignment management.
 
 Handles assigning vehicles to employees and departments.
 """
+
 import logging
 from datetime import date
 from typing import List, Optional
@@ -14,9 +15,12 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.fleet.enums import AssignmentType, VehicleStatus
 from app.models.fleet.vehicle import Vehicle
 from app.models.fleet.vehicle_assignment import VehicleAssignment
-from app.schemas.fleet.assignment import AssignmentCreate, AssignmentEnd, AssignmentUpdate
+from app.schemas.fleet.assignment import (
+    AssignmentCreate,
+    AssignmentEnd,
+    AssignmentUpdate,
+)
 from app.services.common import (
-    ConflictError,
     NotFoundError,
     PaginatedResult,
     PaginationParams,
@@ -178,7 +182,9 @@ class AssignmentService:
         assignment.end_odometer = data.end_odometer
 
         if data.reason:
-            assignment.reason = f"{assignment.reason or ''}\nEnded: {data.reason}".strip()
+            assignment.reason = (
+                f"{assignment.reason or ''}\nEnded: {data.reason}".strip()
+            )
 
         # Update vehicle - clear assignment if this was the active one
         vehicle = self.db.get(Vehicle, assignment.vehicle_id)

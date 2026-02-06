@@ -3,6 +3,7 @@ Paystack API Client.
 
 Handles all HTTP communication with Paystack API.
 """
+
 import hashlib
 import hmac
 import logging
@@ -877,10 +878,14 @@ class PaystackClient:
 
         client = self._get_client()
         try:
-            response = client.get(f"/settlement/{settlement_id}/transactions", params=params)
+            response = client.get(
+                f"/settlement/{settlement_id}/transactions", params=params
+            )
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
-            logger.error(f"Paystack get settlement transactions failed: {e.response.text}")
+            logger.error(
+                f"Paystack get settlement transactions failed: {e.response.text}"
+            )
             raise PaystackError(
                 f"Failed to get settlement transactions: {e.response.text}",
                 status_code=e.response.status_code,
@@ -891,7 +896,9 @@ class PaystackClient:
 
         data = response.json()
         if not data.get("status"):
-            raise PaystackError(data.get("message", "Get settlement transactions failed"))
+            raise PaystackError(
+                data.get("message", "Get settlement transactions failed")
+            )
 
         records = []
         for t in data.get("data", []):

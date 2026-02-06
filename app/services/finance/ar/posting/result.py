@@ -2,9 +2,12 @@
 AR Posting Result - Outcome of AR posting operations.
 """
 
+import logging
 from dataclasses import dataclass
 from typing import Optional
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

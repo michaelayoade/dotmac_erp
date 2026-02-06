@@ -3,6 +3,7 @@ Payslip PDF Generation Service.
 
 Generates PDF payslips using WeasyPrint and Jinja2 templates.
 """
+
 import logging
 from datetime import datetime
 from decimal import Decimal
@@ -13,6 +14,7 @@ from jinja2 import Environment, FileSystemLoader
 from sqlalchemy.orm import Session
 
 from app.models.people.payroll.salary_slip import SalarySlip
+from app.services.formatters import format_currency_compact
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +27,14 @@ def _get_template_env() -> Environment:
     global _template_env
     if _template_env is None:
         import os
+
         template_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))),
-            "templates"
+            os.path.dirname(
+                os.path.dirname(
+                    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                )
+            ),
+            "templates",
         )
         _template_env = Environment(
             loader=FileSystemLoader(template_dir),
@@ -40,9 +47,7 @@ def _get_template_env() -> Environment:
 
 def _format_currency(value: Decimal | float | int, decimals: int = 2) -> str:
     """Format a number as currency with thousands separator."""
-    if value is None:
-        return "0.00"
-    return f"{float(value):,.{decimals}f}"
+    return format_currency_compact(value, none_value="0.00", decimal_places=decimals)
 
 
 class PayslipPDFService:
@@ -71,18 +76,24 @@ class PayslipPDFService:
             PDF file contents as bytes
         """
         try:
-            from weasyprint import HTML, CSS
+            from weasyprint import CSS, HTML
         except ImportError:
             logger.error("WeasyPrint not installed. Run: pip install weasyprint")
             raise ImportError("WeasyPrint is required for PDF generation")
 
         # Get organization info if not provided
-        if not organization_name and hasattr(slip, 'organization') and slip.organization:
+        if (
+            not organization_name
+            and hasattr(slip, "organization")
+            and slip.organization
+        ):
             organization_name = slip.organization.organization_name
 
         # Get employee info
         employee = slip.employee
-        employee_name = slip.employee_name or (employee.full_name if employee else "Unknown")
+        employee_name = slip.employee_name or (
+            employee.full_name if employee else "Unknown"
+        )
         employee_code = employee.employee_code if employee else "N/A"
         department_name = (
             employee.department.department_name

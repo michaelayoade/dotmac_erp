@@ -8,6 +8,7 @@ This migration adds PostgreSQL Row Level Security (RLS) policies for the
 HR schema tables. Uses the same pattern as the finance schemas - tenant
 isolation based on organization_id with bypass capability.
 """
+
 from alembic import op
 from sqlalchemy import text
 
@@ -28,7 +29,8 @@ def upgrade() -> None:
     conn = op.get_bind()
 
     # Find all tables with organization_id column in HR schemas
-    result = conn.execute(text("""
+    result = conn.execute(
+        text("""
         SELECT t.table_schema, t.table_name
         FROM information_schema.tables t
         JOIN information_schema.columns c
@@ -37,7 +39,9 @@ def upgrade() -> None:
         AND c.column_name = 'organization_id'
         AND t.table_type = 'BASE TABLE'
         ORDER BY t.table_schema, t.table_name
-    """), {"schemas": HR_SCHEMAS})
+    """),
+        {"schemas": HR_SCHEMAS},
+    )
 
     tenant_tables = [(row[0], row[1]) for row in result]
 
@@ -102,7 +106,8 @@ def downgrade() -> None:
     conn = op.get_bind()
 
     # Find all tables with organization_id column in HR schemas
-    result = conn.execute(text("""
+    result = conn.execute(
+        text("""
         SELECT t.table_schema, t.table_name
         FROM information_schema.tables t
         JOIN information_schema.columns c
@@ -111,7 +116,9 @@ def downgrade() -> None:
         AND c.column_name = 'organization_id'
         AND t.table_type = 'BASE TABLE'
         ORDER BY t.table_schema, t.table_name
-    """), {"schemas": HR_SCHEMAS})
+    """),
+        {"schemas": HR_SCHEMAS},
+    )
 
     tenant_tables = [(row[0], row[1]) for row in result]
 

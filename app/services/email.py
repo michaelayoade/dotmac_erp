@@ -5,11 +5,11 @@ import socket
 import ssl
 import threading
 from contextlib import contextmanager
+from email import encoders
 from email.mime.application import MIMEApplication
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email import encoders
 from typing import Generator, Optional, TypedDict
 
 from sqlalchemy.orm import Session
@@ -90,7 +90,9 @@ class SMTPConnectionPool:
                 pass
 
     @contextmanager
-    def get_connection(self, config: SMTPConfig) -> Generator[smtplib.SMTP | smtplib.SMTP_SSL, None, None]:
+    def get_connection(
+        self, config: SMTPConfig
+    ) -> Generator[smtplib.SMTP | smtplib.SMTP_SSL, None, None]:
         """
         Get an SMTP connection from the pool.
 
@@ -125,7 +127,9 @@ class SMTPConnectionPool:
             yield conn
             # Return connection to pool if still alive and pool not full
             with self._lock:
-                if len(self._pool) < self._max_connections and self._is_connection_alive(conn):
+                if len(
+                    self._pool
+                ) < self._max_connections and self._is_connection_alive(conn):
                     self._pool.append(conn)
                     conn = None  # Don't close it
         finally:
@@ -175,6 +179,7 @@ def _get_db_setting(db: Session | None, key: str) -> object | None:
         return None
     try:
         from app.services.settings_spec import resolve_value
+
         return resolve_value(db, SettingDomain.email, key)
     except (ImportError, AttributeError, KeyError) as exc:
         logger.debug("Could not resolve email setting %s: %s", key, exc)
@@ -184,7 +189,9 @@ def _get_db_setting(db: Session | None, key: str) -> object | None:
 def _get_smtp_config(db: Session | None = None) -> SMTPConfig:
     """Get SMTP config from database first, then fall back to environment variables."""
     # Try DB settings first, then env vars, then defaults
-    host_raw = _get_db_setting(db, "smtp_host") or _env_value("SMTP_HOST") or "localhost"
+    host_raw = (
+        _get_db_setting(db, "smtp_host") or _env_value("SMTP_HOST") or "localhost"
+    )
     host = str(host_raw)
     port = _get_db_setting(db, "smtp_port") or _env_int("SMTP_PORT", 587)
     username_raw = _get_db_setting(db, "smtp_username") or _env_value("SMTP_USERNAME")
@@ -199,9 +206,17 @@ def _get_smtp_config(db: Session | None = None) -> SMTPConfig:
     use_ssl_db = _get_db_setting(db, "smtp_use_ssl")
     use_ssl = use_ssl_db if use_ssl_db is not None else _env_bool("SMTP_USE_SSL", False)
 
-    from_email_raw = _get_db_setting(db, "smtp_from_email") or _env_value("SMTP_FROM_EMAIL") or "noreply@example.com"
+    from_email_raw = (
+        _get_db_setting(db, "smtp_from_email")
+        or _env_value("SMTP_FROM_EMAIL")
+        or "noreply@example.com"
+    )
     from_email = str(from_email_raw)
-    from_name_raw = _get_db_setting(db, "smtp_from_name") or _env_value("SMTP_FROM_NAME") or "Dotmac ERP"
+    from_name_raw = (
+        _get_db_setting(db, "smtp_from_name")
+        or _env_value("SMTP_FROM_NAME")
+        or "Dotmac ERP"
+    )
     from_name = str(from_name_raw)
     reply_to_raw = _get_db_setting(db, "email_reply_to") or _env_value("EMAIL_REPLY_TO")
     reply_to = str(reply_to_raw) if reply_to_raw is not None else None
@@ -226,7 +241,9 @@ def _get_smtp_config(db: Session | None = None) -> SMTPConfig:
     }
 
 
-def validate_smtp_config(config: SMTPConfig, timeout_seconds: int = 10) -> tuple[bool, str | None]:
+def validate_smtp_config(
+    config: SMTPConfig, timeout_seconds: int = 10
+) -> tuple[bool, str | None]:
     """Validate SMTP settings by attempting a connection and (optional) auth."""
     host = str(config.get("host") or "").strip()
     if not host:
@@ -268,7 +285,9 @@ def validate_smtp_config(config: SMTPConfig, timeout_seconds: int = 10) -> tuple
         server.noop()
         return True, None
     except smtplib.SMTPAuthenticationError:
-        logger.error("SMTP validation failed for host %s:%s: authentication failed", host, port)
+        logger.error(
+            "SMTP validation failed for host %s:%s: authentication failed", host, port
+        )
         return False, "SMTP authentication failed. Check username and password."
     except smtplib.SMTPConnectError as exc:
         logger.error("SMTP validation failed for host %s:%s: %s", host, port, exc)
@@ -290,7 +309,9 @@ def validate_smtp_config(config: SMTPConfig, timeout_seconds: int = 10) -> tuple
                 try:
                     server.close()
                 except (smtplib.SMTPException, OSError) as close_exc:
-                    logger.debug("SMTP close also failed during validation: %s", close_exc)
+                    logger.debug(
+                        "SMTP close also failed during validation: %s", close_exc
+                    )
 
 
 def send_email(
@@ -345,7 +366,11 @@ def send_email(
     # Add attachments if provided
     if attachments:
         for filename, data, mime_type in attachments:
-            maintype, subtype = mime_type.split("/", 1) if "/" in mime_type else ("application", "octet-stream")
+            maintype, subtype = (
+                mime_type.split("/", 1)
+                if "/" in mime_type
+                else ("application", "octet-stream")
+            )
             attachment_part: MIMEBase
             if maintype == "application" and subtype == "pdf":
                 attachment_part = MIMEApplication(data, _subtype=subtype)
@@ -415,4 +440,5 @@ def queue_email(
         attachments: List of attachments as (filename, data, mime_type) tuples
     """
     from app.tasks.email import queue_email as _queue_email
+
     _queue_email(to_email, subject, body_html, body_text, attachments)

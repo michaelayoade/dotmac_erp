@@ -3,6 +3,8 @@ People Settings Web Service.
 
 Provides context and update functions for HR/People settings UI pages.
 """
+
+import logging
 import uuid
 from typing import Any, Optional
 
@@ -13,6 +15,7 @@ from app.models.finance.core_org import Organization
 from app.models.finance.core_org.location import Location
 from app.rls import tenant_context
 
+logger = logging.getLogger(__name__)
 
 # Payroll frequency options
 PAYROLL_FREQUENCIES = [
@@ -112,7 +115,8 @@ class PeopleSettingsWebService:
                     "location_name": loc.location_name,
                     "location_code": loc.location_code,
                     "geofence_enabled": loc.geofence_enabled,
-                    "has_coordinates": loc.latitude is not None and loc.longitude is not None,
+                    "has_coordinates": loc.latitude is not None
+                    and loc.longitude is not None,
                     "has_polygon": loc.geofence_polygon is not None,
                     "geofence_radius_m": loc.geofence_radius_m,
                 }
@@ -165,7 +169,10 @@ class PeopleSettingsWebService:
                     if value == "":
                         value = None
                     # Handle integer conversion for specific fields
-                    if field in ["hr_leave_year_start_month", "hr_probation_days"] and value:
+                    if (
+                        field in ["hr_leave_year_start_month", "hr_probation_days"]
+                        and value
+                    ):
                         try:
                             value = int(value)
                         except (ValueError, TypeError):

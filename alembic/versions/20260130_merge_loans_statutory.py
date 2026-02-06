@@ -6,8 +6,6 @@ Create Date: 2026-01-30
 
 Note: Employee loans migration skipped temporarily - will be added later.
 """
-from alembic import op
-
 
 revision = "20260130_merge_loans_statutory"
 down_revision = (

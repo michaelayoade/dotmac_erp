@@ -6,6 +6,7 @@ Provides view-focused data for tax web routes.
 
 from __future__ import annotations
 
+import logging
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional
@@ -15,27 +16,30 @@ from fastapi import Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.models.finance.tax.tax_code import TaxCode, TaxType
-from app.models.finance.tax.tax_return import TaxReturn, TaxReturnStatus
-from app.models.finance.tax.tax_transaction import TaxTransaction, TaxTransactionType
-from app.models.finance.tax.tax_period import TaxPeriodFrequency, TaxPeriodStatus
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
-from app.config import settings
+from app.models.finance.tax.tax_code import TaxCode, TaxType
+from app.models.finance.tax.tax_period import TaxPeriodFrequency, TaxPeriodStatus
+from app.models.finance.tax.tax_return import TaxReturn, TaxReturnStatus
+from app.models.finance.tax.tax_transaction import TaxTransaction, TaxTransactionType
 from app.services.common import coerce_uuid
 from app.services.finance.platform.currency_context import get_currency_context
+from app.services.formatters import format_currency as _format_currency
+from app.services.formatters import format_date as _format_date
 from app.services.finance.tax import (
-    tax_jurisdiction_service,
-    tax_code_service,
-    tax_period_service,
     deferred_tax_service,
+    tax_code_service,
+    tax_jurisdiction_service,
+    tax_period_service,
 )
-from app.services.finance.tax.tax_master import TaxCodeInput
 from app.services.finance.tax.seed import get_default_jurisdiction
+from app.services.finance.tax.tax_master import TaxCodeInput
 from app.services.finance.tax.tax_return import TaxReturnBoxValue, tax_return_service
 from app.services.finance.tax.tax_transaction import tax_transaction_service
 from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
+from app.web.deps import WebAuthContext, base_context
+
+logger = logging.getLogger(__name__)
 
 
 def _safe_form_text(value: object) -> str:
@@ -47,10 +51,6 @@ def _safe_form_text(value: object) -> str:
     if isinstance(value, str):
         return value
     return str(value)
-
-
-def _format_date(value: Optional[date]) -> str:
-    return value.strftime("%Y-%m-%d") if value else ""
 
 
 def _get_accounts(
@@ -119,16 +119,6 @@ def _tax_code_list_view(tax_code: TaxCode) -> dict:
         "effective_from": _format_date(tax_code.effective_from),
         "effective_to": _format_date(tax_code.effective_to),
     }
-
-
-def _format_currency(
-    amount: Optional[Decimal],
-    currency: str = settings.default_presentation_currency_code,
-) -> str:
-    if amount is None:
-        return ""
-    value = Decimal(str(amount))
-    return f"{currency} {value:,.2f}"
 
 
 def _tax_return_view(tax_return: TaxReturn) -> dict:
@@ -337,7 +327,9 @@ class TaxWebService:
                 "output_tax_raw": row.get("output_tax", 0),
                 "input_tax": _format_currency(Decimal(str(row.get("input_tax", 0)))),
                 "input_tax_raw": row.get("input_tax", 0),
-                "net_payable": _format_currency(Decimal(str(row.get("net_payable", 0)))),
+                "net_payable": _format_currency(
+                    Decimal(str(row.get("net_payable", 0)))
+                ),
                 "net_payable_raw": row.get("net_payable", 0),
                 "transaction_count": row.get("transaction_count", 0),
             }
@@ -434,16 +426,20 @@ class TaxWebService:
         # Format transactions for display
         formatted_txns = []
         for txn in transactions:
-            formatted_txns.append({
-                "transaction_id": str(txn.transaction_id),
-                "transaction_date": _format_date(txn.transaction_date),
-                "transaction_type": txn.transaction_type.value,
-                "source_document_reference": txn.source_document_reference or "",
-                "counterparty_name": txn.counterparty_name or "",
-                "base_amount": _format_currency(txn.base_amount, txn.currency_code),
-                "tax_amount": _format_currency(txn.tax_amount, txn.currency_code),
-                "functional_tax_amount": _format_currency(txn.functional_tax_amount),
-            })
+            formatted_txns.append(
+                {
+                    "transaction_id": str(txn.transaction_id),
+                    "transaction_date": _format_date(txn.transaction_date),
+                    "transaction_type": txn.transaction_type.value,
+                    "source_document_reference": txn.source_document_reference or "",
+                    "counterparty_name": txn.counterparty_name or "",
+                    "base_amount": _format_currency(txn.base_amount, txn.currency_code),
+                    "tax_amount": _format_currency(txn.tax_amount, txn.currency_code),
+                    "functional_tax_amount": _format_currency(
+                        txn.functional_tax_amount
+                    ),
+                }
+            )
 
         # Calculate pagination
         total_pages = (total_count + limit - 1) // limit if limit > 0 else 1
@@ -479,13 +475,17 @@ class TaxWebService:
         )
 
         context = base_context(request, auth, "Tax Jurisdictions", "tax")
-        context.update({
-            "jurisdictions": jurisdictions,
-            "country_code": country_code,
-            "page": page,
-        })
+        context.update(
+            {
+                "jurisdictions": jurisdictions,
+                "country_code": country_code,
+                "page": page,
+            }
+        )
 
-        return templates.TemplateResponse(request, "finance/tax/jurisdictions.html", context)
+        return templates.TemplateResponse(
+            request, "finance/tax/jurisdictions.html", context
+        )
 
     def list_tax_codes_response(
         self,
@@ -530,19 +530,23 @@ class TaxWebService:
         )
 
         context = base_context(request, auth, "Tax Codes", "tax")
-        context.update({
-            "codes": formatted_codes,
-            "tax_type": tax_type,
-            "jurisdiction_id": jurisdiction_id,
-            "is_active": "true" if is_active is True else ("false" if is_active is False else ""),
-            "page": page,
-            "tax_types": list(TaxType),
-            "tax_type_options": [
-                {"value": t.value, "label": t.value.replace("_", " ").title()}
-                for t in TaxType
-            ],
-            "jurisdictions": jurisdictions,
-        })
+        context.update(
+            {
+                "codes": formatted_codes,
+                "tax_type": tax_type,
+                "jurisdiction_id": jurisdiction_id,
+                "is_active": "true"
+                if is_active is True
+                else ("false" if is_active is False else ""),
+                "page": page,
+                "tax_types": list(TaxType),
+                "tax_type_options": [
+                    {"value": t.value, "label": t.value.replace("_", " ").title()}
+                    for t in TaxType
+                ],
+                "jurisdictions": jurisdictions,
+            }
+        )
 
         return templates.TemplateResponse(request, "finance/tax/codes.html", context)
 
@@ -586,14 +590,16 @@ class TaxWebService:
         )
 
         context = base_context(request, auth, "Tax Periods", "tax")
-        context.update({
-            "periods": periods,
-            "jurisdiction_id": jurisdiction_id,
-            "frequency": frequency,
-            "status": status,
-            "year": year,
-            "page": page,
-        })
+        context.update(
+            {
+                "periods": periods,
+                "jurisdiction_id": jurisdiction_id,
+                "frequency": frequency,
+                "status": status,
+                "year": year,
+                "page": page,
+            }
+        )
 
         return templates.TemplateResponse(request, "finance/tax/periods.html", context)
 
@@ -612,7 +618,9 @@ class TaxWebService:
         context["overdue_periods"] = overdue
         context["as_of_date"] = as_of_date
 
-        return templates.TemplateResponse(request, "finance/tax/overdue_periods.html", context)
+        return templates.TemplateResponse(
+            request, "finance/tax/overdue_periods.html", context
+        )
 
     def list_tax_returns_response(
         self,
@@ -644,12 +652,14 @@ class TaxWebService:
         )
 
         context = base_context(request, auth, "Tax Returns", "tax")
-        context.update({
-            "returns": returns,
-            "period_id": period_id,
-            "status": status,
-            "page": page,
-        })
+        context.update(
+            {
+                "returns": returns,
+                "period_id": period_id,
+                "status": status,
+                "page": page,
+            }
+        )
 
         return templates.TemplateResponse(request, "finance/tax/returns.html", context)
 
@@ -669,7 +679,9 @@ class TaxWebService:
             )
         )
 
-        return templates.TemplateResponse(request, "finance/tax/return_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/tax/return_detail.html", context
+        )
 
     def new_return_form_response(
         self,
@@ -687,7 +699,9 @@ class TaxWebService:
         context = base_context(request, auth, "Prepare Tax Return", "tax")
         context["periods"] = periods
 
-        return templates.TemplateResponse(request, "finance/tax/return_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/tax/return_form.html", context
+        )
 
     def deferred_tax_summary_response(
         self,
@@ -747,7 +761,9 @@ class TaxWebService:
             )
         )
 
-        return templates.TemplateResponse(request, "finance/tax/vat_register.html", context)
+        return templates.TemplateResponse(
+            request, "finance/tax/vat_register.html", context
+        )
 
     def tax_liability_summary_response(
         self,
@@ -780,7 +796,9 @@ class TaxWebService:
             )
         )
 
-        return templates.TemplateResponse(request, "finance/tax/liability_summary.html", context)
+        return templates.TemplateResponse(
+            request, "finance/tax/liability_summary.html", context
+        )
 
     def view_tax_transaction_response(
         self,
@@ -798,7 +816,9 @@ class TaxWebService:
             )
         )
 
-        return templates.TemplateResponse(request, "finance/tax/transaction_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/tax/transaction_detail.html", context
+        )
 
     def return_transactions_response(
         self,
@@ -818,7 +838,9 @@ class TaxWebService:
             )
         )
 
-        return templates.TemplateResponse(request, "finance/tax/return_transactions.html", context)
+        return templates.TemplateResponse(
+            request, "finance/tax/return_transactions.html", context
+        )
 
     def recalculate_return_response(
         self,
@@ -952,7 +974,9 @@ class TaxWebService:
         context = base_context(request, auth, "New Tax Code", "tax")
         context.update(self._get_tax_code_form_context(db, auth, error=error))
 
-        return templates.TemplateResponse(request, "finance/tax/code_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/tax/code_form.html", context
+        )
 
     async def create_tax_code_response(
         self,
@@ -983,10 +1007,16 @@ class TaxWebService:
 
             # Parse dates
             effective_from_str = _safe_form_text(form.get("effective_from"))
-            effective_from = date.fromisoformat(effective_from_str) if effective_from_str else date.today()
+            effective_from = (
+                date.fromisoformat(effective_from_str)
+                if effective_from_str
+                else date.today()
+            )
 
             effective_to_str = _safe_form_text(form.get("effective_to"))
-            effective_to = date.fromisoformat(effective_to_str) if effective_to_str else None
+            effective_to = (
+                date.fromisoformat(effective_to_str) if effective_to_str else None
+            )
 
             # Parse booleans
             is_compound = _safe_form_text(form.get("is_compound")) == "true"
@@ -994,19 +1024,31 @@ class TaxWebService:
             is_recoverable = _safe_form_text(form.get("is_recoverable")) == "true"
 
             recovery_rate_pct = _safe_form_text(form.get("recovery_rate", "100"))
-            recovery_rate = Decimal(recovery_rate_pct) / Decimal("100") if is_recoverable else Decimal("0")
+            recovery_rate = (
+                Decimal(recovery_rate_pct) / Decimal("100")
+                if is_recoverable
+                else Decimal("0")
+            )
 
             applies_to_sales = _safe_form_text(form.get("applies_to_sales")) == "true"
-            applies_to_purchases = _safe_form_text(form.get("applies_to_purchases")) == "true"
+            applies_to_purchases = (
+                _safe_form_text(form.get("applies_to_purchases")) == "true"
+            )
 
             # Parse optional fields
             tax_return_box = _safe_form_text(form.get("tax_return_box")).strip() or None
             reporting_code = _safe_form_text(form.get("reporting_code")).strip() or None
 
             # Parse GL account IDs
-            tax_collected_account_id = _safe_form_text(form.get("tax_collected_account_id")) or None
-            tax_paid_account_id = _safe_form_text(form.get("tax_paid_account_id")) or None
-            tax_expense_account_id = _safe_form_text(form.get("tax_expense_account_id")) or None
+            tax_collected_account_id = (
+                _safe_form_text(form.get("tax_collected_account_id")) or None
+            )
+            tax_paid_account_id = (
+                _safe_form_text(form.get("tax_paid_account_id")) or None
+            )
+            tax_expense_account_id = (
+                _safe_form_text(form.get("tax_expense_account_id")) or None
+            )
 
             # Validation
             if not tax_code_str:
@@ -1038,9 +1080,15 @@ class TaxWebService:
                 applies_to_sales=applies_to_sales,
                 tax_return_box=tax_return_box,
                 reporting_code=reporting_code,
-                tax_collected_account_id=coerce_uuid(tax_collected_account_id) if tax_collected_account_id else None,
-                tax_paid_account_id=coerce_uuid(tax_paid_account_id) if tax_paid_account_id else None,
-                tax_expense_account_id=coerce_uuid(tax_expense_account_id) if tax_expense_account_id else None,
+                tax_collected_account_id=coerce_uuid(tax_collected_account_id)
+                if tax_collected_account_id
+                else None,
+                tax_paid_account_id=coerce_uuid(tax_paid_account_id)
+                if tax_paid_account_id
+                else None,
+                tax_expense_account_id=coerce_uuid(tax_expense_account_id)
+                if tax_expense_account_id
+                else None,
             )
 
             # Create tax code
@@ -1072,7 +1120,9 @@ class TaxWebService:
         context = base_context(request, auth, "Edit Tax Code", "tax")
         context.update(self._get_tax_code_form_context(db, auth, tax_code, error))
 
-        return templates.TemplateResponse(request, "finance/tax/code_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/tax/code_form.html", context
+        )
 
     async def update_tax_code_response(
         self,
@@ -1108,10 +1158,16 @@ class TaxWebService:
 
             # Parse dates
             effective_from_str = _safe_form_text(form.get("effective_from"))
-            effective_from = date.fromisoformat(effective_from_str) if effective_from_str else date.today()
+            effective_from = (
+                date.fromisoformat(effective_from_str)
+                if effective_from_str
+                else date.today()
+            )
 
             effective_to_str = _safe_form_text(form.get("effective_to"))
-            effective_to = date.fromisoformat(effective_to_str) if effective_to_str else None
+            effective_to = (
+                date.fromisoformat(effective_to_str) if effective_to_str else None
+            )
 
             # Parse booleans
             is_compound = _safe_form_text(form.get("is_compound")) == "true"
@@ -1120,19 +1176,31 @@ class TaxWebService:
             is_active = _safe_form_text(form.get("is_active")) == "true"
 
             recovery_rate_pct = _safe_form_text(form.get("recovery_rate", "100"))
-            recovery_rate = Decimal(recovery_rate_pct) / Decimal("100") if is_recoverable else Decimal("0")
+            recovery_rate = (
+                Decimal(recovery_rate_pct) / Decimal("100")
+                if is_recoverable
+                else Decimal("0")
+            )
 
             applies_to_sales = _safe_form_text(form.get("applies_to_sales")) == "true"
-            applies_to_purchases = _safe_form_text(form.get("applies_to_purchases")) == "true"
+            applies_to_purchases = (
+                _safe_form_text(form.get("applies_to_purchases")) == "true"
+            )
 
             # Parse optional fields
             tax_return_box = _safe_form_text(form.get("tax_return_box")).strip() or None
             reporting_code = _safe_form_text(form.get("reporting_code")).strip() or None
 
             # Parse GL account IDs
-            tax_collected_account_id = _safe_form_text(form.get("tax_collected_account_id")) or None
-            tax_paid_account_id = _safe_form_text(form.get("tax_paid_account_id")) or None
-            tax_expense_account_id = _safe_form_text(form.get("tax_expense_account_id")) or None
+            tax_collected_account_id = (
+                _safe_form_text(form.get("tax_collected_account_id")) or None
+            )
+            tax_paid_account_id = (
+                _safe_form_text(form.get("tax_paid_account_id")) or None
+            )
+            tax_expense_account_id = (
+                _safe_form_text(form.get("tax_expense_account_id")) or None
+            )
 
             # Validation
             if not tax_code_str:
@@ -1169,9 +1237,17 @@ class TaxWebService:
             tax_code.applies_to_sales = applies_to_sales
             tax_code.tax_return_box = tax_return_box
             tax_code.reporting_code = reporting_code
-            tax_code.tax_collected_account_id = coerce_uuid(tax_collected_account_id) if tax_collected_account_id else None
-            tax_code.tax_paid_account_id = coerce_uuid(tax_paid_account_id) if tax_paid_account_id else None
-            tax_code.tax_expense_account_id = coerce_uuid(tax_expense_account_id) if tax_expense_account_id else None
+            tax_code.tax_collected_account_id = (
+                coerce_uuid(tax_collected_account_id)
+                if tax_collected_account_id
+                else None
+            )
+            tax_code.tax_paid_account_id = (
+                coerce_uuid(tax_paid_account_id) if tax_paid_account_id else None
+            )
+            tax_code.tax_expense_account_id = (
+                coerce_uuid(tax_expense_account_id) if tax_expense_account_id else None
+            )
             tax_code.is_active = is_active
 
             db.commit()
@@ -1179,10 +1255,14 @@ class TaxWebService:
             return RedirectResponse(url="/finance/tax/codes", status_code=303)
 
         except ValueError as e:
-            return self.edit_tax_code_form_response(request, auth, tax_code_id, db, error=str(e))
+            return self.edit_tax_code_form_response(
+                request, auth, tax_code_id, db, error=str(e)
+            )
         except Exception as e:
             error_msg = getattr(e, "detail", str(e))
-            return self.edit_tax_code_form_response(request, auth, tax_code_id, db, error=error_msg)
+            return self.edit_tax_code_form_response(
+                request, auth, tax_code_id, db, error=error_msg
+            )
 
     def toggle_tax_code_response(
         self,
@@ -1249,13 +1329,13 @@ class TaxWebService:
         context = base_context(request, auth, "Tax Summary by Type", "tax")
         context.update(
             {
-            "start_date": start_date.isoformat(),
-            "end_date": end_date.isoformat(),
-            "summaries": summaries,
-            "total_output": total_output,
-            "total_input": total_input,
-            "total_wht_withheld": total_wht_withheld,
-            "net_position": net_position,
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "summaries": summaries,
+                "total_output": total_output,
+                "total_input": total_input,
+                "total_wht_withheld": total_wht_withheld,
+                "net_position": net_position,
             }
         )
         context.update(get_currency_context(db, str(org_id)))
@@ -1306,9 +1386,9 @@ class TaxWebService:
         context = base_context(request, auth, "WHT Report", "tax")
         context.update(
             {
-            "start_date": start_date.isoformat(),
-            "end_date": end_date.isoformat(),
-            "report": report,
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "report": report,
             }
         )
         context.update(get_currency_context(db, str(org_id)))

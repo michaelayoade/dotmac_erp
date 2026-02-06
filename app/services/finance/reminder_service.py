@@ -472,11 +472,13 @@ class FinanceReminderService:
 
         # Only include invoices that have outstanding balance
         stmt = select(Invoice).where(
-            Invoice.status.in_([
-                InvoiceStatus.POSTED,
-                InvoiceStatus.PARTIALLY_PAID,
-                InvoiceStatus.OVERDUE,
-            ]),
+            Invoice.status.in_(
+                [
+                    InvoiceStatus.POSTED,
+                    InvoiceStatus.PARTIALLY_PAID,
+                    InvoiceStatus.OVERDUE,
+                ]
+            ),
             Invoice.due_date <= cutoff,
             Invoice.total_amount > Invoice.amount_paid,
         )

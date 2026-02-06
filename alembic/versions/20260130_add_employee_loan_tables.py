@@ -86,9 +86,14 @@ def upgrade() -> None:
         sa.Column(
             "category",
             postgresql.ENUM(
-                "SALARY_ADVANCE", "PERSONAL_LOAN", "EQUIPMENT_LOAN",
-                "EMERGENCY_LOAN", "HOUSING_LOAN", "EDUCATION_LOAN",
-                name="loan_category", create_type=False,
+                "SALARY_ADVANCE",
+                "PERSONAL_LOAN",
+                "EQUIPMENT_LOAN",
+                "EMERGENCY_LOAN",
+                "HOUSING_LOAN",
+                "EDUCATION_LOAN",
+                name="loan_category",
+                create_type=False,
             ),
             nullable=False,
         ),
@@ -100,8 +105,11 @@ def upgrade() -> None:
         sa.Column(
             "interest_method",
             postgresql.ENUM(
-                "NONE", "FLAT", "REDUCING_BALANCE",
-                name="interest_method", create_type=False,
+                "NONE",
+                "FLAT",
+                "REDUCING_BALANCE",
+                name="interest_method",
+                create_type=False,
             ),
             default="NONE",
         ),
@@ -127,7 +135,9 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column("is_active", sa.Boolean(), default=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now()
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_by_id",
@@ -135,10 +145,14 @@ def upgrade() -> None:
             sa.ForeignKey("people.id"),
             nullable=True,
         ),
-        sa.UniqueConstraint("organization_id", "type_code", name="uq_loan_type_org_code"),
+        sa.UniqueConstraint(
+            "organization_id", "type_code", name="uq_loan_type_org_code"
+        ),
         schema="payroll",
     )
-    op.create_index("idx_loan_type_org", "loan_type", ["organization_id"], schema="payroll")
+    op.create_index(
+        "idx_loan_type_org", "loan_type", ["organization_id"], schema="payroll"
+    )
 
     # Create employee_loan table
     op.create_table(
@@ -182,9 +196,16 @@ def upgrade() -> None:
         sa.Column(
             "status",
             postgresql.ENUM(
-                "DRAFT", "PENDING", "APPROVED", "DISBURSED",
-                "COMPLETED", "WRITTEN_OFF", "CANCELLED", "REJECTED",
-                name="loan_status", create_type=False,
+                "DRAFT",
+                "PENDING",
+                "APPROVED",
+                "DISBURSED",
+                "COMPLETED",
+                "WRITTEN_OFF",
+                "CANCELLED",
+                "REJECTED",
+                name="loan_status",
+                create_type=False,
             ),
             default="DRAFT",
         ),
@@ -204,7 +225,9 @@ def upgrade() -> None:
         ),
         sa.Column("purpose", sa.Text(), nullable=True),
         sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now()
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_by_id",
@@ -212,12 +235,26 @@ def upgrade() -> None:
             sa.ForeignKey("people.id"),
             nullable=True,
         ),
-        sa.UniqueConstraint("organization_id", "loan_number", name="uq_employee_loan_number"),
+        sa.UniqueConstraint(
+            "organization_id", "loan_number", name="uq_employee_loan_number"
+        ),
         schema="payroll",
     )
-    op.create_index("idx_employee_loan_employee", "employee_loan", ["employee_id"], schema="payroll")
-    op.create_index("idx_employee_loan_status", "employee_loan", ["organization_id", "status"], schema="payroll")
-    op.create_index("idx_employee_loan_active", "employee_loan", ["employee_id", "status"], schema="payroll")
+    op.create_index(
+        "idx_employee_loan_employee", "employee_loan", ["employee_id"], schema="payroll"
+    )
+    op.create_index(
+        "idx_employee_loan_status",
+        "employee_loan",
+        ["organization_id", "status"],
+        schema="payroll",
+    )
+    op.create_index(
+        "idx_employee_loan_active",
+        "employee_loan",
+        ["employee_id", "status"],
+        schema="payroll",
+    )
 
     # Create loan_repayment table
     op.create_table(
@@ -232,8 +269,12 @@ def upgrade() -> None:
         sa.Column(
             "repayment_type",
             postgresql.ENUM(
-                "PAYROLL_DEDUCTION", "MANUAL_PAYMENT", "PREPAYMENT", "WRITE_OFF",
-                name="repayment_type", create_type=False,
+                "PAYROLL_DEDUCTION",
+                "MANUAL_PAYMENT",
+                "PREPAYMENT",
+                "WRITE_OFF",
+                name="repayment_type",
+                create_type=False,
             ),
             nullable=False,
         ),
@@ -251,7 +292,9 @@ def upgrade() -> None:
         sa.Column("payment_reference", sa.String(100), nullable=True),
         sa.Column("payment_method", sa.String(50), nullable=True),
         sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now()
+        ),
         sa.Column(
             "created_by_id",
             postgresql.UUID(as_uuid=True),
@@ -260,9 +303,21 @@ def upgrade() -> None:
         ),
         schema="payroll",
     )
-    op.create_index("idx_loan_repayment_loan", "loan_repayment", ["loan_id"], schema="payroll")
-    op.create_index("idx_loan_repayment_slip", "loan_repayment", ["salary_slip_id"], schema="payroll")
-    op.create_index("idx_loan_repayment_date", "loan_repayment", ["repayment_date"], schema="payroll")
+    op.create_index(
+        "idx_loan_repayment_loan", "loan_repayment", ["loan_id"], schema="payroll"
+    )
+    op.create_index(
+        "idx_loan_repayment_slip",
+        "loan_repayment",
+        ["salary_slip_id"],
+        schema="payroll",
+    )
+    op.create_index(
+        "idx_loan_repayment_date",
+        "loan_repayment",
+        ["repayment_date"],
+        schema="payroll",
+    )
 
     # Create salary_slip_loan_deduction link table
     op.create_table(
@@ -289,11 +344,23 @@ def upgrade() -> None:
             sa.ForeignKey("payroll.loan_repayment.repayment_id", ondelete="SET NULL"),
             nullable=True,
         ),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now()
+        ),
         schema="payroll",
     )
-    op.create_index("idx_slip_loan_slip", "salary_slip_loan_deduction", ["slip_id"], schema="payroll")
-    op.create_index("idx_slip_loan_loan", "salary_slip_loan_deduction", ["loan_id"], schema="payroll")
+    op.create_index(
+        "idx_slip_loan_slip",
+        "salary_slip_loan_deduction",
+        ["slip_id"],
+        schema="payroll",
+    )
+    op.create_index(
+        "idx_slip_loan_loan",
+        "salary_slip_loan_deduction",
+        ["loan_id"],
+        schema="payroll",
+    )
 
 
 def downgrade() -> None:

@@ -98,7 +98,7 @@ class TestEmailFormatValidation:
                 authenticated_page.wait_for_load_state("networkidle")
 
                 # Should show validation error or stay on page
-                expect(authenticated_page.locator("body")).to_be_visible()
+                expect(authenticated_page.locator("form")).to_be_visible()
 
 
 @pytest.mark.e2e
@@ -117,7 +117,7 @@ class TestNumberFormatValidation:
             amount_field.first.fill("not-a-number")
 
             # Check for validation
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("form")).to_be_visible()
 
     def test_negative_amount_validation(self, authenticated_page, base_url):
         """Test negative amount validation where not allowed."""
@@ -136,7 +136,7 @@ class TestNumberFormatValidation:
                 authenticated_page.wait_for_load_state("networkidle")
 
                 # Should show error or reject
-                expect(authenticated_page.locator("body")).to_be_visible()
+                expect(authenticated_page.locator("form")).to_be_visible()
 
 
 @pytest.mark.e2e
@@ -166,7 +166,7 @@ class TestDateFormatValidation:
                 authenticated_page.wait_for_load_state("networkidle")
 
                 # Should show validation error
-                expect(authenticated_page.locator("body")).to_be_visible()
+                expect(authenticated_page.locator("form")).to_be_visible()
 
 
 @pytest.mark.e2e
@@ -202,7 +202,7 @@ class TestUniqueConstraintValidation:
                 authenticated_page.wait_for_load_state("networkidle")
 
                 # Should show duplicate error or stay on page
-                expect(authenticated_page.locator("body")).to_be_visible()
+                expect(authenticated_page.locator("form")).to_be_visible()
 
     def test_duplicate_supplier_code_error(self, authenticated_page, base_url):
         """Test duplicate supplier code shows error."""
@@ -227,7 +227,7 @@ class TestUniqueConstraintValidation:
                 submit_btn.click()
                 authenticated_page.wait_for_load_state("networkidle")
 
-                expect(authenticated_page.locator("body")).to_be_visible()
+                expect(authenticated_page.locator("form")).to_be_visible()
 
 
 # =============================================================================
@@ -268,7 +268,7 @@ class TestBusinessRuleValidation:
                 "text=balance, text=unbalanced, text=must equal, .error"
             )
             # Just verify page is visible - error may or may not show
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("form")).to_be_visible()
 
     def test_closed_period_entry_error(self, authenticated_page, base_url):
         """Test entry to closed period shows error."""
@@ -288,7 +288,7 @@ class TestBusinessRuleValidation:
                 period_select.first.select_option(index=1)
 
         # Just verify page loaded
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_credit_limit_exceeded_warning(self, authenticated_page, base_url):
         """Test credit limit exceeded shows warning."""
@@ -313,7 +313,7 @@ class TestBusinessRuleValidation:
             ".warning, .alert-warning, text=credit limit"
         )
         # Just verify page is visible
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_overpayment_warning(self, authenticated_page, base_url):
         """Test overpayment shows warning."""
@@ -328,11 +328,9 @@ class TestBusinessRuleValidation:
             amount_field.first.fill("9999999")
 
         # Look for overpayment warning
-        warning = authenticated_page.locator(
-            ".warning, text=overpayment, text=exceeds"
-        )
+        warning = authenticated_page.locator(".warning, text=overpayment, text=exceeds")
         # Just verify page is visible
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
 
 # =============================================================================
@@ -361,7 +359,7 @@ class TestNotFoundHandling:
             expect(not_found.first).to_be_visible()
         else:
             # May have redirected
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_404_page_for_invalid_invoice_id(self, authenticated_page, base_url):
         """Test 404 page for invalid invoice ID."""
@@ -377,7 +375,7 @@ class TestNotFoundHandling:
         if not_found.count() > 0:
             expect(not_found.first).to_be_visible()
         else:
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_404_page_for_invalid_account_id(self, authenticated_page, base_url):
         """Test 404 page for invalid account ID."""
@@ -393,13 +391,11 @@ class TestNotFoundHandling:
         if not_found.count() > 0:
             expect(not_found.first).to_be_visible()
         else:
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_graceful_error_messages(self, authenticated_page, base_url):
         """Test that error pages show graceful messages."""
-        response = authenticated_page.goto(
-            f"{base_url}/nonexistent-page-xyz123"
-        )
+        response = authenticated_page.goto(f"{base_url}/nonexistent-page-xyz123")
 
         authenticated_page.wait_for_load_state("networkidle")
 
@@ -413,7 +409,7 @@ class TestNotFoundHandling:
             pass
 
         # Should have some content
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
 
 # =============================================================================
@@ -439,13 +435,15 @@ class TestPermissionErrors:
         is_redirected = any(ind in current_url.lower() for ind in login_indicators)
 
         if is_redirected:
-            expect(unauthenticated_page).to_have_url(re.compile(r".*/login.*|.*/auth.*"))
+            expect(unauthenticated_page).to_have_url(
+                re.compile(r".*/login.*|.*/auth.*")
+            )
         else:
             # May show unauthorized message
             unauthorized = unauthenticated_page.locator(
                 "text=unauthorized, text=login required, text=please sign in"
             )
-            expect(unauthenticated_page.locator("body")).to_be_visible()
+            expect(unauthenticated_page.locator("main")).to_be_visible()
 
     def test_admin_page_requires_admin_role(self, authenticated_page, base_url):
         """Test admin pages require admin role."""
@@ -464,10 +462,10 @@ class TestPermissionErrors:
                 "text=forbidden, text=access denied, text=permission"
             )
             # Just verify page loaded
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
         else:
             # Redirected away from admin
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_insufficient_permissions_message(self, authenticated_page, base_url):
         """Test insufficient permissions shows appropriate message."""
@@ -481,4 +479,4 @@ class TestPermissionErrors:
         )
 
         # Just verify page loaded - message may or may not appear
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()

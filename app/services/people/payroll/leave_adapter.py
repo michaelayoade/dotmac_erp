@@ -5,16 +5,16 @@ Bridges the Leave module with Payroll for:
 - Calculating Leave Without Pay (LWP) days for salary deductions
 - Getting leave summary for payroll display
 """
+
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.people.leave import (
@@ -101,7 +101,7 @@ class LeavePayrollAdapter:
             overlap_days = (overlap_end - overlap_start).days + 1
 
             # Adjust for half-day leaves if applicable
-            if hasattr(app, 'half_day') and app.half_day and overlap_days == 1:
+            if hasattr(app, "half_day") and app.half_day and overlap_days == 1:
                 total_lwp_days += Decimal("0.5")
             else:
                 total_lwp_days += Decimal(str(overlap_days))
@@ -226,7 +226,9 @@ class LeavePayrollAdapter:
         results = self.db.execute(stmt).all()
 
         # Aggregate by employee
-        lwp_by_emp: dict[UUID, Decimal] = {emp_id: Decimal("0") for emp_id in employee_ids}
+        lwp_by_emp: dict[UUID, Decimal] = {
+            emp_id: Decimal("0") for emp_id in employee_ids
+        }
 
         for row in results:
             overlap_start = max(row.from_date, period_start)

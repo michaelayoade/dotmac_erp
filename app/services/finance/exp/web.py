@@ -3,6 +3,8 @@ Expense Web View Service.
 
 Provides view-focused data for expense web routes.
 """
+
+import logging
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Optional
@@ -11,33 +13,26 @@ from uuid import UUID
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models.finance.exp.expense_entry import ExpenseEntry, ExpenseStatus, PaymentMethod
+from app.models.finance.core_org.business_unit import BusinessUnit
+from app.models.finance.core_org.cost_center import CostCenter
+from app.models.finance.core_org.project import Project, ProjectStatus
+from app.models.finance.exp.expense_entry import (
+    ExpenseEntry,
+    ExpenseStatus,
+    PaymentMethod,
+)
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 from app.models.finance.tax.tax_code import TaxCode
-from app.models.finance.core_org.project import Project, ProjectStatus
-from app.models.finance.core_org.cost_center import CostCenter
-from app.models.finance.core_org.business_unit import BusinessUnit
-from app.config import settings
 from app.services.common import coerce_uuid
+from app.services.finance.exp.expense import expense_service
+from app.services.formatters import format_currency as _format_currency
+from app.services.formatters import format_date as _format_date
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.platform.org_context import org_context_service
-from app.services.finance.exp.expense import expense_service
 
-
-def _format_currency(
-    amount: Optional[Decimal],
-    currency: str = settings.default_presentation_currency_code,
-) -> str:
-    if amount is None:
-        return "$0.00"
-    value = Decimal(str(amount))
-    return f"{currency} {value:,.2f}"
-
-
-def _format_date(value: Optional[date]) -> str:
-    return value.strftime("%Y-%m-%d") if value else ""
+logger = logging.getLogger(__name__)
 
 
 class ExpenseWebService:
@@ -54,10 +49,7 @@ class ExpenseWebService:
         """Get context for expense list page."""
         org_id = coerce_uuid(organization_id)
 
-        query = (
-            db.query(ExpenseEntry)
-            .filter(ExpenseEntry.organization_id == org_id)
-        )
+        query = db.query(ExpenseEntry).filter(ExpenseEntry.organization_id == org_id)
 
         if status:
             query = query.filter(ExpenseEntry.status == ExpenseStatus(status))
@@ -72,19 +64,25 @@ class ExpenseWebService:
 
         items = []
         for exp in expenses:
-            items.append({
-                "expense_id": str(exp.expense_id),
-                "expense_number": exp.expense_number,
-                "expense_date": _format_date(exp.expense_date),
-                "description": exp.description,
-                "payee": exp.payee or "-",
-                "amount": _format_currency(exp.amount, exp.currency_code),
-                "tax_amount": _format_currency(exp.tax_amount, exp.currency_code),
-                "total_amount": _format_currency(exp.total_amount, exp.currency_code),
-                "payment_method": exp.payment_method.value,
-                "status": exp.status.value,
-                "expense_account": exp.expense_account.account_name if exp.expense_account else "-",
-            })
+            items.append(
+                {
+                    "expense_id": str(exp.expense_id),
+                    "expense_number": exp.expense_number,
+                    "expense_date": _format_date(exp.expense_date),
+                    "description": exp.description,
+                    "payee": exp.payee or "-",
+                    "amount": _format_currency(exp.amount, exp.currency_code),
+                    "tax_amount": _format_currency(exp.tax_amount, exp.currency_code),
+                    "total_amount": _format_currency(
+                        exp.total_amount, exp.currency_code
+                    ),
+                    "payment_method": exp.payment_method.value,
+                    "status": exp.status.value,
+                    "expense_account": exp.expense_account.account_name
+                    if exp.expense_account
+                    else "-",
+                }
+            )
 
         # Status counts
         status_counts = (
@@ -281,17 +279,25 @@ class ExpenseWebService:
                     "description": expense.description,
                     "notes": expense.notes or "",
                     "expense_account_id": str(expense.expense_account_id),
-                    "payment_account_id": str(expense.payment_account_id) if expense.payment_account_id else "",
+                    "payment_account_id": str(expense.payment_account_id)
+                    if expense.payment_account_id
+                    else "",
                     "amount": str(expense.amount),
-                    "tax_code_id": str(expense.tax_code_id) if expense.tax_code_id else "",
+                    "tax_code_id": str(expense.tax_code_id)
+                    if expense.tax_code_id
+                    else "",
                     "tax_amount": str(expense.tax_amount),
                     "currency_code": expense.currency_code,
                     "payment_method": expense.payment_method.value,
                     "payee": expense.payee or "",
                     "receipt_reference": expense.receipt_reference or "",
                     "project_id": str(expense.project_id) if expense.project_id else "",
-                    "cost_center_id": str(expense.cost_center_id) if expense.cost_center_id else "",
-                    "business_unit_id": str(expense.business_unit_id) if expense.business_unit_id else "",
+                    "cost_center_id": str(expense.cost_center_id)
+                    if expense.cost_center_id
+                    else "",
+                    "business_unit_id": str(expense.business_unit_id)
+                    if expense.business_unit_id
+                    else "",
                     "status": expense.status.value,
                     "can_edit": expense.status == ExpenseStatus.DRAFT,
                     "can_submit": expense.status == ExpenseStatus.DRAFT,
@@ -321,36 +327,72 @@ class ExpenseWebService:
                 "expense_date": _format_date(expense.expense_date),
                 "description": expense.description,
                 "notes": expense.notes or "",
-                "expense_account": expense.expense_account.account_name if expense.expense_account else "-",
-                "expense_account_code": expense.expense_account.account_code if expense.expense_account else "",
-                "payment_account": expense.payment_account.account_name if expense.payment_account else "-",
-                "payment_account_code": expense.payment_account.account_code if expense.payment_account else "",
+                "expense_account": expense.expense_account.account_name
+                if expense.expense_account
+                else "-",
+                "expense_account_code": expense.expense_account.account_code
+                if expense.expense_account
+                else "",
+                "payment_account": expense.payment_account.account_name
+                if expense.payment_account
+                else "-",
+                "payment_account_code": expense.payment_account.account_code
+                if expense.payment_account
+                else "",
                 "amount": _format_currency(expense.amount, expense.currency_code),
-                "tax_amount": _format_currency(expense.tax_amount, expense.currency_code),
-                "total_amount": _format_currency(expense.total_amount, expense.currency_code),
+                "tax_amount": _format_currency(
+                    expense.tax_amount, expense.currency_code
+                ),
+                "total_amount": _format_currency(
+                    expense.total_amount, expense.currency_code
+                ),
                 "currency_code": expense.currency_code,
                 "payment_method": expense.payment_method.value,
                 "payee": expense.payee or "-",
                 "receipt_reference": expense.receipt_reference or "-",
                 "project": expense.project.project_name if expense.project else None,
-                "project_code": expense.project.project_code if expense.project else None,
-                "cost_center": expense.cost_center.cost_center_name if expense.cost_center else None,
-                "cost_center_code": expense.cost_center.cost_center_code if expense.cost_center else None,
-                "business_unit": expense.business_unit.unit_name if expense.business_unit else None,
-                "business_unit_code": expense.business_unit.unit_code if expense.business_unit else None,
+                "project_code": expense.project.project_code
+                if expense.project
+                else None,
+                "cost_center": expense.cost_center.cost_center_name
+                if expense.cost_center
+                else None,
+                "cost_center_code": expense.cost_center.cost_center_code
+                if expense.cost_center
+                else None,
+                "business_unit": expense.business_unit.unit_name
+                if expense.business_unit
+                else None,
+                "business_unit_code": expense.business_unit.unit_code
+                if expense.business_unit
+                else None,
                 "status": expense.status.value,
-                "journal_number": expense.journal_entry.journal_number if expense.journal_entry else None,
-                "journal_entry_id": str(expense.journal_entry_id) if expense.journal_entry_id else None,
-                "submitted_at": expense.submitted_at.strftime("%Y-%m-%d %H:%M") if expense.submitted_at else None,
-                "approved_at": expense.approved_at.strftime("%Y-%m-%d %H:%M") if expense.approved_at else None,
-                "posted_at": expense.posted_at.strftime("%Y-%m-%d %H:%M") if expense.posted_at else None,
-                "created_at": expense.created_at.strftime("%Y-%m-%d %H:%M") if expense.created_at else "",
+                "journal_number": expense.journal_entry.journal_number
+                if expense.journal_entry
+                else None,
+                "journal_entry_id": str(expense.journal_entry_id)
+                if expense.journal_entry_id
+                else None,
+                "submitted_at": expense.submitted_at.strftime("%Y-%m-%d %H:%M")
+                if expense.submitted_at
+                else None,
+                "approved_at": expense.approved_at.strftime("%Y-%m-%d %H:%M")
+                if expense.approved_at
+                else None,
+                "posted_at": expense.posted_at.strftime("%Y-%m-%d %H:%M")
+                if expense.posted_at
+                else None,
+                "created_at": expense.created_at.strftime("%Y-%m-%d %H:%M")
+                if expense.created_at
+                else "",
                 "can_edit": expense.status == ExpenseStatus.DRAFT,
                 "can_submit": expense.status == ExpenseStatus.DRAFT,
                 "can_approve": expense.status == ExpenseStatus.SUBMITTED,
-                "can_reject": expense.status in [ExpenseStatus.SUBMITTED, ExpenseStatus.APPROVED],
+                "can_reject": expense.status
+                in [ExpenseStatus.SUBMITTED, ExpenseStatus.APPROVED],
                 "can_post": expense.status == ExpenseStatus.APPROVED,
-                "can_void": expense.status not in [ExpenseStatus.POSTED, ExpenseStatus.VOID],
+                "can_void": expense.status
+                not in [ExpenseStatus.POSTED, ExpenseStatus.VOID],
             },
         }
 

@@ -5,15 +5,16 @@ Provides context and update functions for module settings UI pages.
 Handles: Support, Inventory, Projects, Fleet, and Procurement settings.
 """
 
-import uuid
 import logging
+import uuid
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from sqlalchemy.orm import Session
 
 from app.models.domain_settings import SettingDomain, SettingScope, SettingValueType
 from app.services.settings_spec import SettingSpec, coerce_value, get_spec
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -243,7 +244,10 @@ class ModuleSettingsWebService:
     ) -> tuple[bool, Optional[str]]:
         """Update procurement settings."""
         return self._update_settings(
-            db, organization_id, data, MODULE_SETTINGS_BY_KEY["procurement"].setting_keys
+            db,
+            organization_id,
+            data,
+            MODULE_SETTINGS_BY_KEY["procurement"].setting_keys,
         )
 
     def _build_settings_context(
@@ -314,12 +318,16 @@ class ModuleSettingsWebService:
         warehouses: list[Warehouse] = []
         try:
             from sqlalchemy import select
+
             from app.models.inventory.warehouse import Warehouse
+
             result = db.execute(
-                select(Warehouse).where(
+                select(Warehouse)
+                .where(
                     Warehouse.organization_id == organization_id,
                     Warehouse.is_active.is_(True),
-                ).order_by(Warehouse.warehouse_name)
+                )
+                .order_by(Warehouse.warehouse_name)
             )
             warehouses = list(result.scalars().all())
         except Exception as e:
@@ -355,8 +363,9 @@ class ModuleSettingsWebService:
         if isinstance(value_type, str):
             normalized_type = SettingValueType(value_type)
         try:
-            from app.models.domain_settings import DomainSetting
             from sqlalchemy import select
+
+            from app.models.domain_settings import DomainSetting
 
             result = db.execute(
                 select(DomainSetting).where(
@@ -406,8 +415,9 @@ class ModuleSettingsWebService:
         organization_id: uuid.UUID,
         spec: SettingSpec,
     ) -> Any:
-        from app.models.domain_settings import DomainSetting
         from sqlalchemy import select
+
+        from app.models.domain_settings import DomainSetting
         from app.services.settings_spec import extract_db_value
 
         result = db.execute(

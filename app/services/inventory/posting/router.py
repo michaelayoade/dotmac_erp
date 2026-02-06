@@ -8,13 +8,15 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.models.inventory.inventory_transaction import InventoryTransaction, TransactionType
+from app.models.inventory.inventory_transaction import (
+    InventoryTransaction,
+    TransactionType,
+)
 from app.services.common import coerce_uuid
-
-from app.services.inventory.posting.result import INVPostingResult
-from app.services.inventory.posting.receipt import post_receipt
-from app.services.inventory.posting.issue import post_issue
 from app.services.inventory.posting.adjustment import post_adjustment
+from app.services.inventory.posting.issue import post_issue
+from app.services.inventory.posting.receipt import post_receipt
+from app.services.inventory.posting.result import INVPostingResult
 
 
 def post_transaction(
@@ -54,8 +56,12 @@ def post_transaction(
         TransactionType.ASSEMBLY,
     ]:
         return post_receipt(
-            db, organization_id, transaction_id, posting_date,
-            posted_by_user_id, idempotency_key=idempotency_key
+            db,
+            organization_id,
+            transaction_id,
+            posting_date,
+            posted_by_user_id,
+            idempotency_key=idempotency_key,
         )
     elif transaction.transaction_type in [
         TransactionType.ISSUE,
@@ -63,8 +69,12 @@ def post_transaction(
         TransactionType.DISASSEMBLY,
     ]:
         return post_issue(
-            db, organization_id, transaction_id, posting_date,
-            posted_by_user_id, idempotency_key=idempotency_key
+            db,
+            organization_id,
+            transaction_id,
+            posting_date,
+            posted_by_user_id,
+            idempotency_key=idempotency_key,
         )
     elif transaction.transaction_type in [
         TransactionType.ADJUSTMENT,
@@ -72,8 +82,12 @@ def post_transaction(
         TransactionType.SCRAP,
     ]:
         return post_adjustment(
-            db, organization_id, transaction_id, posting_date,
-            posted_by_user_id, idempotency_key=idempotency_key
+            db,
+            organization_id,
+            transaction_id,
+            posting_date,
+            posted_by_user_id,
+            idempotency_key=idempotency_key,
         )
     else:
         return INVPostingResult(

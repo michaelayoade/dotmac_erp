@@ -55,9 +55,7 @@ def upgrade() -> None:
         "(provider != 'local') OR (username IS NOT NULL AND password_hash IS NOT NULL)",
     )
     op.drop_index("ix_sessions_token_hash", table_name="sessions")
-    op.create_index(
-        "ix_sessions_token_hash", "sessions", ["token_hash"], unique=True
-    )
+    op.create_index("ix_sessions_token_hash", "sessions", ["token_hash"], unique=True)
     op.create_unique_constraint("uq_api_keys_key_hash", "api_keys", ["key_hash"])
 
 

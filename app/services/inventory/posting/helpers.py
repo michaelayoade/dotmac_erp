@@ -11,9 +11,9 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from app.models.inventory.inventory_transaction import InventoryTransaction
 from app.models.inventory.item import Item
 from app.models.inventory.item_category import ItemCategory
-from app.models.inventory.inventory_transaction import InventoryTransaction
 
 
 def get_item_accounts(

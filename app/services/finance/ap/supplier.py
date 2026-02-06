@@ -6,12 +6,11 @@ Manages vendor/supplier records, validation, and lifecycle.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any, List, Optional
 from uuid import UUID
-
-from decimal import Decimal
 
 from fastapi import HTTPException
 from sqlalchemy import and_, func
@@ -19,15 +18,20 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.finance.ap.supplier import Supplier, SupplierType
-from app.models.finance.ap.supplier_invoice import SupplierInvoice, SupplierInvoiceStatus
+from app.models.finance.ap.supplier_invoice import (
+    SupplierInvoice,
+    SupplierInvoiceStatus,
+)
 from app.services.common import coerce_uuid
-from app.services.response import ListResponseMixin
 from app.services.finance.common import (
-    validate_unique_code,
+    apply_search_filter,
     get_org_scoped_entity,
     toggle_entity_status,
-    apply_search_filter,
+    validate_unique_code,
 )
+from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -43,7 +47,9 @@ class SupplierInput:
     supplier_code: str
     supplier_type: SupplierType
     supplier_name: str  # Maps to model: legal_name
-    default_payable_account_id: Optional[UUID] = None  # Maps to model: ap_control_account_id
+    default_payable_account_id: Optional[UUID] = (
+        None  # Maps to model: ap_control_account_id
+    )
     trading_name: Optional[str] = None
     tax_id: Optional[str] = None  # Maps to model: tax_identification_number
     registration_number: Optional[str] = None
@@ -187,15 +193,21 @@ class SupplierService(ListResponseMixin):
         # Update fields - map template-friendly names to model field names
         supplier.supplier_code = input.supplier_code
         supplier.supplier_type = input.supplier_type
-        supplier.legal_name = input.supplier_name  # template: supplier_name → model: legal_name
+        supplier.legal_name = (
+            input.supplier_name
+        )  # template: supplier_name → model: legal_name
         supplier.trading_name = input.trading_name
-        supplier.tax_identification_number = input.tax_id  # template: tax_id → model: tax_identification_number
+        supplier.tax_identification_number = (
+            input.tax_id
+        )  # template: tax_id → model: tax_identification_number
         supplier.registration_number = input.registration_number
         supplier.payment_terms_days = input.payment_terms_days
         supplier.currency_code = input.currency_code
         supplier.default_expense_account_id = input.default_expense_account_id
         if input.default_payable_account_id is not None:
-            supplier.ap_control_account_id = input.default_payable_account_id  # template: default_payable_account_id → model: ap_control_account_id
+            supplier.ap_control_account_id = (
+                input.default_payable_account_id
+            )  # template: default_payable_account_id → model: ap_control_account_id
         supplier.supplier_group_id = input.supplier_group_id
         supplier.is_related_party = input.is_related_party
         supplier.related_party_relationship = input.related_party_relationship
@@ -273,7 +285,10 @@ class SupplierService(ListResponseMixin):
 
         # Update mapped fields (template name → model name)
         for template_field, model_field in field_mapping.items():
-            if template_field in update_data and update_data[template_field] is not None:
+            if (
+                template_field in update_data
+                and update_data[template_field] is not None
+            ):
                 setattr(supplier, model_field, update_data[template_field])
 
         # Update direct fields (same name in both)
@@ -307,7 +322,14 @@ class SupplierService(ListResponseMixin):
 
         # Note: balance_due is a @property, so we compute it inline for SQL
         outstanding_balance = (
-            db.query(func.coalesce(func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), Decimal("0")))
+            db.query(
+                func.coalesce(
+                    func.sum(
+                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
+                    ),
+                    Decimal("0"),
+                )
+            )
             .filter(
                 and_(
                     SupplierInvoice.supplier_id == supplier.supplier_id,

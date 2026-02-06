@@ -33,6 +33,11 @@ from app.services.automation.safe_template import (
     SAFE_FILTERS,
     SAFE_GLOBALS,
 )
+from app.services.formatters import (
+    format_currency_compact,
+    format_date as _base_format_date,
+    format_datetime as _base_format_datetime,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -74,27 +79,17 @@ def _get_template_env() -> SandboxedEnvironment:
 
 def _format_currency(value: Decimal | float | int | None, decimals: int = 2) -> str:
     """Format a number as currency with thousands separator."""
-    if value is None:
-        return "0.00"
-    return f"{float(value):,.{decimals}f}"
+    return format_currency_compact(value, none_value="0.00", decimal_places=decimals)
 
 
 def _format_date(value: date | datetime | None, fmt: str = "%d %B %Y") -> str:
     """Format a date value."""
-    if value is None:
-        return ""
-    if isinstance(value, datetime):
-        value = value.date()
-    return value.strftime(fmt)
+    return _base_format_date(value, fmt=fmt)
 
 
-def _format_datetime(
-    value: datetime | None, fmt: str = "%d %B %Y at %H:%M"
-) -> str:
+def _format_datetime(value: datetime | None, fmt: str = "%d %B %Y at %H:%M") -> str:
     """Format a datetime value."""
-    if value is None:
-        return ""
-    return value.strftime(fmt)
+    return _base_format_datetime(value, fmt=fmt)
 
 
 class DocumentGeneratorError(Exception):
@@ -243,7 +238,9 @@ class DocumentGeneratorService:
         base = env.get_template(base_template)
 
         # SECURITY: Sanitize CSS to prevent script injection
-        sanitized_css = self._sanitize_css(template.css_styles) if template.css_styles else ""
+        sanitized_css = (
+            self._sanitize_css(template.css_styles) if template.css_styles else ""
+        )
 
         full_context = {
             "content": rendered_content,
@@ -282,22 +279,24 @@ class DocumentGeneratorService:
             return ""
 
         # Remove any HTML tags (including script, style, etc.)
-        css = re.sub(r'<[^>]+>', '', css)
+        css = re.sub(r"<[^>]+>", "", css)
 
         # Remove JavaScript protocol URLs
-        css = re.sub(r'javascript\s*:', '', css, flags=re.IGNORECASE)
+        css = re.sub(r"javascript\s*:", "", css, flags=re.IGNORECASE)
 
         # Remove CSS expressions (old IE vulnerability)
-        css = re.sub(r'expression\s*\(', '', css, flags=re.IGNORECASE)
+        css = re.sub(r"expression\s*\(", "", css, flags=re.IGNORECASE)
 
         # Remove behavior property (IE)
-        css = re.sub(r'behavior\s*:', '', css, flags=re.IGNORECASE)
+        css = re.sub(r"behavior\s*:", "", css, flags=re.IGNORECASE)
 
         # Remove @import with http/https URLs (allow local imports)
-        css = re.sub(r'@import\s+url\s*\(["\']?https?://[^)]+\)', '', css, flags=re.IGNORECASE)
+        css = re.sub(
+            r'@import\s+url\s*\(["\']?https?://[^)]+\)', "", css, flags=re.IGNORECASE
+        )
 
         # Remove -moz-binding (Firefox XSS vector)
-        css = re.sub(r'-moz-binding\s*:', '', css, flags=re.IGNORECASE)
+        css = re.sub(r"-moz-binding\s*:", "", css, flags=re.IGNORECASE)
 
         return css.strip()
 
@@ -365,7 +364,9 @@ class DocumentGeneratorService:
             html = HTML(string=html_content)
             pdf_bytes: bytes = html.write_pdf()
         except Exception as e:
-            logger.exception("PDF generation failed for template %s", template.template_id)
+            logger.exception(
+                "PDF generation failed for template %s", template.template_id
+            )
             raise PDFGenerationError(f"PDF generation failed: {e}")
 
         # Calculate hash
@@ -484,11 +485,15 @@ class DocumentGeneratorService:
         entity_id: uuid_module.UUID,
     ) -> list[GeneratedDocument]:
         """Get all generated documents for an entity."""
-        stmt = select(GeneratedDocument).where(
-            GeneratedDocument.organization_id == organization_id,
-            GeneratedDocument.entity_type == entity_type,
-            GeneratedDocument.entity_id == entity_id,
-        ).order_by(GeneratedDocument.created_at.desc())
+        stmt = (
+            select(GeneratedDocument)
+            .where(
+                GeneratedDocument.organization_id == organization_id,
+                GeneratedDocument.entity_type == entity_type,
+                GeneratedDocument.entity_id == entity_id,
+            )
+            .order_by(GeneratedDocument.created_at.desc())
+        )
         return list(self.db.scalars(stmt).all())
 
     def _save_pdf_file(
@@ -514,9 +519,7 @@ class DocumentGeneratorService:
 
         return f"{organization_id}/{filename}"
 
-    def _sanitize_context_for_snapshot(
-        self, context: dict[str, Any]
-    ) -> dict[str, Any]:
+    def _sanitize_context_for_snapshot(self, context: dict[str, Any]) -> dict[str, Any]:
         """
         Sanitize context for storage as JSON snapshot.
 
@@ -543,6 +546,7 @@ class DocumentGeneratorService:
                 # Recursively handle nested structures
                 try:
                     import json
+
                     json.dumps(value)  # Test if serializable
                     snapshot[key] = value
                 except (TypeError, ValueError):

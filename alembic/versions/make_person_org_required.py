@@ -9,6 +9,7 @@ all users are properly scoped to a tenant/organization.
 
 Before running this migration, ensure all existing people have an organization_id set.
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -23,7 +24,6 @@ depends_on = None
 
 # Default organization UUID for migrating orphaned users
 DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001"
-
 
 
 def upgrade() -> None:

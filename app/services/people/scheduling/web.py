@@ -3,8 +3,10 @@ Scheduling web view service.
 
 Provides view-focused data and operations for scheduling web routes.
 """
+
 from __future__ import annotations
 
+import logging
 from datetime import date
 from typing import Any, Optional, cast
 from urllib.parse import quote
@@ -15,23 +17,24 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.people.attendance.shift_type import ShiftType
+from app.models.people.hr.department import Department
+from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.scheduling import (
     RotationType,
-    ScheduleStatus,
     SwapRequestStatus,
 )
-from app.models.people.hr.employee import Employee, EmployeeStatus
-from app.models.people.hr.department import Department
-from app.models.people.attendance.shift_type import ShiftType
 from app.models.person import Person
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.scheduling import (
-    SchedulingService,
     ScheduleGenerator,
+    SchedulingService,
     SwapService,
 )
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
+
+logger = logging.getLogger(__name__)
 
 
 class SchedulingWebService:
@@ -129,31 +132,43 @@ class SchedulingWebService:
 
         patterns = []
         for p in result.items:
-            patterns.append({
-                "shift_pattern_id": str(p.shift_pattern_id),
-                "pattern_code": p.pattern_code,
-                "pattern_name": p.pattern_name,
-                "rotation_type": p.rotation_type.value,
-                "cycle_weeks": p.cycle_weeks,
-                "work_days": p.work_days,
-                "day_shift_name": p.day_shift_type.shift_name if p.day_shift_type else "",
-                "night_shift_name": p.night_shift_type.shift_name if p.night_shift_type else "-",
-                "is_active": p.is_active,
-            })
+            patterns.append(
+                {
+                    "shift_pattern_id": str(p.shift_pattern_id),
+                    "pattern_code": p.pattern_code,
+                    "pattern_name": p.pattern_name,
+                    "rotation_type": p.rotation_type.value,
+                    "cycle_weeks": p.cycle_weeks,
+                    "work_days": p.work_days,
+                    "day_shift_name": p.day_shift_type.shift_name
+                    if p.day_shift_type
+                    else "",
+                    "night_shift_name": p.night_shift_type.shift_name
+                    if p.night_shift_type
+                    else "-",
+                    "is_active": p.is_active,
+                }
+            )
 
-        total_pages = (result.total + pagination.limit - 1) // pagination.limit if pagination.limit > 0 else 1
+        total_pages = (
+            (result.total + pagination.limit - 1) // pagination.limit
+            if pagination.limit > 0
+            else 1
+        )
 
         ctx = base_context(request, auth, "Shift Patterns", "people", db=db)
-        ctx.update({
-            "patterns": patterns,
-            "search": search or "",
-            "is_active": is_active or "",
-            "page": page,
-            "total_pages": total_pages,
-            "has_prev": page > 1,
-            "has_next": page < total_pages,
-            "rotation_types": [r.value for r in RotationType],
-        })
+        ctx.update(
+            {
+                "patterns": patterns,
+                "search": search or "",
+                "is_active": is_active or "",
+                "page": page,
+                "total_pages": total_pages,
+                "has_prev": page > 1,
+                "has_next": page < total_pages,
+                "rotation_types": [r.value for r in RotationType],
+            }
+        )
 
         return templates.TemplateResponse("people/scheduling/patterns.html", ctx)
 
@@ -168,13 +183,15 @@ class SchedulingWebService:
         shift_types = SchedulingWebService._get_shift_types(db, org_id)
 
         ctx = base_context(request, auth, "New Shift Pattern", "people", db=db)
-        ctx.update({
-            "shift_types": shift_types,
-            "rotation_types": [r.value for r in RotationType],
-            "work_days_options": ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
-            "pattern": {},
-            "error": None,
-        })
+        ctx.update(
+            {
+                "shift_types": shift_types,
+                "rotation_types": [r.value for r in RotationType],
+                "work_days_options": ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
+                "pattern": {},
+                "error": None,
+            }
+        )
 
         return templates.TemplateResponse("people/scheduling/pattern_form.html", ctx)
 
@@ -192,14 +209,19 @@ class SchedulingWebService:
 
         pattern_code = SchedulingWebService._get_form_str(form_data, "pattern_code")
         pattern_name = SchedulingWebService._get_form_str(form_data, "pattern_name")
-        description = SchedulingWebService._get_form_str(form_data, "description") or None
-        rotation_type = SchedulingWebService._get_form_str(
-            form_data, "rotation_type", "DAY_ONLY"
-        ) or "DAY_ONLY"
+        description = (
+            SchedulingWebService._get_form_str(form_data, "description") or None
+        )
+        rotation_type = (
+            SchedulingWebService._get_form_str(form_data, "rotation_type", "DAY_ONLY")
+            or "DAY_ONLY"
+        )
         cycle_weeks = int(
             SchedulingWebService._get_form_str(form_data, "cycle_weeks", "1") or "1"
         )
-        work_days = [day for day in form_data.getlist("work_days") if isinstance(day, str)]
+        work_days = [
+            day for day in form_data.getlist("work_days") if isinstance(day, str)
+        ]
         day_shift_type_id = SchedulingWebService._parse_uuid(
             SchedulingWebService._get_form_str(form_data, "day_shift_type_id")
         )
@@ -214,21 +236,33 @@ class SchedulingWebService:
             else:
                 error_message = "Pattern code, name, and day shift type are required."
             ctx = base_context(request, auth, "New Shift Pattern", "people", db=db)
-            ctx.update({
-                "shift_types": shift_types,
-                "rotation_types": [r.value for r in RotationType],
-                "work_days_options": ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
-                "pattern": {
-                    "pattern_code": pattern_code,
-                    "pattern_name": pattern_name,
-                    "description": description,
-                    "rotation_type": rotation_type,
-                    "cycle_weeks": cycle_weeks,
-                    "work_days": work_days,
-                },
-                "error": error_message,
-            })
-            return templates.TemplateResponse("people/scheduling/pattern_form.html", ctx)
+            ctx.update(
+                {
+                    "shift_types": shift_types,
+                    "rotation_types": [r.value for r in RotationType],
+                    "work_days_options": [
+                        "MON",
+                        "TUE",
+                        "WED",
+                        "THU",
+                        "FRI",
+                        "SAT",
+                        "SUN",
+                    ],
+                    "pattern": {
+                        "pattern_code": pattern_code,
+                        "pattern_name": pattern_name,
+                        "description": description,
+                        "rotation_type": rotation_type,
+                        "cycle_weeks": cycle_weeks,
+                        "work_days": work_days,
+                    },
+                    "error": error_message,
+                }
+            )
+            return templates.TemplateResponse(
+                "people/scheduling/pattern_form.html", ctx
+            )
 
         try:
             assert day_shift_type_id is not None
@@ -240,31 +274,47 @@ class SchedulingWebService:
                 description=description,
                 rotation_type=RotationType(rotation_type),
                 cycle_weeks=cycle_weeks,
-                work_days=work_days if work_days else ["MON", "TUE", "WED", "THU", "FRI"],
+                work_days=work_days
+                if work_days
+                else ["MON", "TUE", "WED", "THU", "FRI"],
                 day_shift_type_id=day_shift_type_id,
                 night_shift_type_id=night_shift_type_id,
             )
             db.commit()
-            return RedirectResponse("/people/scheduling/patterns?success=created", status_code=303)
+            return RedirectResponse(
+                "/people/scheduling/patterns?success=created", status_code=303
+            )
         except Exception as e:
             db.rollback()
             shift_types = SchedulingWebService._get_shift_types(db, org_id)
             ctx = base_context(request, auth, "New Shift Pattern", "people", db=db)
-            ctx.update({
-                "shift_types": shift_types,
-                "rotation_types": [r.value for r in RotationType],
-                "work_days_options": ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
-                "pattern": {
-                    "pattern_code": pattern_code,
-                    "pattern_name": pattern_name,
-                    "description": description,
-                    "rotation_type": rotation_type,
-                    "cycle_weeks": cycle_weeks,
-                    "work_days": work_days,
-                },
-                "error": str(e),
-            })
-            return templates.TemplateResponse("people/scheduling/pattern_form.html", ctx)
+            ctx.update(
+                {
+                    "shift_types": shift_types,
+                    "rotation_types": [r.value for r in RotationType],
+                    "work_days_options": [
+                        "MON",
+                        "TUE",
+                        "WED",
+                        "THU",
+                        "FRI",
+                        "SAT",
+                        "SUN",
+                    ],
+                    "pattern": {
+                        "pattern_code": pattern_code,
+                        "pattern_name": pattern_name,
+                        "description": description,
+                        "rotation_type": rotation_type,
+                        "cycle_weeks": cycle_weeks,
+                        "work_days": work_days,
+                    },
+                    "error": str(e),
+                }
+            )
+            return templates.TemplateResponse(
+                "people/scheduling/pattern_form.html", ctx
+            )
 
     @staticmethod
     def edit_pattern_form_response(
@@ -281,25 +331,29 @@ class SchedulingWebService:
         shift_types = SchedulingWebService._get_shift_types(db, org_id)
 
         ctx = base_context(request, auth, "Edit Shift Pattern", "people", db=db)
-        ctx.update({
-            "shift_types": shift_types,
-            "rotation_types": [r.value for r in RotationType],
-            "work_days_options": ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
-            "pattern": {
-                "shift_pattern_id": str(pattern.shift_pattern_id),
-                "pattern_code": pattern.pattern_code,
-                "pattern_name": pattern.pattern_name,
-                "description": pattern.description or "",
-                "rotation_type": pattern.rotation_type.value,
-                "cycle_weeks": pattern.cycle_weeks,
-                "work_days": pattern.work_days,
-                "day_shift_type_id": str(pattern.day_shift_type_id),
-                "night_shift_type_id": str(pattern.night_shift_type_id) if pattern.night_shift_type_id else "",
-                "is_active": pattern.is_active,
-            },
-            "error": None,
-            "is_edit": True,
-        })
+        ctx.update(
+            {
+                "shift_types": shift_types,
+                "rotation_types": [r.value for r in RotationType],
+                "work_days_options": ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
+                "pattern": {
+                    "shift_pattern_id": str(pattern.shift_pattern_id),
+                    "pattern_code": pattern.pattern_code,
+                    "pattern_name": pattern.pattern_name,
+                    "description": pattern.description or "",
+                    "rotation_type": pattern.rotation_type.value,
+                    "cycle_weeks": pattern.cycle_weeks,
+                    "work_days": pattern.work_days,
+                    "day_shift_type_id": str(pattern.day_shift_type_id),
+                    "night_shift_type_id": str(pattern.night_shift_type_id)
+                    if pattern.night_shift_type_id
+                    else "",
+                    "is_active": pattern.is_active,
+                },
+                "error": None,
+                "is_edit": True,
+            }
+        )
 
         return templates.TemplateResponse("people/scheduling/pattern_form.html", ctx)
 
@@ -317,7 +371,9 @@ class SchedulingWebService:
 
         try:
             svc = SchedulingService(db)
-            work_days = [day for day in form_data.getlist("work_days") if isinstance(day, str)]
+            work_days = [
+                day for day in form_data.getlist("work_days") if isinstance(day, str)
+            ]
             night_shift_type_id = SchedulingWebService._parse_uuid(
                 SchedulingWebService._get_form_str(form_data, "night_shift_type_id")
             )
@@ -325,27 +381,41 @@ class SchedulingWebService:
             svc.update_pattern(
                 org_id,
                 pattern_uuid,
-                pattern_code=SchedulingWebService._get_form_str(form_data, "pattern_code"),
-                pattern_name=SchedulingWebService._get_form_str(form_data, "pattern_name"),
-                description=SchedulingWebService._get_form_str(form_data, "description") or None,
+                pattern_code=SchedulingWebService._get_form_str(
+                    form_data, "pattern_code"
+                ),
+                pattern_name=SchedulingWebService._get_form_str(
+                    form_data, "pattern_name"
+                ),
+                description=SchedulingWebService._get_form_str(form_data, "description")
+                or None,
                 rotation_type=RotationType(
-                    SchedulingWebService._get_form_str(form_data, "rotation_type", "DAY_ONLY") or "DAY_ONLY"
+                    SchedulingWebService._get_form_str(
+                        form_data, "rotation_type", "DAY_ONLY"
+                    )
+                    or "DAY_ONLY"
                 ),
                 cycle_weeks=int(
-                    SchedulingWebService._get_form_str(form_data, "cycle_weeks", "1") or "1"
+                    SchedulingWebService._get_form_str(form_data, "cycle_weeks", "1")
+                    or "1"
                 ),
                 work_days=work_days if work_days else None,
                 day_shift_type_id=SchedulingWebService._parse_uuid(
                     SchedulingWebService._get_form_str(form_data, "day_shift_type_id")
                 ),
                 night_shift_type_id=night_shift_type_id,
-                is_active=SchedulingWebService._get_form_str(form_data, "is_active") == "on",
+                is_active=SchedulingWebService._get_form_str(form_data, "is_active")
+                == "on",
             )
             db.commit()
-            return RedirectResponse("/people/scheduling/patterns?success=updated", status_code=303)
-        except Exception as e:
+            return RedirectResponse(
+                "/people/scheduling/patterns?success=updated", status_code=303
+            )
+        except Exception:
             db.rollback()
-            return SchedulingWebService.edit_pattern_form_response(request, auth, db, pattern_id)
+            return SchedulingWebService.edit_pattern_form_response(
+                request, auth, db, pattern_id
+            )
 
     # =========================================================================
     # Pattern Assignments
@@ -375,32 +445,50 @@ class SchedulingWebService:
 
         assignments = []
         for a in result.items:
-            assignments.append({
-                "pattern_assignment_id": str(a.pattern_assignment_id),
-                "employee_name": a.employee.full_name if a.employee else "",
-                "employee_code": a.employee.employee_code if a.employee else "",
-                "department_name": a.department.department_name if a.department else "",
-                "pattern_name": a.shift_pattern.pattern_name if a.shift_pattern else "",
-                "pattern_code": a.shift_pattern.pattern_code if a.shift_pattern else "",
-                "rotation_week_offset": a.rotation_week_offset,
-                "effective_from": a.effective_from.isoformat() if a.effective_from else "",
-                "effective_to": a.effective_to.isoformat() if a.effective_to else "-",
-                "is_active": a.is_active,
-            })
+            assignments.append(
+                {
+                    "pattern_assignment_id": str(a.pattern_assignment_id),
+                    "employee_name": a.employee.full_name if a.employee else "",
+                    "employee_code": a.employee.employee_code if a.employee else "",
+                    "department_name": a.department.department_name
+                    if a.department
+                    else "",
+                    "pattern_name": a.shift_pattern.pattern_name
+                    if a.shift_pattern
+                    else "",
+                    "pattern_code": a.shift_pattern.pattern_code
+                    if a.shift_pattern
+                    else "",
+                    "rotation_week_offset": a.rotation_week_offset,
+                    "effective_from": a.effective_from.isoformat()
+                    if a.effective_from
+                    else "",
+                    "effective_to": a.effective_to.isoformat()
+                    if a.effective_to
+                    else "-",
+                    "is_active": a.is_active,
+                }
+            )
 
         departments = SchedulingWebService._get_departments(db, org_id)
-        total_pages = (result.total + pagination.limit - 1) // pagination.limit if pagination.limit > 0 else 1
+        total_pages = (
+            (result.total + pagination.limit - 1) // pagination.limit
+            if pagination.limit > 0
+            else 1
+        )
 
         ctx = base_context(request, auth, "Shift Assignments", "people", db=db)
-        ctx.update({
-            "assignments": assignments,
-            "departments": departments,
-            "department_id": department_id or "",
-            "page": page,
-            "total_pages": total_pages,
-            "has_prev": page > 1,
-            "has_next": page < total_pages,
-        })
+        ctx.update(
+            {
+                "assignments": assignments,
+                "departments": departments,
+                "department_id": department_id or "",
+                "page": page,
+                "total_pages": total_pages,
+                "has_prev": page > 1,
+                "has_next": page < total_pages,
+            }
+        )
 
         return templates.TemplateResponse("people/scheduling/assignments.html", ctx)
 
@@ -418,13 +506,15 @@ class SchedulingWebService:
         patterns_result = svc.list_patterns(org_id, is_active=True)
 
         ctx = base_context(request, auth, "New Shift Assignment", "people", db=db)
-        ctx.update({
-            "employees": employees,
-            "departments": departments,
-            "patterns": patterns_result.items,
-            "assignment": {},
-            "error": None,
-        })
+        ctx.update(
+            {
+                "employees": employees,
+                "departments": departments,
+                "patterns": patterns_result.items,
+                "assignment": {},
+                "error": None,
+            }
+        )
 
         return templates.TemplateResponse("people/scheduling/assignment_form.html", ctx)
 
@@ -454,7 +544,8 @@ class SchedulingWebService:
             SchedulingWebService._get_form_str(form_data, "effective_to")
         )
         rotation_week_offset = int(
-            SchedulingWebService._get_form_str(form_data, "rotation_week_offset", "0") or "0"
+            SchedulingWebService._get_form_str(form_data, "rotation_week_offset", "0")
+            or "0"
         )
 
         if (
@@ -469,14 +560,18 @@ class SchedulingWebService:
             patterns_result = svc.list_patterns(org_id, is_active=True)
 
             ctx = base_context(request, auth, "New Shift Assignment", "people", db=db)
-            ctx.update({
-                "employees": employees,
-                "departments": departments,
-                "patterns": patterns_result.items,
-                "assignment": {},
-                "error": "Employee, department, pattern, and effective from date are required.",
-            })
-            return templates.TemplateResponse("people/scheduling/assignment_form.html", ctx)
+            ctx.update(
+                {
+                    "employees": employees,
+                    "departments": departments,
+                    "patterns": patterns_result.items,
+                    "assignment": {},
+                    "error": "Employee, department, pattern, and effective from date are required.",
+                }
+            )
+            return templates.TemplateResponse(
+                "people/scheduling/assignment_form.html", ctx
+            )
 
         try:
             svc = SchedulingService(db)
@@ -490,7 +585,9 @@ class SchedulingWebService:
                 rotation_week_offset=rotation_week_offset,
             )
             db.commit()
-            return RedirectResponse("/people/scheduling/assignments?success=created", status_code=303)
+            return RedirectResponse(
+                "/people/scheduling/assignments?success=created", status_code=303
+            )
         except Exception as e:
             db.rollback()
             employees = SchedulingWebService._get_employees(db, org_id)
@@ -499,14 +596,18 @@ class SchedulingWebService:
             patterns_result = svc.list_patterns(org_id, is_active=True)
 
             ctx = base_context(request, auth, "New Shift Assignment", "people", db=db)
-            ctx.update({
-                "employees": employees,
-                "departments": departments,
-                "patterns": patterns_result.items,
-                "assignment": {},
-                "error": str(e),
-            })
-            return templates.TemplateResponse("people/scheduling/assignment_form.html", ctx)
+            ctx.update(
+                {
+                    "employees": employees,
+                    "departments": departments,
+                    "patterns": patterns_result.items,
+                    "assignment": {},
+                    "error": str(e),
+                }
+            )
+            return templates.TemplateResponse(
+                "people/scheduling/assignment_form.html", ctx
+            )
 
     # =========================================================================
     # Schedules
@@ -541,29 +642,37 @@ class SchedulingWebService:
 
         schedules = []
         for s in result.items:
-            schedules.append({
-                "shift_schedule_id": str(s.shift_schedule_id),
-                "employee_name": s.employee.full_name if s.employee else "",
-                "employee_code": s.employee.employee_code if s.employee else "",
-                "shift_date": s.shift_date.isoformat(),
-                "shift_date_display": s.shift_date.strftime("%a %d"),
-                "shift_name": s.shift_type.shift_name if s.shift_type else "",
-                "shift_code": s.shift_type.shift_code if s.shift_type else "",
-                "status": s.status.value,
-            })
+            schedules.append(
+                {
+                    "shift_schedule_id": str(s.shift_schedule_id),
+                    "employee_name": s.employee.full_name if s.employee else "",
+                    "employee_code": s.employee.employee_code if s.employee else "",
+                    "shift_date": s.shift_date.isoformat(),
+                    "shift_date_display": s.shift_date.strftime("%a %d"),
+                    "shift_name": s.shift_type.shift_name if s.shift_type else "",
+                    "shift_code": s.shift_type.shift_code if s.shift_type else "",
+                    "status": s.status.value,
+                }
+            )
 
         departments = SchedulingWebService._get_departments(db, org_id)
-        schedule_status = svc.get_schedule_status_for_month(org_id, dept_uuid, year_month) if dept_uuid else None
+        schedule_status = (
+            svc.get_schedule_status_for_month(org_id, dept_uuid, year_month)
+            if dept_uuid
+            else None
+        )
 
         ctx = base_context(request, auth, "Schedules", "people", db=db)
-        ctx.update({
-            "schedules": schedules,
-            "departments": departments,
-            "department_id": department_id or "",
-            "year_month": year_month,
-            "schedule_status": schedule_status.value if schedule_status else None,
-            "page": page,
-        })
+        ctx.update(
+            {
+                "schedules": schedules,
+                "departments": departments,
+                "department_id": department_id or "",
+                "year_month": year_month,
+                "schedule_status": schedule_status.value if schedule_status else None,
+                "page": page,
+            }
+        )
 
         return templates.TemplateResponse("people/scheduling/schedules.html", ctx)
 
@@ -578,15 +687,19 @@ class SchedulingWebService:
         departments = SchedulingWebService._get_departments(db, org_id)
 
         ctx = base_context(request, auth, "Generate Schedule", "people", db=db)
-        ctx.update({
-            "departments": departments,
-            "department_id": "",
-            "year_month": date.today().strftime("%Y-%m"),
-            "error": None,
-            "result": None,
-        })
+        ctx.update(
+            {
+                "departments": departments,
+                "department_id": "",
+                "year_month": date.today().strftime("%Y-%m"),
+                "error": None,
+                "result": None,
+            }
+        )
 
-        return templates.TemplateResponse("people/scheduling/schedule_generate.html", ctx)
+        return templates.TemplateResponse(
+            "people/scheduling/schedule_generate.html", ctx
+        )
 
     @staticmethod
     async def generate_schedule_response(
@@ -609,14 +722,20 @@ class SchedulingWebService:
 
         if not department_id or not year_month:
             ctx = base_context(request, auth, "Generate Schedule", "people", db=db)
-            ctx.update({
-                "departments": departments,
-                "department_id": SchedulingWebService._get_form_str(form_data, "department_id"),
-                "year_month": year_month or date.today().strftime("%Y-%m"),
-                "error": "Department and month are required.",
-                "result": None,
-            })
-            return templates.TemplateResponse("people/scheduling/schedule_generate.html", ctx)
+            ctx.update(
+                {
+                    "departments": departments,
+                    "department_id": SchedulingWebService._get_form_str(
+                        form_data, "department_id"
+                    ),
+                    "year_month": year_month or date.today().strftime("%Y-%m"),
+                    "error": "Department and month are required.",
+                    "result": None,
+                }
+            )
+            return templates.TemplateResponse(
+                "people/scheduling/schedule_generate.html", ctx
+            )
 
         try:
             generator = ScheduleGenerator(db)
@@ -628,25 +747,37 @@ class SchedulingWebService:
             db.commit()
 
             ctx = base_context(request, auth, "Generate Schedule", "people", db=db)
-            ctx.update({
-                "departments": departments,
-                "department_id": SchedulingWebService._get_form_str(form_data, "department_id"),
-                "year_month": year_month,
-                "error": None,
-                "result": result,
-            })
-            return templates.TemplateResponse("people/scheduling/schedule_generate.html", ctx)
+            ctx.update(
+                {
+                    "departments": departments,
+                    "department_id": SchedulingWebService._get_form_str(
+                        form_data, "department_id"
+                    ),
+                    "year_month": year_month,
+                    "error": None,
+                    "result": result,
+                }
+            )
+            return templates.TemplateResponse(
+                "people/scheduling/schedule_generate.html", ctx
+            )
         except Exception as e:
             db.rollback()
             ctx = base_context(request, auth, "Generate Schedule", "people", db=db)
-            ctx.update({
-                "departments": departments,
-                "department_id": SchedulingWebService._get_form_str(form_data, "department_id"),
-                "year_month": year_month,
-                "error": str(e),
-                "result": None,
-            })
-            return templates.TemplateResponse("people/scheduling/schedule_generate.html", ctx)
+            ctx.update(
+                {
+                    "departments": departments,
+                    "department_id": SchedulingWebService._get_form_str(
+                        form_data, "department_id"
+                    ),
+                    "year_month": year_month,
+                    "error": str(e),
+                    "result": None,
+                }
+            )
+            return templates.TemplateResponse(
+                "people/scheduling/schedule_generate.html", ctx
+            )
 
     @staticmethod
     async def publish_schedule_response(
@@ -722,31 +853,51 @@ class SchedulingWebService:
 
         swap_requests = []
         for sr in result.items:
-            swap_requests.append({
-                "swap_request_id": str(sr.swap_request_id),
-                "requester_name": sr.requester.full_name if sr.requester else "",
-                "target_name": sr.target_employee.full_name if sr.target_employee else "",
-                "requester_date": sr.requester_schedule.shift_date.isoformat() if sr.requester_schedule else "",
-                "target_date": sr.target_schedule.shift_date.isoformat() if sr.target_schedule else "",
-                "requester_shift": sr.requester_schedule.shift_type.shift_name if sr.requester_schedule and sr.requester_schedule.shift_type else "",
-                "target_shift": sr.target_schedule.shift_type.shift_name if sr.target_schedule and sr.target_schedule.shift_type else "",
-                "status": sr.status.value,
-                "reason": sr.reason or "",
-                "created_at": sr.created_at.strftime("%Y-%m-%d %H:%M") if sr.created_at else "",
-            })
+            swap_requests.append(
+                {
+                    "swap_request_id": str(sr.swap_request_id),
+                    "requester_name": sr.requester.full_name if sr.requester else "",
+                    "target_name": sr.target_employee.full_name
+                    if sr.target_employee
+                    else "",
+                    "requester_date": sr.requester_schedule.shift_date.isoformat()
+                    if sr.requester_schedule
+                    else "",
+                    "target_date": sr.target_schedule.shift_date.isoformat()
+                    if sr.target_schedule
+                    else "",
+                    "requester_shift": sr.requester_schedule.shift_type.shift_name
+                    if sr.requester_schedule and sr.requester_schedule.shift_type
+                    else "",
+                    "target_shift": sr.target_schedule.shift_type.shift_name
+                    if sr.target_schedule and sr.target_schedule.shift_type
+                    else "",
+                    "status": sr.status.value,
+                    "reason": sr.reason or "",
+                    "created_at": sr.created_at.strftime("%Y-%m-%d %H:%M")
+                    if sr.created_at
+                    else "",
+                }
+            )
 
-        total_pages = (result.total + pagination.limit - 1) // pagination.limit if pagination.limit > 0 else 1
+        total_pages = (
+            (result.total + pagination.limit - 1) // pagination.limit
+            if pagination.limit > 0
+            else 1
+        )
 
         ctx = base_context(request, auth, "Swap Requests", "people", db=db)
-        ctx.update({
-            "swap_requests": swap_requests,
-            "status": status or "",
-            "status_options": [s.value for s in SwapRequestStatus],
-            "page": page,
-            "total_pages": total_pages,
-            "has_prev": page > 1,
-            "has_next": page < total_pages,
-        })
+        ctx.update(
+            {
+                "swap_requests": swap_requests,
+                "status": status or "",
+                "status_options": [s.value for s in SwapRequestStatus],
+                "page": page,
+                "total_pages": total_pages,
+                "has_prev": page > 1,
+                "has_next": page < total_pages,
+            }
+        )
 
         return templates.TemplateResponse("people/scheduling/swap_requests.html", ctx)
 

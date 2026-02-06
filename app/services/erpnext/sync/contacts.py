@@ -1,6 +1,8 @@
 """
 Contact Sync Service - ERPNext to DotMac ERP (Customers/Suppliers).
 """
+
+import logging
 import uuid
 from datetime import datetime
 from typing import Any, Optional
@@ -8,13 +10,14 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.finance.gl.account import Account
-from app.models.finance.ar.customer import Customer, CustomerType
 from app.models.finance.ap.supplier import Supplier, SupplierType
+from app.models.finance.ar.customer import Customer, CustomerType
+from app.models.finance.gl.account import Account
 from app.services.erpnext.mappings.contacts import CustomerMapping, SupplierMapping
 
 from .base import BaseSyncService
 
+logger = logging.getLogger(__name__)
 
 # Default account codes (from Chart of Accounts)
 DEFAULT_AP_ACCOUNT = "2000"  # Trade Payables
@@ -99,7 +102,9 @@ class CustomerSyncService(BaseSyncService[Customer]):
         data.pop("_source_modified", None)
 
         # Map customer type - stored as VARCHAR
-        customer_type_value = CUSTOMER_TYPE_MAP.get(data.get("customer_type", ""), "COMPANY")
+        customer_type_value = CUSTOMER_TYPE_MAP.get(
+            data.get("customer_type", ""), "COMPANY"
+        )
         customer_type = CustomerType(customer_type_value)
 
         # Generate customer code from source name
@@ -232,7 +237,9 @@ class SupplierSyncService(BaseSyncService[Supplier]):
         data.pop("_source_modified", None)
 
         # Map supplier type - stored as VARCHAR enum
-        supplier_type_value = SUPPLIER_TYPE_MAP.get(data.get("supplier_type", ""), "VENDOR")
+        supplier_type_value = SUPPLIER_TYPE_MAP.get(
+            data.get("supplier_type", ""), "VENDOR"
+        )
         supplier_type = SupplierType(supplier_type_value)
 
         supplier_code = (data.get("supplier_code") or "SUPP")[:30]

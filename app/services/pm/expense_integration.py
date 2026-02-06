@@ -3,8 +3,10 @@ Expense Integration Service - PM Module.
 
 Business logic for linking expense claims to projects.
 """
+
 from __future__ import annotations
 
+import logging
 import uuid
 from decimal import Decimal
 from typing import TYPE_CHECKING, Dict, List, Optional, cast
@@ -12,7 +14,8 @@ from typing import TYPE_CHECKING, Dict, List, Optional, cast
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
-from app.services.common import NotFoundError
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.auth import Principal
@@ -78,7 +81,10 @@ class ProjectExpenseService:
         Returns aggregated expense data.
         """
         try:
-            from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
+            from app.models.expense.expense_claim import (
+                ExpenseClaim,
+                ExpenseClaimStatus,
+            )
         except ImportError:
             return {
                 "project_id": project_id,
@@ -95,9 +101,10 @@ class ProjectExpenseService:
         )
 
         # Total expenses
-        total_count = self.db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(base_where)
-        ) or 0
+        total_count = (
+            self.db.scalar(select(func.count(ExpenseClaim.claim_id)).where(base_where))
+            or 0
+        )
 
         total_amount = self.db.scalar(
             select(func.sum(ExpenseClaim.total_claimed_amount)).where(base_where)
@@ -137,9 +144,7 @@ class ProjectExpenseService:
             "expenses_by_category": expenses_by_category,
         }
 
-    def get_expense_by_category(
-        self, project_id: uuid.UUID
-    ) -> Dict[str, Decimal]:
+    def get_expense_by_category(self, project_id: uuid.UUID) -> Dict[str, Decimal]:
         """Get expenses grouped by category."""
         summary = self.get_expense_summary(project_id)
         return cast(dict[str, Decimal], summary.get("expenses_by_category", {}))

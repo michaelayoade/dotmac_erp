@@ -4,9 +4,9 @@ Revision ID: add_expense_claim_action_seq
 Revises: add_expense_cost_allocation
 Create Date: 2026-01-26
 """
+
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = "add_expense_claim_action_seq"
@@ -42,9 +42,7 @@ def upgrade() -> None:
     )
 
     # Create sequence for claim numbers
-    op.execute(
-        "CREATE SEQUENCE IF NOT EXISTS expense.expense_claim_number_seq"
-    )
+    op.execute("CREATE SEQUENCE IF NOT EXISTS expense.expense_claim_number_seq")
 
     # Align sequence with existing claim numbers to avoid duplicates
     op.execute(
@@ -73,7 +71,11 @@ def upgrade() -> None:
                 primary_key=True,
                 server_default=sa.text("gen_random_uuid()"),
             ),
-            sa.Column("organization_id", sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column(
+                "organization_id",
+                sa.dialects.postgresql.UUID(as_uuid=True),
+                nullable=False,
+            ),
             sa.Column(
                 "claim_id",
                 sa.dialects.postgresql.UUID(as_uuid=True),
@@ -116,8 +118,7 @@ def upgrade() -> None:
             "USING action_type::expense_claim_action_type"
         )
         op.execute(
-            "ALTER TABLE expense.expense_claim_action "
-            "ALTER COLUMN status DROP DEFAULT"
+            "ALTER TABLE expense.expense_claim_action ALTER COLUMN status DROP DEFAULT"
         )
         op.execute(
             "ALTER TABLE expense.expense_claim_action "
@@ -129,7 +130,10 @@ def upgrade() -> None:
             "ALTER COLUMN status SET DEFAULT 'STARTED'::expense_claim_action_status"
         )
     else:
-        columns = {col["name"] for col in inspector.get_columns("expense_claim_action", schema="expense")}
+        columns = {
+            col["name"]
+            for col in inspector.get_columns("expense_claim_action", schema="expense")
+        }
         if "action_type" in columns:
             op.execute(
                 "DO $$ BEGIN "
@@ -147,7 +151,9 @@ def upgrade() -> None:
         if "status" not in columns:
             op.add_column(
                 "expense_claim_action",
-                sa.Column("status", sa.Text(), nullable=False, server_default="STARTED"),
+                sa.Column(
+                    "status", sa.Text(), nullable=False, server_default="STARTED"
+                ),
                 schema="expense",
             )
             op.execute(

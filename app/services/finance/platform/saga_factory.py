@@ -8,7 +8,7 @@ lookup of orchestrators by saga type name.
 from __future__ import annotations
 
 import logging
-from typing import Optional, Type
+from typing import Optional
 
 from app.services.finance.platform.saga_orchestrator import SagaOrchestrator
 
@@ -36,8 +36,7 @@ class SagaFactory:
         saga_type = orchestrator.saga_type
         if saga_type in self._orchestrators:
             logger.warning(
-                "Replacing existing orchestrator for saga type: %s",
-                saga_type
+                "Replacing existing orchestrator for saga type: %s", saga_type
             )
         self._orchestrators[saga_type] = orchestrator
         logger.info("Registered saga orchestrator: %s", saga_type)

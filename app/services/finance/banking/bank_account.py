@@ -4,6 +4,7 @@ Bank Account Service.
 Provides CRUD operations for bank accounts and GL account linkage.
 """
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -22,6 +23,8 @@ from app.models.finance.banking.bank_account import (
 )
 from app.models.finance.gl.account import Account
 from app.services.common import coerce_uuid
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -62,7 +65,9 @@ class BankAccountService:
         # Validate GL account exists and is a cash/bank account
         gl_account = db.get(Account, input.gl_account_id)
         if not gl_account or gl_account.organization_id != org_id:
-            raise HTTPException(status_code=404, detail=f"GL account {input.gl_account_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"GL account {input.gl_account_id} not found"
+            )
 
         # Check for duplicate account number
         existing = db.execute(
@@ -219,12 +224,16 @@ class BankAccountService:
         org_id = coerce_uuid(organization_id)
         bank_account = db.get(BankAccount, bank_account_id)
         if not bank_account or bank_account.organization_id != org_id:
-            raise HTTPException(status_code=404, detail=f"Bank account {bank_account_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Bank account {bank_account_id} not found"
+            )
 
         # Validate GL account
         gl_account = db.get(Account, input.gl_account_id)
         if not gl_account or gl_account.organization_id != org_id:
-            raise HTTPException(status_code=404, detail=f"GL account {input.gl_account_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"GL account {input.gl_account_id} not found"
+            )
 
         # Update fields
         bank_account.bank_name = input.bank_name
@@ -278,7 +287,9 @@ class BankAccountService:
         org_id = coerce_uuid(organization_id)
         bank_account = db.get(BankAccount, bank_account_id)
         if not bank_account or bank_account.organization_id != org_id:
-            raise HTTPException(status_code=404, detail=f"Bank account {bank_account_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Bank account {bank_account_id} not found"
+            )
 
         bank_account.status = status
         bank_account.updated_by = updated_by
@@ -298,7 +309,9 @@ class BankAccountService:
         org_id = coerce_uuid(organization_id)
         bank_account = db.get(BankAccount, bank_account_id)
         if not bank_account or bank_account.organization_id != org_id:
-            raise HTTPException(status_code=404, detail=f"Bank account {bank_account_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Bank account {bank_account_id} not found"
+            )
 
         bank_account.last_reconciled_date = reconciled_date
         bank_account.last_reconciled_balance = reconciled_balance
@@ -334,10 +347,14 @@ class BankAccountService:
         org_id = coerce_uuid(organization_id)
         bank_account = db.get(BankAccount, bank_account_id)
         if not bank_account or bank_account.organization_id != org_id:
-            raise HTTPException(status_code=404, detail=f"Bank account {bank_account_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Bank account {bank_account_id} not found"
+            )
 
         if bank_account.status == BankAccountStatus.closed:
-            raise HTTPException(status_code=400, detail="Bank account is already closed")
+            raise HTTPException(
+                status_code=400, detail="Bank account is already closed"
+            )
 
         # Check GL balance before closing
         gl_balance = self.get_gl_balance(db, org_id, bank_account_id)
@@ -364,22 +381,28 @@ class BankAccountService:
         org_id = coerce_uuid(organization_id)
         bank_account = db.get(BankAccount, bank_account_id)
         if not bank_account or bank_account.organization_id != org_id:
-            raise HTTPException(status_code=404, detail=f"Bank account {bank_account_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Bank account {bank_account_id} not found"
+            )
 
         # Query GL balance from journal entry lines
-        from app.models.finance.gl.journal_entry_line import JournalEntryLine
         from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
+        from app.models.finance.gl.journal_entry_line import JournalEntryLine
 
-        query = select(
-            JournalEntryLine.debit_amount,
-            JournalEntryLine.credit_amount,
-        ).join(
-            JournalEntry,
-            JournalEntryLine.journal_entry_id == JournalEntry.journal_entry_id,
-        ).where(
-            and_(
-                JournalEntryLine.account_id == bank_account.gl_account_id,
+        query = (
+            select(
+                JournalEntryLine.debit_amount,
+                JournalEntryLine.credit_amount,
+            )
+            .join(
+                JournalEntry,
+                JournalEntryLine.journal_entry_id == JournalEntry.journal_entry_id,
+            )
+            .where(
+                and_(
+                    JournalEntryLine.account_id == bank_account.gl_account_id,
                     JournalEntry.status == JournalStatus.POSTED,
+                )
             )
         )
 
@@ -388,8 +411,12 @@ class BankAccountService:
 
         results = db.execute(query).all()
 
-        total_debit = sum((r.debit_amount or Decimal("0") for r in results), Decimal("0"))
-        total_credit = sum((r.credit_amount or Decimal("0") for r in results), Decimal("0"))
+        total_debit = sum(
+            (r.debit_amount or Decimal("0") for r in results), Decimal("0")
+        )
+        total_credit = sum(
+            (r.credit_amount or Decimal("0") for r in results), Decimal("0")
+        )
 
         # For asset accounts (bank), balance = debit - credit
         return total_debit - total_credit

@@ -12,6 +12,7 @@ This migration creates:
           quotation_response, quotation_response_line, bid_evaluation,
           bid_evaluation_score, procurement_contract, vendor_prequalification
 """
+
 from alembic import op
 from app.alembic_utils import ensure_enum
 

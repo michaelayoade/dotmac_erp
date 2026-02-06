@@ -19,8 +19,7 @@ depends_on = None
 
 def _has_column(inspector, table_name: str, column_name: str, schema: str) -> bool:
     return column_name in {
-        column["name"]
-        for column in inspector.get_columns(table_name, schema=schema)
+        column["name"] for column in inspector.get_columns(table_name, schema=schema)
     }
 
 
@@ -39,14 +38,44 @@ def upgrade() -> None:
     _ensure_reset_frequency_type()
 
     columns: list[tuple[str, sa.Column]] = [
-        ("prefix", sa.Column("prefix", sa.String(20), nullable=False, server_default="")),
-        ("suffix", sa.Column("suffix", sa.String(10), nullable=False, server_default="")),
-        ("separator", sa.Column("separator", sa.String(5), nullable=False, server_default="-")),
-        ("min_digits", sa.Column("min_digits", sa.Integer(), nullable=False, server_default="4")),
-        ("include_year", sa.Column("include_year", sa.Boolean(), nullable=False, server_default="true")),
-        ("include_month", sa.Column("include_month", sa.Boolean(), nullable=False, server_default="true")),
-        ("year_format", sa.Column("year_format", sa.Integer(), nullable=False, server_default="4")),
-        ("current_number", sa.Column("current_number", sa.BigInteger(), nullable=False, server_default="0")),
+        (
+            "prefix",
+            sa.Column("prefix", sa.String(20), nullable=False, server_default=""),
+        ),
+        (
+            "suffix",
+            sa.Column("suffix", sa.String(10), nullable=False, server_default=""),
+        ),
+        (
+            "separator",
+            sa.Column("separator", sa.String(5), nullable=False, server_default="-"),
+        ),
+        (
+            "min_digits",
+            sa.Column("min_digits", sa.Integer(), nullable=False, server_default="4"),
+        ),
+        (
+            "include_year",
+            sa.Column(
+                "include_year", sa.Boolean(), nullable=False, server_default="true"
+            ),
+        ),
+        (
+            "include_month",
+            sa.Column(
+                "include_month", sa.Boolean(), nullable=False, server_default="true"
+            ),
+        ),
+        (
+            "year_format",
+            sa.Column("year_format", sa.Integer(), nullable=False, server_default="4"),
+        ),
+        (
+            "current_number",
+            sa.Column(
+                "current_number", sa.BigInteger(), nullable=False, server_default="0"
+            ),
+        ),
         ("current_year", sa.Column("current_year", sa.Integer(), nullable=True)),
         ("current_month", sa.Column("current_month", sa.Integer(), nullable=True)),
         (
@@ -64,11 +93,36 @@ def upgrade() -> None:
                 server_default="MONTHLY",
             ),
         ),
-        ("fiscal_year_reset", sa.Column("fiscal_year_reset", sa.Boolean(), nullable=False, server_default="false")),
-        ("fiscal_year_id", sa.Column("fiscal_year_id", postgresql.UUID(as_uuid=True), nullable=True)),
-        ("last_used_at", sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=True)),
-        ("created_at", sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()"))),
-        ("updated_at", sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True)),
+        (
+            "fiscal_year_reset",
+            sa.Column(
+                "fiscal_year_reset",
+                sa.Boolean(),
+                nullable=False,
+                server_default="false",
+            ),
+        ),
+        (
+            "fiscal_year_id",
+            sa.Column("fiscal_year_id", postgresql.UUID(as_uuid=True), nullable=True),
+        ),
+        (
+            "last_used_at",
+            sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=True),
+        ),
+        (
+            "created_at",
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                nullable=False,
+                server_default=sa.text("now()"),
+            ),
+        ),
+        (
+            "updated_at",
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+        ),
     ]
 
     for column_name, column in columns:

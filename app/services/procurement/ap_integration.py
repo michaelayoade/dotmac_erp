@@ -55,7 +55,6 @@ class ProcurementAPIntegrationService:
         Returns:
             The created SupplierInvoice in DRAFT status.
         """
-        from app.models.procurement.procurement_contract import ProcurementContract
         from app.models.finance.ap.supplier_invoice import (
             SupplierInvoice,
             SupplierInvoiceStatus,
@@ -63,6 +62,7 @@ class ProcurementAPIntegrationService:
         )
         from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
         from app.models.finance.core_config.numbering_sequence import SequenceType
+        from app.models.procurement.procurement_contract import ProcurementContract
         from app.services.finance.platform.sequence import SequenceService
 
         # Load contract with tenant check

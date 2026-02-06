@@ -7,7 +7,7 @@ Services for syncing data from CRM to ERP:
 - (Future: Tasks, Field Services)
 """
 
-from .base import BaseCRMSyncService, CRM_SOURCE_SYSTEM, SyncResult
+from .base import CRM_SOURCE_SYSTEM, BaseCRMSyncService, SyncResult
 from .projects import ProjectSyncService
 from .tickets import TicketSyncService
 

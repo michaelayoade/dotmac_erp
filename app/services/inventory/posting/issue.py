@@ -14,18 +14,24 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.inventory.inventory_transaction import InventoryTransaction, TransactionType
 from app.models.finance.gl.journal_entry import JournalType
-from app.services.common import coerce_uuid
-from app.services.finance.gl.journal import JournalService, JournalInput, JournalLineInput
-from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
-
-from app.services.inventory.posting.result import INVPostingResult
-from app.services.inventory.posting.helpers import (
-    get_item_accounts,
-    get_inventory_account,
-    get_cogs_account,
+from app.models.inventory.inventory_transaction import (
+    InventoryTransaction,
+    TransactionType,
 )
+from app.services.common import coerce_uuid
+from app.services.finance.gl.journal import (
+    JournalInput,
+    JournalLineInput,
+    JournalService,
+)
+from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
+from app.services.inventory.posting.helpers import (
+    get_cogs_account,
+    get_inventory_account,
+    get_item_accounts,
+)
+from app.services.inventory.posting.result import INVPostingResult
 
 
 def post_issue(
@@ -90,7 +96,9 @@ def post_issue(
     inventory_account = get_inventory_account(item, category)
     cogs_account = get_cogs_account(item, category, expense_account_id)
     if not inventory_account:
-        return INVPostingResult(success=False, message="Inventory account not configured")
+        return INVPostingResult(
+            success=False, message="Inventory account not configured"
+        )
     if not cogs_account:
         return INVPostingResult(success=False, message="COGS account not configured")
 

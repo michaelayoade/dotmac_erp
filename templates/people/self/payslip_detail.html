@@ -23,6 +23,13 @@
 
 {% block content %}
 <div class="space-y-6 print:space-y-4">
+    <div class="card p-0 overflow-hidden print:border print:border-slate-300">
+        {% include "partials/_document_header.html" with {
+            "doc_title": "Payslip",
+            "doc_number": slip.slip_number,
+            "doc_status": slip.status.value | title
+        } %}
+    </div>
     {# Status Banner #}
     {% set status_banners = {
         'POSTED': {'bg': 'bg-emerald-50 dark:bg-emerald-900/20', 'border': 'border-emerald-200 dark:border-emerald-800', 'text': 'text-emerald-700 dark:text-emerald-300', 'icon_bg': 'bg-emerald-100 dark:bg-emerald-900/50', 'icon': 'text-emerald-500'},

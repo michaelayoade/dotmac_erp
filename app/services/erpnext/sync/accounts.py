@@ -1,6 +1,7 @@
 """
 Account Sync Service - ERPNext to DotMac ERP.
 """
+
 import logging
 import uuid
 from datetime import datetime
@@ -16,7 +17,7 @@ MAX_ACCOUNT_CODE_LENGTH = 20
 
 from app.models.finance.gl.account import Account, AccountType, NormalBalance
 from app.models.finance.gl.account_category import AccountCategory
-from app.services.erpnext.mappings.accounts import AccountMapping, ROOT_TYPE_MAP
+from app.services.erpnext.mappings.accounts import ROOT_TYPE_MAP, AccountMapping
 
 from .base import BaseSyncService
 
@@ -109,7 +110,9 @@ class AccountSyncService(BaseSyncService[Account]):
         data.pop("_source_modified", None)
 
         # Get or create category
-        category_id = self._get_or_create_category(data.get("account_category", "Asset"))
+        category_id = self._get_or_create_category(
+            data.get("account_category", "Asset")
+        )
 
         # Map is_header to is_posting_allowed (inverted)
         is_header = data.get("is_header", False)
@@ -155,7 +158,9 @@ class AccountSyncService(BaseSyncService[Account]):
         data.pop("_source_modified", None)
 
         # Get or create category
-        category_id = self._get_or_create_category(data.get("account_category", "Asset"))
+        category_id = self._get_or_create_category(
+            data.get("account_category", "Asset")
+        )
         is_header = data.get("is_header", False)
 
         # Determine account_type - must be CONTROL, POSTING, or STATISTICAL

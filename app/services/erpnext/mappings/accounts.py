@@ -1,6 +1,8 @@
 """
 Account mapping from ERPNext to DotMac ERP.
 """
+
+import logging
 from typing import Any, Optional
 
 from .base import (
@@ -12,6 +14,7 @@ from .base import (
     parse_datetime,
 )
 
+logger = logging.getLogger(__name__)
 
 # ERPNext root_type to DotMac ERP category mapping
 ROOT_TYPE_MAP = {

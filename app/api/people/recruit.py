@@ -3,6 +3,7 @@ Recruitment Management API Router.
 
 Thin API wrapper for Recruitment Management endpoints. All business logic is in services.
 """
+
 import csv
 import io
 from datetime import date, datetime
@@ -72,7 +73,9 @@ def parse_enum(value: Optional[str], enum_type, field_name: str):
     try:
         return enum_type(value)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid {field_name}: {value}") from exc
+        raise HTTPException(
+            status_code=400, detail=f"Invalid {field_name}: {value}"
+        ) from exc
 
 
 def csv_response(rows: list[list[str]], filename: str) -> Response:
@@ -129,7 +132,9 @@ def list_job_openings(
     )
 
 
-@router.post("/job-openings", response_model=JobOpeningRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/job-openings", response_model=JobOpeningRead, status_code=status.HTTP_201_CREATED
+)
 def create_job_opening(
     payload: JobOpeningCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -175,7 +180,9 @@ def get_job_opening(
     try:
         job_opening = svc.get_job_opening(organization_id, job_opening_id)
     except JobOpeningNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job opening not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Job opening not found"
+        )
     return JobOpeningRead.model_validate(job_opening)
 
 
@@ -305,7 +312,9 @@ def list_applicants(
     )
 
 
-@router.post("/applicants", response_model=JobApplicantRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/applicants", response_model=JobApplicantRead, status_code=status.HTTP_201_CREATED
+)
 def create_applicant(
     payload: JobApplicantCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -346,7 +355,9 @@ def get_applicant(
 ):
     """Get a job applicant by ID."""
     svc = RecruitmentService(db)
-    return JobApplicantRead.model_validate(svc.get_applicant(organization_id, applicant_id))
+    return JobApplicantRead.model_validate(
+        svc.get_applicant(organization_id, applicant_id)
+    )
 
 
 @router.patch("/applicants/{applicant_id}", response_model=JobApplicantRead)
@@ -453,7 +464,9 @@ def list_interviews(
     )
 
 
-@router.post("/interviews", response_model=InterviewRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/interviews", response_model=InterviewRead, status_code=status.HTTP_201_CREATED
+)
 def schedule_interview(
     payload: InterviewCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -473,6 +486,7 @@ def schedule_interview(
         meeting_link=payload.meeting_link,
     )
     db.commit()
+    svc.send_interview_invitation(organization_id, interview)
     return InterviewRead.model_validate(interview)
 
 
@@ -484,7 +498,9 @@ def get_interview(
 ):
     """Get an interview by ID."""
     svc = RecruitmentService(db)
-    return InterviewRead.model_validate(svc.get_interview(organization_id, interview_id))
+    return InterviewRead.model_validate(
+        svc.get_interview(organization_id, interview_id)
+    )
 
 
 @router.patch("/interviews/{interview_id}", response_model=InterviewRead)
@@ -499,6 +515,17 @@ def update_interview(
     update_data = payload.model_dump(exclude_unset=True)
     interview = svc.update_interview(organization_id, interview_id, **update_data)
     db.commit()
+    if any(
+        key in update_data
+        for key in (
+            "scheduled_from",
+            "scheduled_to",
+            "interview_type",
+            "location",
+            "meeting_link",
+        )
+    ):
+        svc.send_interview_invitation(organization_id, interview)
     return InterviewRead.model_validate(interview)
 
 
@@ -574,7 +601,9 @@ def list_job_offers(
     )
 
 
-@router.post("/offers", response_model=JobOfferRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/offers", response_model=JobOfferRead, status_code=status.HTTP_201_CREATED
+)
 def create_job_offer(
     payload: JobOfferCreate,
     organization_id: UUID = Depends(require_organization_id),

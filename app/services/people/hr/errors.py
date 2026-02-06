@@ -3,10 +3,11 @@
 These errors extend the base ServiceError classes with domain-specific
 error types for HR operations.
 """
+
 from __future__ import annotations
 
+import logging
 import uuid
-from typing import TYPE_CHECKING
 
 from app.services.common import (
     ConflictError,
@@ -15,6 +16,8 @@ from app.services.common import (
     ServiceError,
     ValidationError,
 )
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     # Re-export base errors for convenience
@@ -133,7 +136,9 @@ class EmployeeStatusError(ConflictError):
 
     def __init__(self, current_status: str, message: str | None = None) -> None:
         if message is None:
-            message = f"Operation not allowed for employee with status: {current_status}"
+            message = (
+                f"Operation not allowed for employee with status: {current_status}"
+            )
         super().__init__(message)
         self.current_status = current_status
 
@@ -142,7 +147,8 @@ class InvalidManagerError(ValidationError):
     """Raised when manager assignment would create circular reference."""
 
     def __init__(
-        self, message: str = "Invalid manager assignment - would create circular reference"
+        self,
+        message: str = "Invalid manager assignment - would create circular reference",
     ) -> None:
         super().__init__(message)
 
@@ -478,7 +484,9 @@ class AttendanceRequestNotFoundError(NotFoundError):
 class AttendanceRequestStatusError(ConflictError):
     """Raised when attendance request status transition is not allowed."""
 
-    def __init__(self, request_id: int, current_status: str, target_status: str) -> None:
+    def __init__(
+        self, request_id: int, current_status: str, target_status: str
+    ) -> None:
         message = f"Cannot transition attendance request {request_id} from {current_status} to {target_status}"
         super().__init__(message)
         self.request_id = request_id
@@ -739,7 +747,9 @@ class TrainingRegistrationError(ConflictError):
 class TrainingResultNotFoundError(NotFoundError):
     """Raised when training result is not found."""
 
-    def __init__(self, result_id: int | None = None, message: str | None = None) -> None:
+    def __init__(
+        self, result_id: int | None = None, message: str | None = None
+    ) -> None:
         if message is None:
             message = (
                 f"Training result not found: {result_id}"
@@ -753,9 +763,7 @@ class TrainingResultNotFoundError(NotFoundError):
 class TrainingEventStatusError(ValidationError):
     """Raised when training event status transition is not allowed."""
 
-    def __init__(
-        self, event_id: int, current_status: str, target_status: str
-    ) -> None:
+    def __init__(self, event_id: int, current_status: str, target_status: str) -> None:
         message = f"Cannot transition event {event_id} from {current_status} to {target_status}"
         super().__init__(message)
         self.event_id = event_id
@@ -804,7 +812,9 @@ class AppraisalStatusTransitionError(ConflictError):
     """Raised when appraisal status transition is not allowed."""
 
     def __init__(self, current_status: str, target_status: str) -> None:
-        message = f"Cannot transition appraisal from {current_status} to {target_status}"
+        message = (
+            f"Cannot transition appraisal from {current_status} to {target_status}"
+        )
         super().__init__(message)
         self.current_status = current_status
         self.target_status = target_status

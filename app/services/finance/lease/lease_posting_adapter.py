@@ -7,6 +7,7 @@ ROU depreciation into journal entries and posts them to the general ledger.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -16,13 +17,19 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.models.finance.gl.journal_entry import JournalType
+from app.models.finance.lease.lease_asset import LeaseAsset
 from app.models.finance.lease.lease_contract import LeaseContract, LeaseStatus
 from app.models.finance.lease.lease_liability import LeaseLiability
-from app.models.finance.lease.lease_asset import LeaseAsset
 from app.services.common import coerce_uuid
-from app.services.finance.gl.journal import JournalService, JournalInput, JournalLineInput
+from app.services.finance.gl.journal import (
+    JournalInput,
+    JournalLineInput,
+    JournalService,
+)
 from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
-from app.models.finance.gl.journal_entry import JournalType
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -87,15 +94,9 @@ class LeasePostingAdapter:
 
         # Load liability and asset
         liability = (
-            db.query(LeaseLiability)
-            .filter(LeaseLiability.lease_id == ls_id)
-            .first()
+            db.query(LeaseLiability).filter(LeaseLiability.lease_id == ls_id).first()
         )
-        asset = (
-            db.query(LeaseAsset)
-            .filter(LeaseAsset.lease_id == ls_id)
-            .first()
-        )
+        asset = db.query(LeaseAsset).filter(LeaseAsset.lease_id == ls_id).first()
 
         if not liability or not asset:
             return LeasePostingResult(
@@ -156,7 +157,7 @@ class LeasePostingAdapter:
             # Credit to Provision for Restoration
             # Use a restoration provision account if available
             # Otherwise use the lease liability account as a default
-            provision_account = getattr(asset, 'restoration_provision_account_id', None)
+            provision_account = getattr(asset, "restoration_provision_account_id", None)
             if not provision_account:
                 provision_account = liability.lease_liability_account_id
             journal_lines.append(
@@ -188,7 +189,9 @@ class LeasePostingAdapter:
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
 
         except HTTPException as e:
             return LeasePostingResult(
@@ -209,7 +212,9 @@ class LeasePostingAdapter:
         )
 
         try:
-            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+            posting_result = LedgerPostingService.post_journal_entry(
+                db, posting_request
+            )
 
             if not posting_result.success:
                 return LeasePostingResult(
@@ -272,9 +277,7 @@ class LeasePostingAdapter:
 
         # Load liability
         liability = (
-            db.query(LeaseLiability)
-            .filter(LeaseLiability.lease_id == ls_id)
-            .first()
+            db.query(LeaseLiability).filter(LeaseLiability.lease_id == ls_id).first()
         )
 
         if not liability:
@@ -333,7 +336,9 @@ class LeasePostingAdapter:
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
 
         except HTTPException as e:
             return LeasePostingResult(
@@ -342,7 +347,9 @@ class LeasePostingAdapter:
 
         # Post to ledger
         if not idempotency_key:
-            idempotency_key = f"{org_id}:LEASE:INT:{ls_id}:{accrual_date.isoformat()}:v1"
+            idempotency_key = (
+                f"{org_id}:LEASE:INT:{ls_id}:{accrual_date.isoformat()}:v1"
+            )
 
         posting_request = PostingRequest(
             organization_id=org_id,
@@ -354,7 +361,9 @@ class LeasePostingAdapter:
         )
 
         try:
-            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+            posting_result = LedgerPostingService.post_journal_entry(
+                db, posting_request
+            )
 
             if not posting_result.success:
                 return LeasePostingResult(
@@ -425,9 +434,7 @@ class LeasePostingAdapter:
 
         # Load liability
         liability = (
-            db.query(LeaseLiability)
-            .filter(LeaseLiability.lease_id == ls_id)
-            .first()
+            db.query(LeaseLiability).filter(LeaseLiability.lease_id == ls_id).first()
         )
 
         if not liability:
@@ -486,7 +493,9 @@ class LeasePostingAdapter:
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
 
         except HTTPException as e:
             return LeasePostingResult(
@@ -495,7 +504,9 @@ class LeasePostingAdapter:
 
         # Post to ledger
         if not idempotency_key:
-            idempotency_key = f"{org_id}:LEASE:PAY:{ls_id}:{payment_date.isoformat()}:v1"
+            idempotency_key = (
+                f"{org_id}:LEASE:PAY:{ls_id}:{payment_date.isoformat()}:v1"
+            )
 
         posting_request = PostingRequest(
             organization_id=org_id,
@@ -507,7 +518,9 @@ class LeasePostingAdapter:
         )
 
         try:
-            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+            posting_result = LedgerPostingService.post_journal_entry(
+                db, posting_request
+            )
 
             if not posting_result.success:
                 return LeasePostingResult(
@@ -576,11 +589,7 @@ class LeasePostingAdapter:
             return LeasePostingResult(success=False, message="Lease contract not found")
 
         # Load asset
-        asset = (
-            db.query(LeaseAsset)
-            .filter(LeaseAsset.lease_id == ls_id)
-            .first()
-        )
+        asset = db.query(LeaseAsset).filter(LeaseAsset.lease_id == ls_id).first()
 
         if not asset:
             return LeasePostingResult(
@@ -638,7 +647,9 @@ class LeasePostingAdapter:
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
 
         except HTTPException as e:
             return LeasePostingResult(
@@ -647,7 +658,9 @@ class LeasePostingAdapter:
 
         # Post to ledger
         if not idempotency_key:
-            idempotency_key = f"{org_id}:LEASE:DEP:{ls_id}:{depreciation_date.isoformat()}:v1"
+            idempotency_key = (
+                f"{org_id}:LEASE:DEP:{ls_id}:{depreciation_date.isoformat()}:v1"
+            )
 
         posting_request = PostingRequest(
             organization_id=org_id,
@@ -659,7 +672,9 @@ class LeasePostingAdapter:
         )
 
         try:
-            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+            posting_result = LedgerPostingService.post_journal_entry(
+                db, posting_request
+            )
 
             if not posting_result.success:
                 return LeasePostingResult(
@@ -670,7 +685,9 @@ class LeasePostingAdapter:
 
             # Update asset carrying amount
             asset.accumulated_depreciation += depreciation_amount
-            asset.carrying_amount = asset.initial_rou_asset_value - asset.accumulated_depreciation
+            asset.carrying_amount = (
+                asset.initial_rou_asset_value - asset.accumulated_depreciation
+            )
             if asset.carrying_amount < 0:
                 asset.carrying_amount = Decimal("0")
             db.commit()
@@ -736,15 +753,9 @@ class LeasePostingAdapter:
 
         # Load liability and asset
         liability = (
-            db.query(LeaseLiability)
-            .filter(LeaseLiability.lease_id == ls_id)
-            .first()
+            db.query(LeaseLiability).filter(LeaseLiability.lease_id == ls_id).first()
         )
-        asset = (
-            db.query(LeaseAsset)
-            .filter(LeaseAsset.lease_id == ls_id)
-            .first()
-        )
+        asset = db.query(LeaseAsset).filter(LeaseAsset.lease_id == ls_id).first()
 
         if not liability or not asset:
             return LeasePostingResult(
@@ -845,7 +856,9 @@ class LeasePostingAdapter:
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
 
         except HTTPException as e:
             return LeasePostingResult(
@@ -866,7 +879,9 @@ class LeasePostingAdapter:
         )
 
         try:
-            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+            posting_result = LedgerPostingService.post_journal_entry(
+                db, posting_request
+            )
 
             if not posting_result.success:
                 return LeasePostingResult(

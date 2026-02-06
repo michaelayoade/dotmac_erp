@@ -6,32 +6,36 @@ Manages payment creation, approval, posting, and allocation to invoices.
 
 from __future__ import annotations
 
+import logging
+import uuid as uuid_lib
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
-import uuid as uuid_lib
 
 from fastapi import HTTPException
-from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
+from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import (
     SupplierInvoice,
     SupplierInvoiceStatus,
 )
 from app.models.finance.ap.supplier_payment import (
-    SupplierPayment,
     APPaymentMethod,
     APPaymentStatus,
+    SupplierPayment,
 )
-from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
+from app.models.finance.audit.audit_log import AuditAction
 from app.models.finance.core_config.numbering_sequence import SequenceType
+from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import coerce_uuid
 from app.services.finance.platform.sequence import SequenceService
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -57,7 +61,9 @@ class SupplierPaymentInput:
     reference: Optional[str] = None
     description: Optional[str] = None
     # Withholding Tax (WHT) - when we withhold tax from supplier payment
-    gross_amount: Optional[Decimal] = None  # Invoice amount before WHT; defaults to amount if no WHT
+    gross_amount: Optional[Decimal] = (
+        None  # Invoice amount before WHT; defaults to amount if no WHT
+    )
     wht_code_id: Optional[UUID] = None  # WHT tax code applied
     wht_amount: Decimal = field(default_factory=lambda: Decimal("0"))  # WHT withheld
     # Legacy field - maps to wht_amount for backward compatibility
@@ -224,6 +230,20 @@ class SupplierPaymentService(ListResponseMixin):
         db.commit()
         db.refresh(payment)
 
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="ap",
+            table_name="supplier_payment",
+            record_id=str(payment.payment_id),
+            action=AuditAction.INSERT,
+            new_values={
+                "payment_number": payment.payment_number,
+                "amount": str(payment.amount),
+            },
+            user_id=user_id,
+        )
+
         return payment
 
     @staticmethod
@@ -269,23 +289,43 @@ class SupplierPaymentService(ListResponseMixin):
                 detail="Segregation of duties violation: creator cannot approve",
             )
 
+        old_status = payment.status.value
         payment.status = APPaymentStatus.APPROVED
         payment.approved_by_user_id = user_id
         payment.approved_at = datetime.now(timezone.utc)
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=db, organization_id=org_id, entity_type="PAYMENT",
-                entity_id=payment.payment_id, event="ON_APPROVAL",
+                db=db,
+                organization_id=org_id,
+                entity_type="PAYMENT",
+                entity_id=payment.payment_id,
+                event="ON_APPROVAL",
                 old_values={"status": "DRAFT"},
-                new_values={"status": "APPROVED"}, user_id=user_id,
+                new_values={"status": "APPROVED"},
+                user_id=user_id,
             )
         except Exception:
             pass
 
         db.commit()
         db.refresh(payment)
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="ap",
+            table_name="supplier_payment",
+            record_id=str(payment.payment_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": old_status},
+            new_values={"status": "APPROVED"},
+            user_id=user_id,
+        )
 
         return payment
 
@@ -362,12 +402,19 @@ class SupplierPaymentService(ListResponseMixin):
                     invoice.status = SupplierInvoiceStatus.PARTIALLY_PAID
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=db, organization_id=org_id, entity_type="PAYMENT",
-                entity_id=payment.payment_id, event="ON_STATUS_CHANGE",
+                db=db,
+                organization_id=org_id,
+                entity_type="PAYMENT",
+                entity_id=payment.payment_id,
+                event="ON_STATUS_CHANGE",
                 old_values={"status": "APPROVED"},
-                new_values={"status": "SENT"}, user_id=user_id,
+                new_values={"status": "SENT"},
+                user_id=user_id,
             )
         except Exception:
             pass
@@ -428,10 +475,23 @@ class SupplierPaymentService(ListResponseMixin):
                     else:
                         invoice.status = SupplierInvoiceStatus.PARTIALLY_PAID
 
+        old_status = payment.status.value
         payment.status = APPaymentStatus.VOID
 
         db.commit()
         db.refresh(payment)
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="ap",
+            table_name="supplier_payment",
+            record_id=str(payment.payment_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": old_status},
+            new_values={"status": "VOID"},
+            user_id=coerce_uuid(voided_by_user_id),
+        )
 
         return payment
 

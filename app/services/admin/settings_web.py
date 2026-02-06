@@ -5,26 +5,24 @@ Provides context and update functions for Admin settings UI pages.
 Handles org-wide settings: Organization profile, Branding, Email, Features, Payments.
 """
 
-import uuid
 import logging
+import uuid
 from typing import Any, Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.domain_settings import SettingDomain, SettingValueType
+from app.models.finance.core_org import Organization
 from app.schemas.settings import DomainSettingUpdate
 from app.services.domain_settings import DomainSettings
 from app.services.settings_cache import get_cached_setting
-from app.models.finance.core_org import Organization
 from app.services.settings_spec import (
     DOMAIN_SETTINGS_SERVICE,
+    get_spec,
     list_specs,
     resolve_value,
-    get_spec,
-    coerce_value,
 )
-from app.schemas.settings import DomainSettingUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -196,7 +194,10 @@ class AdminSettingsWebService:
         # Try to get branding from OrganizationBranding if it exists
         branding = None
         try:
-            from app.models.finance.core_org.organization_branding import OrganizationBranding
+            from app.models.finance.core_org.organization_branding import (
+                OrganizationBranding,
+            )
+
             branding = db.execute(
                 select(OrganizationBranding).where(
                     OrganizationBranding.organization_id == organization_id
@@ -236,7 +237,10 @@ class AdminSettingsWebService:
 
         # Try to update OrganizationBranding if model exists
         try:
-            from app.models.finance.core_org.organization_branding import OrganizationBranding
+            from app.models.finance.core_org.organization_branding import (
+                OrganizationBranding,
+            )
+
             branding = db.execute(
                 select(OrganizationBranding).where(
                     OrganizationBranding.organization_id == organization_id
@@ -274,7 +278,7 @@ class AdminSettingsWebService:
                 if has_branding_data:
                     branding = OrganizationBranding(
                         organization_id=organization_id,
-                        **{f: data.get(f) for f in branding_fields if f in data}
+                        **{f: data.get(f) for f in branding_fields if f in data},
                     )
                     db.add(branding)
         except Exception as e:
@@ -316,6 +320,7 @@ class AdminSettingsWebService:
         """Get email settings for the form."""
         # Delegate to finance settings service for email context
         from app.services.finance.settings_web import settings_web_service
+
         return settings_web_service.get_email_settings_context(db, organization_id)
 
     def update_email(
@@ -327,6 +332,7 @@ class AdminSettingsWebService:
         """Update email settings."""
         # Delegate to finance settings service for email updates
         from app.services.finance.settings_web import settings_web_service
+
         return settings_web_service.update_email_settings(db, organization_id, data)
 
     # ========== Feature Flags ==========
@@ -351,13 +357,15 @@ class AdminSettingsWebService:
 
         for spec in specs:
             value = resolve_value(db, SettingDomain.features, spec.key)
-            features.append({
-                "key": spec.key,
-                "label": spec.key.replace("enable_", "").replace("_", " ").title(),
-                "description": feature_descriptions.get(spec.key, ""),
-                "enabled": bool(value),
-                "default": spec.default,
-            })
+            features.append(
+                {
+                    "key": spec.key,
+                    "label": spec.key.replace("enable_", "").replace("_", " ").title(),
+                    "description": feature_descriptions.get(spec.key, ""),
+                    "enabled": bool(value),
+                    "default": spec.default,
+                }
+            )
 
         return {"features": features}
 
@@ -413,6 +421,7 @@ class AdminSettingsWebService:
         """Get Paystack settings for the form."""
         # Delegate to finance settings service
         from app.services.finance.settings_web import settings_web_service
+
         return settings_web_service.get_payments_settings_context(db, organization_id)
 
     def update_paystack(
@@ -424,6 +433,7 @@ class AdminSettingsWebService:
         """Update Paystack settings."""
         # Delegate to finance settings service
         from app.services.finance.settings_web import settings_web_service
+
         return settings_web_service.update_payments_settings(db, organization_id, data)
 
 

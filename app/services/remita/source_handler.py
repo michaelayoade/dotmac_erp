@@ -8,7 +8,6 @@ This is a dispatcher that routes updates to the appropriate module service.
 import logging
 from datetime import datetime, timezone
 from typing import Optional
-from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -118,8 +117,8 @@ class RemitaSourceHandler:
         Updates the payment record with Remita reference.
         """
         from app.models.finance.ap.supplier_payment import (
-            SupplierPayment,
             APPaymentStatus,
+            SupplierPayment,
         )
 
         payment = self.db.get(SupplierPayment, rrr.source_id)
@@ -142,7 +141,9 @@ class RemitaSourceHandler:
             "source_id": str(rrr.source_id),
             "payment_number": payment.payment_number,
             "action": "updated",
-            "new_status": payment.status.value if hasattr(payment.status, "value") else str(payment.status),
+            "new_status": payment.status.value
+            if hasattr(payment.status, "value")
+            else str(payment.status),
         }
 
     def _handle_payroll_run_paid(self, rrr: RemitaRRR) -> dict:

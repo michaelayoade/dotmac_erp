@@ -6,35 +6,44 @@ Manages creation, approval workflow, posting, and payment tracking.
 
 from __future__ import annotations
 
+import logging
+import uuid as uuid_lib
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Optional
 from uuid import UUID
-import uuid as uuid_lib
 
 from fastapi import HTTPException
-from sqlalchemy import and_, inspect as sa_inspect
+from sqlalchemy import and_
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models.finance.ar.contract import Contract
 from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.models.finance.ar.invoice_line import InvoiceLine
-from app.models.finance.ar.performance_obligation import PerformanceObligation
+from app.models.finance.ar.invoice_line_tax import InvoiceLineTax
 from app.models.finance.ar.payment_terms import PaymentTerms
+from app.models.finance.ar.performance_obligation import PerformanceObligation
 from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.models.finance.core_org.cost_center import CostCenter
 from app.models.finance.core_org.project import Project
 from app.models.finance.core_org.reporting_segment import ReportingSegment
 from app.models.finance.gl.account import Account
-from app.models.inventory.item import Item
 from app.models.finance.tax.tax_code import TaxCode
-from app.models.finance.ar.invoice_line_tax import InvoiceLineTax
+from app.models.inventory.item import Item
+from app.models.finance.audit.audit_log import AuditAction
+from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import coerce_uuid
 from app.services.finance.platform.sequence import SequenceService
-from app.services.finance.tax.tax_calculation import TaxCalculationService, LineCalculationResult
+from app.services.finance.tax.tax_calculation import (
+    LineCalculationResult,
+    TaxCalculationService,
+)
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -324,7 +333,9 @@ class ARInvoiceService(ListResponseMixin):
 
         # Create lines and their tax records
         for idx, line_input in enumerate(input.lines, start=1):
-            line_amount = line_input.quantity * line_input.unit_price - line_input.discount_amount
+            line_amount = (
+                line_input.quantity * line_input.unit_price - line_input.discount_amount
+            )
             if input.invoice_type == InvoiceType.CREDIT_NOTE:
                 line_amount = -abs(line_amount)
 
@@ -335,10 +346,17 @@ class ARInvoiceService(ListResponseMixin):
                 line_tax_total = -abs(line_tax_total)
 
             # Get primary tax code ID for legacy compatibility (first tax code)
-            effective_tax_codes = list(line_input.tax_code_ids) if line_input.tax_code_ids else []
-            if line_input.tax_code_id and line_input.tax_code_id not in effective_tax_codes:
+            effective_tax_codes = (
+                list(line_input.tax_code_ids) if line_input.tax_code_ids else []
+            )
+            if (
+                line_input.tax_code_id
+                and line_input.tax_code_id not in effective_tax_codes
+            ):
                 effective_tax_codes.append(line_input.tax_code_id)
-            primary_tax_code_id = effective_tax_codes[0] if effective_tax_codes else None
+            primary_tax_code_id = (
+                effective_tax_codes[0] if effective_tax_codes else None
+            )
 
             invoice_line = InvoiceLine(
                 invoice_id=invoice.invoice_id,
@@ -383,6 +401,22 @@ class ARInvoiceService(ListResponseMixin):
 
         db.commit()
         db.refresh(invoice)
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="ar",
+            table_name="invoice",
+            record_id=str(invoice.invoice_id),
+            action=AuditAction.INSERT,
+            new_values={
+                "invoice_number": invoice.invoice_number,
+                "customer_id": str(customer_id),
+                "total_amount": str(invoice.total_amount),
+                "currency_code": invoice.currency_code,
+            },
+            user_id=user_id,
+        )
 
         return invoice
 
@@ -439,9 +473,7 @@ class ARInvoiceService(ListResponseMixin):
 
         # Delete existing lines and their tax records
         existing_lines = (
-            db.query(InvoiceLine)
-            .filter(InvoiceLine.invoice_id == inv_id)
-            .all()
+            db.query(InvoiceLine).filter(InvoiceLine.invoice_id == inv_id).all()
         )
         for line in existing_lines:
             db.query(InvoiceLineTax).filter(
@@ -455,12 +487,19 @@ class ARInvoiceService(ListResponseMixin):
         line_tax_results: list[Optional[LineCalculationResult]] = []
 
         for line_input in input.lines:
-            line_amount = line_input.quantity * line_input.unit_price - line_input.discount_amount
+            line_amount = (
+                line_input.quantity * line_input.unit_price - line_input.discount_amount
+            )
             subtotal += line_amount
 
             # Determine tax codes: prefer new multi-tax field, fall back to legacy single field
-            effective_tax_codes = list(line_input.tax_code_ids) if line_input.tax_code_ids else []
-            if line_input.tax_code_id and line_input.tax_code_id not in effective_tax_codes:
+            effective_tax_codes = (
+                list(line_input.tax_code_ids) if line_input.tax_code_ids else []
+            )
+            if (
+                line_input.tax_code_id
+                and line_input.tax_code_id not in effective_tax_codes
+            ):
                 effective_tax_codes.append(line_input.tax_code_id)
 
             if effective_tax_codes:
@@ -515,7 +554,9 @@ class ARInvoiceService(ListResponseMixin):
 
         # Create new lines and their tax records
         for idx, line_input in enumerate(input.lines, start=1):
-            line_amount = line_input.quantity * line_input.unit_price - line_input.discount_amount
+            line_amount = (
+                line_input.quantity * line_input.unit_price - line_input.discount_amount
+            )
             if input.invoice_type == InvoiceType.CREDIT_NOTE:
                 line_amount = -abs(line_amount)
 
@@ -524,10 +565,17 @@ class ARInvoiceService(ListResponseMixin):
             if input.invoice_type == InvoiceType.CREDIT_NOTE and tax_result:
                 line_tax_total = -abs(line_tax_total)
 
-            effective_tax_codes = list(line_input.tax_code_ids) if line_input.tax_code_ids else []
-            if line_input.tax_code_id and line_input.tax_code_id not in effective_tax_codes:
+            effective_tax_codes = (
+                list(line_input.tax_code_ids) if line_input.tax_code_ids else []
+            )
+            if (
+                line_input.tax_code_id
+                and line_input.tax_code_id not in effective_tax_codes
+            ):
                 effective_tax_codes.append(line_input.tax_code_id)
-            primary_tax_code_id = effective_tax_codes[0] if effective_tax_codes else None
+            primary_tax_code_id = (
+                effective_tax_codes[0] if effective_tax_codes else None
+            )
 
             line = InvoiceLine(
                 invoice_id=invoice.invoice_id,
@@ -603,7 +651,10 @@ class ARInvoiceService(ListResponseMixin):
 
         # Fire workflow automation event
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
                 db=db,
                 organization_id=org_id,
@@ -616,6 +667,18 @@ class ARInvoiceService(ListResponseMixin):
             )
         except Exception:
             pass
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="ar",
+            table_name="invoice",
+            record_id=str(inv_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": "DRAFT"},
+            new_values={"status": "SUBMITTED"},
+            user_id=user_id,
+        )
 
         db.commit()
         db.refresh(invoice)
@@ -657,7 +720,10 @@ class ARInvoiceService(ListResponseMixin):
 
         # Fire workflow automation event
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
                 db=db,
                 organization_id=org_id,
@@ -670,6 +736,18 @@ class ARInvoiceService(ListResponseMixin):
             )
         except Exception:
             pass
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="ar",
+            table_name="invoice",
+            record_id=str(inv_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": "SUBMITTED"},
+            new_values={"status": "APPROVED"},
+            user_id=user_id,
+        )
 
         db.commit()
         db.refresh(invoice)
@@ -723,7 +801,10 @@ class ARInvoiceService(ListResponseMixin):
 
         # Fire workflow automation event
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
                 db=db,
                 organization_id=org_id,
@@ -736,6 +817,18 @@ class ARInvoiceService(ListResponseMixin):
             )
         except Exception:
             pass
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="ar",
+            table_name="invoice",
+            record_id=str(inv_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": "APPROVED"},
+            new_values={"status": "POSTED"},
+            user_id=user_id,
+        )
 
         db.commit()
         db.refresh(invoice)
@@ -772,10 +865,24 @@ class ARInvoiceService(ListResponseMixin):
                 detail=f"Cannot void invoice with status '{invoice.status.value}'",
             )
 
+        old_status = invoice.status.value
         invoice.status = InvoiceStatus.VOID
         invoice.voided_by_user_id = user_id
         invoice.voided_at = datetime.now(timezone.utc)
         invoice.void_reason = reason
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="ar",
+            table_name="invoice",
+            record_id=str(inv_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": old_status},
+            new_values={"status": "VOID"},
+            user_id=user_id,
+            reason=reason,
+        )
 
         db.commit()
         db.refresh(invoice)
@@ -830,7 +937,10 @@ class ARInvoiceService(ListResponseMixin):
 
         # Fire workflow automation event
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
                 db=db,
                 organization_id=org_id,
@@ -843,6 +953,19 @@ class ARInvoiceService(ListResponseMixin):
             )
         except Exception:
             pass
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="ar",
+            table_name="invoice",
+            record_id=str(inv_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": old_status},
+            new_values={"status": "DRAFT"},
+            user_id=coerce_uuid(cancelled_by_user_id),
+            reason=reason,
+        )
 
         db.commit()
         db.refresh(invoice)
@@ -875,7 +998,9 @@ class ARInvoiceService(ListResponseMixin):
             .filter(
                 and_(
                     Invoice.organization_id == org_id,
-                    Invoice.status.in_([InvoiceStatus.POSTED, InvoiceStatus.PARTIALLY_PAID]),
+                    Invoice.status.in_(
+                        [InvoiceStatus.POSTED, InvoiceStatus.PARTIALLY_PAID]
+                    ),
                     Invoice.due_date < ref_date,
                 )
             )
@@ -1032,11 +1157,13 @@ class ARInvoiceService(ListResponseMixin):
             query = query.filter(
                 and_(
                     Invoice.due_date < date.today(),
-                    Invoice.status.in_([
-                        InvoiceStatus.POSTED,
-                        InvoiceStatus.PARTIALLY_PAID,
-                        InvoiceStatus.OVERDUE,
-                    ]),
+                    Invoice.status.in_(
+                        [
+                            InvoiceStatus.POSTED,
+                            InvoiceStatus.PARTIALLY_PAID,
+                            InvoiceStatus.OVERDUE,
+                        ]
+                    ),
                 )
             )
 

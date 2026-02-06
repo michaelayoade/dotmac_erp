@@ -3,6 +3,7 @@ ERPNext Timesheet Sync Service.
 
 Syncs Timesheet Detail rows to pm.time_entry table.
 """
+
 import logging
 import uuid
 from datetime import datetime
@@ -11,7 +12,7 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.pm import TimeEntry, BillingStatus
+from app.models.pm import BillingStatus, TimeEntry
 from app.models.sync import SyncEntity
 from app.services.erpnext.mappings.timesheets import TimesheetDetailMapping
 
@@ -71,7 +72,9 @@ class TimesheetSyncService(BaseSyncService[TimeEntry]):
             "modified",
         ]
 
-        for timesheet in client.get_all_documents("Timesheet", filters=filters, fields=parent_fields):
+        for timesheet in client.get_all_documents(
+            "Timesheet", filters=filters, fields=parent_fields
+        ):
             timesheet_name = timesheet.get("name")
             employee_name = timesheet.get("employee")
 
@@ -115,7 +118,9 @@ class TimesheetSyncService(BaseSyncService[TimeEntry]):
 
         if not project_id:
             # Skip entries without project (general time entries)
-            raise ValueError(f"Cannot create time entry without project: {project_source_name}")
+            raise ValueError(
+                f"Cannot create time entry without project: {project_source_name}"
+            )
 
         # Resolve task ID
         task_source_name = data.pop("_task_source_name", None)
@@ -126,7 +131,9 @@ class TimesheetSyncService(BaseSyncService[TimeEntry]):
         employee_id = self._resolve_employee_id(employee_source_name)
 
         if not employee_id:
-            raise ValueError(f"Cannot create time entry without employee: {employee_source_name}")
+            raise ValueError(
+                f"Cannot create time entry without employee: {employee_source_name}"
+            )
 
         # Convert billing_status string to enum
         billing_status_value = data.pop("billing_status", "NOT_BILLED")
@@ -177,7 +184,9 @@ class TimesheetSyncService(BaseSyncService[TimeEntry]):
             select(TimeEntry).where(TimeEntry.entry_id == sync_entity.target_id)
         ).scalar_one_or_none()
 
-    def _resolve_project_id(self, project_source_name: Optional[str]) -> Optional[uuid.UUID]:
+    def _resolve_project_id(
+        self, project_source_name: Optional[str]
+    ) -> Optional[uuid.UUID]:
         """Resolve DotMac project_id from ERPNext project name."""
         if not project_source_name:
             return None
@@ -225,7 +234,9 @@ class TimesheetSyncService(BaseSyncService[TimeEntry]):
 
         return result
 
-    def _resolve_employee_id(self, employee_source_name: Optional[str]) -> Optional[uuid.UUID]:
+    def _resolve_employee_id(
+        self, employee_source_name: Optional[str]
+    ) -> Optional[uuid.UUID]:
         """Resolve DotMac employee_id from ERPNext employee name."""
         if not employee_source_name:
             return None

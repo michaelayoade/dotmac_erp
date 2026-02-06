@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class StepResult:
     """Result of executing a saga step."""
+
     success: bool
     output_data: dict[str, Any] = field(default_factory=dict)
     compensation_data: dict[str, Any] = field(default_factory=dict)
@@ -39,6 +40,7 @@ class StepResult:
 @dataclass
 class SagaResult:
     """Result of saga execution."""
+
     success: bool
     saga_id: Optional[UUID] = None
     result: dict[str, Any] = field(default_factory=dict)
@@ -46,15 +48,18 @@ class SagaResult:
     was_compensated: bool = False
 
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 @dataclass
 class SagaStepDefinition(Generic[T]):
     """Definition of a saga step."""
+
     name: str
     execute: Callable[[Session, dict[str, Any], dict[str, Any]], StepResult]
-    compensate: Optional[Callable[[Session, dict[str, Any], dict[str, Any]], bool]] = None
+    compensate: Optional[Callable[[Session, dict[str, Any], dict[str, Any]], bool]] = (
+        None
+    )
     description: str = ""
 
 
@@ -152,7 +157,9 @@ class SagaOrchestrator(ABC):
 
         logger.info(
             "Created saga %s type=%s idempotency=%s",
-            saga.saga_id, self.saga_type, idempotency_key
+            saga.saga_id,
+            self.saga_type,
+            idempotency_key,
         )
 
         # Execute steps
@@ -192,7 +199,9 @@ class SagaOrchestrator(ABC):
 
         if saga.status in {SagaStatus.EXECUTING, SagaStatus.COMPENSATING}:
             # In progress - try to resume
-            logger.info("Resuming saga %s in status %s", saga.saga_id, saga.status.value)
+            logger.info(
+                "Resuming saga %s in status %s", saga.saga_id, saga.status.value
+            )
             if saga.status == SagaStatus.COMPENSATING:
                 return self._compensate_steps(db, saga)
             return self._execute_steps(db, saga)
@@ -222,10 +231,7 @@ class SagaOrchestrator(ABC):
                     context.update(step.output_data)
                 continue
 
-            logger.info(
-                "Executing saga %s step %d: %s",
-                saga.saga_id, i, step_def.name
-            )
+            logger.info("Executing saga %s step %d: %s", saga.saga_id, i, step_def.name)
 
             # Mark step as executing
             step.status = StepStatus.EXECUTING
@@ -237,8 +243,7 @@ class SagaOrchestrator(ABC):
                 result = step_def.execute(db, saga.payload, context)
             except Exception as e:
                 logger.exception(
-                    "Saga %s step %d failed with exception",
-                    saga.saga_id, i
+                    "Saga %s step %d failed with exception", saga.saga_id, i
                 )
                 result = StepResult(
                     success=False,
@@ -258,10 +263,7 @@ class SagaOrchestrator(ABC):
                 saga.current_step = i + 1
                 db.commit()
 
-                logger.info(
-                    "Saga %s step %d completed successfully",
-                    saga.saga_id, i
-                )
+                logger.info("Saga %s step %d completed successfully", saga.saga_id, i)
             else:
                 # Step failed - start compensation
                 step.status = StepStatus.FAILED
@@ -272,7 +274,9 @@ class SagaOrchestrator(ABC):
 
                 logger.warning(
                     "Saga %s step %d failed: %s - starting compensation",
-                    saga.saga_id, i, result.error
+                    saga.saga_id,
+                    i,
+                    result.error,
                 )
 
                 return self._compensate_steps(db, saga)
@@ -323,8 +327,7 @@ class SagaOrchestrator(ABC):
                 continue
 
             logger.info(
-                "Compensating saga %s step %d: %s",
-                saga.saga_id, i, step_def.name
+                "Compensating saga %s step %d: %s", saga.saga_id, i, step_def.name
             )
 
             step.status = StepStatus.COMPENSATING
@@ -337,10 +340,7 @@ class SagaOrchestrator(ABC):
                     step.compensation_data or {},
                 )
             except Exception as e:
-                logger.exception(
-                    "Saga %s step %d compensation failed",
-                    saga.saga_id, i
-                )
+                logger.exception("Saga %s step %d compensation failed", saga.saga_id, i)
                 success = False
                 step.error_message = f"Compensation failed: {e}"
 
@@ -349,19 +349,13 @@ class SagaOrchestrator(ABC):
                 step.completed_at = datetime.now(timezone.utc)
                 db.commit()
 
-                logger.info(
-                    "Saga %s step %d compensated",
-                    saga.saga_id, i
-                )
+                logger.info("Saga %s step %d compensated", saga.saga_id, i)
             else:
                 compensation_failed = True
                 step.retry_count += 1
                 db.commit()
 
-                logger.error(
-                    "Saga %s step %d compensation failed",
-                    saga.saga_id, i
-                )
+                logger.error("Saga %s step %d compensation failed", saga.saga_id, i)
 
         if compensation_failed:
             saga.status = SagaStatus.FAILED

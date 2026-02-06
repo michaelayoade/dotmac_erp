@@ -3,17 +3,19 @@ Gantt Chart Service - PM Module.
 
 Business logic for generating Gantt chart data.
 """
+
 from __future__ import annotations
 
+import logging
 import uuid
-from datetime import date, timedelta
-from typing import TYPE_CHECKING, Dict, List, Optional
+from datetime import timedelta
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.finance.core_org.project import Project
-from app.models.pm import Milestone, MilestoneStatus, Task, TaskDependency
+from app.models.pm import Milestone, MilestoneStatus, Task
 from app.schemas.pm.gantt import (
     GanttChartData,
     GanttLink,
@@ -21,6 +23,8 @@ from app.schemas.pm.gantt import (
     dependency_type_to_gantt_type,
 )
 from app.services.common import NotFoundError
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.auth import Principal
@@ -108,7 +112,9 @@ class GanttService:
                 start_date=task.start_date,
                 end_date=end_date,
                 duration=duration,
-                progress=task.progress_percent / 100.0 if task.progress_percent else 0.0,
+                progress=task.progress_percent / 100.0
+                if task.progress_percent
+                else 0.0,
                 parent=str(task.parent_task_id) if task.parent_task_id else None,
                 type="task",
                 priority=task.priority,

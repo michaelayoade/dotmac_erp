@@ -6,25 +6,30 @@ Provides unified search across entity types with consistent response format.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from sqlalchemy import or_, func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
+
+from app.models.finance.ap.supplier import Supplier
 
 # Import models for searchable entities
 from app.models.finance.ar.customer import Customer
-from app.models.finance.ap.supplier import Supplier
-from app.models.finance.gl.account import Account
-from app.models.inventory.item import Item
-from app.models.finance.tax.tax_code import TaxCode
 from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus
+from app.models.finance.gl.account import Account
+from app.models.finance.tax.tax_code import TaxCode
+from app.models.inventory.item import Item
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
 class SearchSuggestion:
     """A single search suggestion."""
+
     id: str
     label: str
     subtitle: Optional[str] = None
@@ -45,6 +50,7 @@ class SearchSuggestion:
 @dataclass
 class SearchResult:
     """Search result with suggestions and metadata."""
+
     suggestions: List[SearchSuggestion]
     query: str
     entity_type: str
@@ -215,7 +221,9 @@ class SearchSuggestionsService:
 
         # Optional filter by account type
         if filters.get("account_type"):
-            base_query = base_query.filter(Account.account_type == filters["account_type"])
+            base_query = base_query.filter(
+                Account.account_type == filters["account_type"]
+            )
 
         total = base_query.count()
         accounts = base_query.limit(limit).all()
@@ -334,7 +342,9 @@ class SearchSuggestionsService:
             SearchSuggestion(
                 id=str(a.bank_account_id),
                 label=a.account_name,
-                subtitle=f"{a.bank_name} - {a.account_number[-4:]}" if a.account_number else a.bank_name,
+                subtitle=f"{a.bank_name} - {a.account_number[-4:]}"
+                if a.account_number
+                else a.bank_name,
                 category="bank_account",
             )
             for a in accounts

@@ -23,15 +23,18 @@ from app.models.finance.ap.supplier_invoice import (
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.finance.gl.journal_entry import JournalType
 from app.services.common import coerce_uuid
-from app.services.finance.gl.journal import JournalService, JournalInput, JournalLineInput
-from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
-
-from app.services.finance.ap.posting.result import APPostingResult
 from app.services.finance.ap.posting.helpers import (
-    determine_debit_account,
-    create_tax_transactions,
     create_assets_for_capitalizable_lines,
+    create_tax_transactions,
+    determine_debit_account,
 )
+from app.services.finance.ap.posting.result import APPostingResult
+from app.services.finance.gl.journal import (
+    JournalInput,
+    JournalLineInput,
+    JournalService,
+)
+from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
 
 
 def post_invoice(
@@ -70,6 +73,7 @@ def post_invoice(
     # Delegate to saga if requested
     if use_saga:
         from app.services.finance.ap.ap_posting_saga import post_invoice_with_saga
+
         result = post_invoice_with_saga(
             db=db,
             organization_id=organization_id,
@@ -115,9 +119,7 @@ def post_invoice(
     )
 
     if not lines:
-        return APPostingResult(
-            success=False, message="Invoice has no lines"
-        )
+        return APPostingResult(success=False, message="Invoice has no lines")
 
     # Build journal entry lines
     journal_lines: list[JournalLineInput] = []
@@ -126,9 +128,7 @@ def post_invoice(
     # Debit lines (expense/asset/inventory accounts)
     for inv_line in lines:
         # Determine account using smart routing
-        account_id = determine_debit_account(
-            db, org_id, inv_line, supplier
-        )
+        account_id = determine_debit_account(db, org_id, inv_line, supplier)
 
         if not account_id:
             return APPostingResult(
@@ -218,21 +218,19 @@ def post_invoice(
     )
 
     try:
-        journal = JournalService.create_journal(
-            db, org_id, journal_input, user_id
-        )
+        journal = JournalService.create_journal(db, org_id, journal_input, user_id)
 
         # Submit and approve automatically for AP posting
         JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
 
         # Use a system user ID for auto-approval to avoid SoD issue
         # In production, this would be a designated system account
-        JournalService.approve_journal(
-            db, org_id, journal.journal_entry_id, user_id
-        )
+        JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
 
     except HTTPException as e:
-        return APPostingResult(success=False, message=f"Journal creation failed: {e.detail}")
+        return APPostingResult(
+            success=False, message=f"Journal creation failed: {e.detail}"
+        )
 
     # Post to ledger
     if not idempotency_key:

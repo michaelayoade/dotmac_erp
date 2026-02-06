@@ -3,16 +3,23 @@ Numbering Sequence Service.
 
 Generates document numbers based on configurable sequences.
 """
+
+import logging
 import uuid
 from datetime import date, datetime
-from typing import Optional, Union
+from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
-from app.models.finance.core_config import NumberingSequence, SequenceType, ResetFrequency
+from app.models.finance.core_config import (
+    NumberingSequence,
+    ResetFrequency,
+    SequenceType,
+)
 
+logger = logging.getLogger(__name__)
 
 # Default prefixes for each sequence type
 DEFAULT_PREFIXES = {
@@ -141,7 +148,9 @@ class NumberingService:
     ) -> Optional[NumberingSequence]:
         """Get sequence configuration by ID."""
         result = await self.db.execute(
-            select(NumberingSequence).where(NumberingSequence.sequence_id == sequence_id)
+            select(NumberingSequence).where(
+                NumberingSequence.sequence_id == sequence_id
+            )
         )
         return result.scalar_one_or_none()
 
@@ -198,8 +207,8 @@ class NumberingService:
 
         if sequence.reset_frequency == ResetFrequency.MONTHLY:
             return bool(
-                reference_date.year != sequence.current_year or
-                reference_date.month != sequence.current_month
+                reference_date.year != sequence.current_year
+                or reference_date.month != sequence.current_month
             )
 
         return False
@@ -241,7 +250,9 @@ class NumberingService:
 
         return result
 
-    def preview_format(self, sequence: NumberingSequence, sample_number: int = 1) -> str:
+    def preview_format(
+        self, sequence: NumberingSequence, sample_number: int = 1
+    ) -> str:
         """Generate a preview of what a number would look like."""
         today = date.today()
         parts = []
@@ -297,7 +308,9 @@ class NumberingService:
     ) -> Optional[NumberingSequence]:
         """Update a sequence configuration."""
         result = await self.db.execute(
-            select(NumberingSequence).where(NumberingSequence.sequence_id == sequence_id)
+            select(NumberingSequence).where(
+                NumberingSequence.sequence_id == sequence_id
+            )
         )
         sequence = result.scalar_one_or_none()
 
@@ -331,7 +344,9 @@ class NumberingService:
     ) -> Optional[NumberingSequence]:
         """Reset a sequence counter to a specific value."""
         result = await self.db.execute(
-            select(NumberingSequence).where(NumberingSequence.sequence_id == sequence_id)
+            select(NumberingSequence).where(
+                NumberingSequence.sequence_id == sequence_id
+            )
         )
         sequence = result.scalar_one_or_none()
 
@@ -451,8 +466,8 @@ class SyncNumberingService:
 
         if sequence.reset_frequency == ResetFrequency.MONTHLY:
             return bool(
-                reference_date.year != sequence.current_year or
-                reference_date.month != sequence.current_month
+                reference_date.year != sequence.current_year
+                or reference_date.month != sequence.current_month
             )
 
         return False

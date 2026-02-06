@@ -6,6 +6,7 @@ Handles asset sales, scrapping, and other disposal types.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -13,14 +14,16 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from app.models.fixed_assets.asset import Asset, AssetStatus
-from app.models.fixed_assets.asset_category import AssetCategory
 from app.models.fixed_assets.asset_disposal import AssetDisposal, DisposalType
+from app.models.finance.audit.audit_log import AuditAction
+from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -102,7 +105,10 @@ class AssetDisposalService(ListResponseMixin):
         net_proceeds = input.disposal_proceeds - input.costs_of_disposal
 
         # Add insurance proceeds if applicable
-        if input.disposal_type == DisposalType.INSURANCE_CLAIM and input.insurance_proceeds:
+        if (
+            input.disposal_type == DisposalType.INSURANCE_CLAIM
+            and input.insurance_proceeds
+        ):
             net_proceeds += input.insurance_proceeds
 
         # Calculate gain/loss
@@ -134,6 +140,23 @@ class AssetDisposalService(ListResponseMixin):
         db.add(disposal)
         db.commit()
         db.refresh(disposal)
+
+        fire_audit_event(
+            db,
+            org_id,
+            "fa",
+            "asset_disposal",
+            str(disposal.disposal_id),
+            AuditAction.INSERT,
+            new_values={
+                "asset_id": str(ast_id),
+                "disposal_type": input.disposal_type.value,
+                "disposal_date": str(input.disposal_date),
+                "net_proceeds": str(disposal.net_proceeds),
+                "gain_loss": str(disposal.gain_loss_on_disposal),
+            },
+            user_id=user_id,
+        )
 
         return disposal
 
@@ -192,16 +215,35 @@ class AssetDisposalService(ListResponseMixin):
         asset.disposal_gain_loss = disposal.gain_loss_on_disposal
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=db, organization_id=org_id,
-                entity_type="ASSET_DISPOSAL", entity_id=disposal.disposal_id,
+                db=db,
+                organization_id=org_id,
+                entity_type="ASSET_DISPOSAL",
+                entity_id=disposal.disposal_id,
                 event="ON_APPROVAL",
-                old_values={}, new_values={"status": "DISPOSED"},
+                old_values={},
+                new_values={"status": "DISPOSED"},
                 user_id=user_id,
             )
         except Exception:
             pass
+
+        fire_audit_event(
+            db,
+            org_id,
+            "fa",
+            "asset_disposal",
+            str(disposal.disposal_id),
+            AuditAction.UPDATE,
+            old_values={"status": "PENDING"},
+            new_values={"status": "APPROVED", "approved_by": str(user_id)},
+            user_id=user_id,
+            reason="Asset disposal approved",
+        )
 
         db.commit()
         db.refresh(disposal)
@@ -268,6 +310,19 @@ class AssetDisposalService(ListResponseMixin):
 
         disposal.journal_entry_id = result.journal_entry_id
 
+        fire_audit_event(
+            db,
+            org_id,
+            "fa",
+            "asset_disposal",
+            str(disposal.disposal_id),
+            AuditAction.UPDATE,
+            old_values={"journal_entry_id": None},
+            new_values={"journal_entry_id": str(result.journal_entry_id)},
+            user_id=user_id,
+            reason="Asset disposal posted to GL",
+        )
+
         db.commit()
         db.refresh(disposal)
 
@@ -319,11 +374,7 @@ class AssetDisposalService(ListResponseMixin):
         if not asset or asset.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Asset not found")
 
-        return (
-            db.query(AssetDisposal)
-            .filter(AssetDisposal.asset_id == ast_id)
-            .first()
-        )
+        return db.query(AssetDisposal).filter(AssetDisposal.asset_id == ast_id).first()
 
     @staticmethod
     def list(
@@ -342,14 +393,12 @@ class AssetDisposalService(ListResponseMixin):
         query = db.query(AssetDisposal)
 
         if asset_id:
-            query = query.filter(
-                AssetDisposal.asset_id == coerce_uuid(asset_id)
-            )
+            query = query.filter(AssetDisposal.asset_id == coerce_uuid(asset_id))
         elif organization_id:
             # Need to join to filter by org
-            query = query.join(
-                Asset, AssetDisposal.asset_id == Asset.asset_id
-            ).filter(Asset.organization_id == coerce_uuid(organization_id))
+            query = query.join(Asset, AssetDisposal.asset_id == Asset.asset_id).filter(
+                Asset.organization_id == coerce_uuid(organization_id)
+            )
 
         if disposal_type:
             query = query.filter(AssetDisposal.disposal_type == disposal_type)
@@ -394,9 +443,11 @@ class AssetDisposalService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        query = db.query(AssetDisposal).join(
-            Asset, AssetDisposal.asset_id == Asset.asset_id
-        ).filter(Asset.organization_id == org_id)
+        query = (
+            db.query(AssetDisposal)
+            .join(Asset, AssetDisposal.asset_id == Asset.asset_id)
+            .filter(Asset.organization_id == org_id)
+        )
 
         if fiscal_period_id:
             query = query.filter(

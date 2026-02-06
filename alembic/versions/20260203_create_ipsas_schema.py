@@ -14,6 +14,7 @@ This migration creates:
 - Organization columns: sector_type, accounting_framework,
                         fund_accounting_enabled, commitment_control_enabled
 """
+
 from alembic import op
 from app.alembic_utils import ensure_enum
 import sqlalchemy as sa
@@ -40,56 +41,92 @@ def upgrade() -> None:
     ensure_enum(
         bind,
         "fund_type",
-        "GENERAL", "CAPITAL", "SPECIAL", "DONOR", "TRUST", "REVOLVING", "CONSOLIDATED",
+        "GENERAL",
+        "CAPITAL",
+        "SPECIAL",
+        "DONOR",
+        "TRUST",
+        "REVOLVING",
+        "CONSOLIDATED",
         schema="ipsas",
     )
     ensure_enum(
         bind,
         "fund_status",
-        "ACTIVE", "FROZEN", "CLOSED",
+        "ACTIVE",
+        "FROZEN",
+        "CLOSED",
         schema="ipsas",
     )
     ensure_enum(
         bind,
         "appropriation_type",
-        "ORIGINAL", "SUPPLEMENTARY", "VIREMENT_IN", "VIREMENT_OUT", "REDUCTION",
+        "ORIGINAL",
+        "SUPPLEMENTARY",
+        "VIREMENT_IN",
+        "VIREMENT_OUT",
+        "REDUCTION",
         schema="ipsas",
     )
     ensure_enum(
         bind,
         "appropriation_status",
-        "DRAFT", "SUBMITTED", "APPROVED", "ACTIVE", "LAPSED", "CLOSED",
+        "DRAFT",
+        "SUBMITTED",
+        "APPROVED",
+        "ACTIVE",
+        "LAPSED",
+        "CLOSED",
         schema="ipsas",
     )
     ensure_enum(
         bind,
         "allotment_status",
-        "ACTIVE", "FROZEN", "CLOSED",
+        "ACTIVE",
+        "FROZEN",
+        "CLOSED",
         schema="ipsas",
     )
     ensure_enum(
         bind,
         "commitment_type",
-        "PURCHASE_ORDER", "CONTRACT", "PAYROLL", "OTHER",
+        "PURCHASE_ORDER",
+        "CONTRACT",
+        "PAYROLL",
+        "OTHER",
         schema="ipsas",
     )
     ensure_enum(
         bind,
         "commitment_status",
-        "PENDING", "COMMITTED", "OBLIGATED", "PARTIALLY_PAID", "EXPENDED",
-        "CANCELLED", "LAPSED",
+        "PENDING",
+        "COMMITTED",
+        "OBLIGATED",
+        "PARTIALLY_PAID",
+        "EXPENDED",
+        "CANCELLED",
+        "LAPSED",
         schema="ipsas",
     )
     ensure_enum(
         bind,
         "virement_status",
-        "DRAFT", "SUBMITTED", "APPROVED", "APPLIED", "REJECTED",
+        "DRAFT",
+        "SUBMITTED",
+        "APPROVED",
+        "APPLIED",
+        "REJECTED",
         schema="ipsas",
     )
     ensure_enum(
         bind,
         "coa_segment_type",
-        "ADMINISTRATIVE", "ECONOMIC", "FUND", "FUNCTIONAL", "PROGRAM", "PROJECT",
+        "ADMINISTRATIVE",
+        "ECONOMIC",
+        "FUND",
+        "FUNCTIONAL",
+        "PROGRAM",
+        "PROJECT",
         schema="ipsas",
     )
 
@@ -102,14 +139,18 @@ def upgrade() -> None:
         ensure_enum(
             bind,
             "sector_type",
-            "PRIVATE", "PUBLIC", "NGO",
+            "PRIVATE",
+            "PUBLIC",
+            "NGO",
             schema="core_org",
         )
     if "accounting_framework" not in existing_enums:
         ensure_enum(
             bind,
             "accounting_framework",
-            "IFRS", "IPSAS", "BOTH",
+            "IFRS",
+            "IPSAS",
+            "BOTH",
             schema="core_org",
         )
 
@@ -127,7 +168,9 @@ def upgrade() -> None:
                 sa.Column(
                     "sector_type",
                     postgresql.ENUM(
-                        "PRIVATE", "PUBLIC", "NGO",
+                        "PRIVATE",
+                        "PUBLIC",
+                        "NGO",
                         name="sector_type",
                         schema="core_org",
                         create_type=False,
@@ -143,7 +186,9 @@ def upgrade() -> None:
                 sa.Column(
                     "accounting_framework",
                     postgresql.ENUM(
-                        "IFRS", "IPSAS", "BOTH",
+                        "IFRS",
+                        "IPSAS",
+                        "BOTH",
                         name="accounting_framework",
                         schema="core_org",
                         create_type=False,
@@ -195,28 +240,43 @@ def upgrade() -> None:
             sa.Column(
                 "fund_type",
                 postgresql.ENUM(
-                    "GENERAL", "CAPITAL", "SPECIAL", "DONOR", "TRUST",
-                    "REVOLVING", "CONSOLIDATED",
-                    name="fund_type", schema="ipsas", create_type=False,
+                    "GENERAL",
+                    "CAPITAL",
+                    "SPECIAL",
+                    "DONOR",
+                    "TRUST",
+                    "REVOLVING",
+                    "CONSOLIDATED",
+                    name="fund_type",
+                    schema="ipsas",
+                    create_type=False,
                 ),
                 nullable=False,
             ),
             sa.Column(
                 "status",
                 postgresql.ENUM(
-                    "ACTIVE", "FROZEN", "CLOSED",
-                    name="fund_status", schema="ipsas", create_type=False,
+                    "ACTIVE",
+                    "FROZEN",
+                    "CLOSED",
+                    name="fund_status",
+                    schema="ipsas",
+                    create_type=False,
                 ),
                 nullable=False,
             ),
-            sa.Column("is_restricted", sa.Boolean(), nullable=False, server_default="false"),
+            sa.Column(
+                "is_restricted", sa.Boolean(), nullable=False, server_default="false"
+            ),
             sa.Column("restriction_description", sa.Text(), nullable=True),
             sa.Column("donor_name", sa.String(200), nullable=True),
             sa.Column("donor_reference", sa.String(100), nullable=True),
             sa.Column("effective_from", sa.Date(), nullable=False),
             sa.Column("effective_to", sa.Date(), nullable=True),
             sa.Column("parent_fund_id", postgresql.UUID(as_uuid=True), nullable=True),
-            sa.Column("created_by_user_id", postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column(
+                "created_by_user_id", postgresql.UUID(as_uuid=True), nullable=False
+            ),
             sa.Column(
                 "created_at",
                 sa.DateTime(timezone=True),
@@ -233,12 +293,16 @@ def upgrade() -> None:
             schema="ipsas",
         )
         op.create_index(
-            "idx_fund_org_status", "fund",
-            ["organization_id", "status"], schema="ipsas",
+            "idx_fund_org_status",
+            "fund",
+            ["organization_id", "status"],
+            schema="ipsas",
         )
         op.create_index(
-            "idx_fund_type", "fund",
-            ["organization_id", "fund_type"], schema="ipsas",
+            "idx_fund_type",
+            "fund",
+            ["organization_id", "fund_type"],
+            schema="ipsas",
         )
 
     # ========================================
@@ -262,22 +326,38 @@ def upgrade() -> None:
             sa.Column(
                 "appropriation_type",
                 postgresql.ENUM(
-                    "ORIGINAL", "SUPPLEMENTARY", "VIREMENT_IN", "VIREMENT_OUT",
+                    "ORIGINAL",
+                    "SUPPLEMENTARY",
+                    "VIREMENT_IN",
+                    "VIREMENT_OUT",
                     "REDUCTION",
-                    name="appropriation_type", schema="ipsas", create_type=False,
+                    name="appropriation_type",
+                    schema="ipsas",
+                    create_type=False,
                 ),
                 nullable=False,
             ),
             sa.Column(
                 "status",
                 postgresql.ENUM(
-                    "DRAFT", "SUBMITTED", "APPROVED", "ACTIVE", "LAPSED", "CLOSED",
-                    name="appropriation_status", schema="ipsas", create_type=False,
+                    "DRAFT",
+                    "SUBMITTED",
+                    "APPROVED",
+                    "ACTIVE",
+                    "LAPSED",
+                    "CLOSED",
+                    name="appropriation_status",
+                    schema="ipsas",
+                    create_type=False,
                 ),
                 nullable=False,
             ),
-            sa.Column("approved_amount", sa.Numeric(20, 6), nullable=False, server_default="0"),
-            sa.Column("revised_amount", sa.Numeric(20, 6), nullable=False, server_default="0"),
+            sa.Column(
+                "approved_amount", sa.Numeric(20, 6), nullable=False, server_default="0"
+            ),
+            sa.Column(
+                "revised_amount", sa.Numeric(20, 6), nullable=False, server_default="0"
+            ),
             sa.Column("currency_code", sa.String(3), nullable=False),
             sa.Column("account_id", postgresql.UUID(as_uuid=True), nullable=True),
             sa.Column("cost_center_id", postgresql.UUID(as_uuid=True), nullable=True),
@@ -285,8 +365,12 @@ def upgrade() -> None:
             sa.Column("appropriation_act_reference", sa.String(100), nullable=True),
             sa.Column("effective_from", sa.Date(), nullable=False),
             sa.Column("effective_to", sa.Date(), nullable=True),
-            sa.Column("created_by_user_id", postgresql.UUID(as_uuid=True), nullable=False),
-            sa.Column("approved_by_user_id", postgresql.UUID(as_uuid=True), nullable=True),
+            sa.Column(
+                "created_by_user_id", postgresql.UUID(as_uuid=True), nullable=False
+            ),
+            sa.Column(
+                "approved_by_user_id", postgresql.UUID(as_uuid=True), nullable=True
+            ),
             sa.Column("approved_at", sa.DateTime(timezone=True), nullable=True),
             sa.Column(
                 "created_at",
@@ -311,12 +395,16 @@ def upgrade() -> None:
             schema="ipsas",
         )
         op.create_index(
-            "idx_approp_org_fy", "appropriation",
-            ["organization_id", "fiscal_year_id"], schema="ipsas",
+            "idx_approp_org_fy",
+            "appropriation",
+            ["organization_id", "fiscal_year_id"],
+            schema="ipsas",
         )
         op.create_index(
-            "idx_approp_fund", "appropriation",
-            ["fund_id"], schema="ipsas",
+            "idx_approp_fund",
+            "appropriation",
+            ["fund_id"],
+            schema="ipsas",
         )
 
     # ========================================
@@ -331,20 +419,28 @@ def upgrade() -> None:
                 nullable=False,
                 server_default=sa.text("gen_random_uuid()"),
             ),
-            sa.Column("appropriation_id", postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column(
+                "appropriation_id", postgresql.UUID(as_uuid=True), nullable=False
+            ),
             sa.Column("organization_id", postgresql.UUID(as_uuid=True), nullable=False),
             sa.Column("allotment_code", sa.String(30), nullable=False),
             sa.Column("allotment_name", sa.String(200), nullable=False),
             sa.Column("cost_center_id", postgresql.UUID(as_uuid=True), nullable=True),
             sa.Column("business_unit_id", postgresql.UUID(as_uuid=True), nullable=True),
-            sa.Column("allotted_amount", sa.Numeric(20, 6), nullable=False, server_default="0"),
+            sa.Column(
+                "allotted_amount", sa.Numeric(20, 6), nullable=False, server_default="0"
+            ),
             sa.Column("period_from", sa.Date(), nullable=False),
             sa.Column("period_to", sa.Date(), nullable=False),
             sa.Column(
                 "status",
                 postgresql.ENUM(
-                    "ACTIVE", "FROZEN", "CLOSED",
-                    name="allotment_status", schema="ipsas", create_type=False,
+                    "ACTIVE",
+                    "FROZEN",
+                    "CLOSED",
+                    name="allotment_status",
+                    schema="ipsas",
+                    create_type=False,
                 ),
                 nullable=False,
             ),
@@ -368,8 +464,10 @@ def upgrade() -> None:
             schema="ipsas",
         )
         op.create_index(
-            "idx_allotment_approp", "allotment",
-            ["appropriation_id"], schema="ipsas",
+            "idx_allotment_approp",
+            "allotment",
+            ["appropriation_id"],
+            schema="ipsas",
         )
 
     # ========================================
@@ -389,17 +487,29 @@ def upgrade() -> None:
             sa.Column(
                 "commitment_type",
                 postgresql.ENUM(
-                    "PURCHASE_ORDER", "CONTRACT", "PAYROLL", "OTHER",
-                    name="commitment_type", schema="ipsas", create_type=False,
+                    "PURCHASE_ORDER",
+                    "CONTRACT",
+                    "PAYROLL",
+                    "OTHER",
+                    name="commitment_type",
+                    schema="ipsas",
+                    create_type=False,
                 ),
                 nullable=False,
             ),
             sa.Column(
                 "status",
                 postgresql.ENUM(
-                    "PENDING", "COMMITTED", "OBLIGATED", "PARTIALLY_PAID",
-                    "EXPENDED", "CANCELLED", "LAPSED",
-                    name="commitment_status", schema="ipsas", create_type=False,
+                    "PENDING",
+                    "COMMITTED",
+                    "OBLIGATED",
+                    "PARTIALLY_PAID",
+                    "EXPENDED",
+                    "CANCELLED",
+                    "LAPSED",
+                    name="commitment_status",
+                    schema="ipsas",
+                    create_type=False,
                 ),
                 nullable=False,
             ),
@@ -407,7 +517,9 @@ def upgrade() -> None:
             sa.Column("allotment_id", postgresql.UUID(as_uuid=True), nullable=True),
             sa.Column("fund_id", postgresql.UUID(as_uuid=True), nullable=False),
             sa.Column(
-                "source_type", sa.String(50), nullable=False,
+                "source_type",
+                sa.String(50),
+                nullable=False,
                 comment="purchase_order, contract, payroll, etc.",
             ),
             sa.Column("source_id", postgresql.UUID(as_uuid=True), nullable=False),
@@ -416,24 +528,49 @@ def upgrade() -> None:
             sa.Column("business_unit_id", postgresql.UUID(as_uuid=True), nullable=True),
             sa.Column("project_id", postgresql.UUID(as_uuid=True), nullable=True),
             sa.Column("fiscal_year_id", postgresql.UUID(as_uuid=True), nullable=False),
-            sa.Column("fiscal_period_id", postgresql.UUID(as_uuid=True), nullable=False),
-            sa.Column("currency_code", sa.String(3), nullable=False),
-            sa.Column("committed_amount", sa.Numeric(20, 6), nullable=False, server_default="0"),
-            sa.Column("obligated_amount", sa.Numeric(20, 6), nullable=False, server_default="0"),
-            sa.Column("expended_amount", sa.Numeric(20, 6), nullable=False, server_default="0"),
-            sa.Column("cancelled_amount", sa.Numeric(20, 6), nullable=False, server_default="0"),
             sa.Column(
-                "commitment_journal_id", postgresql.UUID(as_uuid=True), nullable=True,
+                "fiscal_period_id", postgresql.UUID(as_uuid=True), nullable=False
+            ),
+            sa.Column("currency_code", sa.String(3), nullable=False),
+            sa.Column(
+                "committed_amount",
+                sa.Numeric(20, 6),
+                nullable=False,
+                server_default="0",
+            ),
+            sa.Column(
+                "obligated_amount",
+                sa.Numeric(20, 6),
+                nullable=False,
+                server_default="0",
+            ),
+            sa.Column(
+                "expended_amount", sa.Numeric(20, 6), nullable=False, server_default="0"
+            ),
+            sa.Column(
+                "cancelled_amount",
+                sa.Numeric(20, 6),
+                nullable=False,
+                server_default="0",
+            ),
+            sa.Column(
+                "commitment_journal_id",
+                postgresql.UUID(as_uuid=True),
+                nullable=True,
                 comment="Encumbrance journal entry",
             ),
             sa.Column(
-                "obligation_journal_id", postgresql.UUID(as_uuid=True), nullable=True,
+                "obligation_journal_id",
+                postgresql.UUID(as_uuid=True),
+                nullable=True,
                 comment="Obligation journal entry",
             ),
             sa.Column("commitment_date", sa.Date(), nullable=False),
             sa.Column("obligation_date", sa.Date(), nullable=True),
             sa.Column("expenditure_date", sa.Date(), nullable=True),
-            sa.Column("created_by_user_id", postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column(
+                "created_by_user_id", postgresql.UUID(as_uuid=True), nullable=False
+            ),
             sa.Column(
                 "created_at",
                 sa.DateTime(timezone=True),
@@ -448,9 +585,7 @@ def upgrade() -> None:
             sa.ForeignKeyConstraint(
                 ["appropriation_id"], ["ipsas.appropriation.appropriation_id"]
             ),
-            sa.ForeignKeyConstraint(
-                ["allotment_id"], ["ipsas.allotment.allotment_id"]
-            ),
+            sa.ForeignKeyConstraint(["allotment_id"], ["ipsas.allotment.allotment_id"]),
             sa.ForeignKeyConstraint(["fund_id"], ["ipsas.fund.fund_id"]),
             sa.ForeignKeyConstraint(["account_id"], ["gl.account.account_id"]),
             sa.ForeignKeyConstraint(
@@ -465,20 +600,28 @@ def upgrade() -> None:
             schema="ipsas",
         )
         op.create_index(
-            "idx_commitment_org_status", "commitment",
-            ["organization_id", "status"], schema="ipsas",
+            "idx_commitment_org_status",
+            "commitment",
+            ["organization_id", "status"],
+            schema="ipsas",
         )
         op.create_index(
-            "idx_commitment_fund", "commitment",
-            ["fund_id"], schema="ipsas",
+            "idx_commitment_fund",
+            "commitment",
+            ["fund_id"],
+            schema="ipsas",
         )
         op.create_index(
-            "idx_commitment_approp", "commitment",
-            ["appropriation_id"], schema="ipsas",
+            "idx_commitment_approp",
+            "commitment",
+            ["appropriation_id"],
+            schema="ipsas",
         )
         op.create_index(
-            "idx_commitment_source", "commitment",
-            ["source_type", "source_id"], schema="ipsas",
+            "idx_commitment_source",
+            "commitment",
+            ["source_type", "source_id"],
+            schema="ipsas",
         )
 
     # ========================================
@@ -497,9 +640,21 @@ def upgrade() -> None:
             sa.Column("line_number", sa.Integer(), nullable=False),
             sa.Column("account_id", postgresql.UUID(as_uuid=True), nullable=False),
             sa.Column("description", sa.Text(), nullable=True),
-            sa.Column("committed_amount", sa.Numeric(20, 6), nullable=False, server_default="0"),
-            sa.Column("obligated_amount", sa.Numeric(20, 6), nullable=False, server_default="0"),
-            sa.Column("expended_amount", sa.Numeric(20, 6), nullable=False, server_default="0"),
+            sa.Column(
+                "committed_amount",
+                sa.Numeric(20, 6),
+                nullable=False,
+                server_default="0",
+            ),
+            sa.Column(
+                "obligated_amount",
+                sa.Numeric(20, 6),
+                nullable=False,
+                server_default="0",
+            ),
+            sa.Column(
+                "expended_amount", sa.Numeric(20, 6), nullable=False, server_default="0"
+            ),
             sa.Column("source_line_type", sa.String(50), nullable=True),
             sa.Column("source_line_id", postgresql.UUID(as_uuid=True), nullable=True),
             sa.PrimaryKeyConstraint("line_id"),
@@ -510,8 +665,10 @@ def upgrade() -> None:
             schema="ipsas",
         )
         op.create_index(
-            "idx_commitment_line_commitment", "commitment_line",
-            ["commitment_id"], schema="ipsas",
+            "idx_commitment_line_commitment",
+            "commitment_line",
+            ["commitment_id"],
+            schema="ipsas",
         )
 
     # ========================================
@@ -533,25 +690,43 @@ def upgrade() -> None:
             sa.Column(
                 "status",
                 postgresql.ENUM(
-                    "DRAFT", "SUBMITTED", "APPROVED", "APPLIED", "REJECTED",
-                    name="virement_status", schema="ipsas", create_type=False,
+                    "DRAFT",
+                    "SUBMITTED",
+                    "APPROVED",
+                    "APPLIED",
+                    "REJECTED",
+                    name="virement_status",
+                    schema="ipsas",
+                    create_type=False,
                 ),
                 nullable=False,
             ),
-            sa.Column("from_appropriation_id", postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column(
+                "from_appropriation_id", postgresql.UUID(as_uuid=True), nullable=False
+            ),
             sa.Column("from_account_id", postgresql.UUID(as_uuid=True), nullable=True),
-            sa.Column("from_cost_center_id", postgresql.UUID(as_uuid=True), nullable=True),
+            sa.Column(
+                "from_cost_center_id", postgresql.UUID(as_uuid=True), nullable=True
+            ),
             sa.Column("from_fund_id", postgresql.UUID(as_uuid=True), nullable=True),
-            sa.Column("to_appropriation_id", postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column(
+                "to_appropriation_id", postgresql.UUID(as_uuid=True), nullable=False
+            ),
             sa.Column("to_account_id", postgresql.UUID(as_uuid=True), nullable=True),
-            sa.Column("to_cost_center_id", postgresql.UUID(as_uuid=True), nullable=True),
+            sa.Column(
+                "to_cost_center_id", postgresql.UUID(as_uuid=True), nullable=True
+            ),
             sa.Column("to_fund_id", postgresql.UUID(as_uuid=True), nullable=True),
             sa.Column("amount", sa.Numeric(20, 6), nullable=False),
             sa.Column("currency_code", sa.String(3), nullable=False),
             sa.Column("justification", sa.Text(), nullable=False),
             sa.Column("approval_authority", sa.String(100), nullable=True),
-            sa.Column("created_by_user_id", postgresql.UUID(as_uuid=True), nullable=False),
-            sa.Column("approved_by_user_id", postgresql.UUID(as_uuid=True), nullable=True),
+            sa.Column(
+                "created_by_user_id", postgresql.UUID(as_uuid=True), nullable=False
+            ),
+            sa.Column(
+                "approved_by_user_id", postgresql.UUID(as_uuid=True), nullable=True
+            ),
             sa.Column("approved_at", sa.DateTime(timezone=True), nullable=True),
             sa.Column("applied_at", sa.DateTime(timezone=True), nullable=True),
             sa.Column(
@@ -580,12 +755,16 @@ def upgrade() -> None:
             schema="ipsas",
         )
         op.create_index(
-            "idx_virement_org_status", "virement",
-            ["organization_id", "status"], schema="ipsas",
+            "idx_virement_org_status",
+            "virement",
+            ["organization_id", "status"],
+            schema="ipsas",
         )
         op.create_index(
-            "idx_virement_fy", "virement",
-            ["fiscal_year_id"], schema="ipsas",
+            "idx_virement_fy",
+            "virement",
+            ["fiscal_year_id"],
+            schema="ipsas",
         )
 
     # ========================================
@@ -604,9 +783,15 @@ def upgrade() -> None:
             sa.Column(
                 "segment_type",
                 postgresql.ENUM(
-                    "ADMINISTRATIVE", "ECONOMIC", "FUND", "FUNCTIONAL",
-                    "PROGRAM", "PROJECT",
-                    name="coa_segment_type", schema="ipsas", create_type=False,
+                    "ADMINISTRATIVE",
+                    "ECONOMIC",
+                    "FUND",
+                    "FUNCTIONAL",
+                    "PROGRAM",
+                    "PROJECT",
+                    name="coa_segment_type",
+                    schema="ipsas",
+                    create_type=False,
                 ),
                 nullable=False,
             ),
@@ -614,7 +799,9 @@ def upgrade() -> None:
             sa.Column("code_position_start", sa.Integer(), nullable=False),
             sa.Column("code_length", sa.Integer(), nullable=False),
             sa.Column("separator", sa.String(1), nullable=False, server_default="-"),
-            sa.Column("is_required", sa.Boolean(), nullable=False, server_default="true"),
+            sa.Column(
+                "is_required", sa.Boolean(), nullable=False, server_default="true"
+            ),
             sa.Column("display_order", sa.Integer(), nullable=False),
             sa.Column(
                 "created_at",
@@ -632,8 +819,10 @@ def upgrade() -> None:
             schema="ipsas",
         )
         op.create_index(
-            "idx_coa_seg_def_org", "coa_segment_definition",
-            ["organization_id"], schema="ipsas",
+            "idx_coa_seg_def_org",
+            "coa_segment_definition",
+            ["organization_id"],
+            schema="ipsas",
         )
 
     # ========================================
@@ -672,7 +861,8 @@ def upgrade() -> None:
                 ["organization_id"], ["core_org.organization.organization_id"]
             ),
             sa.ForeignKeyConstraint(
-                ["parent_segment_value_id"], ["ipsas.coa_segment_value.segment_value_id"]
+                ["parent_segment_value_id"],
+                ["ipsas.coa_segment_value.segment_value_id"],
             ),
             sa.UniqueConstraint(
                 "segment_def_id", "segment_code", name="uq_coa_segment_value"
@@ -680,12 +870,16 @@ def upgrade() -> None:
             schema="ipsas",
         )
         op.create_index(
-            "idx_coa_seg_val_def", "coa_segment_value",
-            ["segment_def_id"], schema="ipsas",
+            "idx_coa_seg_val_def",
+            "coa_segment_value",
+            ["segment_def_id"],
+            schema="ipsas",
         )
         op.create_index(
-            "idx_coa_seg_val_org", "coa_segment_value",
-            ["organization_id"], schema="ipsas",
+            "idx_coa_seg_val_org",
+            "coa_segment_value",
+            ["organization_id"],
+            schema="ipsas",
         )
 
     # ========================================
@@ -779,7 +973,9 @@ def downgrade() -> None:
             for col in inspector.get_columns("organization", schema="core_org")
         }
         if "commitment_control_enabled" in columns:
-            op.drop_column("organization", "commitment_control_enabled", schema="core_org")
+            op.drop_column(
+                "organization", "commitment_control_enabled", schema="core_org"
+            )
         if "fund_accounting_enabled" in columns:
             op.drop_column("organization", "fund_accounting_enabled", schema="core_org")
         if "accounting_framework" in columns:

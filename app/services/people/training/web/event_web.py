@@ -21,12 +21,12 @@ from app.web.deps import WebAuthContext, base_context
 
 from .base import (
     logger,
-    parse_uuid,
     parse_date,
-    parse_time,
     parse_decimal,
-    parse_int,
     parse_event_status,
+    parse_int,
+    parse_time,
+    parse_uuid,
 )
 
 logger = logging.getLogger(__name__)
@@ -143,7 +143,9 @@ class EventWebService:
     def build_event_input(form_data: dict) -> dict:
         """Build input kwargs for event from form data."""
         return {
-            "program_id": coerce_uuid(form_data["program_id"]) if form_data.get("program_id") else None,
+            "program_id": coerce_uuid(form_data["program_id"])
+            if form_data.get("program_id")
+            else None,
             "event_name": form_data.get("event_name", ""),
             "event_type": form_data.get("event_type", "IN_PERSON"),
             "start_date": parse_date(form_data.get("start_date")),
@@ -152,7 +154,9 @@ class EventWebService:
             "end_time": parse_time(form_data.get("end_time")),
             "location": form_data.get("location") or None,
             "meeting_link": form_data.get("meeting_link") or None,
-            "trainer_employee_id": coerce_uuid(form_data["trainer_employee_id"]) if form_data.get("trainer_employee_id") else None,
+            "trainer_employee_id": coerce_uuid(form_data["trainer_employee_id"])
+            if form_data.get("trainer_employee_id")
+            else None,
             "trainer_name": form_data.get("trainer_name") or None,
             "trainer_email": form_data.get("trainer_email") or None,
             "max_attendees": parse_int(form_data.get("max_attendees")),
@@ -180,11 +184,19 @@ class EventWebService:
         context["request"] = request
         context.update(
             self.list_events_context(
-                db, coerce_uuid(auth.organization_id),
-                search, status, program_id, start_date, end_date, page
+                db,
+                coerce_uuid(auth.organization_id),
+                search,
+                status,
+                program_id,
+                start_date,
+                end_date,
+                page,
             )
         )
-        return templates.TemplateResponse(request, "people/training/events.html", context)
+        return templates.TemplateResponse(
+            request, "people/training/events.html", context
+        )
 
     def event_new_form_response(
         self,
@@ -198,11 +210,12 @@ class EventWebService:
         context["request"] = request
         context.update(
             self.event_form_context(
-                db, coerce_uuid(auth.organization_id),
-                preselected_program_id=program_id
+                db, coerce_uuid(auth.organization_id), preselected_program_id=program_id
             )
         )
-        return templates.TemplateResponse(request, "people/training/event_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/training/event_form.html", context
+        )
 
     def event_detail_response(
         self,
@@ -218,11 +231,15 @@ class EventWebService:
         if not ctx.get("event"):
             return RedirectResponse(url="/people/training/events", status_code=303)
 
-        context = base_context(request, auth, ctx["event"].event_name, "training", db=db)
+        context = base_context(
+            request, auth, ctx["event"].event_name, "training", db=db
+        )
         context["request"] = request
         context.update(ctx)
         context["success"] = success
-        return templates.TemplateResponse(request, "people/training/event_detail.html", context)
+        return templates.TemplateResponse(
+            request, "people/training/event_detail.html", context
+        )
 
     def event_edit_form_response(
         self,
@@ -237,10 +254,14 @@ class EventWebService:
         if not ctx.get("event"):
             return RedirectResponse(url="/people/training/events", status_code=303)
 
-        context = base_context(request, auth, f"Edit {ctx['event'].event_name}", "training", db=db)
+        context = base_context(
+            request, auth, f"Edit {ctx['event'].event_name}", "training", db=db
+        )
         context["request"] = request
         context.update(ctx)
-        return templates.TemplateResponse(request, "people/training/event_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/training/event_form.html", context
+        )
 
     async def create_event_response(
         self,
@@ -264,12 +285,16 @@ class EventWebService:
         except Exception as e:
             db.rollback()
             logger.exception("create_event_response: failed")
-            context = base_context(request, auth, "New Training Event", "training", db=db)
+            context = base_context(
+                request, auth, "New Training Event", "training", db=db
+            )
             context["request"] = request
             context.update(self.event_form_context(db, org_id))
             context["form_data"] = dict(form_data)
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "people/training/event_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/training/event_form.html", context
+            )
 
     async def update_event_response(
         self,
@@ -298,7 +323,9 @@ class EventWebService:
             context["request"] = request
             context.update(self.event_form_context(db, org_id, event_id))
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "people/training/event_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/training/event_form.html", context
+            )
 
     def schedule_event_response(
         self,
@@ -311,7 +338,9 @@ class EventWebService:
         svc = TrainingService(db)
 
         try:
-            svc.update_event(org_id, coerce_uuid(event_id), status=TrainingEventStatus.SCHEDULED)
+            svc.update_event(
+                org_id, coerce_uuid(event_id), status=TrainingEventStatus.SCHEDULED
+            )
             db.commit()
             return RedirectResponse(
                 url=f"/people/training/events/{event_id}?success=Event+scheduled",

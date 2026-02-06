@@ -6,6 +6,7 @@ Adapted from DotMac People for the unified ERP platform.
 
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional, Sequence, TypedDict
@@ -14,6 +15,7 @@ from uuid import UUID
 from sqlalchemy import and_, case, delete, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.models.finance.audit.audit_log import AuditAction
 from app.models.people.leave import (
     Holiday,
     HolidayList,
@@ -23,7 +25,10 @@ from app.models.people.leave import (
     LeaveType,
     LeaveTypePolicy,
 )
+from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import PaginatedResult, PaginationParams
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
@@ -1049,6 +1054,24 @@ class LeaveService:
 
         self.db.add(application)
         self.db.flush()
+
+        fire_audit_event(
+            db=self.db,
+            organization_id=org_id,
+            table_schema="hr",
+            table_name="leave_application",
+            record_id=str(application.application_id),
+            action=AuditAction.INSERT,
+            new_values={
+                "status": LeaveApplicationStatus.SUBMITTED.value,
+                "employee_id": str(employee_id),
+                "leave_type_id": str(leave_type_id),
+                "from_date": str(from_date),
+                "to_date": str(to_date),
+                "total_leave_days": str(total_days),
+            },
+        )
+
         return application
 
     def approve_application(
@@ -1086,9 +1109,23 @@ class LeaveService:
 
         self.db.flush()
 
+        fire_audit_event(
+            db=self.db,
+            organization_id=org_id,
+            table_schema="hr",
+            table_name="leave_application",
+            record_id=str(application.application_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": LeaveApplicationStatus.SUBMITTED.value},
+            new_values={"status": LeaveApplicationStatus.APPROVED.value},
+        )
+
         # Fire workflow automation event
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
                 db=self.db,
                 organization_id=org_id,
@@ -1150,9 +1187,23 @@ class LeaveService:
 
         self.db.flush()
 
+        fire_audit_event(
+            db=self.db,
+            organization_id=org_id,
+            table_schema="hr",
+            table_name="leave_application",
+            record_id=str(application.application_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": LeaveApplicationStatus.SUBMITTED.value},
+            new_values={"status": LeaveApplicationStatus.REJECTED.value},
+        )
+
         # Fire workflow automation event
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
                 db=self.db,
                 organization_id=org_id,
@@ -1229,9 +1280,23 @@ class LeaveService:
 
         self.db.flush()
 
+        fire_audit_event(
+            db=self.db,
+            organization_id=org_id,
+            table_schema="hr",
+            table_name="leave_application",
+            record_id=str(application.application_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": old_status},
+            new_values={"status": LeaveApplicationStatus.CANCELLED.value},
+        )
+
         # Fire workflow automation event
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
                 db=self.db,
                 organization_id=org_id,
@@ -1389,7 +1454,7 @@ class LeaveService:
 
         Returns a list of employees with their leave balances across all leave types.
         """
-        from app.models.people.hr import Employee, Department
+        from app.models.people.hr import Department, Employee
         from app.models.person import Person
 
         target_year = year or date.today().year
@@ -1563,7 +1628,7 @@ class LeaveService:
         Returns a list of approved leave applications for the given period
         suitable for calendar display.
         """
-        from app.models.people.hr import Employee, Department
+        from app.models.people.hr import Department, Employee
         from app.models.person import Person
 
         today = date.today()

@@ -3,10 +3,11 @@ Batch Transfer Service.
 
 Handles bulk expense reimbursement transfers via Paystack.
 """
+
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 from uuid import UUID, uuid4
 
@@ -14,23 +15,23 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.domain_settings import SettingDomain
 from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
-from app.models.finance.payments.transfer_batch import (
-    TransferBatch,
-    TransferBatchItem,
-    TransferBatchStatus,
-    TransferBatchItemStatus,
-)
+from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.models.finance.payments.payment_intent import (
     PaymentDirection,
     PaymentIntent,
     PaymentIntentStatus,
 )
-from app.models.domain_settings import SettingDomain
+from app.models.finance.payments.transfer_batch import (
+    TransferBatch,
+    TransferBatchItem,
+    TransferBatchItemStatus,
+    TransferBatchStatus,
+)
 from app.services.common import coerce_uuid
-from app.models.finance.core_config.numbering_sequence import SequenceType
-from app.services.finance.platform.sequence import SequenceService
 from app.services.finance.payments.paystack_client import PaystackClient, PaystackConfig
+from app.services.finance.platform.sequence import SequenceService
 from app.services.settings_spec import resolve_value
 
 logger = logging.getLogger(__name__)
@@ -130,12 +131,16 @@ class BatchTransferService:
                 continue
 
             if not claim.net_payable_amount or claim.net_payable_amount <= Decimal("0"):
-                logger.warning(f"Claim {claim.claim_number} has no payable amount, skipping")
+                logger.warning(
+                    f"Claim {claim.claim_number} has no payable amount, skipping"
+                )
                 continue
 
             # Get employee bank details
             if not claim.recipient_bank_code or not claim.recipient_account_number:
-                logger.warning(f"Claim {claim.claim_number} missing bank details, skipping")
+                logger.warning(
+                    f"Claim {claim.claim_number} missing bank details, skipping"
+                )
                 continue
 
             # Get employee name
@@ -273,12 +278,14 @@ class BatchTransferService:
         # completed_count only counts fully COMPLETED items (via webhook confirmation)
         # During process_batch, items move to PROCESSING status; webhooks update to COMPLETED
         batch.completed_count = sum(
-            1 for item in batch.items
+            1
+            for item in batch.items
             if item.status == TransferBatchItemStatus.COMPLETED
         )
         batch.failed_count = failed_count
         processing_count = sum(
-            1 for item in batch.items
+            1
+            for item in batch.items
             if item.status == TransferBatchItemStatus.PROCESSING
         )
 
@@ -448,7 +455,9 @@ class BatchTransferService:
                     ExpenseClaim.net_payable_amount > Decimal("0"),
                 )
                 .order_by(ExpenseClaim.approved_on)
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
 
     def _get_batch(self, batch_id: UUID) -> TransferBatch:

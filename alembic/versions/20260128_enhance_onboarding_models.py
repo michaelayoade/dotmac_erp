@@ -9,6 +9,7 @@ Adds fields for:
 - EmployeeOnboarding: self-service portal, progress tracking, buddy assignment
 - EmployeeOnboardingActivity: task assignment, due dates, document collection, reminders
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -353,8 +354,16 @@ def downgrade() -> None:
     # ========================================
     # EmployeeOnboardingActivity - drop columns
     # ========================================
-    op.drop_index("idx_onboarding_activity_due_date", table_name="employee_onboarding_activity", schema="hr")
-    op.drop_index("idx_onboarding_activity_assignee", table_name="employee_onboarding_activity", schema="hr")
+    op.drop_index(
+        "idx_onboarding_activity_due_date",
+        table_name="employee_onboarding_activity",
+        schema="hr",
+    )
+    op.drop_index(
+        "idx_onboarding_activity_assignee",
+        table_name="employee_onboarding_activity",
+        schema="hr",
+    )
 
     op.drop_column("employee_onboarding_activity", "reminder_sent_at", schema="hr")
     op.drop_column("employee_onboarding_activity", "completion_notes", schema="hr")
@@ -372,7 +381,11 @@ def downgrade() -> None:
     # ========================================
     # EmployeeOnboarding - drop columns
     # ========================================
-    op.drop_index("idx_onboarding_self_service_token", table_name="employee_onboarding", schema="hr")
+    op.drop_index(
+        "idx_onboarding_self_service_token",
+        table_name="employee_onboarding",
+        schema="hr",
+    )
 
     op.drop_column("employee_onboarding", "manager_id", schema="hr")
     op.drop_column("employee_onboarding", "buddy_employee_id", schema="hr")
@@ -387,7 +400,11 @@ def downgrade() -> None:
     # ========================================
     # ChecklistTemplateItem - drop columns
     # ========================================
-    op.drop_index("idx_checklist_template_item_category", table_name="checklist_template_item", schema="hr")
+    op.drop_index(
+        "idx_checklist_template_item_category",
+        table_name="checklist_template_item",
+        schema="hr",
+    )
 
     op.drop_column("checklist_template_item", "instructions", schema="hr")
     op.drop_column("checklist_template_item", "document_type", schema="hr")

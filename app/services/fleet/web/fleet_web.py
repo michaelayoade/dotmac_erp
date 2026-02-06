@@ -25,8 +25,7 @@ from app.models.fleet.enums import (
     VehicleStatus,
     VehicleType,
 )
-from app.services.common import NotFoundError
-from app.services.common import PaginationParams, coerce_uuid
+from app.services.common import NotFoundError, PaginationParams, coerce_uuid
 from app.services.fleet.assignment_service import AssignmentService
 from app.services.fleet.document_service import DocumentService
 from app.services.fleet.fuel_service import FuelService

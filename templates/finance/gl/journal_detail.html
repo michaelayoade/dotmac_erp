@@ -179,12 +179,14 @@
 <div class="space-y-6">
     {# Main Journal Document Card #}
     <div class="document-card">
+        {% include "partials/_document_header.html" with {
+            "doc_title": "Journal Entry",
+            "doc_number": entry.journal_number,
+            "doc_status": entry.status | replace('_', ' ') | title
+        } %}
         <div class="document-header">
             <div class="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                    <div class="document-title">Journal Entry</div>
-                    <div class="document-number">{{ entry.journal_number }}</div>
-                </div>
+                <div></div>
                 <div class="flex flex-col items-end gap-2">
                     {# Status Badge #}
                     {% if entry.status == 'DRAFT' %}

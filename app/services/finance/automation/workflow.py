@@ -728,13 +728,13 @@ class WorkflowService:
         context: TriggerContext,
     ) -> ActionResult:
         """Send in-app notification action."""
-        from app.services.finance.automation.template_renderer import render_template
-        from app.services.notification import NotificationService
         from app.models.notification import (
             EntityType,
             NotificationChannel,
             NotificationType,
         )
+        from app.services.finance.automation.template_renderer import render_template
+        from app.services.notification import NotificationService
 
         try:
             recipient_ids = config.get("recipient_ids", [])

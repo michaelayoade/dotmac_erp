@@ -6,7 +6,8 @@ Manages VAT/GST/Sales tax return preparation, review, and filing.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import logging
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, List, Optional
@@ -16,15 +17,17 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.models.finance.tax.tax_period import TaxPeriod, TaxPeriodStatus
 from app.models.finance.tax.tax_return import (
     TaxReturn,
     TaxReturnStatus,
     TaxReturnType,
 )
-from app.models.finance.tax.tax_period import TaxPeriod, TaxPeriodStatus
 from app.models.finance.tax.tax_transaction import TaxTransaction, TaxTransactionType
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -80,53 +83,63 @@ class TaxReturnService(ListResponseMixin):
         user_id = coerce_uuid(prepared_by_user_id)
 
         # Validate tax period exists and is open
-        period = db.query(TaxPeriod).filter(
-            TaxPeriod.period_id == period_id,
-            TaxPeriod.organization_id == org_id,
-        ).first()
+        period = (
+            db.query(TaxPeriod)
+            .filter(
+                TaxPeriod.period_id == period_id,
+                TaxPeriod.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not period:
             raise HTTPException(status_code=404, detail="Tax period not found")
 
         if period.status != TaxPeriodStatus.OPEN:
             raise HTTPException(
-                status_code=400,
-                detail=f"Tax period is in {period.status.value} status"
+                status_code=400, detail=f"Tax period is in {period.status.value} status"
             )
 
         # Check for existing return
-        existing = db.query(TaxReturn).filter(
-            TaxReturn.tax_period_id == period_id,
-            TaxReturn.organization_id == org_id,
-            TaxReturn.return_type == input.return_type,
-            TaxReturn.is_amendment == False,
-        ).first()
+        existing = (
+            db.query(TaxReturn)
+            .filter(
+                TaxReturn.tax_period_id == period_id,
+                TaxReturn.organization_id == org_id,
+                TaxReturn.return_type == input.return_type,
+                TaxReturn.is_amendment == False,
+            )
+            .first()
+        )
 
         if existing and existing.status != TaxReturnStatus.DRAFT:
             raise HTTPException(
-                status_code=400,
-                detail="A return already exists for this period"
+                status_code=400, detail="A return already exists for this period"
             )
 
         # Calculate totals from transactions
         # Output tax
-        output_result = db.query(
-            func.sum(TaxTransaction.functional_tax_amount)
-        ).filter(
-            TaxTransaction.organization_id == org_id,
-            TaxTransaction.fiscal_period_id == period.fiscal_period_id,
-            TaxTransaction.transaction_type == TaxTransactionType.OUTPUT,
-        ).scalar()
+        output_result = (
+            db.query(func.sum(TaxTransaction.functional_tax_amount))
+            .filter(
+                TaxTransaction.organization_id == org_id,
+                TaxTransaction.fiscal_period_id == period.fiscal_period_id,
+                TaxTransaction.transaction_type == TaxTransactionType.OUTPUT,
+            )
+            .scalar()
+        )
         total_output = output_result or Decimal("0")
 
         # Input tax (recoverable)
-        input_result = db.query(
-            func.sum(TaxTransaction.recoverable_amount)
-        ).filter(
-            TaxTransaction.organization_id == org_id,
-            TaxTransaction.fiscal_period_id == period.fiscal_period_id,
-            TaxTransaction.transaction_type == TaxTransactionType.INPUT,
-        ).scalar()
+        input_result = (
+            db.query(func.sum(TaxTransaction.recoverable_amount))
+            .filter(
+                TaxTransaction.organization_id == org_id,
+                TaxTransaction.fiscal_period_id == period.fiscal_period_id,
+                TaxTransaction.transaction_type == TaxTransactionType.INPUT,
+            )
+            .scalar()
+        )
         total_input = input_result or Decimal("0")
 
         # Net payable
@@ -184,16 +197,21 @@ class TaxReturnService(ListResponseMixin):
     ) -> dict[str, Any]:
         """Calculate values for tax return boxes."""
         # Group transactions by return box
-        box_data = db.query(
-            TaxTransaction.tax_return_box,
-            func.sum(TaxTransaction.functional_base_amount).label("base_amount"),
-            func.sum(TaxTransaction.functional_tax_amount).label("tax_amount"),
-            func.count(TaxTransaction.transaction_id).label("count"),
-        ).filter(
-            TaxTransaction.organization_id == organization_id,
-            TaxTransaction.fiscal_period_id == fiscal_period_id,
-            TaxTransaction.tax_return_box.isnot(None),
-        ).group_by(TaxTransaction.tax_return_box).all()
+        box_data = (
+            db.query(
+                TaxTransaction.tax_return_box,
+                func.sum(TaxTransaction.functional_base_amount).label("base_amount"),
+                func.sum(TaxTransaction.functional_tax_amount).label("tax_amount"),
+                func.count(TaxTransaction.transaction_id).label("count"),
+            )
+            .filter(
+                TaxTransaction.organization_id == organization_id,
+                TaxTransaction.fiscal_period_id == fiscal_period_id,
+                TaxTransaction.tax_return_box.isnot(None),
+            )
+            .group_by(TaxTransaction.tax_return_box)
+            .all()
+        )
 
         boxes = {}
         for row in box_data:
@@ -228,10 +246,14 @@ class TaxReturnService(ListResponseMixin):
         return_id = coerce_uuid(return_id)
         user_id = coerce_uuid(reviewed_by_user_id)
 
-        tax_return = db.query(TaxReturn).filter(
-            TaxReturn.return_id == return_id,
-            TaxReturn.organization_id == org_id,
-        ).first()
+        tax_return = (
+            db.query(TaxReturn)
+            .filter(
+                TaxReturn.return_id == return_id,
+                TaxReturn.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not tax_return:
             raise HTTPException(status_code=404, detail="Tax return not found")
@@ -239,14 +261,14 @@ class TaxReturnService(ListResponseMixin):
         if tax_return.status != TaxReturnStatus.PREPARED:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot review return in {tax_return.status.value} status"
+                detail=f"Cannot review return in {tax_return.status.value} status",
             )
 
         # SoD check
         if tax_return.prepared_by_user_id == user_id:
             raise HTTPException(
                 status_code=400,
-                detail="Reviewer cannot be the same as preparer (Segregation of Duties)"
+                detail="Reviewer cannot be the same as preparer (Segregation of Duties)",
             )
 
         tax_return.status = TaxReturnStatus.REVIEWED
@@ -283,18 +305,25 @@ class TaxReturnService(ListResponseMixin):
         return_id = coerce_uuid(return_id)
         user_id = coerce_uuid(filed_by_user_id)
 
-        tax_return = db.query(TaxReturn).filter(
-            TaxReturn.return_id == return_id,
-            TaxReturn.organization_id == org_id,
-        ).first()
+        tax_return = (
+            db.query(TaxReturn)
+            .filter(
+                TaxReturn.return_id == return_id,
+                TaxReturn.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not tax_return:
             raise HTTPException(status_code=404, detail="Tax return not found")
 
-        if tax_return.status not in [TaxReturnStatus.PREPARED, TaxReturnStatus.REVIEWED]:
+        if tax_return.status not in [
+            TaxReturnStatus.PREPARED,
+            TaxReturnStatus.REVIEWED,
+        ]:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot file return in {tax_return.status.value} status"
+                detail=f"Cannot file return in {tax_return.status.value} status",
             )
 
         tax_return.status = TaxReturnStatus.FILED
@@ -303,9 +332,11 @@ class TaxReturnService(ListResponseMixin):
         tax_return.filing_reference = filing_reference
 
         # Update tax period status
-        period = db.query(TaxPeriod).filter(
-            TaxPeriod.period_id == tax_return.tax_period_id
-        ).first()
+        period = (
+            db.query(TaxPeriod)
+            .filter(TaxPeriod.period_id == tax_return.tax_period_id)
+            .first()
+        )
         if period:
             period.status = TaxPeriodStatus.FILED
 
@@ -315,10 +346,13 @@ class TaxReturnService(ListResponseMixin):
                 TaxTransaction.organization_id == org_id,
                 TaxTransaction.fiscal_period_id == period.fiscal_period_id,
                 TaxTransaction.is_included_in_return == False,
-            ).update({
-                TaxTransaction.is_included_in_return: True,
-                TaxTransaction.tax_return_period: tax_return.return_reference or str(return_id),
-            })
+            ).update(
+                {
+                    TaxTransaction.is_included_in_return: True,
+                    TaxTransaction.tax_return_period: tax_return.return_reference
+                    or str(return_id),
+                }
+            )
 
         db.commit()
         db.refresh(tax_return)
@@ -351,10 +385,14 @@ class TaxReturnService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         return_id = coerce_uuid(return_id)
 
-        tax_return = db.query(TaxReturn).filter(
-            TaxReturn.return_id == return_id,
-            TaxReturn.organization_id == org_id,
-        ).first()
+        tax_return = (
+            db.query(TaxReturn)
+            .filter(
+                TaxReturn.return_id == return_id,
+                TaxReturn.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not tax_return:
             raise HTTPException(status_code=404, detail="Tax return not found")
@@ -362,18 +400,22 @@ class TaxReturnService(ListResponseMixin):
         if tax_return.status != TaxReturnStatus.FILED:
             raise HTTPException(
                 status_code=400,
-                detail="Return must be filed before payment can be recorded"
+                detail="Return must be filed before payment can be recorded",
             )
 
         tax_return.is_paid = True
         tax_return.payment_date = payment_date
         tax_return.payment_reference = payment_reference
-        tax_return.payment_journal_entry_id = coerce_uuid(journal_entry_id) if journal_entry_id else None
+        tax_return.payment_journal_entry_id = (
+            coerce_uuid(journal_entry_id) if journal_entry_id else None
+        )
 
         # Update tax period status
-        period = db.query(TaxPeriod).filter(
-            TaxPeriod.period_id == tax_return.tax_period_id
-        ).first()
+        period = (
+            db.query(TaxPeriod)
+            .filter(TaxPeriod.period_id == tax_return.tax_period_id)
+            .first()
+        )
         if period:
             period.status = TaxPeriodStatus.PAID
 
@@ -409,19 +451,20 @@ class TaxReturnService(ListResponseMixin):
         original_id = coerce_uuid(original_return_id)
         user_id = coerce_uuid(prepared_by_user_id)
 
-        original = db.query(TaxReturn).filter(
-            TaxReturn.return_id == original_id,
-            TaxReturn.organization_id == org_id,
-        ).first()
+        original = (
+            db.query(TaxReturn)
+            .filter(
+                TaxReturn.return_id == original_id,
+                TaxReturn.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not original:
             raise HTTPException(status_code=404, detail="Original return not found")
 
         if original.status != TaxReturnStatus.FILED:
-            raise HTTPException(
-                status_code=400,
-                detail="Can only amend filed returns"
-            )
+            raise HTTPException(status_code=400, detail="Can only amend filed returns")
 
         # Mark original as amended
         original.status = TaxReturnStatus.AMENDED
@@ -472,10 +515,14 @@ class TaxReturnService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         return_id = coerce_uuid(return_id)
 
-        tax_return = db.query(TaxReturn).filter(
-            TaxReturn.return_id == return_id,
-            TaxReturn.organization_id == org_id,
-        ).first()
+        tax_return = (
+            db.query(TaxReturn)
+            .filter(
+                TaxReturn.return_id == return_id,
+                TaxReturn.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not tax_return:
             raise HTTPException(status_code=404, detail="Tax return not found")
@@ -485,12 +532,14 @@ class TaxReturnService(ListResponseMixin):
 
         result = []
         for box_num, data in tax_return.box_values.items():
-            result.append(TaxReturnBoxValue(
-                box_number=box_num,
-                description=f"Box {box_num}",
-                amount=Decimal(data.get("tax_amount", "0")),
-                transaction_count=data.get("transaction_count", 0),
-            ))
+            result.append(
+                TaxReturnBoxValue(
+                    box_number=box_num,
+                    description=f"Box {box_num}",
+                    amount=Decimal(data.get("tax_amount", "0")),
+                    transaction_count=data.get("transaction_count", 0),
+                )
+            )
 
         return sorted(result, key=lambda x: x.box_number)
 
@@ -514,10 +563,14 @@ class TaxReturnService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         ret_id = coerce_uuid(return_id)
 
-        tax_return = db.query(TaxReturn).filter(
-            TaxReturn.return_id == ret_id,
-            TaxReturn.organization_id == org_id,
-        ).first()
+        tax_return = (
+            db.query(TaxReturn)
+            .filter(
+                TaxReturn.return_id == ret_id,
+                TaxReturn.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not tax_return:
             raise HTTPException(status_code=404, detail="Tax return not found")
@@ -525,35 +578,41 @@ class TaxReturnService(ListResponseMixin):
         if tax_return.status not in [TaxReturnStatus.DRAFT, TaxReturnStatus.PREPARED]:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot recalculate return in {tax_return.status.value} status"
+                detail=f"Cannot recalculate return in {tax_return.status.value} status",
             )
 
         # Get fiscal period for this tax period
-        period = db.query(TaxPeriod).filter(
-            TaxPeriod.period_id == tax_return.tax_period_id
-        ).first()
+        period = (
+            db.query(TaxPeriod)
+            .filter(TaxPeriod.period_id == tax_return.tax_period_id)
+            .first()
+        )
 
         if not period:
             raise HTTPException(status_code=404, detail="Tax period not found")
 
         # Recalculate output tax
-        output_result = db.query(
-            func.sum(TaxTransaction.functional_tax_amount)
-        ).filter(
-            TaxTransaction.organization_id == org_id,
-            TaxTransaction.fiscal_period_id == period.fiscal_period_id,
-            TaxTransaction.transaction_type == TaxTransactionType.OUTPUT,
-        ).scalar()
+        output_result = (
+            db.query(func.sum(TaxTransaction.functional_tax_amount))
+            .filter(
+                TaxTransaction.organization_id == org_id,
+                TaxTransaction.fiscal_period_id == period.fiscal_period_id,
+                TaxTransaction.transaction_type == TaxTransactionType.OUTPUT,
+            )
+            .scalar()
+        )
         total_output = output_result or Decimal("0")
 
         # Recalculate input tax (recoverable)
-        input_result = db.query(
-            func.sum(TaxTransaction.recoverable_amount)
-        ).filter(
-            TaxTransaction.organization_id == org_id,
-            TaxTransaction.fiscal_period_id == period.fiscal_period_id,
-            TaxTransaction.transaction_type == TaxTransactionType.INPUT,
-        ).scalar()
+        input_result = (
+            db.query(func.sum(TaxTransaction.recoverable_amount))
+            .filter(
+                TaxTransaction.organization_id == org_id,
+                TaxTransaction.fiscal_period_id == period.fiscal_period_id,
+                TaxTransaction.transaction_type == TaxTransactionType.INPUT,
+            )
+            .scalar()
+        )
         total_input = input_result or Decimal("0")
 
         # Update return
@@ -598,18 +657,24 @@ class TaxReturnService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         ret_id = coerce_uuid(return_id)
 
-        tax_return = db.query(TaxReturn).filter(
-            TaxReturn.return_id == ret_id,
-            TaxReturn.organization_id == org_id,
-        ).first()
+        tax_return = (
+            db.query(TaxReturn)
+            .filter(
+                TaxReturn.return_id == ret_id,
+                TaxReturn.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not tax_return:
             raise HTTPException(status_code=404, detail="Tax return not found")
 
         # Get fiscal period
-        period = db.query(TaxPeriod).filter(
-            TaxPeriod.period_id == tax_return.tax_period_id
-        ).first()
+        period = (
+            db.query(TaxPeriod)
+            .filter(TaxPeriod.period_id == tax_return.tax_period_id)
+            .first()
+        )
 
         if not period:
             return [], 0
@@ -625,9 +690,12 @@ class TaxReturnService(ListResponseMixin):
 
         # Get paginated results
         offset = (page - 1) * limit
-        transactions = query.order_by(
-            TaxTransaction.transaction_date.desc()
-        ).offset(offset).limit(limit).all()
+        transactions = (
+            query.order_by(TaxTransaction.transaction_date.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
 
         return transactions, total_count
 
@@ -652,40 +720,56 @@ class TaxReturnService(ListResponseMixin):
         period_id = coerce_uuid(tax_period_id)
 
         # Get fiscal period
-        period = db.query(TaxPeriod).filter(
-            TaxPeriod.period_id == period_id,
-            TaxPeriod.organization_id == org_id,
-        ).first()
+        period = (
+            db.query(TaxPeriod)
+            .filter(
+                TaxPeriod.period_id == period_id,
+                TaxPeriod.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not period:
-            return {"transaction_count": 0, "output_total": Decimal("0"), "input_total": Decimal("0")}
+            return {
+                "transaction_count": 0,
+                "output_total": Decimal("0"),
+                "input_total": Decimal("0"),
+            }
 
         # Get unreported transactions count
-        count = db.query(TaxTransaction).filter(
-            TaxTransaction.organization_id == org_id,
-            TaxTransaction.fiscal_period_id == period.fiscal_period_id,
-            TaxTransaction.is_included_in_return == False,
-        ).count()
+        count = (
+            db.query(TaxTransaction)
+            .filter(
+                TaxTransaction.organization_id == org_id,
+                TaxTransaction.fiscal_period_id == period.fiscal_period_id,
+                TaxTransaction.is_included_in_return == False,
+            )
+            .count()
+        )
 
         # Output tax total
-        output_result = db.query(
-            func.sum(TaxTransaction.functional_tax_amount)
-        ).filter(
-            TaxTransaction.organization_id == org_id,
-            TaxTransaction.fiscal_period_id == period.fiscal_period_id,
-            TaxTransaction.transaction_type == TaxTransactionType.OUTPUT,
-            TaxTransaction.is_included_in_return == False,
-        ).scalar()
+        output_result = (
+            db.query(func.sum(TaxTransaction.functional_tax_amount))
+            .filter(
+                TaxTransaction.organization_id == org_id,
+                TaxTransaction.fiscal_period_id == period.fiscal_period_id,
+                TaxTransaction.transaction_type == TaxTransactionType.OUTPUT,
+                TaxTransaction.is_included_in_return == False,
+            )
+            .scalar()
+        )
 
         # Input tax total (recoverable)
-        input_result = db.query(
-            func.sum(TaxTransaction.recoverable_amount)
-        ).filter(
-            TaxTransaction.organization_id == org_id,
-            TaxTransaction.fiscal_period_id == period.fiscal_period_id,
-            TaxTransaction.transaction_type == TaxTransactionType.INPUT,
-            TaxTransaction.is_included_in_return == False,
-        ).scalar()
+        input_result = (
+            db.query(func.sum(TaxTransaction.recoverable_amount))
+            .filter(
+                TaxTransaction.organization_id == org_id,
+                TaxTransaction.fiscal_period_id == period.fiscal_period_id,
+                TaxTransaction.transaction_type == TaxTransactionType.INPUT,
+                TaxTransaction.is_included_in_return == False,
+            )
+            .scalar()
+        )
 
         return {
             "transaction_count": count,
@@ -696,9 +780,11 @@ class TaxReturnService(ListResponseMixin):
     @staticmethod
     def get(db: Session, return_id: str) -> Optional[TaxReturn]:
         """Get a tax return by ID."""
-        return db.query(TaxReturn).filter(
-            TaxReturn.return_id == coerce_uuid(return_id)
-        ).first()
+        return (
+            db.query(TaxReturn)
+            .filter(TaxReturn.return_id == coerce_uuid(return_id))
+            .first()
+        )
 
     @staticmethod
     def list(
@@ -735,9 +821,7 @@ class TaxReturnService(ListResponseMixin):
             )
 
         if tax_period_id:
-            query = query.filter(
-                TaxReturn.tax_period_id == coerce_uuid(tax_period_id)
-            )
+            query = query.filter(TaxReturn.tax_period_id == coerce_uuid(tax_period_id))
 
         if jurisdiction_id:
             query = query.filter(
@@ -750,7 +834,12 @@ class TaxReturnService(ListResponseMixin):
         if status:
             query = query.filter(TaxReturn.status == status)
 
-        return query.order_by(TaxReturn.created_at.desc()).offset(offset).limit(limit).all()
+        return (
+            query.order_by(TaxReturn.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
 
 
 # Module-level instance

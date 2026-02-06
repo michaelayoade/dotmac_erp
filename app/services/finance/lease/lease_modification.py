@@ -7,6 +7,7 @@ and payment reassessments per IFRS 16.44-46.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -16,13 +17,18 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.models.finance.lease.lease_asset import LeaseAsset
 from app.models.finance.lease.lease_contract import LeaseContract, LeaseStatus
 from app.models.finance.lease.lease_liability import LeaseLiability
-from app.models.finance.lease.lease_asset import LeaseAsset
-from app.models.finance.lease.lease_modification import LeaseModification, ModificationType
+from app.models.finance.lease.lease_modification import (
+    LeaseModification,
+    ModificationType,
+)
 from app.services.common import coerce_uuid
 from app.services.finance.lease.lease_calculation import LeaseCalculationService
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -86,10 +92,14 @@ class LeaseModificationService(ListResponseMixin):
         user_id = coerce_uuid(created_by_user_id)
 
         # Load lease contract
-        contract = db.query(LeaseContract).filter(
-            LeaseContract.lease_id == lease_id,
-            LeaseContract.organization_id == org_id,
-        ).first()
+        contract = (
+            db.query(LeaseContract)
+            .filter(
+                LeaseContract.lease_id == lease_id,
+                LeaseContract.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not contract:
             return ModificationResult(success=False, message="Lease contract not found")
@@ -97,22 +107,19 @@ class LeaseModificationService(ListResponseMixin):
         if contract.status not in [LeaseStatus.ACTIVE]:
             return ModificationResult(
                 success=False,
-                message=f"Cannot modify lease in {contract.status.value} status"
+                message=f"Cannot modify lease in {contract.status.value} status",
             )
 
         # Load liability and asset
-        liability = db.query(LeaseLiability).filter(
-            LeaseLiability.lease_id == lease_id
-        ).first()
+        liability = (
+            db.query(LeaseLiability).filter(LeaseLiability.lease_id == lease_id).first()
+        )
 
-        asset = db.query(LeaseAsset).filter(
-            LeaseAsset.lease_id == lease_id
-        ).first()
+        asset = db.query(LeaseAsset).filter(LeaseAsset.lease_id == lease_id).first()
 
         if not liability or not asset:
             return ModificationResult(
-                success=False,
-                message="Lease liability and asset must exist"
+                success=False, message="Lease liability and asset must exist"
             )
 
         # Capture before values
@@ -125,14 +132,30 @@ class LeaseModificationService(ListResponseMixin):
         if input.is_separate_lease:
             # IFRS 16.44: Account as a separate lease
             return LeaseModificationService._process_separate_lease(
-                db, org_id, input, contract, liability, asset,
-                liability_before, rou_asset_before, remaining_term_before, user_id
+                db,
+                org_id,
+                input,
+                contract,
+                liability,
+                asset,
+                liability_before,
+                rou_asset_before,
+                remaining_term_before,
+                user_id,
             )
         else:
             # IFRS 16.45-46: Remeasure and adjust
             return LeaseModificationService._process_non_separate_modification(
-                db, org_id, input, contract, liability, asset,
-                liability_before, rou_asset_before, remaining_term_before, user_id
+                db,
+                org_id,
+                input,
+                contract,
+                liability,
+                asset,
+                liability_before,
+                rou_asset_before,
+                remaining_term_before,
+                user_id,
             )
 
     @staticmethod
@@ -179,7 +202,7 @@ class LeaseModificationService(ListResponseMixin):
         return ModificationResult(
             success=True,
             modification=modification,
-            message="Separate lease modification recorded. Create a new lease for additional scope."
+            message="Separate lease modification recorded. Create a new lease for additional scope.",
         )
 
     @staticmethod
@@ -213,7 +236,9 @@ class LeaseModificationService(ListResponseMixin):
         if input.new_lease_payments:
             new_payment_amount = input.new_lease_payments
         else:
-            new_payment_amount = liability.initial_liability_amount / (contract.lease_term_months or 1)
+            new_payment_amount = liability.initial_liability_amount / (
+                contract.lease_term_months or 1
+            )
 
         # Calculate new liability (PV of remaining payments at new rate)
         new_liability = LeaseCalculationService.calculate_pv(
@@ -225,9 +250,16 @@ class LeaseModificationService(ListResponseMixin):
         liability_adjustment = new_liability - liability_before
 
         # Determine ROU asset adjustment based on modification type
-        if input.modification_type in [ModificationType.SCOPE_DECREASE, ModificationType.TERM_REDUCTION]:
+        if input.modification_type in [
+            ModificationType.SCOPE_DECREASE,
+            ModificationType.TERM_REDUCTION,
+        ]:
             # IFRS 16.46(a): Proportional reduction for partial terminations
-            reduction_ratio = new_liability / liability_before if liability_before > 0 else Decimal("1")
+            reduction_ratio = (
+                new_liability / liability_before
+                if liability_before > 0
+                else Decimal("1")
+            )
             new_rou_asset = rou_asset_before * reduction_ratio
             rou_asset_adjustment = new_rou_asset - rou_asset_before
             gain_loss = liability_adjustment - rou_asset_adjustment
@@ -284,7 +316,7 @@ class LeaseModificationService(ListResponseMixin):
             liability_adjustment=liability_adjustment,
             rou_asset_adjustment=rou_asset_adjustment,
             gain_loss=gain_loss,
-            message="Lease modification processed successfully"
+            message="Lease modification processed successfully",
         )
 
     @staticmethod
@@ -294,8 +326,9 @@ class LeaseModificationService(ListResponseMixin):
         as_of_date: date,
     ) -> int:
         """Calculate remaining lease term in months."""
-        elapsed_months = (as_of_date.year - commencement_date.year) * 12 + \
-                         (as_of_date.month - commencement_date.month)
+        elapsed_months = (as_of_date.year - commencement_date.year) * 12 + (
+            as_of_date.month - commencement_date.month
+        )
         remaining = total_term_months - elapsed_months
         return max(0, remaining)
 
@@ -322,9 +355,13 @@ class LeaseModificationService(ListResponseMixin):
         mod_id = coerce_uuid(modification_id)
         user_id = coerce_uuid(approved_by_user_id)
 
-        modification = db.query(LeaseModification).filter(
-            LeaseModification.modification_id == mod_id,
-        ).first()
+        modification = (
+            db.query(LeaseModification)
+            .filter(
+                LeaseModification.modification_id == mod_id,
+            )
+            .first()
+        )
 
         if not modification:
             raise HTTPException(status_code=404, detail="Modification not found")
@@ -332,8 +369,7 @@ class LeaseModificationService(ListResponseMixin):
         # SoD check
         if modification.created_by_user_id == user_id:
             raise HTTPException(
-                status_code=400,
-                detail="Approver cannot be the same as creator"
+                status_code=400, detail="Approver cannot be the same as creator"
             )
 
         modification.approved_by_user_id = user_id
@@ -347,9 +383,11 @@ class LeaseModificationService(ListResponseMixin):
     @staticmethod
     def get(db: Session, modification_id: str) -> Optional[LeaseModification]:
         """Get a modification by ID."""
-        return db.query(LeaseModification).filter(
-            LeaseModification.modification_id == coerce_uuid(modification_id)
-        ).first()
+        return (
+            db.query(LeaseModification)
+            .filter(LeaseModification.modification_id == coerce_uuid(modification_id))
+            .first()
+        )
 
     @staticmethod
     def list_by_lease(
@@ -357,9 +395,12 @@ class LeaseModificationService(ListResponseMixin):
         lease_id: UUID,
     ) -> list[LeaseModification]:
         """List all modifications for a lease."""
-        return db.query(LeaseModification).filter(
-            LeaseModification.lease_id == coerce_uuid(lease_id)
-        ).order_by(LeaseModification.effective_date.desc()).all()
+        return (
+            db.query(LeaseModification)
+            .filter(LeaseModification.lease_id == coerce_uuid(lease_id))
+            .order_by(LeaseModification.effective_date.desc())
+            .all()
+        )
 
     @staticmethod
     def list(
@@ -375,7 +416,9 @@ class LeaseModificationService(ListResponseMixin):
         query = db.query(LeaseModification)
 
         if modification_type:
-            query = query.filter(LeaseModification.modification_type == modification_type)
+            query = query.filter(
+                LeaseModification.modification_type == modification_type
+            )
 
         if from_date:
             query = query.filter(LeaseModification.effective_date >= from_date)
@@ -383,9 +426,12 @@ class LeaseModificationService(ListResponseMixin):
         if to_date:
             query = query.filter(LeaseModification.effective_date <= to_date)
 
-        return query.order_by(
-            LeaseModification.effective_date.desc()
-        ).offset(offset).limit(limit).all()
+        return (
+            query.order_by(LeaseModification.effective_date.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
 
 
 # Module-level instance

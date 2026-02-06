@@ -9,8 +9,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, time
-from decimal import Decimal
-from typing import Optional, TYPE_CHECKING, cast
+from typing import Optional, cast
 from uuid import UUID
 
 from app.models.people.recruit import (
@@ -20,12 +19,12 @@ from app.models.people.recruit import (
     OfferStatus,
 )
 from app.services.common import coerce_uuid
-
-if TYPE_CHECKING:
-    from app.models.people.recruit.job_opening import JobOpening
-    from app.models.people.recruit.applicant import Applicant
-    from app.models.people.recruit.interview import Interview
-    from app.models.people.recruit.job_offer import JobOffer
+from app.services.formatters import format_currency as format_currency  # noqa: F401
+from app.services.formatters import format_date as format_date  # noqa: F401
+from app.services.formatters import format_datetime as format_datetime  # noqa: F401
+from app.services.formatters import parse_date as parse_date_only  # noqa: F401
+from app.services.formatters import parse_decimal as parse_decimal  # noqa: F401
+from app.services.formatters import parse_int as parse_int  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -61,37 +60,7 @@ def parse_date(value: Optional[str], *, end_of_day: bool = False) -> Optional[da
             return None
 
 
-def parse_date_only(value: Optional[str]) -> Optional[date]:
-    """Parse a date string to date object."""
-    if not value:
-        return None
-    try:
-        return date.fromisoformat(value)
-    except ValueError:
-        return None
-
-
-def parse_int(value: Optional[str]) -> Optional[int]:
-    """Parse a string to int, returning None on failure."""
-    if not value:
-        return None
-    try:
-        return int(value)
-    except ValueError:
-        return None
-
-
-def parse_decimal(value: Optional[str]) -> Optional[Decimal]:
-    """Parse a string to Decimal, returning None on failure."""
-    if not value:
-        return None
-    try:
-        return Decimal(value)
-    except Exception:
-        return None
-
-
-def parse_status(value: Optional[str], status_enum):
+def parse_status(value: Optional[str], status_enum):  # type: ignore[type-arg]
     """Parse a status string to enum, returning None on failure."""
     if not value:
         return None
@@ -99,32 +68,6 @@ def parse_status(value: Optional[str], status_enum):
         return status_enum(value)
     except ValueError:
         return None
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Formatting Utilities
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def format_date(d: Optional[date]) -> str:
-    """Format a date for display."""
-    if d is None:
-        return ""
-    return d.strftime("%Y-%m-%d")
-
-
-def format_datetime(dt: Optional[datetime]) -> str:
-    """Format a datetime for display."""
-    if dt is None:
-        return ""
-    return dt.strftime("%Y-%m-%d %H:%M")
-
-
-def format_currency(amount: Optional[Decimal], currency_code: str = "NGN") -> str:
-    """Format a currency amount for display."""
-    if amount is None:
-        return ""
-    return f"{currency_code} {amount:,.2f}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

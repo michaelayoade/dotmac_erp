@@ -3,6 +3,7 @@ Shift Scheduling Service.
 
 Handles shift patterns, pattern assignments, and schedule queries.
 """
+
 from __future__ import annotations
 
 import logging
@@ -15,11 +16,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.scheduling import (
+    RotationType,
+    ScheduleStatus,
     ShiftPattern,
     ShiftPatternAssignment,
     ShiftSchedule,
-    RotationType,
-    ScheduleStatus,
 )
 from app.services.common import PaginatedResult, PaginationParams
 
@@ -160,9 +161,7 @@ class SchedulingService:
         """Create a new shift pattern."""
         # Validate: rotating patterns need night shift
         if rotation_type == RotationType.ROTATING and not night_shift_type_id:
-            raise SchedulingServiceError(
-                "Rotating patterns require a night shift type"
-            )
+            raise SchedulingServiceError("Rotating patterns require a night shift type")
 
         pattern = ShiftPattern(
             organization_id=org_id,
@@ -182,7 +181,10 @@ class SchedulingService:
             self.db.flush()
         except IntegrityError as e:
             self.db.rollback()
-            if "uq_shift_pattern_org_code" in str(e).lower() or "pattern_code" in str(e).lower():
+            if (
+                "uq_shift_pattern_org_code" in str(e).lower()
+                or "pattern_code" in str(e).lower()
+            ):
                 raise SchedulingServiceError(
                     f"Pattern code '{pattern_code}' already exists in this organization"
                 ) from e
@@ -211,16 +213,20 @@ class SchedulingService:
             setattr(pattern, key, value)
 
         # Validate rotating patterns
-        if pattern.rotation_type == RotationType.ROTATING and not pattern.night_shift_type_id:
-            raise SchedulingServiceError(
-                "Rotating patterns require a night shift type"
-            )
+        if (
+            pattern.rotation_type == RotationType.ROTATING
+            and not pattern.night_shift_type_id
+        ):
+            raise SchedulingServiceError("Rotating patterns require a night shift type")
 
         try:
             self.db.flush()
         except IntegrityError as e:
             self.db.rollback()
-            if "uq_shift_pattern_org_code" in str(e).lower() or "pattern_code" in str(e).lower():
+            if (
+                "uq_shift_pattern_org_code" in str(e).lower()
+                or "pattern_code" in str(e).lower()
+            ):
                 raise SchedulingServiceError(
                     f"Pattern code '{pattern.pattern_code}' already exists in this organization"
                 ) from e
@@ -627,14 +633,11 @@ class SchedulingService:
         # - Is active
         # - Date ranges overlap: existing.from <= new.to AND existing.to >= new.from
         #   (accounting for NULL effective_to meaning "ongoing")
-        query = (
-            select(ShiftPatternAssignment)
-            .where(
-                ShiftPatternAssignment.organization_id == org_id,
-                ShiftPatternAssignment.employee_id == employee_id,
-                ShiftPatternAssignment.department_id == department_id,
-                ShiftPatternAssignment.is_active == True,  # noqa: E712
-            )
+        query = select(ShiftPatternAssignment).where(
+            ShiftPatternAssignment.organization_id == org_id,
+            ShiftPatternAssignment.employee_id == employee_id,
+            ShiftPatternAssignment.department_id == department_id,
+            ShiftPatternAssignment.is_active == True,  # noqa: E712
         )
 
         # Check for date overlap

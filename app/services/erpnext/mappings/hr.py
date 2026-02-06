@@ -8,6 +8,8 @@ Maps ERPNext HR DocTypes to DotMac HR schema:
 - Employee Grade → hr.employee_grade
 - Employee → hr.employee
 """
+
+import logging
 from typing import Any
 
 from .base import (
@@ -20,6 +22,7 @@ from .base import (
     parse_decimal,
 )
 
+logger = logging.getLogger(__name__)
 
 # ERPNext Employee Status to DotMac EmployeeStatus
 EMPLOYEE_STATUS_MAP = {

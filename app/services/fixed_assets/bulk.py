@@ -6,6 +6,7 @@ Provides bulk operations for fixed asset master data.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from uuid import UUID
 
@@ -14,6 +15,8 @@ from sqlalchemy.orm import Session
 from app.models.fixed_assets.asset import Asset, AssetStatus
 from app.models.fixed_assets.depreciation_schedule import DepreciationSchedule
 from app.services.bulk_actions import BulkActionService
+
+logger = logging.getLogger(__name__)
 
 
 class AssetBulkService(BulkActionService[Asset]):

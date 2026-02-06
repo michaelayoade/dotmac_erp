@@ -5,6 +5,7 @@ from time import monotonic
 from threading import Lock
 from starlette.responses import Response, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.api.audit import router as audit_router
@@ -69,8 +70,8 @@ from app.web.inventory import router as inventory_web_router
 from app.web.fleet import router as fleet_web_router
 from app.web.procurement import router as procurement_web_router
 from app.db import SessionLocal
-from app.services import audit as audit_service
-from app.api.deps import require_role, require_user_auth, require_tenant_auth
+from app.api.deps import require_role, require_tenant_auth
+
 # Ensure all models are registered with SQLAlchemy metadata at startup.
 import app.models as app_models  # noqa: F401
 from app.models.domain_settings import DomainSetting, SettingDomain
@@ -108,6 +109,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="DotMac ERP API", lifespan=lifespan)
 
+
 # Redirect legacy AR customers path to web UI (avoid JSON API response)
 @app.get("/ar/customers", include_in_schema=False)
 @app.get("/ar/customers/", include_in_schema=False)
@@ -117,6 +119,7 @@ def ar_customers_redirect(request: Request):
     if query:
         url = f"{url}?{query}"
     return RedirectResponse(url=url, status_code=302)
+
 
 _AUDIT_SETTINGS_CACHE: dict | None = None
 _AUDIT_SETTINGS_CACHE_AT: float | None = None
@@ -141,11 +144,26 @@ async def csp_middleware(request: Request, call_next):
 
 
 # Sensitive parameter names to redact from audit logs
-_SENSITIVE_PARAMS = frozenset({
-    "password", "passwd", "pwd", "secret", "token", "api_key", "apikey",
-    "api-key", "auth", "authorization", "credential", "credentials",
-    "access_token", "refresh_token", "private_key", "privatekey",
-})
+_SENSITIVE_PARAMS = frozenset(
+    {
+        "password",
+        "passwd",
+        "pwd",
+        "secret",
+        "token",
+        "api_key",
+        "apikey",
+        "api-key",
+        "auth",
+        "authorization",
+        "credential",
+        "credentials",
+        "access_token",
+        "refresh_token",
+        "private_key",
+        "privatekey",
+    }
+)
 
 
 def _sanitize_query_params(params: dict) -> dict:
@@ -300,6 +318,7 @@ def _to_list(setting: DomainSetting, upper: bool) -> set[str] | list[str]:
 def _is_audit_path_skipped(path: str, skip_paths: list[str]) -> bool:
     return any(path.startswith(prefix) for prefix in skip_paths)
 
+
 def _include_api_router(router, dependencies=None):
     app.include_router(router, dependencies=dependencies)
     app.include_router(router, prefix="/api/v1", dependencies=dependencies)
@@ -330,7 +349,9 @@ app.include_router(admin_crm_sync_router)  # DotMac CRM sync management UI
 app.include_router(profile_web_router)
 app.include_router(finance_web_router, prefix="/finance")
 app.include_router(expense_web_router, prefix="/expense")
-app.include_router(finance_settings_web_router)  # Has its own /settings prefix (finance)
+app.include_router(
+    finance_settings_web_router
+)  # Has its own /settings prefix (finance)
 app.include_router(automation_web_router)  # Has its own /automation prefix
 app.include_router(payroll_alias_web_router)
 app.include_router(people_web_router)
@@ -397,13 +418,13 @@ app.include_router(careers_web_router)  # Web UI routes
 app.include_router(onboarding_portal_router)  # Web UI routes
 
 # Standalone module web routes
-app.include_router(fixed_assets_web_router)   # /fixed-assets/* web routes
-app.include_router(inventory_web_router)      # /inventory/* web routes
-app.include_router(fleet_web_router)          # /fleet/* web routes
-app.include_router(procurement_web_router)        # /procurement/* web routes
-app.include_router(support_web_router)            # /support/* web routes
-app.include_router(projects_web_router)           # /projects/* web routes
-app.include_router(module_settings_web_router)    # /settings/* web routes
+app.include_router(fixed_assets_web_router)  # /fixed-assets/* web routes
+app.include_router(inventory_web_router)  # /inventory/* web routes
+app.include_router(fleet_web_router)  # /fleet/* web routes
+app.include_router(procurement_web_router)  # /procurement/* web routes
+app.include_router(support_web_router)  # /support/* web routes
+app.include_router(projects_web_router)  # /projects/* web routes
+app.include_router(module_settings_web_router)  # /settings/* web routes
 
 # Standalone module API routes
 _include_api_router(fa_api_router, dependencies=[Depends(require_tenant_auth)])
@@ -419,7 +440,8 @@ app.include_router(
 )
 _include_api_router(ipsas_router, dependencies=[Depends(require_tenant_auth)])
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+static_dir = Path(__file__).resolve().parent.parent / "static"
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 
 @app.get("/favicon.ico", include_in_schema=False)

@@ -1,6 +1,8 @@
 """Checklist template service."""
+
 from __future__ import annotations
 
+import logging
 from typing import Optional
 from uuid import UUID
 
@@ -13,6 +15,8 @@ from app.models.people.hr.checklist_template import (
     ChecklistTemplateType,
 )
 from app.services.common import PaginatedResult, PaginationParams
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["ChecklistTemplateService"]
 
@@ -32,7 +36,9 @@ class ChecklistTemplateService:
         search: Optional[str] = None,
         pagination: Optional[PaginationParams] = None,
     ) -> PaginatedResult[ChecklistTemplate]:
-        query = select(ChecklistTemplate).where(ChecklistTemplate.organization_id == org_id)
+        query = select(ChecklistTemplate).where(
+            ChecklistTemplate.organization_id == org_id
+        )
 
         if template_type:
             query = query.where(ChecklistTemplate.template_type == template_type)
@@ -51,9 +57,7 @@ class ChecklistTemplateService:
         query = query.order_by(ChecklistTemplate.template_name)
 
         count_subq = (
-            query.with_only_columns(ChecklistTemplate.template_id)
-            .distinct()
-            .subquery()
+            query.with_only_columns(ChecklistTemplate.template_id).distinct().subquery()
         )
         count_query = select(func.count()).select_from(count_subq)
         total = self.db.scalar(count_query) or 0

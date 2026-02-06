@@ -11,10 +11,10 @@ Usage:
     python scripts/erpnext_sync.py --sync material_requests  # Sync only material requests
     python scripts/erpnext_sync.py --entity items     # Sync specific entity
 """
+
 import sys
 import os
 import argparse
-from datetime import datetime, timedelta
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -22,10 +22,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.services.erpnext.client import ERPNextClient, ERPNextConfig, ERPNextError
 
 
-# Default ERPNext configuration values
-ERPNEXT_URL = "https://erp.dotmac.ng"
-ERPNEXT_API_KEY = "REDACTED_API_KEY"
-ERPNEXT_API_SECRET = "REDACTED_API_SECRET"
+# ERPNext configuration — read from environment, fall back to defaults
+ERPNEXT_URL = os.environ.get("ERPNEXT_URL", "https://erp.dotmac.ng")
+ERPNEXT_API_KEY = os.environ.get("ERPNEXT_API_KEY", "")
+ERPNEXT_API_SECRET = os.environ.get("ERPNEXT_API_SECRET", "")
 ERPNEXT_COMPANY = "Dotmac Technologies"  # Must match company name in ERPNext exactly
 
 # ERPNextConfig for preview/testing (used by client directly)
@@ -108,7 +108,9 @@ def list_sample_data():
         for i, acc in enumerate(client.get_chart_of_accounts()):
             if i >= 5:
                 break
-            print(f"  {acc.get('name')} - {acc.get('account_name')} ({acc.get('root_type')})")
+            print(
+                f"  {acc.get('name')} - {acc.get('account_name')} ({acc.get('root_type')})"
+            )
 
         # Sample items
         print("\n--- Sample Items (first 5) ---")
@@ -129,7 +131,9 @@ def list_sample_data():
         for i, mr in enumerate(client.get_material_requests()):
             if i >= 5:
                 break
-            print(f"  {mr.get('name')} - {mr.get('material_request_type')} ({mr.get('status')})")
+            print(
+                f"  {mr.get('name')} - {mr.get('material_request_type')} ({mr.get('status')})"
+            )
 
         # Sample customers
         print("\n--- Sample Customers (first 5) ---")
@@ -149,10 +153,12 @@ def run_sync(entity_types=None, organization_id=None, user_id=None, incremental=
         user_id: UUID of user performing sync
         incremental: If True, only sync records modified since last sync
     """
-    from uuid import UUID
     from app.db import SessionLocal
     from app.models.sync import SyncType
-    from app.services.erpnext.sync.orchestrator import ERPNextSyncOrchestrator, MigrationConfig
+    from app.services.erpnext.sync.orchestrator import (
+        ERPNextSyncOrchestrator,
+        MigrationConfig,
+    )
 
     # Default IDs (should be configured per environment)
     if organization_id is None:
@@ -160,6 +166,7 @@ def run_sync(entity_types=None, organization_id=None, user_id=None, incremental=
         db = SessionLocal()
         try:
             from app.models.finance.core_org import Organization
+
             org = db.query(Organization).first()
             if org:
                 organization_id = org.organization_id
@@ -174,10 +181,15 @@ def run_sync(entity_types=None, organization_id=None, user_id=None, incremental=
         db = SessionLocal()
         try:
             from app.models.person import Person
-            person = db.query(Person).filter(
-                Person.organization_id == organization_id,
-                Person.is_active.is_(True),
-            ).first()
+
+            person = (
+                db.query(Person)
+                .filter(
+                    Person.organization_id == organization_id,
+                    Person.is_active.is_(True),
+                )
+                .first()
+            )
             if person:
                 user_id = person.id
             else:
@@ -186,9 +198,9 @@ def run_sync(entity_types=None, organization_id=None, user_id=None, incremental=
         finally:
             db.close()
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("ERPNext Sync")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"Organization ID: {organization_id}")
     print(f"User ID: {user_id}")
     print(f"Sync Type: {'Incremental' if incremental else 'Full'}")
@@ -196,7 +208,7 @@ def run_sync(entity_types=None, organization_id=None, user_id=None, incremental=
         print(f"Entities: {', '.join(entity_types)}")
     else:
         print("Entities: All supported")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     db = SessionLocal()
     try:
@@ -246,14 +258,16 @@ def run_sync(entity_types=None, organization_id=None, user_id=None, incremental=
                 print(f"\nSyncing {entity}...")
                 try:
                     result = orchestrator.run_single(entity)
-                    print(f"  ✓ {entity}: {result.synced_count} synced, {result.skipped_count} skipped, {result.error_count} errors")
+                    print(
+                        f"  ✓ {entity}: {result.synced_count} synced, {result.skipped_count} skipped, {result.error_count} errors"
+                    )
                 except Exception as e:
                     print(f"  ✗ {entity}: {str(e)}")
         else:
             # Full sync
             print("Running full sync...")
             history = orchestrator.run()
-            print(f"\nSync completed!")
+            print("\nSync completed!")
             print(f"  Total records: {history.total_records}")
             print(f"  Synced: {history.synced_count}")
             print(f"  Skipped: {history.skipped_count}")
@@ -268,6 +282,7 @@ def run_sync(entity_types=None, organization_id=None, user_id=None, incremental=
         db.rollback()
         print(f"\n✗ Sync failed: {str(e)}")
         import traceback
+
         traceback.print_exc()
         return False
     finally:
@@ -288,39 +303,31 @@ Examples:
   python scripts/erpnext_sync.py --entity warehouses --entity items  # Multiple entities
   python scripts/erpnext_sync.py --sync --incremental    # Incremental sync
   python scripts/erpnext_sync.py --sample                # Show sample data
-        """
+        """,
     )
 
     parser.add_argument(
         "--sync",
         nargs="?",
         const="all",
-        help="Run sync. Optional: 'all', 'inventory', 'material_requests'"
+        help="Run sync. Optional: 'all', 'inventory', 'material_requests'",
     )
     parser.add_argument(
         "--entity",
         action="append",
         dest="entities",
-        help="Specific entity to sync (can be repeated)"
+        help="Specific entity to sync (can be repeated)",
     )
     parser.add_argument(
         "--incremental",
         action="store_true",
-        help="Only sync records modified since last sync"
+        help="Only sync records modified since last sync",
     )
     parser.add_argument(
-        "--sample",
-        action="store_true",
-        help="Show sample data from ERPNext"
+        "--sample", action="store_true", help="Show sample data from ERPNext"
     )
-    parser.add_argument(
-        "--org-id",
-        help="Organization ID (UUID) to sync to"
-    )
-    parser.add_argument(
-        "--user-id",
-        help="User ID (UUID) performing sync"
-    )
+    parser.add_argument("--org-id", help="Organization ID (UUID) to sync to")
+    parser.add_argument("--user-id", help="User ID (UUID) performing sync")
 
     args = parser.parse_args()
 
@@ -353,9 +360,11 @@ Examples:
         # Convert string UUIDs
         if org_id:
             from uuid import UUID
+
             org_id = UUID(org_id)
         if user_id:
             from uuid import UUID
+
             user_id = UUID(user_id)
 
         success = run_sync(

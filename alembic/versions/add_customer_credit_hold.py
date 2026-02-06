@@ -28,7 +28,9 @@ def upgrade() -> None:
         if "credit_hold" not in columns:
             op.add_column(
                 "customer",
-                sa.Column("credit_hold", sa.Boolean, nullable=False, server_default="false"),
+                sa.Column(
+                    "credit_hold", sa.Boolean, nullable=False, server_default="false"
+                ),
                 schema="ar",
             )
 

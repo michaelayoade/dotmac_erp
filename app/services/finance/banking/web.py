@@ -7,17 +7,13 @@ Provides view-focused data for banking web routes.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
-from uuid import UUID
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
-
-logger = logging.getLogger(__name__)
 
 from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus
 from app.models.finance.banking.bank_reconciliation import (
@@ -33,47 +29,23 @@ from app.models.finance.banking.bank_statement import (
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
-from app.config import settings
 from app.services.common import coerce_uuid
 from app.services.finance.platform.currency_context import get_currency_context
+from app.services.formatters import format_currency as _base_format_currency
+from app.services.formatters import format_date as _format_date
+from app.services.formatters import parse_date as _parse_date
 from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
+from app.web.deps import WebAuthContext, base_context
 
-
-def _parse_date(value: Optional[str]) -> Optional[date]:
-    """Parse date string in YYYY-MM-DD format.
-
-    Logs warning on parse failure for debugging data quality issues.
-    """
-    if not value:
-        return None
-    try:
-        return datetime.strptime(value, "%Y-%m-%d").date()
-    except ValueError:
-        logger.warning("Failed to parse date value: %r (expected YYYY-MM-DD format)", value)
-        return None
-
-
-def _format_date(value: Optional[date | datetime]) -> str:
-    if not value:
-        return ""
-    if isinstance(value, datetime):
-        return value.strftime("%Y-%m-%d")
-    return value.strftime("%Y-%m-%d")
+logger = logging.getLogger(__name__)
 
 
 def _format_currency(
     amount: Optional[Decimal],
-    currency: str = settings.default_presentation_currency_code,
+    currency: Optional[str] = None,
 ) -> str:
-    """Format currency amount with symbol and thousands separator.
-
-    Returns dash for None values to indicate no data available.
-    """
-    if amount is None:
-        return "—"
-    value = Decimal(str(amount))
-    return f"{currency} {value:,.2f}"
+    """Format currency with em-dash for None values."""
+    return _base_format_currency(amount, currency, none_value="\u2014")
 
 
 def _parse_account_status(value: Optional[str]) -> Optional[BankAccountStatus]:
@@ -118,7 +90,9 @@ def _statement_status_label(status: BankStatementStatus) -> str:
     return str(status.value)
 
 
-def _parse_reconciliation_status(value: Optional[str]) -> Optional[ReconciliationStatus]:
+def _parse_reconciliation_status(
+    value: Optional[str],
+) -> Optional[ReconciliationStatus]:
     """Parse reconciliation status enum value.
 
     Logs warning on parse failure for debugging.
@@ -147,16 +121,22 @@ def _account_view(account: BankAccount) -> dict:
         "currency_code": currency,
         "gl_account_id": account.gl_account_id,
         "status": account.status.value if account.status else "",
-        "last_statement_balance": _format_currency(account.last_statement_balance, currency),
+        "last_statement_balance": _format_currency(
+            account.last_statement_balance, currency
+        ),
         "last_statement_date": _format_date(account.last_statement_date),
         "last_reconciled_date": _format_date(account.last_reconciled_date),
-        "last_reconciled_balance": _format_currency(account.last_reconciled_balance, currency),
+        "last_reconciled_balance": _format_currency(
+            account.last_reconciled_balance, currency
+        ),
         "contact_name": account.contact_name,
         "contact_phone": account.contact_phone,
         "contact_email": account.contact_email,
         "notes": account.notes,
         "allow_overdraft": account.allow_overdraft,
-        "overdraft_limit": _format_currency(account.overdraft_limit, currency) if account.overdraft_limit else None,
+        "overdraft_limit": _format_currency(account.overdraft_limit, currency)
+        if account.overdraft_limit
+        else None,
     }
 
 
@@ -187,7 +167,9 @@ def _statement_line_view(line: BankStatementLine) -> dict:
         "line_id": line.line_id,
         "line_number": line.line_number,
         "transaction_date": _format_date(line.transaction_date),
-        "transaction_type": line.transaction_type.value if line.transaction_type else "",
+        "transaction_type": line.transaction_type.value
+        if line.transaction_type
+        else "",
         "amount": line.amount,
         "description": line.description,
         "reference": line.reference,
@@ -303,12 +285,9 @@ class BankingWebService:
             .scalar()
             or 0
         )
-        total_balance = (
-            query.with_entities(
-                func.coalesce(func.sum(BankAccount.last_statement_balance), 0)
-            ).scalar()
-            or Decimal("0")
-        )
+        total_balance = query.with_entities(
+            func.coalesce(func.sum(BankAccount.last_statement_balance), 0)
+        ).scalar() or Decimal("0")
         pending_recon = (
             db.query(func.count(BankReconciliation.reconciliation_id))
             .filter(
@@ -400,7 +379,9 @@ class BankingWebService:
         query = db.query(BankStatement).filter(BankStatement.organization_id == org_id)
 
         if account_id:
-            query = query.filter(BankStatement.bank_account_id == coerce_uuid(account_id))
+            query = query.filter(
+                BankStatement.bank_account_id == coerce_uuid(account_id)
+            )
         if status_value:
             query = query.filter(BankStatement.status == status_value)
         if from_date:
@@ -427,7 +408,9 @@ class BankingWebService:
 
         total_lines = sum(statement.total_lines or 0 for statement in statements)
         matched_lines = sum(statement.matched_lines or 0 for statement in statements)
-        unmatched_lines = sum(statement.unmatched_lines or 0 for statement in statements)
+        unmatched_lines = sum(
+            statement.unmatched_lines or 0 for statement in statements
+        )
 
         total_pages = max(1, (total_count + limit - 1) // limit)
 
@@ -510,7 +493,9 @@ class BankingWebService:
             query = query.filter(BankReconciliation.reconciliation_date <= to_date)
 
         total_count = (
-            query.with_entities(func.count(BankReconciliation.reconciliation_id)).scalar()
+            query.with_entities(
+                func.count(BankReconciliation.reconciliation_id)
+            ).scalar()
             or 0
         )
         reconciliations = (
@@ -531,16 +516,22 @@ class BankingWebService:
             1 for recon in reconciliations if recon.status == ReconciliationStatus.draft
         )
         pending_review_count = sum(
-            1 for recon in reconciliations if recon.status == ReconciliationStatus.pending_review
+            1
+            for recon in reconciliations
+            if recon.status == ReconciliationStatus.pending_review
         )
         approved_count = sum(
-            1 for recon in reconciliations if recon.status == ReconciliationStatus.approved
+            1
+            for recon in reconciliations
+            if recon.status == ReconciliationStatus.approved
         )
 
         total_pages = max(1, (total_count + limit - 1) // limit)
 
         return {
-            "reconciliations": [_reconciliation_view(recon) for recon in reconciliations],
+            "reconciliations": [
+                _reconciliation_view(recon) for recon in reconciliations
+            ],
             "accounts": [_account_view(account) for account in accounts],
             "account_id": account_id,
             "status": status,
@@ -594,7 +585,10 @@ class BankingWebService:
 
         statement_lines = (
             db.query(BankStatementLine)
-            .join(BankStatement, BankStatementLine.statement_id == BankStatement.statement_id)
+            .join(
+                BankStatement,
+                BankStatementLine.statement_id == BankStatement.statement_id,
+            )
             .filter(
                 BankStatement.bank_account_id == reconciliation.bank_account_id,
                 BankStatementLine.is_matched.is_(False),
@@ -609,7 +603,10 @@ class BankingWebService:
         if bank_account:
             gl_lines = (
                 db.query(JournalEntryLine, JournalEntry)
-                .join(JournalEntry, JournalEntryLine.journal_entry_id == JournalEntry.journal_entry_id)
+                .join(
+                    JournalEntry,
+                    JournalEntryLine.journal_entry_id == JournalEntry.journal_entry_id,
+                )
                 .filter(
                     JournalEntryLine.account_id == bank_account.gl_account_id,
                     JournalEntry.status == JournalStatus.POSTED,
@@ -662,10 +659,18 @@ class BankingWebService:
         ]
         adjustments = [line for line in reconciliation.lines if line.is_adjustment]
 
-        total_matched = sum((_line_amount(line) for line in matched_lines), Decimal("0"))
-        total_deposits = sum((_line_amount(line) for line in outstanding_deposits), Decimal("0"))
-        total_payments = sum((_line_amount(line) for line in outstanding_payments), Decimal("0"))
-        total_adjustments = sum((_line_amount(line) for line in adjustments), Decimal("0"))
+        total_matched = sum(
+            (_line_amount(line) for line in matched_lines), Decimal("0")
+        )
+        total_deposits = sum(
+            (_line_amount(line) for line in outstanding_deposits), Decimal("0")
+        )
+        total_payments = sum(
+            (_line_amount(line) for line in outstanding_payments), Decimal("0")
+        )
+        total_adjustments = sum(
+            (_line_amount(line) for line in adjustments), Decimal("0")
+        )
 
         statement_balance = Decimal(str(reconciliation.statement_closing_balance))
         gl_balance = Decimal(str(reconciliation.gl_closing_balance))
@@ -676,12 +681,18 @@ class BankingWebService:
         report = {
             "reconciliation": recon_view,
             "summary": {
-                "statement_balance": _format_currency(statement_balance, reconciliation.currency_code),
-                "gl_balance": _format_currency(gl_balance, reconciliation.currency_code),
+                "statement_balance": _format_currency(
+                    statement_balance, reconciliation.currency_code
+                ),
+                "gl_balance": _format_currency(
+                    gl_balance, reconciliation.currency_code
+                ),
                 "adjusted_book_balance": _format_currency(
                     adjusted_statement, reconciliation.currency_code
                 ),
-                "difference": _format_currency(difference, reconciliation.currency_code),
+                "difference": _format_currency(
+                    difference, reconciliation.currency_code
+                ),
                 "is_reconciled": difference == Decimal("0"),
             },
             "matched_items": {
@@ -692,16 +703,22 @@ class BankingWebService:
             "outstanding_deposits": {
                 "count": len(outstanding_deposits),
                 "total": _format_currency(total_deposits, reconciliation.currency_code),
-                "items": [_reconciliation_line_view(line) for line in outstanding_deposits],
+                "items": [
+                    _reconciliation_line_view(line) for line in outstanding_deposits
+                ],
             },
             "outstanding_payments": {
                 "count": len(outstanding_payments),
                 "total": _format_currency(total_payments, reconciliation.currency_code),
-                "items": [_reconciliation_line_view(line) for line in outstanding_payments],
+                "items": [
+                    _reconciliation_line_view(line) for line in outstanding_payments
+                ],
             },
             "adjustments": {
                 "count": len(adjustments),
-                "total": _format_currency(total_adjustments, reconciliation.currency_code),
+                "total": _format_currency(
+                    total_adjustments, reconciliation.currency_code
+                ),
                 "items": [_reconciliation_line_view(line) for line in adjustments],
             },
         }
@@ -759,28 +776,39 @@ class BankingWebService:
         account_map = {}
         account_ids = [p.default_account_id for p in payees if p.default_account_id]
         if account_ids:
-            accounts = db.query(Account).filter(Account.account_id.in_(account_ids)).all()
-            account_map = {a.account_id: f"{a.account_code} - {a.account_name}" for a in accounts}
+            accounts = (
+                db.query(Account).filter(Account.account_id.in_(account_ids)).all()
+            )
+            account_map = {
+                a.account_id: f"{a.account_code} - {a.account_name}" for a in accounts
+            }
 
         payee_list = []
         for p in payees:
             default_account_id = p.default_account_id
-            payee_list.append({
-                "payee_id": str(p.payee_id),
-                "payee_name": p.payee_name,
-                "payee_type": p.payee_type.value if p.payee_type else "",
-                "name_patterns": p.name_patterns or "",
-                "default_account": account_map.get(default_account_id, "")
-                if default_account_id
-                else "",
-                "match_count": p.match_count,
-                "last_matched": _format_date(p.last_matched_at) if p.last_matched_at else "Never",
-            })
+            payee_list.append(
+                {
+                    "payee_id": str(p.payee_id),
+                    "payee_name": p.payee_name,
+                    "payee_type": p.payee_type.value if p.payee_type else "",
+                    "name_patterns": p.name_patterns or "",
+                    "default_account": account_map.get(default_account_id, "")
+                    if default_account_id
+                    else "",
+                    "match_count": p.match_count,
+                    "last_matched": _format_date(p.last_matched_at)
+                    if p.last_matched_at
+                    else "Never",
+                }
+            )
 
         total_pages = (total + per_page - 1) // per_page
         return {
             "payees": payee_list,
-            "payee_types": [{"value": t.value, "label": t.value.replace("_", " ").title()} for t in PayeeType],
+            "payee_types": [
+                {"value": t.value, "label": t.value.replace("_", " ").title()}
+                for t in PayeeType
+            ],
             "search": search or "",
             "selected_type": payee_type or "",
             "total_count": total,
@@ -813,7 +841,10 @@ class BankingWebService:
         )
 
         account_options = [
-            {"value": str(a.account_id), "label": f"{a.account_code} - {a.account_name}"}
+            {
+                "value": str(a.account_id),
+                "label": f"{a.account_code} - {a.account_name}",
+            }
             for a in accounts
         ]
 
@@ -830,7 +861,9 @@ class BankingWebService:
                 "payee_name": payee.payee_name,
                 "payee_type": payee.payee_type.value if payee.payee_type else "",
                 "name_patterns": payee.name_patterns or "",
-                "default_account_id": str(payee.default_account_id) if payee.default_account_id else "",
+                "default_account_id": str(payee.default_account_id)
+                if payee.default_account_id
+                else "",
                 "notes": payee.notes or "",
                 "is_active": payee.is_active,
             }
@@ -838,7 +871,10 @@ class BankingWebService:
         return {
             "payee": payee_data,
             "is_edit": payee is not None,
-            "payee_types": [{"value": t.value, "label": t.value.replace("_", " ").title()} for t in PayeeType],
+            "payee_types": [
+                {"value": t.value, "label": t.value.replace("_", " ").title()}
+                for t in PayeeType
+            ],
             "accounts": account_options,
         }
 
@@ -855,7 +891,10 @@ class BankingWebService:
         per_page: int = 25,
     ) -> dict:
         """Context for transaction rules list page."""
-        from app.models.finance.banking.transaction_rule import TransactionRule, RuleType, RuleAction
+        from app.models.finance.banking.transaction_rule import (
+            RuleType,
+            TransactionRule,
+        )
 
         org_id = coerce_uuid(organization_id)
 
@@ -882,32 +921,43 @@ class BankingWebService:
         account_map = {}
         account_ids = [r.target_account_id for r in rules if r.target_account_id]
         if account_ids:
-            accounts = db.query(Account).filter(Account.account_id.in_(account_ids)).all()
-            account_map = {a.account_id: f"{a.account_code} - {a.account_name}" for a in accounts}
+            accounts = (
+                db.query(Account).filter(Account.account_id.in_(account_ids)).all()
+            )
+            account_map = {
+                a.account_id: f"{a.account_code} - {a.account_name}" for a in accounts
+            }
 
         rule_list = []
         for r in rules:
             target_account_id = r.target_account_id
-            rule_list.append({
-                "rule_id": str(r.rule_id),
-                "rule_name": r.rule_name,
-                "description": r.description or "",
-                "rule_type": r.rule_type.value if r.rule_type else "",
-                "action": r.action.value if r.action else "",
-                "target_account": account_map.get(target_account_id, "")
-                if target_account_id
-                else "",
-                "priority": r.priority,
-                "auto_apply": r.auto_apply,
-                "is_active": r.is_active,
-                "match_count": r.match_count,
-                "success_rate": f"{r.success_rate:.0f}%" if r.success_count + r.reject_count > 0 else "N/A",
-            })
+            rule_list.append(
+                {
+                    "rule_id": str(r.rule_id),
+                    "rule_name": r.rule_name,
+                    "description": r.description or "",
+                    "rule_type": r.rule_type.value if r.rule_type else "",
+                    "action": r.action.value if r.action else "",
+                    "target_account": account_map.get(target_account_id, "")
+                    if target_account_id
+                    else "",
+                    "priority": r.priority,
+                    "auto_apply": r.auto_apply,
+                    "is_active": r.is_active,
+                    "match_count": r.match_count,
+                    "success_rate": f"{r.success_rate:.0f}%"
+                    if r.success_count + r.reject_count > 0
+                    else "N/A",
+                }
+            )
 
         total_pages = (total + per_page - 1) // per_page
         return {
             "rules": rule_list,
-            "rule_types": [{"value": t.value, "label": t.value.replace("_", " ").title()} for t in RuleType],
+            "rule_types": [
+                {"value": t.value, "label": t.value.replace("_", " ").title()}
+                for t in RuleType
+            ],
             "selected_type": rule_type or "",
             "total_count": total,
             "total_pages": total_pages,
@@ -926,8 +976,12 @@ class BankingWebService:
         rule_id: Optional[str] = None,
     ) -> dict:
         """Context for transaction rule create/edit form."""
-        from app.models.finance.banking.transaction_rule import TransactionRule, RuleType, RuleAction
         from app.models.finance.banking.payee import Payee
+        from app.models.finance.banking.transaction_rule import (
+            RuleAction,
+            RuleType,
+            TransactionRule,
+        )
 
         org_id = coerce_uuid(organization_id)
 
@@ -940,20 +994,29 @@ class BankingWebService:
         )
 
         account_options = [
-            {"value": str(a.account_id), "label": f"{a.account_code} - {a.account_name}"}
+            {
+                "value": str(a.account_id),
+                "label": f"{a.account_code} - {a.account_name}",
+            }
             for a in accounts
         ]
 
         # Get bank accounts for dropdown
         bank_accounts = (
             db.query(BankAccount)
-            .filter(BankAccount.organization_id == org_id, BankAccount.status == BankAccountStatus.active)
+            .filter(
+                BankAccount.organization_id == org_id,
+                BankAccount.status == BankAccountStatus.active,
+            )
             .order_by(BankAccount.account_name)
             .all()
         )
 
         bank_account_options = [
-            {"value": str(ba.bank_account_id), "label": f"{ba.bank_name} - {ba.account_name}"}
+            {
+                "value": str(ba.bank_account_id),
+                "label": f"{ba.bank_name} - {ba.account_name}",
+            }
             for ba in bank_accounts
         ]
 
@@ -966,8 +1029,7 @@ class BankingWebService:
         )
 
         payee_options = [
-            {"value": str(p.payee_id), "label": p.payee_name}
-            for p in payees
+            {"value": str(p.payee_id), "label": p.payee_name} for p in payees
         ]
 
         rule = None
@@ -985,8 +1047,12 @@ class BankingWebService:
                 "rule_type": rule.rule_type.value if rule.rule_type else "",
                 "conditions": rule.conditions or {},
                 "action": rule.action.value if rule.action else "",
-                "target_account_id": str(rule.target_account_id) if rule.target_account_id else "",
-                "bank_account_id": str(rule.bank_account_id) if rule.bank_account_id else "",
+                "target_account_id": str(rule.target_account_id)
+                if rule.target_account_id
+                else "",
+                "bank_account_id": str(rule.bank_account_id)
+                if rule.bank_account_id
+                else "",
                 "payee_id": str(rule.payee_id) if rule.payee_id else "",
                 "priority": rule.priority,
                 "auto_apply": rule.auto_apply,
@@ -999,8 +1065,14 @@ class BankingWebService:
         return {
             "rule": rule_data,
             "is_edit": rule is not None,
-            "rule_types": [{"value": t.value, "label": t.value.replace("_", " ").title()} for t in RuleType],
-            "actions": [{"value": a.value, "label": a.value.replace("_", " ").title()} for a in RuleAction],
+            "rule_types": [
+                {"value": t.value, "label": t.value.replace("_", " ").title()}
+                for t in RuleType
+            ],
+            "actions": [
+                {"value": a.value, "label": a.value.replace("_", " ").title()}
+                for a in RuleAction
+            ],
             "accounts": account_options,
             "bank_accounts": bank_account_options,
             "payees": payee_options,
@@ -1025,7 +1097,9 @@ class BankingWebService:
                 page=page,
             )
         )
-        return templates.TemplateResponse(request, "finance/banking/accounts.html", context)
+        return templates.TemplateResponse(
+            request, "finance/banking/accounts.html", context
+        )
 
     def account_new_form_response(
         self,
@@ -1035,7 +1109,9 @@ class BankingWebService:
     ) -> HTMLResponse:
         context = base_context(request, auth, "New Bank Account", "banking")
         context.update(self.account_form_context(db, str(auth.organization_id)))
-        return templates.TemplateResponse(request, "finance/banking/account_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/banking/account_form.html", context
+        )
 
     def account_detail_response(
         self,
@@ -1052,7 +1128,9 @@ class BankingWebService:
                 account_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/banking/account_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/banking/account_detail.html", context
+        )
 
     def account_edit_form_response(
         self,
@@ -1069,7 +1147,9 @@ class BankingWebService:
                 account_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/banking/account_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/banking/account_form.html", context
+        )
 
     def list_statements_response(
         self,
@@ -1094,7 +1174,9 @@ class BankingWebService:
                 page=page,
             )
         )
-        return templates.TemplateResponse(request, "finance/banking/statements.html", context)
+        return templates.TemplateResponse(
+            request, "finance/banking/statements.html", context
+        )
 
     def statement_import_form_response(
         self,
@@ -1104,7 +1186,9 @@ class BankingWebService:
     ) -> HTMLResponse:
         context = base_context(request, auth, "Import Bank Statement", "banking")
         context.update(self.statement_import_context(db, str(auth.organization_id)))
-        return templates.TemplateResponse(request, "finance/banking/statement_import.html", context)
+        return templates.TemplateResponse(
+            request, "finance/banking/statement_import.html", context
+        )
 
     def statement_detail_response(
         self,
@@ -1121,7 +1205,9 @@ class BankingWebService:
                 statement_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/banking/statement_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/banking/statement_detail.html", context
+        )
 
     def list_reconciliations_response(
         self,
@@ -1181,7 +1267,9 @@ class BankingWebService:
                 reconciliation_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/banking/reconciliation.html", context)
+        return templates.TemplateResponse(
+            request, "finance/banking/reconciliation.html", context
+        )
 
     def reconciliation_report_response(
         self,
@@ -1223,7 +1311,9 @@ class BankingWebService:
                 page=page,
             )
         )
-        return templates.TemplateResponse(request, "finance/banking/payees.html", context)
+        return templates.TemplateResponse(
+            request, "finance/banking/payees.html", context
+        )
 
     def payee_new_form_response(
         self,
@@ -1233,7 +1323,9 @@ class BankingWebService:
     ) -> HTMLResponse:
         context = base_context(request, auth, "New Payee", "banking")
         context.update(self.payee_form_context(db, str(auth.organization_id)))
-        return templates.TemplateResponse(request, "finance/banking/payee_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/banking/payee_form.html", context
+        )
 
     def payee_detail_response(
         self,
@@ -1250,7 +1342,9 @@ class BankingWebService:
                 payee_id=payee_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/banking/payee_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/banking/payee_form.html", context
+        )
 
     def list_rules_response(
         self,
@@ -1269,7 +1363,9 @@ class BankingWebService:
                 page=page,
             )
         )
-        return templates.TemplateResponse(request, "finance/banking/rules.html", context)
+        return templates.TemplateResponse(
+            request, "finance/banking/rules.html", context
+        )
 
     def rule_new_form_response(
         self,
@@ -1279,7 +1375,9 @@ class BankingWebService:
     ) -> HTMLResponse:
         context = base_context(request, auth, "New Transaction Rule", "banking")
         context.update(self.rule_form_context(db, str(auth.organization_id)))
-        return templates.TemplateResponse(request, "finance/banking/rule_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/banking/rule_form.html", context
+        )
 
     def rule_detail_response(
         self,
@@ -1296,7 +1394,9 @@ class BankingWebService:
                 rule_id=rule_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/banking/rule_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/banking/rule_form.html", context
+        )
 
 
 banking_web_service = BankingWebService()

@@ -1,6 +1,8 @@
 """Service for managing workflow tasks."""
+
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 from typing import Optional
 from uuid import UUID
@@ -8,8 +10,14 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.workflow_task import WorkflowTask, WorkflowTaskStatus, WorkflowTaskPriority
+from app.models.workflow_task import (
+    WorkflowTask,
+    WorkflowTaskPriority,
+    WorkflowTaskStatus,
+)
 from app.services.common import PaginatedResult, PaginationParams
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["WorkflowTaskService"]
 
@@ -32,7 +40,9 @@ class WorkflowTaskService:
         query = select(WorkflowTask).where(WorkflowTask.organization_id == org_id)
 
         if assignee_employee_id:
-            query = query.where(WorkflowTask.assignee_employee_id == assignee_employee_id)
+            query = query.where(
+                WorkflowTask.assignee_employee_id == assignee_employee_id
+            )
 
         if status:
             query = query.where(WorkflowTask.status == status)
@@ -104,6 +114,8 @@ class WorkflowTaskService:
             WorkflowTask.organization_id == org_id
         )
         if assignee_employee_id:
-            query = query.where(WorkflowTask.assignee_employee_id == assignee_employee_id)
+            query = query.where(
+                WorkflowTask.assignee_employee_id == assignee_employee_id
+            )
         results = self.db.execute(query.group_by(WorkflowTask.status)).all()
         return {status.value: count for status, count in results}

@@ -6,6 +6,7 @@ Handles:
 - Mapping CRM entities to local ERP entities
 - Providing expense totals for CRM entities
 """
+
 import hashlib
 import logging
 from datetime import datetime, timezone
@@ -20,8 +21,8 @@ from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
 from app.models.finance.core_org.project import Project, ProjectStatus, ProjectType
 from app.models.people.hr.employee import Employee
 from app.models.person import Person
-from app.models.pm.task import Task, TaskStatus, TaskPriority
-from app.models.support.ticket import Ticket, TicketStatus, TicketPriority
+from app.models.pm.task import Task, TaskPriority, TaskStatus
+from app.models.support.ticket import Ticket, TicketPriority, TicketStatus
 from app.models.sync.dotmac_crm_sync import (
     CRMEntityType,
     CRMSyncMapping,
@@ -120,7 +121,14 @@ class DotMacCRMSyncService:
                 self.db.flush()  # Get project_id
                 mapping.local_entity_id = project.project_id
                 mapping.local_entity_type = "project"
-            self._update_mapping(mapping, data.name, data.code, data.customer_name, data.status, data.metadata)
+            self._update_mapping(
+                mapping,
+                data.name,
+                data.code,
+                data.customer_name,
+                data.status,
+                data.metadata,
+            )
         else:
             # Create new project
             project = self._create_project(org_id, data)
@@ -132,7 +140,9 @@ class DotMacCRMSyncService:
                 crm_id=data.crm_id,
                 local_entity_type="project",
                 local_entity_id=project.project_id,
-                crm_status=CRM_SYNC_STATUS_MAP.get(data.status.lower(), CRMSyncStatus.ACTIVE),
+                crm_status=CRM_SYNC_STATUS_MAP.get(
+                    data.status.lower(), CRMSyncStatus.ACTIVE
+                ),
                 display_name=data.name,
                 display_code=data.code,
                 customer_name=data.customer_name,
@@ -164,7 +174,14 @@ class DotMacCRMSyncService:
                 self.db.flush()
                 mapping.local_entity_id = ticket.ticket_id
                 mapping.local_entity_type = "ticket"
-            self._update_mapping(mapping, data.subject, data.ticket_number, data.customer_name, data.status, data.metadata)
+            self._update_mapping(
+                mapping,
+                data.subject,
+                data.ticket_number,
+                data.customer_name,
+                data.status,
+                data.metadata,
+            )
         else:
             ticket = self._create_ticket(org_id, data)
             self.db.flush()
@@ -175,7 +192,9 @@ class DotMacCRMSyncService:
                 crm_id=data.crm_id,
                 local_entity_type="ticket",
                 local_entity_id=ticket.ticket_id,
-                crm_status=CRM_SYNC_STATUS_MAP.get(data.status.lower(), CRMSyncStatus.ACTIVE),
+                crm_status=CRM_SYNC_STATUS_MAP.get(
+                    data.status.lower(), CRMSyncStatus.ACTIVE
+                ),
                 display_name=data.subject,
                 display_code=data.ticket_number,
                 customer_name=data.customer_name,
@@ -214,11 +233,15 @@ class DotMacCRMSyncService:
             else:
                 if not project_id:
                     project_id = self._get_or_create_default_project(org_id)
-                task = self._create_task(org_id, data, project_id, ticket_id, employee_id)
+                task = self._create_task(
+                    org_id, data, project_id, ticket_id, employee_id
+                )
                 self.db.flush()
                 mapping.local_entity_id = task.task_id
                 mapping.local_entity_type = "task"
-            self._update_mapping(mapping, data.title, None, None, data.status, data.metadata)
+            self._update_mapping(
+                mapping, data.title, None, None, data.status, data.metadata
+            )
         else:
             # Work orders require a project - create a default one if needed
             if not project_id:
@@ -233,13 +256,17 @@ class DotMacCRMSyncService:
                 crm_id=data.crm_id,
                 local_entity_type="task",
                 local_entity_id=task.task_id,
-                crm_status=CRM_SYNC_STATUS_MAP.get(data.status.lower(), CRMSyncStatus.ACTIVE),
+                crm_status=CRM_SYNC_STATUS_MAP.get(
+                    data.status.lower(), CRMSyncStatus.ACTIVE
+                ),
                 display_name=data.title,
                 crm_data=data.metadata,
             )
             self.db.add(mapping)
 
-        logger.info("Synced CRM work order %s -> %s", data.crm_id, mapping.local_entity_id)
+        logger.info(
+            "Synced CRM work order %s -> %s", data.crm_id, mapping.local_entity_id
+        )
         return mapping
 
     # ============ List Operations (for UI dropdowns) ============
@@ -266,7 +293,10 @@ class DotMacCRMSyncService:
             )
 
         if status:
-            stmt = stmt.where(CRMSyncMapping.crm_status == CRM_SYNC_STATUS_MAP.get(status.lower(), CRMSyncStatus.ACTIVE))
+            stmt = stmt.where(
+                CRMSyncMapping.crm_status
+                == CRM_SYNC_STATUS_MAP.get(status.lower(), CRMSyncStatus.ACTIVE)
+            )
 
         stmt = stmt.order_by(CRMSyncMapping.display_name).limit(limit)
         mappings = list(self.db.scalars(stmt).all())
@@ -454,28 +484,32 @@ class DotMacCRMSyncService:
                     available = on_hand - reserved
 
                 reorder_point = item.reorder_point or Decimal("0")
-                is_below_reorder = available <= reorder_point if reorder_point else False
+                is_below_reorder = (
+                    available <= reorder_point if reorder_point else False
+                )
 
-                items.append(InventoryItemStock(
-                    item_id=item.item_id,
-                    item_code=item.item_code,
-                    item_name=item.item_name,
-                    description=item.description,
-                    category_code=category.category_code if category else None,
-                    category_name=category.category_name if category else None,
-                    base_uom=item.base_uom,
-                    stock_uom=item.base_uom,
-                    quantity_on_hand=on_hand,
-                    quantity_reserved=reserved,
-                    quantity_available=available,
-                    on_hand=on_hand,
-                    reserved=reserved,
-                    reorder_point=item.reorder_point,
-                    list_price=item.list_price,
-                    currency_code=item.currency_code,
-                    barcode=item.barcode,
-                    is_below_reorder=is_below_reorder,
-                ))
+                items.append(
+                    InventoryItemStock(
+                        item_id=item.item_id,
+                        item_code=item.item_code,
+                        item_name=item.item_name,
+                        description=item.description,
+                        category_code=category.category_code if category else None,
+                        category_name=category.category_name if category else None,
+                        base_uom=item.base_uom,
+                        stock_uom=item.base_uom,
+                        quantity_on_hand=on_hand,
+                        quantity_reserved=reserved,
+                        quantity_available=available,
+                        on_hand=on_hand,
+                        reserved=reserved,
+                        reorder_point=item.reorder_point,
+                        list_price=item.list_price,
+                        currency_code=item.currency_code,
+                        barcode=item.barcode,
+                        is_below_reorder=is_below_reorder,
+                    )
+                )
         else:
             # Filtered pagination: compute total_count and has_more against filtered items
             total_count = 0
@@ -484,7 +518,11 @@ class DotMacCRMSyncService:
             current_offset = 0
 
             while True:
-                page_stmt = stmt.order_by(Item.item_code).offset(current_offset).limit(batch_size)
+                page_stmt = (
+                    stmt.order_by(Item.item_code)
+                    .offset(current_offset)
+                    .limit(batch_size)
+                )
                 results = self.db.execute(page_stmt).all()
                 if not results:
                     break
@@ -495,8 +533,12 @@ class DotMacCRMSyncService:
                             self.db, org_id, item.item_id, warehouse_id
                         )
                         on_hand = balance.quantity_on_hand if balance else Decimal("0")
-                        reserved = balance.quantity_reserved if balance else Decimal("0")
-                        available = balance.quantity_available if balance else Decimal("0")
+                        reserved = (
+                            balance.quantity_reserved if balance else Decimal("0")
+                        )
+                        available = (
+                            balance.quantity_available if balance else Decimal("0")
+                        )
                     else:
                         on_hand = InventoryBalanceService.get_on_hand(
                             self.db, org_id, item.item_id
@@ -510,7 +552,9 @@ class DotMacCRMSyncService:
                         continue
 
                     reorder_point = item.reorder_point or Decimal("0")
-                    is_below_reorder = available <= reorder_point if reorder_point else False
+                    is_below_reorder = (
+                        available <= reorder_point if reorder_point else False
+                    )
                     if only_below_reorder and not is_below_reorder:
                         continue
 
@@ -520,26 +564,32 @@ class DotMacCRMSyncService:
                         continue
 
                     if len(items) < limit:
-                        items.append(InventoryItemStock(
-                            item_id=item.item_id,
-                            item_code=item.item_code,
-                            item_name=item.item_name,
-                            description=item.description,
-                            category_code=category.category_code if category else None,
-                            category_name=category.category_name if category else None,
-                            base_uom=item.base_uom,
-                            stock_uom=item.base_uom,
-                            quantity_on_hand=on_hand,
-                            quantity_reserved=reserved,
-                            quantity_available=available,
-                            on_hand=on_hand,
-                            reserved=reserved,
-                            reorder_point=item.reorder_point,
-                            list_price=item.list_price,
-                            currency_code=item.currency_code,
-                            barcode=item.barcode,
-                            is_below_reorder=is_below_reorder,
-                        ))
+                        items.append(
+                            InventoryItemStock(
+                                item_id=item.item_id,
+                                item_code=item.item_code,
+                                item_name=item.item_name,
+                                description=item.description,
+                                category_code=category.category_code
+                                if category
+                                else None,
+                                category_name=category.category_name
+                                if category
+                                else None,
+                                base_uom=item.base_uom,
+                                stock_uom=item.base_uom,
+                                quantity_on_hand=on_hand,
+                                quantity_reserved=reserved,
+                                quantity_available=available,
+                                on_hand=on_hand,
+                                reserved=reserved,
+                                reorder_point=item.reorder_point,
+                                list_price=item.list_price,
+                                currency_code=item.currency_code,
+                                barcode=item.barcode,
+                                is_below_reorder=is_below_reorder,
+                            )
+                        )
                     else:
                         has_more = True
 
@@ -578,7 +628,9 @@ class DotMacCRMSyncService:
             return None
 
         # Get category
-        category = self.db.get(ItemCategory, item.category_id) if item.category_id else None
+        category = (
+            self.db.get(ItemCategory, item.category_id) if item.category_id else None
+        )
 
         # Get stock summary with warehouse breakdown
         summary = InventoryBalanceService.get_item_stock_summary(
@@ -589,18 +641,20 @@ class DotMacCRMSyncService:
         if summary:
             for wh_balance in summary.warehouses:
                 if wh_balance.warehouse_id:
-                    warehouse_stocks.append(WarehouseStock(
-                        warehouse_id=wh_balance.warehouse_id,
-                        warehouse_code=wh_balance.warehouse_code or "",
-                        warehouse_name=(
-                            getattr(wh_balance, "warehouse_name", None)
-                            or wh_balance.warehouse_code
-                            or ""
-                        ),
-                        quantity_on_hand=wh_balance.quantity_on_hand,
-                        quantity_reserved=wh_balance.quantity_reserved,
-                        quantity_available=wh_balance.quantity_available,
-                    ))
+                    warehouse_stocks.append(
+                        WarehouseStock(
+                            warehouse_id=wh_balance.warehouse_id,
+                            warehouse_code=wh_balance.warehouse_code or "",
+                            warehouse_name=(
+                                getattr(wh_balance, "warehouse_name", None)
+                                or wh_balance.warehouse_code
+                                or ""
+                            ),
+                            quantity_on_hand=wh_balance.quantity_on_hand,
+                            quantity_reserved=wh_balance.quantity_reserved,
+                            quantity_available=wh_balance.quantity_available,
+                        )
+                    )
 
         total_on_hand = summary.total_on_hand if summary else Decimal("0")
         total_reserved = summary.total_reserved if summary else Decimal("0")
@@ -654,7 +708,11 @@ class DotMacCRMSyncService:
         from app.models.inventory.warehouse import Warehouse
 
         stmt = (
-            select(Warehouse.warehouse_id, Warehouse.warehouse_code, Warehouse.warehouse_name)
+            select(
+                Warehouse.warehouse_id,
+                Warehouse.warehouse_code,
+                Warehouse.warehouse_name,
+            )
             .where(
                 Warehouse.organization_id == org_id,
                 Warehouse.is_active.is_(True),
@@ -760,7 +818,9 @@ class DotMacCRMSyncService:
         mapping.display_name = display_name
         mapping.display_code = display_code
         mapping.customer_name = customer_name
-        mapping.crm_status = CRM_SYNC_STATUS_MAP.get(status.lower(), CRMSyncStatus.ACTIVE)
+        mapping.crm_status = CRM_SYNC_STATUS_MAP.get(
+            status.lower(), CRMSyncStatus.ACTIVE
+        )
         mapping.synced_at = datetime.now(timezone.utc)
         if crm_data is not None:
             mapping.crm_data = crm_data
@@ -768,7 +828,9 @@ class DotMacCRMSyncService:
     def _generate_unique_code(self, prefix: str, crm_id: str, max_len: int = 20) -> str:
         """Generate a unique code from CRM ID using hash to avoid collisions."""
         # Use hash of full CRM ID for uniqueness, take enough chars to fit max_len
-        hash_suffix = hashlib.sha256(crm_id.encode()).hexdigest()[:max_len - len(prefix) - 1]
+        hash_suffix = hashlib.sha256(crm_id.encode()).hexdigest()[
+            : max_len - len(prefix) - 1
+        ]
         return f"{prefix}-{hash_suffix.upper()}"
 
     def _create_project(self, org_id: UUID, data: CRMProjectPayload) -> Project:
@@ -793,13 +855,19 @@ class DotMacCRMSyncService:
         """Update existing project from CRM data."""
         project.project_name = data.name
         project.description = data.description
-        project.status = PROJECT_STATUS_MAP.get(data.status.lower(), ProjectStatus.ACTIVE)
-        project.start_date = data.start_at.date() if data.start_at else project.start_date
+        project.status = PROJECT_STATUS_MAP.get(
+            data.status.lower(), ProjectStatus.ACTIVE
+        )
+        project.start_date = (
+            data.start_at.date() if data.start_at else project.start_date
+        )
         project.end_date = data.due_at.date() if data.due_at else project.end_date
 
     def _create_ticket(self, org_id: UUID, data: CRMTicketPayload) -> Ticket:
         """Create a local Ticket from CRM data."""
-        ticket_number = data.ticket_number or self._generate_unique_code("CRM", data.crm_id, max_len=50)
+        ticket_number = data.ticket_number or self._generate_unique_code(
+            "CRM", data.crm_id, max_len=50
+        )
 
         ticket = Ticket(
             organization_id=org_id,
@@ -866,7 +934,9 @@ class DotMacCRMSyncService:
         if data.scheduled_end:
             task.due_date = data.scheduled_end.date()
 
-    def _resolve_project_id(self, org_id: UUID, crm_id: Optional[str]) -> Optional[UUID]:
+    def _resolve_project_id(
+        self, org_id: UUID, crm_id: Optional[str]
+    ) -> Optional[UUID]:
         """Resolve CRM project ID to local project ID."""
         if not crm_id:
             return None
@@ -880,7 +950,9 @@ class DotMacCRMSyncService:
         mapping = self._get_mapping(org_id, CRMEntityType.TICKET, crm_id)
         return mapping.local_entity_id if mapping else None
 
-    def _resolve_employee_id(self, org_id: UUID, email: Optional[str]) -> Optional[UUID]:
+    def _resolve_employee_id(
+        self, org_id: UUID, email: Optional[str]
+    ) -> Optional[UUID]:
         """Resolve employee email to employee ID.
 
         Looks up by person.email (work email) or employee.personal_email.
@@ -995,7 +1067,9 @@ class DotMacCRMSyncService:
         # Build base query
         stmt = select(
             ExpenseClaim.status,
-            func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0).label("total"),
+            func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0).label(
+                "total"
+            ),
         ).where(ExpenseClaim.organization_id == org_id)
 
         if project_id:
@@ -1015,7 +1089,10 @@ class DotMacCRMSyncService:
                 totals.draft = amount
             elif status == ExpenseClaimStatus.SUBMITTED:
                 totals.submitted = amount
-            elif status in (ExpenseClaimStatus.APPROVED, ExpenseClaimStatus.PENDING_APPROVAL):
+            elif status in (
+                ExpenseClaimStatus.APPROVED,
+                ExpenseClaimStatus.PENDING_APPROVAL,
+            ):
                 totals.approved += amount
             elif status == ExpenseClaimStatus.PAID:
                 totals.paid = amount

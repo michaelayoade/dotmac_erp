@@ -16,11 +16,11 @@ from typing import Optional
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.config import settings
 from app.models.finance.core_org.organization import Organization
 from app.models.people.hr.department import Department
 from app.models.people.recruit.job_applicant import ApplicantStatus, JobApplicant
 from app.models.people.recruit.job_opening import JobOpening, JobOpeningStatus
-from app.config import settings
 from app.services.careers.candidate_notifications import CandidateNotificationService
 from app.services.careers.resume_service import ResumeService
 
@@ -157,7 +157,9 @@ class CareersService:
             base_conditions.append(JobOpening.is_remote == is_remote)
 
         # Get total count
-        count_stmt = select(func.count()).select_from(JobOpening).where(*base_conditions)
+        count_stmt = (
+            select(func.count()).select_from(JobOpening).where(*base_conditions)
+        )
         total = self.db.scalar(count_stmt) or 0
 
         # Get paginated results with eager loading
@@ -197,9 +199,7 @@ class CareersService:
         )
         return self.db.scalar(stmt)
 
-    def get_job_by_code(
-        self, org_id: uuid.UUID, job_code: str
-    ) -> Optional[JobOpening]:
+    def get_job_by_code(self, org_id: uuid.UUID, job_code: str) -> Optional[JobOpening]:
         """
         Get a job opening by its code (for public URLs).
 
@@ -283,9 +283,13 @@ class CareersService:
         year = date.today().year
 
         # Count existing applications this year for this org
-        stmt = select(func.count()).select_from(JobApplicant).where(
-            JobApplicant.organization_id == org_id,
-            JobApplicant.application_number.like(f"APP-{year}-%"),
+        stmt = (
+            select(func.count())
+            .select_from(JobApplicant)
+            .where(
+                JobApplicant.organization_id == org_id,
+                JobApplicant.application_number.like(f"APP-{year}-%"),
+            )
         )
         count = self.db.scalar(stmt) or 0
 
@@ -340,7 +344,9 @@ class CareersService:
         # Verify job exists and is open
         job = self.get_public_job(org_id, job_id)
         if not job:
-            raise JobNotFoundError("Job position not found or no longer accepting applications")
+            raise JobNotFoundError(
+                "Job position not found or no longer accepting applications"
+            )
 
         # Check for duplicate application (same email + job)
         existing = self.db.scalar(
@@ -441,7 +447,9 @@ class CareersService:
 
         # Generate verification token
         token = secrets.token_urlsafe(32)
-        expires = datetime.now(timezone.utc) + timedelta(hours=STATUS_TOKEN_EXPIRY_HOURS)
+        expires = datetime.now(timezone.utc) + timedelta(
+            hours=STATUS_TOKEN_EXPIRY_HOURS
+        )
 
         # Update applicant with token
         applicant.verification_token = token
@@ -449,9 +457,7 @@ class CareersService:
         self.db.flush()
 
         # Build verification URL
-        verification_url = (
-            f"{settings.app_url}/careers/{self._public_org_identifier(org)}/status/{token}"
-        )
+        verification_url = f"{settings.app_url}/careers/{self._public_org_identifier(org)}/status/{token}"
 
         # Send verification email
         self.notification_service.send_status_verification_email(
@@ -465,9 +471,7 @@ class CareersService:
         logger.info("Status verification email sent to %s", email)
         return True
 
-    def verify_status_token(
-        self, org_id: uuid.UUID, token: str
-    ) -> Optional[dict]:
+    def verify_status_token(self, org_id: uuid.UUID, token: str) -> Optional[dict]:
         """
         Verify a status token and return application status.
 
@@ -497,7 +501,9 @@ class CareersService:
         # Check expiration
         if applicant.verification_token_expires:
             if datetime.now(timezone.utc) > applicant.verification_token_expires:
-                logger.debug("Status token expired for %s", applicant.application_number)
+                logger.debug(
+                    "Status token expired for %s", applicant.application_number
+                )
                 return None
 
         # Mark email as verified
@@ -508,10 +514,14 @@ class CareersService:
         # Build status response (no sensitive data)
         return {
             "application_number": applicant.application_number,
-            "job_title": applicant.job_opening.job_title if applicant.job_opening else "Unknown Position",
+            "job_title": applicant.job_opening.job_title
+            if applicant.job_opening
+            else "Unknown Position",
             "status": applicant.status.value,
             "status_display": self._format_status(applicant.status),
-            "applied_on": applicant.applied_on.isoformat() if applicant.applied_on else None,
+            "applied_on": applicant.applied_on.isoformat()
+            if applicant.applied_on
+            else None,
             "applicant_name": f"{applicant.first_name} {applicant.last_name}",
         }
 
@@ -554,7 +564,9 @@ class CareersService:
             db=self.db,
             applicant_email=applicant.email,
             applicant_name=applicant.first_name,
-            job_title=applicant.job_opening.job_title if applicant.job_opening else "Position",
+            job_title=applicant.job_opening.job_title
+            if applicant.job_opening
+            else "Position",
             application_number=applicant.application_number,
             org_name=org.legal_name or org.trading_name or "Our Company",
             org_slug=self._public_org_identifier(org),

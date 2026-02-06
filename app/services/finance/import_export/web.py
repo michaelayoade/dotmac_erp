@@ -5,6 +5,7 @@ Provides web-specific service methods for data import functionality.
 Both API and Web routes can use this service layer.
 """
 
+import logging
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -14,26 +15,29 @@ from fastapi import UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.finance.gl.account import Account
 from app.models.finance.banking.bank_account import BankAccount
+from app.models.finance.gl.account import Account
+
 from . import (
     AccountImporter,
-    CustomerImporter,
-    SupplierImporter,
-    ItemImporter,
     AssetImporter,
     BankAccountImporter,
-    InvoiceImporter,
-    ExpenseImporter,
+    CustomerImporter,
     CustomerPaymentImporter,
-    SupplierPaymentImporter,
+    ExpenseImporter,
     ImportConfig,
     ImportResult,
     ImportStatus,
+    InvoiceImporter,
+    ItemImporter,
     PreviewResult,
-    get_ar_control_account,
+    SupplierImporter,
+    SupplierPaymentImporter,
     get_ap_control_account,
+    get_ar_control_account,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ImportWebService:
@@ -53,7 +57,9 @@ class ImportWebService:
     }
 
     @staticmethod
-    def _find_account_by_type(db: Session, org_id: UUID, subledger_type: str) -> Optional[UUID]:
+    def _find_account_by_type(
+        db: Session, org_id: UUID, subledger_type: str
+    ) -> Optional[UUID]:
         """Find account by subledger type."""
         result = db.execute(
             select(Account).where(
@@ -64,7 +70,9 @@ class ImportWebService:
         return result.account_id if result else None
 
     @staticmethod
-    def _find_account_by_name_pattern(db: Session, org_id: UUID, pattern: str) -> Optional[UUID]:
+    def _find_account_by_name_pattern(
+        db: Session, org_id: UUID, pattern: str
+    ) -> Optional[UUID]:
         """Find account by name pattern."""
         result = db.execute(
             select(Account).where(
@@ -85,7 +93,9 @@ class ImportWebService:
         elif entity_type == "customers":
             ar_control_id = get_ar_control_account(db, org_id)
             if not ar_control_id:
-                ar_control_id = ImportWebService._find_account_by_name_pattern(db, org_id, "receivable")
+                ar_control_id = ImportWebService._find_account_by_name_pattern(
+                    db, org_id, "receivable"
+                )
             if not ar_control_id:
                 raise ValueError("No AR control account found. Import accounts first.")
             return CustomerImporter(db, config, ar_control_id)
@@ -93,26 +103,38 @@ class ImportWebService:
         elif entity_type == "suppliers":
             ap_control_id = get_ap_control_account(db, org_id)
             if not ap_control_id:
-                ap_control_id = ImportWebService._find_account_by_name_pattern(db, org_id, "payable")
+                ap_control_id = ImportWebService._find_account_by_name_pattern(
+                    db, org_id, "payable"
+                )
             if not ap_control_id:
                 raise ValueError("No AP control account found. Import accounts first.")
             return SupplierImporter(db, config, ap_control_id)
 
         elif entity_type == "items":
-            inv_account = ImportWebService._find_account_by_type(db, org_id, "INVENTORY")
+            inv_account = ImportWebService._find_account_by_type(
+                db, org_id, "INVENTORY"
+            )
             if not inv_account:
-                inv_account = ImportWebService._find_account_by_name_pattern(db, org_id, "inventory")
+                inv_account = ImportWebService._find_account_by_name_pattern(
+                    db, org_id, "inventory"
+                )
             if not inv_account:
                 raise ValueError("No inventory account found. Import accounts first.")
-            return ItemImporter(db, config, inv_account, inv_account, inv_account, inv_account)
+            return ItemImporter(
+                db, config, inv_account, inv_account, inv_account, inv_account
+            )
 
         elif entity_type == "assets":
             asset_account = ImportWebService._find_account_by_type(db, org_id, "ASSET")
             if not asset_account:
-                asset_account = ImportWebService._find_account_by_name_pattern(db, org_id, "fixed asset")
+                asset_account = ImportWebService._find_account_by_name_pattern(
+                    db, org_id, "fixed asset"
+                )
             if not asset_account:
                 raise ValueError("No fixed asset account found. Import accounts first.")
-            return AssetImporter(db, config, asset_account, asset_account, asset_account, asset_account)
+            return AssetImporter(
+                db, config, asset_account, asset_account, asset_account, asset_account
+            )
 
         elif entity_type == "bank_accounts":
             gl_account = ImportWebService._find_account_by_type(db, org_id, "BANK")
@@ -122,11 +144,16 @@ class ImportWebService:
             ar_control_id = get_ar_control_account(db, org_id)
             if not ar_control_id:
                 raise ValueError("No AR control account found. Import accounts first.")
-            revenue_account = ImportWebService._find_account_by_name_pattern(db, org_id, "sales") or ar_control_id
+            revenue_account = (
+                ImportWebService._find_account_by_name_pattern(db, org_id, "sales")
+                or ar_control_id
+            )
             return InvoiceImporter(db, config, ar_control_id, revenue_account)
 
         elif entity_type == "expenses":
-            expense_account = ImportWebService._find_account_by_name_pattern(db, org_id, "expense")
+            expense_account = ImportWebService._find_account_by_name_pattern(
+                db, org_id, "expense"
+            )
             if not expense_account:
                 raise ValueError("No expense account found. Import accounts first.")
             payment_account = ImportWebService._find_account_by_type(db, org_id, "BANK")
@@ -166,13 +193,13 @@ class ImportWebService:
         if entity_type not in ImportWebService.SUPPORTED_ENTITY_TYPES:
             raise ValueError(f"Unsupported entity type: {entity_type}")
 
-        if not file.filename or not file.filename.endswith('.csv'):
+        if not file.filename or not file.filename.endswith(".csv"):
             raise ValueError("Only CSV files are supported")
 
         content = await file.read()
 
         # Save to temp file for processing
-        with tempfile.NamedTemporaryFile(mode='wb', suffix='.csv', delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp:
             tmp.write(content)
             tmp_path = tmp.name
 
@@ -242,13 +269,13 @@ class ImportWebService:
         if entity_type not in ImportWebService.SUPPORTED_ENTITY_TYPES:
             raise ValueError(f"Unsupported entity type: {entity_type}")
 
-        if not file.filename or not file.filename.endswith('.csv'):
+        if not file.filename or not file.filename.endswith(".csv"):
             raise ValueError("Only CSV files are supported")
 
         content = await file.read()
 
         # Save to temp file for processing
-        with tempfile.NamedTemporaryFile(mode='wb', suffix='.csv', delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp:
             tmp.write(content)
             tmp_path = tmp.name
 
@@ -268,7 +295,10 @@ class ImportWebService:
             result: ImportResult = importer.import_file(tmp_path)
 
             # Commit if not dry run and successful
-            if not dry_run and result.status in (ImportStatus.COMPLETED, ImportStatus.COMPLETED_WITH_ERRORS):
+            if not dry_run and result.status in (
+                ImportStatus.COMPLETED,
+                ImportStatus.COMPLETED_WITH_ERRORS,
+            ):
                 db.commit()
             else:
                 db.rollback()
@@ -288,7 +318,7 @@ class ImportWebService:
                 "warnings": [str(w) for w in result.warnings[:50]],
             }
 
-        except Exception as e:
+        except Exception:
             db.rollback()
             raise
 

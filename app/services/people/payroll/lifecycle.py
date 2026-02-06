@@ -15,31 +15,37 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from typing import Optional, Set, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, Set
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus, SalarySlipDeduction
 from app.models.people.payroll.payroll_entry import PayrollEntry, PayrollEntryStatus
+from app.models.people.payroll.salary_slip import (
+    SalarySlip,
+    SalarySlipDeduction,
+    SalarySlipStatus,
+)
+from app.models.finance.audit.audit_log import AuditAction
+from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import coerce_uuid
 
 if TYPE_CHECKING:
-    from app.services.people.payroll.payroll_gl_adapter import PayrollPostingResult
+    pass
 from app.services.people.payroll.events import (
     PayrollEventDispatcher,
-    SlipSubmitted,
-    SlipApproved,
-    SlipPosted,
-    SlipPaid,
-    SlipCancelled,
-    SlipRejected,
-    RunSubmitted,
     RunApproved,
+    RunCancelled,
     RunPosted,
     RunSlipsCreated,
-    RunCancelled,
+    RunSubmitted,
+    SlipApproved,
+    SlipCancelled,
+    SlipPaid,
+    SlipPosted,
+    SlipRejected,
+    SlipSubmitted,
     payroll_dispatcher,
 )
 
@@ -53,10 +59,20 @@ logger = logging.getLogger(__name__)
 
 SLIP_TRANSITIONS: dict[SalarySlipStatus, Set[SalarySlipStatus]] = {
     SalarySlipStatus.DRAFT: {SalarySlipStatus.SUBMITTED, SalarySlipStatus.CANCELLED},
-    SalarySlipStatus.SUBMITTED: {SalarySlipStatus.APPROVED, SalarySlipStatus.DRAFT, SalarySlipStatus.CANCELLED},
-    SalarySlipStatus.APPROVED: {SalarySlipStatus.POSTED, SalarySlipStatus.SUBMITTED, SalarySlipStatus.CANCELLED},
+    SalarySlipStatus.SUBMITTED: {
+        SalarySlipStatus.APPROVED,
+        SalarySlipStatus.DRAFT,
+        SalarySlipStatus.CANCELLED,
+    },
+    SalarySlipStatus.APPROVED: {
+        SalarySlipStatus.POSTED,
+        SalarySlipStatus.SUBMITTED,
+        SalarySlipStatus.CANCELLED,
+    },
     SalarySlipStatus.POSTED: {SalarySlipStatus.PAID, SalarySlipStatus.CANCELLED},
-    SalarySlipStatus.PAID: {SalarySlipStatus.CANCELLED},  # Very limited - requires reversal
+    SalarySlipStatus.PAID: {
+        SalarySlipStatus.CANCELLED
+    },  # Very limited - requires reversal
     SalarySlipStatus.CANCELLED: set(),  # Terminal state
 }
 
@@ -67,11 +83,27 @@ RUN_TRANSITIONS: dict[PayrollEntryStatus, Set[PayrollEntryStatus]] = {
         PayrollEntryStatus.SLIPS_CREATED,
         PayrollEntryStatus.CANCELLED,
     },
-    PayrollEntryStatus.PENDING: {PayrollEntryStatus.SLIPS_CREATED, PayrollEntryStatus.CANCELLED},
-    PayrollEntryStatus.SLIPS_CREATED: {PayrollEntryStatus.SUBMITTED, PayrollEntryStatus.CANCELLED},
-    PayrollEntryStatus.SUBMITTED: {PayrollEntryStatus.APPROVED, PayrollEntryStatus.SLIPS_CREATED, PayrollEntryStatus.CANCELLED},
-    PayrollEntryStatus.APPROVED: {PayrollEntryStatus.POSTED, PayrollEntryStatus.SUBMITTED, PayrollEntryStatus.CANCELLED},
-    PayrollEntryStatus.POSTED: {PayrollEntryStatus.CANCELLED},  # Very limited - requires reversal
+    PayrollEntryStatus.PENDING: {
+        PayrollEntryStatus.SLIPS_CREATED,
+        PayrollEntryStatus.CANCELLED,
+    },
+    PayrollEntryStatus.SLIPS_CREATED: {
+        PayrollEntryStatus.SUBMITTED,
+        PayrollEntryStatus.CANCELLED,
+    },
+    PayrollEntryStatus.SUBMITTED: {
+        PayrollEntryStatus.APPROVED,
+        PayrollEntryStatus.SLIPS_CREATED,
+        PayrollEntryStatus.CANCELLED,
+    },
+    PayrollEntryStatus.APPROVED: {
+        PayrollEntryStatus.POSTED,
+        PayrollEntryStatus.SUBMITTED,
+        PayrollEntryStatus.CANCELLED,
+    },
+    PayrollEntryStatus.POSTED: {
+        PayrollEntryStatus.CANCELLED
+    },  # Very limited - requires reversal
     PayrollEntryStatus.CANCELLED: set(),  # Terminal state
 }
 
@@ -223,13 +255,19 @@ class PayrollLifecycle:
 
         # Fire workflow automation event
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=self.db, organization_id=slip.organization_id,
-                entity_type="SALARY_SLIP", entity_id=slip.slip_id,
+                db=self.db,
+                organization_id=slip.organization_id,
+                entity_type="SALARY_SLIP",
+                entity_id=slip.slip_id,
                 event="ON_STATUS_CHANGE",
                 old_values={"status": previous.value},
-                new_values={"status": "SUBMITTED"}, user_id=user_id,
+                new_values={"status": "SUBMITTED"},
+                user_id=user_id,
             )
         except Exception:
             pass
@@ -284,6 +322,17 @@ class PayrollLifecycle:
         previous = self._update_slip_status(slip, SalarySlipStatus.APPROVED, user_id)
         self.db.flush()
 
+        fire_audit_event(
+            db=self.db,
+            organization_id=slip.organization_id,
+            table_schema="hr",
+            table_name="payroll_slip",
+            record_id=str(slip.slip_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": previous.value},
+            new_values={"status": SalarySlipStatus.APPROVED.value},
+        )
+
         logger.info(
             "Slip %s approved: %s → %s by user %s (gross: %s, net: %s)",
             slip.slip_number,
@@ -296,13 +345,19 @@ class PayrollLifecycle:
 
         # Fire workflow automation event
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=self.db, organization_id=slip.organization_id,
-                entity_type="SALARY_SLIP", entity_id=slip.slip_id,
+                db=self.db,
+                organization_id=slip.organization_id,
+                entity_type="SALARY_SLIP",
+                entity_id=slip.slip_id,
                 event="ON_APPROVAL",
                 old_values={"status": previous.value},
-                new_values={"status": "APPROVED"}, user_id=user_id,
+                new_values={"status": "APPROVED"},
+                user_id=user_id,
             )
         except Exception:
             pass
@@ -451,6 +506,17 @@ class PayrollLifecycle:
             slip.payment_reference = payment_reference
 
         self.db.flush()
+
+        fire_audit_event(
+            db=self.db,
+            organization_id=slip.organization_id,
+            table_schema="hr",
+            table_name="payroll_slip",
+            record_id=str(slip.slip_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": previous.value},
+            new_values={"status": SalarySlipStatus.PAID.value},
+        )
 
         logger.info(
             "Slip %s paid: %s → %s by user %s (ref: %s)",
@@ -614,7 +680,9 @@ class PayrollLifecycle:
 
         self.validate_run_transition(run.status, PayrollEntryStatus.SLIPS_CREATED)
 
-        previous = self._update_run_status(run, PayrollEntryStatus.SLIPS_CREATED, user_id)
+        previous = self._update_run_status(
+            run, PayrollEntryStatus.SLIPS_CREATED, user_id
+        )
         self.db.flush()
 
         logger.info(
@@ -672,13 +740,19 @@ class PayrollLifecycle:
 
         # Fire workflow automation event
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=self.db, organization_id=run.organization_id,
-                entity_type="PAYROLL_RUN", entity_id=run.entry_id,
+                db=self.db,
+                organization_id=run.organization_id,
+                entity_type="PAYROLL_RUN",
+                entity_id=run.entry_id,
                 event="ON_STATUS_CHANGE",
                 old_values={"status": previous.value},
-                new_values={"status": "SUBMITTED"}, user_id=user_id,
+                new_values={"status": "SUBMITTED"},
+                user_id=user_id,
             )
         except Exception:
             pass
@@ -733,6 +807,17 @@ class PayrollLifecycle:
         previous = self._update_run_status(run, PayrollEntryStatus.APPROVED, user_id)
         self.db.flush()
 
+        fire_audit_event(
+            db=self.db,
+            organization_id=run.organization_id,
+            table_schema="hr",
+            table_name="payroll_run",
+            record_id=str(run.entry_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": previous.value},
+            new_values={"status": PayrollEntryStatus.APPROVED.value},
+        )
+
         logger.info(
             "Run %s approved: %s → %s by user %s",
             run.entry_number,
@@ -743,13 +828,19 @@ class PayrollLifecycle:
 
         # Fire workflow automation event
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=self.db, organization_id=run.organization_id,
-                entity_type="PAYROLL_RUN", entity_id=run.entry_id,
+                db=self.db,
+                organization_id=run.organization_id,
+                entity_type="PAYROLL_RUN",
+                entity_id=run.entry_id,
                 event="ON_APPROVAL",
                 old_values={"status": previous.value},
-                new_values={"status": "APPROVED"}, user_id=user_id,
+                new_values={"status": "APPROVED"},
+                user_id=user_id,
             )
         except Exception:
             pass
@@ -810,6 +901,7 @@ class PayrollLifecycle:
         """
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
+
         from app.services.people.payroll.payroll_gl_adapter import PayrollGLAdapter
 
         run = self._get_run(organization_id, run_id)
@@ -823,7 +915,9 @@ class PayrollLifecycle:
             self.db.scalars(
                 select(SalarySlip)
                 .options(
-                    selectinload(SalarySlip.deductions).selectinload(SalarySlipDeduction.component)
+                    selectinload(SalarySlip.deductions).selectinload(
+                        SalarySlipDeduction.component
+                    )
                 )
                 .where(SalarySlip.payroll_entry_id == run.entry_id)
             ).all()
@@ -851,6 +945,7 @@ class PayrollLifecycle:
 
         # Enforce single currency/exchange rate per run
         from decimal import Decimal
+
         currency_codes = {s.currency_code for s in slips}
         exchange_rates = {s.exchange_rate or Decimal("1.0") for s in slips}
         if len(currency_codes) > 1 or len(exchange_rates) > 1:

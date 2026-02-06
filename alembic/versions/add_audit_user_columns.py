@@ -37,8 +37,7 @@ TABLES = [
 def _has_column(inspector, table_name: str, column_name: str, schema: str) -> bool:
     """Check if a column exists in a table."""
     return column_name in {
-        column["name"]
-        for column in inspector.get_columns(table_name, schema=schema)
+        column["name"] for column in inspector.get_columns(table_name, schema=schema)
     }
 
 
@@ -83,7 +82,9 @@ def upgrade() -> None:
         updated_by_idx = f"idx_{table}_updated_by"
 
         # Check if indexes exist before creating
-        existing_indexes = {idx["name"] for idx in inspector.get_indexes(table, schema=schema)}
+        existing_indexes = {
+            idx["name"] for idx in inspector.get_indexes(table, schema=schema)
+        }
 
         if created_by_idx not in existing_indexes:
             op.create_index(
@@ -111,7 +112,9 @@ def downgrade() -> None:
             continue
 
         # Drop indexes first
-        existing_indexes = {idx["name"] for idx in inspector.get_indexes(table, schema=schema)}
+        existing_indexes = {
+            idx["name"] for idx in inspector.get_indexes(table, schema=schema)
+        }
 
         created_by_idx = f"idx_{table}_created_by"
         updated_by_idx = f"idx_{table}_updated_by"

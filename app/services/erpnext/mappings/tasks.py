@@ -1,11 +1,14 @@
 """
 ERPNext Task mapping for project management sync.
 """
+
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
 from .base import DocTypeMapping, FieldMapping, parse_date, parse_decimal, parse_int
 
+logger = logging.getLogger(__name__)
 
 # ERPNext Task status to DotMac TaskStatus mapping
 TASK_STATUS_MAP = {
@@ -66,21 +69,27 @@ class TaskMapping(DocTypeMapping):
     source_doctype: str = "Task"
     target_table: str = "pm.task"
     unique_key: str = "name"
-    fields: list[FieldMapping] = field(default_factory=lambda: [
-        FieldMapping("name", "_source_name"),
-        FieldMapping("subject", "task_name", required=True),
-        FieldMapping("status", "status", transformer=map_task_status),
-        FieldMapping("priority", "priority", transformer=map_task_priority),
-        FieldMapping("project", "_project_source_name"),
-        FieldMapping("parent_task", "_parent_task_source_name"),
-        FieldMapping("exp_start_date", "start_date", transformer=parse_date),
-        FieldMapping("exp_end_date", "due_date", transformer=parse_date),
-        FieldMapping("expected_time", "estimated_hours", transformer=parse_decimal),
-        FieldMapping("actual_time", "actual_hours", default=0, transformer=parse_decimal),
-        FieldMapping("progress", "progress_percent", default=0, transformer=parse_int),
-        FieldMapping("description", "description"),
-        FieldMapping("completed_on", "actual_end_date", transformer=parse_date),
-    ])
+    fields: list[FieldMapping] = field(
+        default_factory=lambda: [
+            FieldMapping("name", "_source_name"),
+            FieldMapping("subject", "task_name", required=True),
+            FieldMapping("status", "status", transformer=map_task_status),
+            FieldMapping("priority", "priority", transformer=map_task_priority),
+            FieldMapping("project", "_project_source_name"),
+            FieldMapping("parent_task", "_parent_task_source_name"),
+            FieldMapping("exp_start_date", "start_date", transformer=parse_date),
+            FieldMapping("exp_end_date", "due_date", transformer=parse_date),
+            FieldMapping("expected_time", "estimated_hours", transformer=parse_decimal),
+            FieldMapping(
+                "actual_time", "actual_hours", default=0, transformer=parse_decimal
+            ),
+            FieldMapping(
+                "progress", "progress_percent", default=0, transformer=parse_int
+            ),
+            FieldMapping("description", "description"),
+            FieldMapping("completed_on", "actual_end_date", transformer=parse_date),
+        ]
+    )
 
     def transform_record(self, record: dict[str, Any]) -> dict[str, Any]:
         """Transform ERPNext Task to DotMac task data."""

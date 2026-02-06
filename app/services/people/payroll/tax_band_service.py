@@ -192,7 +192,9 @@ class TaxBandService:
                     message="No active tax bands configured",
                 )
             )
-            return TaxBandValidationResult(is_valid=False, errors=errors, warnings=warnings)
+            return TaxBandValidationResult(
+                is_valid=False, errors=errors, warnings=warnings
+            )
 
         # Validate each individual band
         for band in bands:
@@ -328,7 +330,11 @@ class TaxBandService:
                 continue
 
             # Check if ranges overlap
-            band_max = band.max_amount if band.max_amount is not None else Decimal("999999999999")
+            band_max = (
+                band.max_amount
+                if band.max_amount is not None
+                else Decimal("999999999999")
+            )
             new_max = max_amount if max_amount is not None else Decimal("999999999999")
 
             if min_amount < band_max and new_max > band.min_amount:

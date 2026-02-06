@@ -4,14 +4,15 @@ Task Service - PM Module.
 Business logic for task management including CRUD, dependencies,
 status transitions, and hierarchy management.
 """
+
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date
-from decimal import Decimal
 from typing import TYPE_CHECKING, Dict, List, Optional, Set
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.pm import (
@@ -29,6 +30,8 @@ from app.services.common import (
     ValidationError,
     paginate,
 )
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.auth import Principal
@@ -264,9 +267,7 @@ class TaskService:
 
         return True
 
-    def move_task(
-        self, task_id: uuid.UUID, new_parent_id: Optional[uuid.UUID]
-    ) -> Task:
+    def move_task(self, task_id: uuid.UUID, new_parent_id: Optional[uuid.UUID]) -> Task:
         """Move a task to a new parent (or make it top-level)."""
         task = self.get_task_or_raise(task_id)
 
@@ -291,9 +292,7 @@ class TaskService:
         task = self.get_task_or_raise(task_id)
 
         if task.status not in (TaskStatus.OPEN, TaskStatus.ON_HOLD):
-            raise ConflictError(
-                f"Cannot start task in status {task.status.value}"
-            )
+            raise ConflictError(f"Cannot start task in status {task.status.value}")
 
         # Check dependencies are completed
         for dep in task.dependencies:
@@ -351,9 +350,7 @@ class TaskService:
 
         return task
 
-    def assign_task(
-        self, task_id: uuid.UUID, employee_id: Optional[uuid.UUID]
-    ) -> Task:
+    def assign_task(self, task_id: uuid.UUID, employee_id: Optional[uuid.UUID]) -> Task:
         """Assign task to an employee (or unassign if None)."""
         task = self.get_task_or_raise(task_id)
         task.assigned_to_id = employee_id
@@ -405,9 +402,7 @@ class TaskService:
 
         return dependency
 
-    def remove_dependency(
-        self, task_id: uuid.UUID, depends_on_id: uuid.UUID
-    ) -> bool:
+    def remove_dependency(self, task_id: uuid.UUID, depends_on_id: uuid.UUID) -> bool:
         """Remove a dependency between tasks."""
         dep = self.db.scalars(
             select(TaskDependency).where(
@@ -484,9 +479,7 @@ class TaskService:
     # Private Helpers
     # =========================================================================
 
-    def _would_create_cycle(
-        self, task_id: uuid.UUID, new_parent_id: uuid.UUID
-    ) -> bool:
+    def _would_create_cycle(self, task_id: uuid.UUID, new_parent_id: uuid.UUID) -> bool:
         """Check if moving task under new_parent would create a cycle."""
         current: Optional[uuid.UUID] = new_parent_id
         while current:

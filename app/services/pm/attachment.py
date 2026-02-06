@@ -75,11 +75,15 @@ class ProjectAttachmentService:
         Returns:
             List of attachments
         """
-        query = select(Attachment).where(
-            Attachment.organization_id == organization_id,
-            Attachment.entity_type == entity_type,
-            Attachment.entity_id == entity_id,
-        ).order_by(Attachment.created_at.desc())
+        query = (
+            select(Attachment)
+            .where(
+                Attachment.organization_id == organization_id,
+                Attachment.entity_type == entity_type,
+                Attachment.entity_id == entity_id,
+            )
+            .order_by(Attachment.created_at.desc())
+        )
 
         return list(db.execute(query).scalars().all())
 
@@ -114,12 +118,18 @@ class ProjectAttachmentService:
         """
         # Check file size
         if file_size > MAX_FILE_SIZE:
-            return False, f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB"
+            return (
+                False,
+                f"File too large. Maximum size is {MAX_FILE_SIZE // (1024 * 1024)}MB",
+            )
 
         # Check extension
         ext = os.path.splitext(filename)[1].lower()
         if ext not in ALLOWED_EXTENSIONS:
-            return False, f"File type not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS.keys())}"
+            return (
+                False,
+                f"File type not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS.keys())}",
+            )
 
         return True, None
 
@@ -181,7 +191,11 @@ class ProjectAttachmentService:
             return None, "Failed to save file"
 
         # Determine category
-        category = AttachmentCategory.PROJECT if entity_type == "PROJECT" else AttachmentCategory.TASK
+        category = (
+            AttachmentCategory.PROJECT
+            if entity_type == "PROJECT"
+            else AttachmentCategory.TASK
+        )
 
         # Create database record
         attachment = Attachment(

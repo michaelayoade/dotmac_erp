@@ -3,30 +3,36 @@
 Handles job openings, applicants, interviews, and job offers.
 Adapted from DotMac People for the unified ERP platform.
 """
+
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, List, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
-from sqlalchemy import Integer, and_, func, or_, select
+from sqlalchemy import Integer, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.person import Gender, Person, PersonStatus
 from app.models.people.recruit import (
+    ApplicantStatus,
     Interview,
     InterviewRound,
     InterviewStatus,
     JobApplicant,
-    ApplicantStatus,
     JobOffer,
-    OfferStatus,
     JobOpening,
     JobOpeningStatus,
+    OfferStatus,
 )
+from app.models.person import Gender, Person, PersonStatus
+from app.models.finance.audit.audit_log import AuditAction
+from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import PaginatedResult, PaginationParams
 from app.services.people.hr import EmployeeCreateData
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
@@ -272,6 +278,19 @@ class RecruitmentService:
 
         self.db.add(opening)
         self.db.flush()
+        fire_audit_event(
+            self.db,
+            org_id,
+            "recruit",
+            "job_opening",
+            str(opening.job_opening_id),
+            AuditAction.INSERT,
+            new_values={
+                "job_code": job_code,
+                "job_title": job_title,
+                "status": status.value,
+            },
+        )
         return opening
 
     def update_job_opening(
@@ -296,6 +315,16 @@ class RecruitmentService:
         opening.status = JobOpeningStatus.OPEN
         opening.posted_on = date.today()
         self.db.flush()
+        fire_audit_event(
+            self.db,
+            org_id,
+            "recruit",
+            "job_opening",
+            str(opening.job_opening_id),
+            AuditAction.UPDATE,
+            old_values={"status": "DRAFT"},
+            new_values={"status": "OPEN", "posted_on": str(opening.posted_on)},
+        )
         return opening
 
     def close_job_opening(self, org_id: UUID, job_opening_id: UUID) -> JobOpening:
@@ -303,14 +332,30 @@ class RecruitmentService:
         opening = self.get_job_opening(org_id, job_opening_id)
         opening.status = JobOpeningStatus.CLOSED
         self.db.flush()
+        fire_audit_event(
+            self.db,
+            org_id,
+            "recruit",
+            "job_opening",
+            str(opening.job_opening_id),
+            AuditAction.UPDATE,
+            new_values={"status": "CLOSED"},
+            reason="Job opening closed",
+        )
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=self.db, organization_id=org_id,
-                entity_type="RECRUITMENT", entity_id=opening.job_opening_id,
+                db=self.db,
+                organization_id=org_id,
+                entity_type="RECRUITMENT",
+                entity_id=opening.job_opening_id,
                 event="ON_STATUS_CHANGE",
-                old_values={}, new_values={"status": "CLOSED"},
+                old_values={},
+                new_values={"status": "CLOSED"},
             )
         except Exception:
             pass
@@ -433,11 +478,14 @@ class RecruitmentService:
         self.get_job_opening(org_id, job_opening_id)
 
         # Generate application number
-        count = self.db.scalar(
-            select(func.count(JobApplicant.applicant_id)).where(
-                JobApplicant.organization_id == org_id
+        count = (
+            self.db.scalar(
+                select(func.count(JobApplicant.applicant_id)).where(
+                    JobApplicant.organization_id == org_id
+                )
             )
-        ) or 0
+            or 0
+        )
         application_number = f"APP-{date.today().year}-{count + 1:05d}"
 
         applicant = JobApplicant(
@@ -467,6 +515,20 @@ class RecruitmentService:
 
         self.db.add(applicant)
         self.db.flush()
+        fire_audit_event(
+            self.db,
+            org_id,
+            "recruit",
+            "job_applicant",
+            str(applicant.applicant_id),
+            AuditAction.INSERT,
+            new_values={
+                "application_number": application_number,
+                "job_opening_id": str(job_opening_id),
+                "name": f"{first_name} {last_name}",
+                "email": email,
+            },
+        )
         return applicant
 
     def update_applicant(
@@ -510,11 +572,22 @@ class RecruitmentService:
                 "Invalid pipeline transition",
             )
 
+        old_status = applicant.status
         applicant.status = to_status
         if notes:
             applicant.notes = notes
 
         self.db.flush()
+        fire_audit_event(
+            self.db,
+            org_id,
+            "recruit",
+            "job_applicant",
+            str(applicant.applicant_id),
+            AuditAction.UPDATE,
+            old_values={"status": old_status.value},
+            new_values={"status": to_status.value},
+        )
         return applicant
 
     def reject_applicant(
@@ -530,6 +603,16 @@ class RecruitmentService:
         if reason:
             applicant.notes = reason
         self.db.flush()
+        fire_audit_event(
+            self.db,
+            org_id,
+            "recruit",
+            "job_applicant",
+            str(applicant.applicant_id),
+            AuditAction.UPDATE,
+            new_values={"status": "REJECTED"},
+            reason=reason,
+        )
         return applicant
 
     # =========================================================================
@@ -555,9 +638,9 @@ class RecruitmentService:
             query = query.where(Interview.applicant_id == applicant_id)
 
         if job_opening_id:
-            query = query.join(JobApplicant, JobApplicant.applicant_id == Interview.applicant_id).where(
-                JobApplicant.job_opening_id == job_opening_id
-            )
+            query = query.join(
+                JobApplicant, JobApplicant.applicant_id == Interview.applicant_id
+            ).where(JobApplicant.job_opening_id == job_opening_id)
 
         if interviewer_id:
             query = query.where(Interview.interviewer_id == interviewer_id)
@@ -635,10 +718,28 @@ class RecruitmentService:
         self.db.add(interview)
 
         # Move applicant to interviewing stage if not already
-        if applicant.status in [ApplicantStatus.NEW, ApplicantStatus.SCREENING, ApplicantStatus.SHORTLISTED]:
+        if applicant.status in [
+            ApplicantStatus.NEW,
+            ApplicantStatus.SCREENING,
+            ApplicantStatus.SHORTLISTED,
+        ]:
             applicant.status = ApplicantStatus.INTERVIEW_SCHEDULED
 
         self.db.flush()
+        fire_audit_event(
+            self.db,
+            org_id,
+            "recruit",
+            "interview",
+            str(interview.interview_id),
+            AuditAction.INSERT,
+            new_values={
+                "applicant_id": str(applicant_id),
+                "round": round.value,
+                "interviewer_id": str(interviewer_id),
+                "scheduled_from": str(scheduled_from),
+            },
+        )
         return interview
 
     def reschedule_interview(
@@ -670,7 +771,9 @@ class RecruitmentService:
         for key, value in kwargs.items():
             if value is None or not hasattr(interview, key):
                 continue
-            if key in ("scheduled_from", "scheduled_to") and value != getattr(interview, key):
+            if key in ("scheduled_from", "scheduled_to") and value != getattr(
+                interview, key
+            ):
                 schedule_changed = True
             setattr(interview, key, value)
 
@@ -836,11 +939,14 @@ class RecruitmentService:
         self.get_job_opening(org_id, job_opening_id)
 
         # Generate offer number
-        count = self.db.scalar(
-            select(func.count(JobOffer.offer_id)).where(
-                JobOffer.organization_id == org_id
+        count = (
+            self.db.scalar(
+                select(func.count(JobOffer.offer_id)).where(
+                    JobOffer.organization_id == org_id
+                )
             )
-        ) or 0
+            or 0
+        )
         offer_number = f"OFR-{date.today().year}-{count + 1:05d}"
 
         offer = JobOffer(
@@ -873,6 +979,20 @@ class RecruitmentService:
         applicant.status = ApplicantStatus.SELECTED
 
         self.db.flush()
+        fire_audit_event(
+            self.db,
+            org_id,
+            "recruit",
+            "job_offer",
+            str(offer.offer_id),
+            AuditAction.INSERT,
+            new_values={
+                "offer_number": offer_number,
+                "applicant_id": str(applicant_id),
+                "base_salary": str(base_salary),
+                "status": "DRAFT",
+            },
+        )
         return offer
 
     def extend_offer(self, org_id: UUID, offer_id: UUID) -> JobOffer:
@@ -901,6 +1021,16 @@ class RecruitmentService:
         offer.status = OfferStatus.ACCEPTED
         offer.responded_on = date.today()
         self.db.flush()
+        fire_audit_event(
+            self.db,
+            org_id,
+            "recruit",
+            "job_offer",
+            str(offer.offer_id),
+            AuditAction.UPDATE,
+            old_values={"status": "EXTENDED"},
+            new_values={"status": "ACCEPTED"},
+        )
         return offer
 
     def decline_offer(
@@ -1018,6 +1148,19 @@ class RecruitmentService:
                 opening.positions_filled += 1
 
         self.db.flush()
+        fire_audit_event(
+            self.db,
+            org_id,
+            "recruit",
+            "job_offer",
+            str(offer.offer_id),
+            AuditAction.UPDATE,
+            new_values={
+                "status": "CONVERTED",
+                "converted_to_employee_id": str(employee.employee_id),
+            },
+            reason="Offer converted to employee",
+        )
 
         # Auto-create onboarding record
         onboarding_id = None
@@ -1060,53 +1203,75 @@ class RecruitmentService:
     def get_recruitment_stats(self, org_id: UUID) -> dict:
         """Get recruitment statistics for dashboard."""
         # Open positions
-        open_positions = self.db.scalar(
-            select(func.sum(JobOpening.number_of_positions - JobOpening.positions_filled)).where(
-                JobOpening.organization_id == org_id,
-                JobOpening.status == JobOpeningStatus.OPEN,
+        open_positions = (
+            self.db.scalar(
+                select(
+                    func.sum(
+                        JobOpening.number_of_positions - JobOpening.positions_filled
+                    )
+                ).where(
+                    JobOpening.organization_id == org_id,
+                    JobOpening.status == JobOpeningStatus.OPEN,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Total applicants
-        total_applicants = self.db.scalar(
-            select(func.count(JobApplicant.applicant_id)).where(
-                JobApplicant.organization_id == org_id
+        total_applicants = (
+            self.db.scalar(
+                select(func.count(JobApplicant.applicant_id)).where(
+                    JobApplicant.organization_id == org_id
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Interviews scheduled
-        interviews_scheduled = self.db.scalar(
-            select(func.count(Interview.interview_id)).where(
-                Interview.organization_id == org_id,
-                Interview.status == InterviewStatus.SCHEDULED,
+        interviews_scheduled = (
+            self.db.scalar(
+                select(func.count(Interview.interview_id)).where(
+                    Interview.organization_id == org_id,
+                    Interview.status == InterviewStatus.SCHEDULED,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Offers pending
-        offers_pending = self.db.scalar(
-            select(func.count(JobOffer.offer_id)).where(
-                JobOffer.organization_id == org_id,
-                JobOffer.status == OfferStatus.EXTENDED,
+        offers_pending = (
+            self.db.scalar(
+                select(func.count(JobOffer.offer_id)).where(
+                    JobOffer.organization_id == org_id,
+                    JobOffer.status == OfferStatus.EXTENDED,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Offers accepted
-        offers_accepted = self.db.scalar(
-            select(func.count(JobOffer.offer_id)).where(
-                JobOffer.organization_id == org_id,
-                JobOffer.status == OfferStatus.ACCEPTED,
+        offers_accepted = (
+            self.db.scalar(
+                select(func.count(JobOffer.offer_id)).where(
+                    JobOffer.organization_id == org_id,
+                    JobOffer.status == OfferStatus.ACCEPTED,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Recent hires (this month)
         month_start = date.today().replace(day=1)
-        recent_hires = self.db.scalar(
-            select(func.count(JobOffer.offer_id)).where(
-                JobOffer.organization_id == org_id,
-                JobOffer.status == OfferStatus.CONVERTED,
-                JobOffer.responded_on >= month_start,
+        recent_hires = (
+            self.db.scalar(
+                select(func.count(JobOffer.offer_id)).where(
+                    JobOffer.organization_id == org_id,
+                    JobOffer.status == OfferStatus.CONVERTED,
+                    JobOffer.responded_on >= month_start,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         return {
             "open_positions": open_positions,
@@ -1119,34 +1284,49 @@ class RecruitmentService:
 
     def get_job_opening_stats(self, org_id: UUID) -> dict:
         """Get job opening summary stats."""
-        total = self.db.scalar(
-            select(func.count(JobOpening.job_opening_id)).where(
-                JobOpening.organization_id == org_id
+        total = (
+            self.db.scalar(
+                select(func.count(JobOpening.job_opening_id)).where(
+                    JobOpening.organization_id == org_id
+                )
             )
-        ) or 0
-        open_count = self.db.scalar(
-            select(func.count(JobOpening.job_opening_id)).where(
-                JobOpening.organization_id == org_id,
-                JobOpening.status == JobOpeningStatus.OPEN,
+            or 0
+        )
+        open_count = (
+            self.db.scalar(
+                select(func.count(JobOpening.job_opening_id)).where(
+                    JobOpening.organization_id == org_id,
+                    JobOpening.status == JobOpeningStatus.OPEN,
+                )
             )
-        ) or 0
-        filled = self.db.scalar(
-            select(func.count(JobOpening.job_opening_id)).where(
-                JobOpening.organization_id == org_id,
-                JobOpening.status == JobOpeningStatus.FILLED,
+            or 0
+        )
+        filled = (
+            self.db.scalar(
+                select(func.count(JobOpening.job_opening_id)).where(
+                    JobOpening.organization_id == org_id,
+                    JobOpening.status == JobOpeningStatus.FILLED,
+                )
             )
-        ) or 0
-        closed = self.db.scalar(
-            select(func.count(JobOpening.job_opening_id)).where(
-                JobOpening.organization_id == org_id,
-                JobOpening.status == JobOpeningStatus.CLOSED,
+            or 0
+        )
+        closed = (
+            self.db.scalar(
+                select(func.count(JobOpening.job_opening_id)).where(
+                    JobOpening.organization_id == org_id,
+                    JobOpening.status == JobOpeningStatus.CLOSED,
+                )
             )
-        ) or 0
-        total_applicants = self.db.scalar(
-            select(func.count(JobApplicant.applicant_id)).where(
-                JobApplicant.organization_id == org_id
+            or 0
+        )
+        total_applicants = (
+            self.db.scalar(
+                select(func.count(JobApplicant.applicant_id)).where(
+                    JobApplicant.organization_id == org_id
+                )
             )
-        ) or 0
+            or 0
+        )
 
         return {
             "total": total,
@@ -1181,15 +1361,31 @@ class RecruitmentService:
         summary = {
             "total": len(applicants),
             "new": sum(1 for a in applicants if a.status == ApplicantStatus.NEW),
-            "screening": sum(1 for a in applicants if a.status == ApplicantStatus.SCREENING),
-            "shortlisted": sum(1 for a in applicants if a.status == ApplicantStatus.SHORTLISTED),
-            "interviewing": sum(1 for a in applicants if a.status == ApplicantStatus.INTERVIEW_SCHEDULED),
-            "selected": sum(1 for a in applicants if a.status == ApplicantStatus.SELECTED),
-            "offer_sent": sum(1 for a in applicants if a.status == ApplicantStatus.OFFER_EXTENDED),
+            "screening": sum(
+                1 for a in applicants if a.status == ApplicantStatus.SCREENING
+            ),
+            "shortlisted": sum(
+                1 for a in applicants if a.status == ApplicantStatus.SHORTLISTED
+            ),
+            "interviewing": sum(
+                1 for a in applicants if a.status == ApplicantStatus.INTERVIEW_SCHEDULED
+            ),
+            "selected": sum(
+                1 for a in applicants if a.status == ApplicantStatus.SELECTED
+            ),
+            "offer_sent": sum(
+                1 for a in applicants if a.status == ApplicantStatus.OFFER_EXTENDED
+            ),
             "hired": sum(1 for a in applicants if a.status == ApplicantStatus.HIRED),
-            "rejected": sum(1 for a in applicants if a.status == ApplicantStatus.REJECTED),
-            "withdrawn": sum(1 for a in applicants if a.status == ApplicantStatus.WITHDRAWN),
-            "declined": sum(1 for a in applicants if a.status == ApplicantStatus.OFFER_DECLINED),
+            "rejected": sum(
+                1 for a in applicants if a.status == ApplicantStatus.REJECTED
+            ),
+            "withdrawn": sum(
+                1 for a in applicants if a.status == ApplicantStatus.WITHDRAWN
+            ),
+            "declined": sum(
+                1 for a in applicants if a.status == ApplicantStatus.OFFER_DECLINED
+            ),
         }
 
         return summary
@@ -1260,13 +1456,15 @@ class RecruitmentService:
             else:
                 conversion_rate = 0
 
-            pipeline.append({
-                "status": status_value,
-                "label": label,
-                "count": count,
-                "percentage": round(count / total * 100, 1) if total > 0 else 0,
-                "conversion_rate": conversion_rate,
-            })
+            pipeline.append(
+                {
+                    "status": status_value,
+                    "label": label,
+                    "count": count,
+                    "percentage": round(count / total * 100, 1) if total > 0 else 0,
+                    "conversion_rate": conversion_rate,
+                }
+            )
 
             if count > 0:
                 prev_count = count
@@ -1321,11 +1519,15 @@ class RecruitmentService:
             filters.append(JobApplicant.applied_on <= end_date)
 
         # Get hired applicants with their application and hire dates
-        hired_applicants = self.db.scalars(
-            select(JobApplicant)
-            .options(joinedload(JobApplicant.job_opening))
-            .where(*filters)
-        ).unique().all()
+        hired_applicants = (
+            self.db.scalars(
+                select(JobApplicant)
+                .options(joinedload(JobApplicant.job_opening))
+                .where(*filters)
+            )
+            .unique()
+            .all()
+        )
 
         if not hired_applicants:
             return {
@@ -1354,13 +1556,19 @@ class RecruitmentService:
             if opening_id not in opening_stats:
                 opening_stats[opening_id] = {
                     "job_opening_id": opening_id,
-                    "job_title": applicant.job_opening.job_title if applicant.job_opening else "Unknown",
+                    "job_title": applicant.job_opening.job_title
+                    if applicant.job_opening
+                    else "Unknown",
                     "hires": [],
                 }
             opening_stats[opening_id]["hires"].append(days)
 
         # Calculate overall stats
-        avg_days = round(sum(days_to_hire_list) / len(days_to_hire_list), 1) if days_to_hire_list else 0
+        avg_days = (
+            round(sum(days_to_hire_list) / len(days_to_hire_list), 1)
+            if days_to_hire_list
+            else 0
+        )
         fastest = min(days_to_hire_list) if days_to_hire_list else 0
         slowest = max(days_to_hire_list) if days_to_hire_list else 0
 
@@ -1368,14 +1576,18 @@ class RecruitmentService:
         by_opening = []
         for stats in opening_stats.values():
             hire_days = stats["hires"]
-            by_opening.append({
-                "job_opening_id": stats["job_opening_id"],
-                "job_title": stats["job_title"],
-                "hire_count": len(hire_days),
-                "average_days": round(sum(hire_days) / len(hire_days), 1) if hire_days else 0,
-                "fastest_days": min(hire_days) if hire_days else 0,
-                "slowest_days": max(hire_days) if hire_days else 0,
-            })
+            by_opening.append(
+                {
+                    "job_opening_id": stats["job_opening_id"],
+                    "job_title": stats["job_title"],
+                    "hire_count": len(hire_days),
+                    "average_days": round(sum(hire_days) / len(hire_days), 1)
+                    if hire_days
+                    else 0,
+                    "fastest_days": min(hire_days) if hire_days else 0,
+                    "slowest_days": max(hire_days) if hire_days else 0,
+                }
+            )
 
         by_opening.sort(key=lambda x: x["average_days"])
 
@@ -1416,7 +1628,9 @@ class RecruitmentService:
                     func.cast(JobApplicant.status == ApplicantStatus.HIRED, Integer)
                 ).label("hired"),
                 func.sum(
-                    func.cast(JobApplicant.status == ApplicantStatus.SHORTLISTED, Integer)
+                    func.cast(
+                        JobApplicant.status == ApplicantStatus.SHORTLISTED, Integer
+                    )
                 ).label("shortlisted"),
             )
             .where(*filters)
@@ -1429,15 +1643,21 @@ class RecruitmentService:
         total_hired = sum((r.hired or 0) for r in results)
 
         for row in results:
-            hire_rate = round((row.hired or 0) / row.total * 100, 1) if row.total > 0 else 0
-            sources.append({
-                "source": row.source,
-                "total_applicants": row.total,
-                "hired": row.hired or 0,
-                "shortlisted": row.shortlisted or 0,
-                "hire_rate": hire_rate,
-                "percentage": round(row.total / total_applicants * 100, 1) if total_applicants > 0 else 0,
-            })
+            hire_rate = (
+                round((row.hired or 0) / row.total * 100, 1) if row.total > 0 else 0
+            )
+            sources.append(
+                {
+                    "source": row.source,
+                    "total_applicants": row.total,
+                    "hired": row.hired or 0,
+                    "shortlisted": row.shortlisted or 0,
+                    "hire_rate": hire_rate,
+                    "percentage": round(row.total / total_applicants * 100, 1)
+                    if total_applicants > 0
+                    else 0,
+                }
+            )
 
         # Find best performing source
         best_source = max(sources, key=lambda x: x["hire_rate"]) if sources else None
@@ -1446,7 +1666,9 @@ class RecruitmentService:
             "sources": sources,
             "total_applicants": total_applicants,
             "total_hired": total_hired,
-            "overall_hire_rate": round(total_hired / total_applicants * 100, 1) if total_applicants > 0 else 0,
+            "overall_hire_rate": round(total_hired / total_applicants * 100, 1)
+            if total_applicants > 0
+            else 0,
             "best_source": best_source["source"] if best_source else None,
             "source_count": len(sources),
         }
@@ -1468,55 +1690,88 @@ class RecruitmentService:
 
         if start_date:
             applicant_filters.append(JobApplicant.applied_on >= start_date)
-            opening_filters.append(JobOpening.created_at >= datetime.combine(start_date, datetime.min.time()))
+            opening_filters.append(
+                JobOpening.created_at
+                >= datetime.combine(start_date, datetime.min.time())
+            )
         if end_date:
             applicant_filters.append(JobApplicant.applied_on <= end_date)
-            opening_filters.append(JobOpening.created_at <= datetime.combine(end_date, datetime.max.time()))
+            opening_filters.append(
+                JobOpening.created_at <= datetime.combine(end_date, datetime.max.time())
+            )
 
         # Job opening stats
-        total_openings = self.db.scalar(
-            select(func.count(JobOpening.job_opening_id)).where(*opening_filters)
-        ) or 0
-
-        open_positions = self.db.scalar(
-            select(func.count(JobOpening.job_opening_id)).where(
-                *opening_filters,
-                JobOpening.status == JobOpeningStatus.OPEN,
+        total_openings = (
+            self.db.scalar(
+                select(func.count(JobOpening.job_opening_id)).where(*opening_filters)
             )
-        ) or 0
+            or 0
+        )
 
-        filled_positions = self.db.scalar(
-            select(func.count(JobOpening.job_opening_id)).where(
-                *opening_filters,
-                JobOpening.status == JobOpeningStatus.FILLED,
+        open_positions = (
+            self.db.scalar(
+                select(func.count(JobOpening.job_opening_id)).where(
+                    *opening_filters,
+                    JobOpening.status == JobOpeningStatus.OPEN,
+                )
             )
-        ) or 0
+            or 0
+        )
+
+        filled_positions = (
+            self.db.scalar(
+                select(func.count(JobOpening.job_opening_id)).where(
+                    *opening_filters,
+                    JobOpening.status == JobOpeningStatus.FILLED,
+                )
+            )
+            or 0
+        )
 
         # Applicant stats
-        total_applicants = self.db.scalar(
-            select(func.count(JobApplicant.applicant_id)).where(*applicant_filters)
-        ) or 0
-
-        hired = self.db.scalar(
-            select(func.count(JobApplicant.applicant_id)).where(
-                *applicant_filters,
-                JobApplicant.status == ApplicantStatus.HIRED,
+        total_applicants = (
+            self.db.scalar(
+                select(func.count(JobApplicant.applicant_id)).where(*applicant_filters)
             )
-        ) or 0
+            or 0
+        )
 
-        pending_review = self.db.scalar(
-            select(func.count(JobApplicant.applicant_id)).where(
-                *applicant_filters,
-                JobApplicant.status.in_([ApplicantStatus.NEW, ApplicantStatus.SCREENING]),
+        hired = (
+            self.db.scalar(
+                select(func.count(JobApplicant.applicant_id)).where(
+                    *applicant_filters,
+                    JobApplicant.status == ApplicantStatus.HIRED,
+                )
             )
-        ) or 0
+            or 0
+        )
 
-        in_interview = self.db.scalar(
-            select(func.count(JobApplicant.applicant_id)).where(
-                *applicant_filters,
-                JobApplicant.status.in_([ApplicantStatus.INTERVIEW_SCHEDULED, ApplicantStatus.INTERVIEW_COMPLETED]),
+        pending_review = (
+            self.db.scalar(
+                select(func.count(JobApplicant.applicant_id)).where(
+                    *applicant_filters,
+                    JobApplicant.status.in_(
+                        [ApplicantStatus.NEW, ApplicantStatus.SCREENING]
+                    ),
+                )
             )
-        ) or 0
+            or 0
+        )
+
+        in_interview = (
+            self.db.scalar(
+                select(func.count(JobApplicant.applicant_id)).where(
+                    *applicant_filters,
+                    JobApplicant.status.in_(
+                        [
+                            ApplicantStatus.INTERVIEW_SCHEDULED,
+                            ApplicantStatus.INTERVIEW_COMPLETED,
+                        ]
+                    ),
+                )
+            )
+            or 0
+        )
 
         # Status breakdown for chart
         status_results = self.db.execute(
@@ -1529,7 +1784,9 @@ class RecruitmentService:
             {
                 "status": status.value,
                 "count": count,
-                "percentage": round(count / total_applicants * 100, 1) if total_applicants > 0 else 0,
+                "percentage": round(count / total_applicants * 100, 1)
+                if total_applicants > 0
+                else 0,
             }
             for status, count in status_results
         ]
@@ -1542,8 +1799,13 @@ class RecruitmentService:
                 func.count(JobApplicant.applicant_id).label("applicant_count"),
             )
             .select_from(JobOpening)
-            .outerjoin(JobApplicant, JobApplicant.job_opening_id == JobOpening.job_opening_id)
-            .where(JobOpening.organization_id == org_id, JobOpening.status == JobOpeningStatus.OPEN)
+            .outerjoin(
+                JobApplicant, JobApplicant.job_opening_id == JobOpening.job_opening_id
+            )
+            .where(
+                JobOpening.organization_id == org_id,
+                JobOpening.status == JobOpeningStatus.OPEN,
+            )
             .group_by(JobOpening.job_opening_id, JobOpening.job_title)
             .order_by(func.count(JobApplicant.applicant_id).desc())
             .limit(5)
@@ -1566,7 +1828,9 @@ class RecruitmentService:
             "hired": hired,
             "pending_review": pending_review,
             "in_interview": in_interview,
-            "hire_rate": round(hired / total_applicants * 100, 1) if total_applicants > 0 else 0,
+            "hire_rate": round(hired / total_applicants * 100, 1)
+            if total_applicants > 0
+            else 0,
             "status_breakdown": status_breakdown,
             "top_openings": top_openings,
         }

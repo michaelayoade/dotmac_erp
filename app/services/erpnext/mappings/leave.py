@@ -6,6 +6,8 @@ Maps ERPNext Leave DocTypes to DotMac leave schema:
 - Leave Allocation → leave.leave_allocation
 - Leave Application → leave.leave_application
 """
+
+import logging
 from typing import Any
 
 from .base import (
@@ -17,6 +19,7 @@ from .base import (
     parse_decimal,
 )
 
+logger = logging.getLogger(__name__)
 
 # ERPNext Leave Application status to DotMac LeaveApplicationStatus
 LEAVE_STATUS_MAP = {

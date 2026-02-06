@@ -1,6 +1,8 @@
 """Asset assignment service."""
+
 from __future__ import annotations
 
+import logging
 from datetime import date
 from typing import Optional
 from uuid import UUID
@@ -9,7 +11,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.fixed_assets.asset import Asset, AssetStatus
-from app.models.people.assets.assignment import AssetAssignment, AssignmentStatus, AssetCondition
+from app.models.people.assets.assignment import (
+    AssetAssignment,
+    AssetCondition,
+    AssignmentStatus,
+)
 from app.models.people.hr.employee import Employee
 from app.services.common import (
     ConflictError,
@@ -18,6 +24,8 @@ from app.services.common import (
     PaginationParams,
     ValidationError,
 )
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["AssetAssignmentService"]
 
@@ -47,9 +55,7 @@ class AssetAssignmentService:
         issued_on: date,
     ) -> None:
         if asset.status in {AssetStatus.DISPOSED, AssetStatus.IMPAIRED}:
-            raise ValidationError(
-                f"Cannot assign asset in {asset.status.value} status"
-            )
+            raise ValidationError(f"Cannot assign asset in {asset.status.value} status")
         if asset.status == AssetStatus.DRAFT:
             asset.status = AssetStatus.ACTIVE
             asset.in_service_date = asset.in_service_date or issued_on

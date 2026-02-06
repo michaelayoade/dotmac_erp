@@ -8,27 +8,30 @@ import logging
 from datetime import date
 from decimal import Decimal
 from typing import Optional
-from uuid import UUID
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.models.people.perf.appraisal_cycle import AppraisalCycleStatus
 from app.models.people.hr import EmployeeStatus
+from app.models.people.perf.appraisal_cycle import AppraisalCycleStatus
 from app.services.common import PaginationParams, coerce_uuid
-from app.services.people.hr import EmployeeFilters, OrganizationService, DepartmentFilters
+from app.services.people.hr import (
+    DepartmentFilters,
+    EmployeeFilters,
+    OrganizationService,
+)
 from app.services.people.perf import PerformanceService
 from app.services.performance_automation import PerformanceAutomationService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
 from .base import (
-    parse_uuid,
-    parse_date,
-    parse_int,
-    parse_decimal,
     parse_cycle_status,
+    parse_date,
+    parse_decimal,
+    parse_int,
+    parse_uuid,
 )
 
 logger = logging.getLogger(__name__)
@@ -73,20 +76,24 @@ class CycleWebService:
         context = base_context(request, auth, "Appraisal Cycles", "perf", db=db)
         context["request"] = request
         success = request.query_params.get("success")
-        context.update({
-            "cycles": result.items,
-            "status": status,
-            "year": year,
-            "search": search,
-            "success": success,
-            "statuses": [s.value for s in AppraisalCycleStatus],
-            "page": result.page,
-            "total_pages": result.total_pages,
-            "total": result.total,
-            "has_prev": result.has_prev,
-            "has_next": result.has_next,
-        })
-        return templates.TemplateResponse(request, "people/perf/appraisal_cycles.html", context)
+        context.update(
+            {
+                "cycles": result.items,
+                "status": status,
+                "year": year,
+                "search": search,
+                "success": success,
+                "statuses": [s.value for s in AppraisalCycleStatus],
+                "page": result.page,
+                "total_pages": result.total_pages,
+                "total": result.total,
+                "has_prev": result.has_prev,
+                "has_next": result.has_next,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/appraisal_cycles.html", context
+        )
 
     def cycle_new_form_response(
         self,
@@ -97,12 +104,16 @@ class CycleWebService:
         """Render new cycle form."""
         context = base_context(request, auth, "New Appraisal Cycle", "perf", db=db)
         context["request"] = request
-        context.update({
-            "cycle": None,
-            "form_data": {},
-            "error": None,
-        })
-        return templates.TemplateResponse(request, "people/perf/appraisal_cycle_form.html", context)
+        context.update(
+            {
+                "cycle": None,
+                "form_data": {},
+                "error": None,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/appraisal_cycle_form.html", context
+        )
 
     async def create_cycle_response(
         self,
@@ -129,9 +140,15 @@ class CycleWebService:
                 review_period_end=end_date,
                 start_date=start_date,
                 end_date=end_date,
-                self_assessment_deadline=parse_date(self._form_text(form_data.get("self_assessment_end"))),
-                manager_review_deadline=parse_date(self._form_text(form_data.get("manager_review_end"))),
-                calibration_deadline=parse_date(self._form_text(form_data.get("calibration_end"))),
+                self_assessment_deadline=parse_date(
+                    self._form_text(form_data.get("self_assessment_end"))
+                ),
+                manager_review_deadline=parse_date(
+                    self._form_text(form_data.get("manager_review_end"))
+                ),
+                calibration_deadline=parse_date(
+                    self._form_text(form_data.get("calibration_end"))
+                ),
                 description=self._form_text(form_data.get("description")) or None,
             )
             db.commit()
@@ -143,12 +160,16 @@ class CycleWebService:
             db.rollback()
             context = base_context(request, auth, "New Appraisal Cycle", "perf", db=db)
             context["request"] = request
-            context.update({
-                "cycle": None,
-                "form_data": dict(form_data),
-                "error": str(e),
-            })
-            return templates.TemplateResponse(request, "people/perf/cycle_form.html", context)
+            context.update(
+                {
+                    "cycle": None,
+                    "form_data": dict(form_data),
+                    "error": str(e),
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/perf/cycle_form.html", context
+            )
 
     def cycle_detail_response(
         self,
@@ -175,14 +196,18 @@ class CycleWebService:
 
         context = base_context(request, auth, cycle.cycle_name, "perf", db=db)
         context["request"] = request
-        context.update({
-            "cycle": cycle,
-            "appraisals": appraisals.items,
-            "appraisals_total": appraisals.total,
-            "success": success,
-            "error": None,
-        })
-        return templates.TemplateResponse(request, "people/perf/cycle_detail.html", context)
+        context.update(
+            {
+                "cycle": cycle,
+                "appraisals": appraisals.items,
+                "appraisals_total": appraisals.total,
+                "success": success,
+                "error": None,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/cycle_detail.html", context
+        )
 
     def cycle_edit_form_response(
         self,
@@ -202,12 +227,16 @@ class CycleWebService:
 
         context = base_context(request, auth, f"Edit {cycle.cycle_name}", "perf", db=db)
         context["request"] = request
-        context.update({
-            "cycle": cycle,
-            "form_data": {},
-            "error": None,
-        })
-        return templates.TemplateResponse(request, "people/perf/cycle_form.html", context)
+        context.update(
+            {
+                "cycle": cycle,
+                "form_data": {},
+                "error": None,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/cycle_form.html", context
+        )
 
     async def update_cycle_response(
         self,
@@ -230,13 +259,27 @@ class CycleWebService:
                 year=parse_int(self._form_text(form_data.get("year"))),
                 start_date=parse_date(self._form_text(form_data.get("start_date"))),
                 end_date=parse_date(self._form_text(form_data.get("end_date"))),
-                self_assessment_start=parse_date(self._form_text(form_data.get("self_assessment_start"))),
-                self_assessment_end=parse_date(self._form_text(form_data.get("self_assessment_end"))),
-                manager_review_start=parse_date(self._form_text(form_data.get("manager_review_start"))),
-                manager_review_end=parse_date(self._form_text(form_data.get("manager_review_end"))),
-                calibration_start=parse_date(self._form_text(form_data.get("calibration_start"))),
-                calibration_end=parse_date(self._form_text(form_data.get("calibration_end"))),
-                feedback_start=parse_date(self._form_text(form_data.get("feedback_start"))),
+                self_assessment_start=parse_date(
+                    self._form_text(form_data.get("self_assessment_start"))
+                ),
+                self_assessment_end=parse_date(
+                    self._form_text(form_data.get("self_assessment_end"))
+                ),
+                manager_review_start=parse_date(
+                    self._form_text(form_data.get("manager_review_start"))
+                ),
+                manager_review_end=parse_date(
+                    self._form_text(form_data.get("manager_review_end"))
+                ),
+                calibration_start=parse_date(
+                    self._form_text(form_data.get("calibration_start"))
+                ),
+                calibration_end=parse_date(
+                    self._form_text(form_data.get("calibration_end"))
+                ),
+                feedback_start=parse_date(
+                    self._form_text(form_data.get("feedback_start"))
+                ),
                 feedback_end=parse_date(self._form_text(form_data.get("feedback_end"))),
                 description=form_data.get("description") or None,
             )
@@ -248,14 +291,20 @@ class CycleWebService:
         except Exception as e:
             db.rollback()
             cycle = svc.get_cycle(org_id, coerce_uuid(cycle_id))
-            context = base_context(request, auth, f"Edit {cycle.cycle_name}", "perf", db=db)
+            context = base_context(
+                request, auth, f"Edit {cycle.cycle_name}", "perf", db=db
+            )
             context["request"] = request
-            context.update({
-                "cycle": cycle,
-                "form_data": {},
-                "error": str(e),
-            })
-            return templates.TemplateResponse(request, "people/perf/cycle_form.html", context)
+            context.update(
+                {
+                    "cycle": cycle,
+                    "form_data": {},
+                    "error": str(e),
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/perf/cycle_form.html", context
+            )
 
     def activate_cycle_response(
         self,
@@ -344,7 +393,9 @@ class CycleWebService:
             return RedirectResponse(url="/people/perf/cycles", status_code=303)
         except Exception:
             db.rollback()
-            return RedirectResponse(url=f"/people/perf/cycles/{cycle_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/perf/cycles/{cycle_id}", status_code=303
+            )
 
     # ─────────────────────────────────────────────────────────────────────────
     # KRAs
@@ -388,19 +439,21 @@ class CycleWebService:
         context = base_context(request, auth, "Key Result Areas", "perf", db=db)
         context["request"] = request
         success = request.query_params.get("success")
-        context.update({
-            "kras": result.items,
-            "search": search,
-            "is_active": is_active,
-            "department_id": department_id,
-            "departments": departments,
-            "success": success,
-            "page": result.page,
-            "total_pages": result.total_pages,
-            "total": result.total,
-            "has_prev": result.has_prev,
-            "has_next": result.has_next,
-        })
+        context.update(
+            {
+                "kras": result.items,
+                "search": search,
+                "is_active": is_active,
+                "department_id": department_id,
+                "departments": departments,
+                "success": success,
+                "page": result.page,
+                "total_pages": result.total_pages,
+                "total": result.total,
+                "has_prev": result.has_prev,
+                "has_next": result.has_next,
+            }
+        )
         return templates.TemplateResponse(request, "people/perf/kras.html", context)
 
     def kra_new_form_response(
@@ -420,12 +473,14 @@ class CycleWebService:
 
         context = base_context(request, auth, "New KRA", "perf", db=db)
         context["request"] = request
-        context.update({
-            "kra": None,
-            "departments": departments,
-            "form_data": {},
-            "error": None,
-        })
+        context.update(
+            {
+                "kra": None,
+                "departments": departments,
+                "form_data": {},
+                "error": None,
+            }
+        )
         return templates.TemplateResponse(request, "people/perf/kra_form.html", context)
 
     async def create_kra_response(
@@ -450,7 +505,10 @@ class CycleWebService:
                     if self._form_text(form_data.get("department_id"))
                     else None
                 ),
-                default_weightage=parse_decimal(self._form_text(form_data.get("weight"))) or Decimal("0"),
+                default_weightage=parse_decimal(
+                    self._form_text(form_data.get("weight"))
+                )
+                or Decimal("0"),
             )
             db.commit()
             return RedirectResponse(
@@ -462,13 +520,19 @@ class CycleWebService:
             org_svc = OrganizationService(db, org_id)
             context = base_context(request, auth, "New KRA", "perf", db=db)
             context["request"] = request
-            context.update({
-                "kra": None,
-                "departments": org_svc.list_departments(DepartmentFilters(is_active=True), PaginationParams(limit=100)).items,
-                "form_data": dict(form_data),
-                "error": str(e),
-            })
-            return templates.TemplateResponse(request, "people/perf/kra_form.html", context)
+            context.update(
+                {
+                    "kra": None,
+                    "departments": org_svc.list_departments(
+                        DepartmentFilters(is_active=True), PaginationParams(limit=100)
+                    ).items,
+                    "form_data": dict(form_data),
+                    "error": str(e),
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/perf/kra_form.html", context
+            )
 
     def kra_detail_response(
         self,
@@ -489,12 +553,16 @@ class CycleWebService:
 
         context = base_context(request, auth, kra.kra_name, "perf", db=db)
         context["request"] = request
-        context.update({
-            "kra": kra,
-            "success": success,
-            "error": None,
-        })
-        return templates.TemplateResponse(request, "people/perf/kra_detail.html", context)
+        context.update(
+            {
+                "kra": kra,
+                "success": success,
+                "error": None,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/kra_detail.html", context
+        )
 
     def kra_edit_form_response(
         self,
@@ -515,12 +583,16 @@ class CycleWebService:
 
         context = base_context(request, auth, f"Edit {kra.kra_name}", "perf", db=db)
         context["request"] = request
-        context.update({
-            "kra": kra,
-            "departments": org_svc.list_departments(DepartmentFilters(is_active=True), PaginationParams(limit=100)).items,
-            "form_data": {},
-            "error": None,
-        })
+        context.update(
+            {
+                "kra": kra,
+                "departments": org_svc.list_departments(
+                    DepartmentFilters(is_active=True), PaginationParams(limit=100)
+                ).items,
+                "form_data": {},
+                "error": None,
+            }
+        )
         return templates.TemplateResponse(request, "people/perf/kra_form.html", context)
 
     async def update_kra_response(
@@ -547,7 +619,10 @@ class CycleWebService:
                     if self._form_text(form_data.get("department_id"))
                     else None
                 ),
-                default_weightage=parse_decimal(self._form_text(form_data.get("weight"))) or Decimal("0"),
+                default_weightage=parse_decimal(
+                    self._form_text(form_data.get("weight"))
+                )
+                or Decimal("0"),
             )
             db.commit()
             return RedirectResponse(
@@ -560,13 +635,19 @@ class CycleWebService:
             kra = svc.get_kra(org_id, coerce_uuid(kra_id))
             context = base_context(request, auth, f"Edit {kra.kra_name}", "perf", db=db)
             context["request"] = request
-            context.update({
-                "kra": kra,
-                "departments": org_svc.list_departments(DepartmentFilters(is_active=True), PaginationParams(limit=100)).items,
-                "form_data": {},
-                "error": str(e),
-            })
-            return templates.TemplateResponse(request, "people/perf/kra_form.html", context)
+            context.update(
+                {
+                    "kra": kra,
+                    "departments": org_svc.list_departments(
+                        DepartmentFilters(is_active=True), PaginationParams(limit=100)
+                    ).items,
+                    "form_data": {},
+                    "error": str(e),
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/perf/kra_form.html", context
+            )
 
     def toggle_kra_active_response(
         self,
@@ -647,20 +728,24 @@ class CycleWebService:
         context = base_context(request, auth, "Appraisal Templates", "perf", db=db)
         context["request"] = request
         success = request.query_params.get("success")
-        context.update({
-            "templates": result.items,
-            "search": search,
-            "is_active": is_active,
-            "department_id": department_id,
-            "departments": departments,
-            "success": success,
-            "page": result.page,
-            "total_pages": result.total_pages,
-            "total": result.total,
-            "has_prev": result.has_prev,
-            "has_next": result.has_next,
-        })
-        return templates.TemplateResponse(request, "people/perf/appraisal_templates.html", context)
+        context.update(
+            {
+                "templates": result.items,
+                "search": search,
+                "is_active": is_active,
+                "department_id": department_id,
+                "departments": departments,
+                "success": success,
+                "page": result.page,
+                "total_pages": result.total_pages,
+                "total": result.total,
+                "has_prev": result.has_prev,
+                "has_next": result.has_next,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/appraisal_templates.html", context
+        )
 
     def template_new_form_response(
         self,
@@ -678,18 +763,24 @@ class CycleWebService:
             PaginationParams(limit=100),
         ).items
 
-        kras = svc.list_kras(org_id, is_active=True, pagination=PaginationParams(limit=100)).items
+        kras = svc.list_kras(
+            org_id, is_active=True, pagination=PaginationParams(limit=100)
+        ).items
 
         context = base_context(request, auth, "New Template", "perf", db=db)
         context["request"] = request
-        context.update({
-            "template": None,
-            "departments": departments,
-            "kras": kras,
-            "form_data": {},
-            "error": None,
-        })
-        return templates.TemplateResponse(request, "people/perf/template_form.html", context)
+        context.update(
+            {
+                "template": None,
+                "departments": departments,
+                "kras": kras,
+                "form_data": {},
+                "error": None,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/template_form.html", context
+        )
 
     async def create_template_response(
         self,
@@ -708,8 +799,13 @@ class CycleWebService:
                 template_code=self._form_text(form_data.get("template_code")),
                 template_name=self._form_text(form_data.get("template_name")),
                 description=self._form_text(form_data.get("description")) or None,
-                department_id=coerce_uuid(form_data["department_id"]) if self._form_text(form_data.get("department_id")) else None,
-                rating_scale_max=parse_int(self._form_text(form_data.get("rating_scale_max"))) or 5,
+                department_id=coerce_uuid(form_data["department_id"])
+                if self._form_text(form_data.get("department_id"))
+                else None,
+                rating_scale_max=parse_int(
+                    self._form_text(form_data.get("rating_scale_max"))
+                )
+                or 5,
             )
             db.commit()
             return RedirectResponse(
@@ -721,14 +817,22 @@ class CycleWebService:
             org_svc = OrganizationService(db, org_id)
             context = base_context(request, auth, "New Template", "perf", db=db)
             context["request"] = request
-            context.update({
-                "template": None,
-                "departments": org_svc.list_departments(DepartmentFilters(is_active=True), PaginationParams(limit=100)).items,
-                "kras": svc.list_kras(org_id, is_active=True, pagination=PaginationParams(limit=100)).items,
-                "form_data": dict(form_data),
-                "error": str(e),
-            })
-            return templates.TemplateResponse(request, "people/perf/template_form.html", context)
+            context.update(
+                {
+                    "template": None,
+                    "departments": org_svc.list_departments(
+                        DepartmentFilters(is_active=True), PaginationParams(limit=100)
+                    ).items,
+                    "kras": svc.list_kras(
+                        org_id, is_active=True, pagination=PaginationParams(limit=100)
+                    ).items,
+                    "form_data": dict(form_data),
+                    "error": str(e),
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/perf/template_form.html", context
+            )
 
     def template_detail_response(
         self,
@@ -749,12 +853,16 @@ class CycleWebService:
 
         context = base_context(request, auth, template.template_name, "perf", db=db)
         context["request"] = request
-        context.update({
-            "template": template,
-            "success": success,
-            "error": None,
-        })
-        return templates.TemplateResponse(request, "people/perf/template_detail.html", context)
+        context.update(
+            {
+                "template": template,
+                "success": success,
+                "error": None,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/template_detail.html", context
+        )
 
     def template_edit_form_response(
         self,
@@ -773,16 +881,26 @@ class CycleWebService:
         except Exception:
             return RedirectResponse(url="/people/perf/templates", status_code=303)
 
-        context = base_context(request, auth, f"Edit {template.template_name}", "perf", db=db)
+        context = base_context(
+            request, auth, f"Edit {template.template_name}", "perf", db=db
+        )
         context["request"] = request
-        context.update({
-            "template": template,
-            "departments": org_svc.list_departments(DepartmentFilters(is_active=True), PaginationParams(limit=100)).items,
-            "kras": svc.list_kras(org_id, is_active=True, pagination=PaginationParams(limit=100)).items,
-            "form_data": {},
-            "error": None,
-        })
-        return templates.TemplateResponse(request, "people/perf/template_form.html", context)
+        context.update(
+            {
+                "template": template,
+                "departments": org_svc.list_departments(
+                    DepartmentFilters(is_active=True), PaginationParams(limit=100)
+                ).items,
+                "kras": svc.list_kras(
+                    org_id, is_active=True, pagination=PaginationParams(limit=100)
+                ).items,
+                "form_data": {},
+                "error": None,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/template_form.html", context
+        )
 
     async def update_template_response(
         self,
@@ -805,7 +923,10 @@ class CycleWebService:
                 department_id=coerce_uuid(form_data["department_id"])
                 if self._form_text(form_data.get("department_id"))
                 else None,
-                rating_scale_max=parse_int(self._form_text(form_data.get("rating_scale_max"))) or 5,
+                rating_scale_max=parse_int(
+                    self._form_text(form_data.get("rating_scale_max"))
+                )
+                or 5,
             )
             db.commit()
             return RedirectResponse(
@@ -816,16 +937,26 @@ class CycleWebService:
             db.rollback()
             org_svc = OrganizationService(db, org_id)
             template = svc.get_template(org_id, coerce_uuid(template_id))
-            context = base_context(request, auth, f"Edit {template.template_name}", "perf", db=db)
+            context = base_context(
+                request, auth, f"Edit {template.template_name}", "perf", db=db
+            )
             context["request"] = request
-            context.update({
-                "template": template,
-                "departments": org_svc.list_departments(DepartmentFilters(is_active=True), PaginationParams(limit=100)).items,
-                "kras": svc.list_kras(org_id, is_active=True, pagination=PaginationParams(limit=100)).items,
-                "form_data": {},
-                "error": str(e),
-            })
-            return templates.TemplateResponse(request, "people/perf/template_form.html", context)
+            context.update(
+                {
+                    "template": template,
+                    "departments": org_svc.list_departments(
+                        DepartmentFilters(is_active=True), PaginationParams(limit=100)
+                    ).items,
+                    "kras": svc.list_kras(
+                        org_id, is_active=True, pagination=PaginationParams(limit=100)
+                    ).items,
+                    "form_data": {},
+                    "error": str(e),
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/perf/template_form.html", context
+            )
 
     def toggle_template_active_response(
         self,
@@ -848,7 +979,9 @@ class CycleWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url=f"/people/perf/templates/{template_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/perf/templates/{template_id}", status_code=303
+        )
 
     def delete_template_response(
         self,
@@ -866,7 +999,9 @@ class CycleWebService:
             return RedirectResponse(url="/people/perf/templates", status_code=303)
         except Exception:
             db.rollback()
-            return RedirectResponse(url=f"/people/perf/templates/{template_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/perf/templates/{template_id}", status_code=303
+            )
 
     # ─────────────────────────────────────────────────────────────────────────
     # Scorecards
@@ -906,20 +1041,24 @@ class CycleWebService:
         context = base_context(request, auth, "Scorecards", "perf", db=db)
         context["request"] = request
         success = request.query_params.get("success")
-        context.update({
-            "scorecards": result.items,
-            "employee_id": employee_id,
-            "cycle_id": cycle_id,
-            "is_finalized": is_finalized,
-            "cycles": cycles,
-            "success": success,
-            "page": result.page,
-            "total_pages": result.total_pages,
-            "total": result.total,
-            "has_prev": result.has_prev,
-            "has_next": result.has_next,
-        })
-        return templates.TemplateResponse(request, "people/perf/scorecards.html", context)
+        context.update(
+            {
+                "scorecards": result.items,
+                "employee_id": employee_id,
+                "cycle_id": cycle_id,
+                "is_finalized": is_finalized,
+                "cycles": cycles,
+                "success": success,
+                "page": result.page,
+                "total_pages": result.total_pages,
+                "total": result.total,
+                "has_prev": result.has_prev,
+                "has_next": result.has_next,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/scorecards.html", context
+        )
 
     def scorecard_new_form_response(
         self,
@@ -933,7 +1072,7 @@ class CycleWebService:
         org_svc = OrganizationService(db, org_id)
 
         employees = org_svc.list_employees(
-                EmployeeFilters(status=EmployeeStatus.ACTIVE),
+            EmployeeFilters(status=EmployeeStatus.ACTIVE),
             PaginationParams(limit=500),
         ).items
 
@@ -941,14 +1080,18 @@ class CycleWebService:
 
         context = base_context(request, auth, "New Scorecard", "perf", db=db)
         context["request"] = request
-        context.update({
-            "scorecard": None,
-            "employees": employees,
-            "cycles": cycles,
-            "form_data": {},
-            "error": None,
-        })
-        return templates.TemplateResponse(request, "people/perf/scorecard_form.html", context)
+        context.update(
+            {
+                "scorecard": None,
+                "employees": employees,
+                "cycles": cycles,
+                "form_data": {},
+                "error": None,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/scorecard_form.html", context
+        )
 
     async def create_scorecard_response(
         self,
@@ -962,8 +1105,13 @@ class CycleWebService:
         svc = PerformanceService(db)
 
         try:
-            period_start = parse_date(self._form_text(form_data.get("period_start"))) or date.today()
-            period_end = parse_date(self._form_text(form_data.get("period_end"))) or period_start
+            period_start = (
+                parse_date(self._form_text(form_data.get("period_start")))
+                or date.today()
+            )
+            period_end = (
+                parse_date(self._form_text(form_data.get("period_end"))) or period_start
+            )
             scorecard = svc.create_scorecard(
                 org_id,
                 employee_id=coerce_uuid(self._form_text(form_data.get("employee_id"))),
@@ -981,17 +1129,23 @@ class CycleWebService:
             org_svc = OrganizationService(db, org_id)
             context = base_context(request, auth, "New Scorecard", "perf", db=db)
             context["request"] = request
-            context.update({
-                "scorecard": None,
-                "employees": org_svc.list_employees(
-                    EmployeeFilters(status=EmployeeStatus.ACTIVE),
-                    PaginationParams(limit=500),
-                ).items,
-                "cycles": svc.list_cycles(org_id, pagination=PaginationParams(limit=50)).items,
-                "form_data": dict(form_data),
-                "error": str(e),
-            })
-            return templates.TemplateResponse(request, "people/perf/scorecard_form.html", context)
+            context.update(
+                {
+                    "scorecard": None,
+                    "employees": org_svc.list_employees(
+                        EmployeeFilters(status=EmployeeStatus.ACTIVE),
+                        PaginationParams(limit=500),
+                    ).items,
+                    "cycles": svc.list_cycles(
+                        org_id, pagination=PaginationParams(limit=50)
+                    ).items,
+                    "form_data": dict(form_data),
+                    "error": str(e),
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/perf/scorecard_form.html", context
+            )
 
     def scorecard_detail_response(
         self,
@@ -1010,14 +1164,24 @@ class CycleWebService:
         except Exception:
             return RedirectResponse(url="/people/perf/scorecards", status_code=303)
 
-        context = base_context(request, auth, f"Scorecard - {scorecard.employee.full_name if scorecard.employee else 'Unknown'}", "perf", db=db)
+        context = base_context(
+            request,
+            auth,
+            f"Scorecard - {scorecard.employee.full_name if scorecard.employee else 'Unknown'}",
+            "perf",
+            db=db,
+        )
         context["request"] = request
-        context.update({
-            "scorecard": scorecard,
-            "success": success,
-            "error": None,
-        })
-        return templates.TemplateResponse(request, "people/perf/scorecard_detail.html", context)
+        context.update(
+            {
+                "scorecard": scorecard,
+                "success": success,
+                "error": None,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/scorecard_detail.html", context
+        )
 
     def scorecard_update_item_form_response(
         self,
@@ -1035,19 +1199,25 @@ class CycleWebService:
             scorecard = svc.get_scorecard(org_id, coerce_uuid(scorecard_id))
             item = next((i for i in scorecard.items if str(i.item_id) == item_id), None)
             if not item:
-                return RedirectResponse(url=f"/people/perf/scorecards/{scorecard_id}", status_code=303)
+                return RedirectResponse(
+                    url=f"/people/perf/scorecards/{scorecard_id}", status_code=303
+                )
         except Exception:
             return RedirectResponse(url="/people/perf/scorecards", status_code=303)
 
         context = base_context(request, auth, "Update Scorecard Item", "perf", db=db)
         context["request"] = request
-        context.update({
-            "scorecard": scorecard,
-            "item": item,
-            "form_data": {},
-            "error": None,
-        })
-        return templates.TemplateResponse(request, "people/perf/scorecard_item_form.html", context)
+        context.update(
+            {
+                "scorecard": scorecard,
+                "item": item,
+                "form_data": {},
+                "error": None,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/scorecard_item_form.html", context
+        )
 
     async def update_scorecard_item_response(
         self,
@@ -1081,15 +1251,21 @@ class CycleWebService:
             db.rollback()
             scorecard = svc.get_scorecard(org_id, coerce_uuid(scorecard_id))
             item = next((i for i in scorecard.items if str(i.item_id) == item_id), None)
-            context = base_context(request, auth, "Update Scorecard Item", "perf", db=db)
+            context = base_context(
+                request, auth, "Update Scorecard Item", "perf", db=db
+            )
             context["request"] = request
-            context.update({
-                "scorecard": scorecard,
-                "item": item,
-                "form_data": dict(form_data),
-                "error": str(e),
-            })
-            return templates.TemplateResponse(request, "people/perf/scorecard_item_form.html", context)
+            context.update(
+                {
+                    "scorecard": scorecard,
+                    "item": item,
+                    "form_data": dict(form_data),
+                    "error": str(e),
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/perf/scorecard_item_form.html", context
+            )
 
     def scorecard_finalize_form_response(
         self,
@@ -1109,12 +1285,16 @@ class CycleWebService:
 
         context = base_context(request, auth, "Finalize Scorecard", "perf", db=db)
         context["request"] = request
-        context.update({
-            "scorecard": scorecard,
-            "form_data": {},
-            "error": None,
-        })
-        return templates.TemplateResponse(request, "people/perf/scorecard_finalize_form.html", context)
+        context.update(
+            {
+                "scorecard": scorecard,
+                "form_data": {},
+                "error": None,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/perf/scorecard_finalize_form.html", context
+        )
 
     async def finalize_scorecard_response(
         self,
@@ -1144,9 +1324,13 @@ class CycleWebService:
             scorecard = svc.get_scorecard(org_id, coerce_uuid(scorecard_id))
             context = base_context(request, auth, "Finalize Scorecard", "perf", db=db)
             context["request"] = request
-            context.update({
-                "scorecard": scorecard,
-                "form_data": dict(form_data),
-                "error": str(e),
-            })
-            return templates.TemplateResponse(request, "people/perf/scorecard_finalize_form.html", context)
+            context.update(
+                {
+                    "scorecard": scorecard,
+                    "form_data": dict(form_data),
+                    "error": str(e),
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/perf/scorecard_finalize_form.html", context
+            )

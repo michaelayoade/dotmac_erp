@@ -3,19 +3,21 @@ Payment Service.
 
 Handles payment intent creation and processing for Paystack integration.
 """
+
 import logging
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Any, Optional, cast
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Any, Optional
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.domain_settings import SettingDomain
 from app.models.finance.ar.customer import Customer
-from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 from app.models.finance.ar.customer_payment import PaymentMethod
+from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 from app.models.finance.payments.payment_intent import (
     PaymentDirection,
     PaymentIntent,
@@ -26,7 +28,6 @@ from app.models.finance.payments.transfer_batch import (
     TransferBatchItemStatus,
     TransferBatchStatus,
 )
-from app.models.domain_settings import SettingDomain
 from app.services.common import coerce_uuid
 from app.services.finance.payments.paystack_client import (
     PaystackClient,
@@ -56,9 +57,13 @@ class PaymentService:
         organization_id: Optional[UUID] = None,
     ) -> Optional[PaymentIntent]:
         """Get a payment intent by reference (optionally scoped to org)."""
-        query = db.query(PaymentIntent).filter(PaymentIntent.paystack_reference == reference)
+        query = db.query(PaymentIntent).filter(
+            PaymentIntent.paystack_reference == reference
+        )
         if organization_id is not None:
-            query = query.filter(PaymentIntent.organization_id == coerce_uuid(organization_id))
+            query = query.filter(
+                PaymentIntent.organization_id == coerce_uuid(organization_id)
+            )
         return query.first()
 
     def create_invoice_payment_intent(
@@ -88,7 +93,9 @@ class PaymentService:
         # Get invoice
         invoice = self.db.get(Invoice, inv_id)
         if not invoice:
-            raise HTTPException(status_code=404, detail=f"Invoice {invoice_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Invoice {invoice_id} not found"
+            )
         if invoice.organization_id != self.organization_id:
             raise HTTPException(status_code=404, detail="Invoice not found")
 
@@ -138,7 +145,9 @@ class PaymentService:
         # Get customer and validate email
         customer = self.db.get(Customer, invoice.customer_id)
         if not customer:
-            raise HTTPException(status_code=400, detail="Customer not found for invoice")
+            raise HTTPException(
+                status_code=400, detail="Customer not found for invoice"
+            )
 
         # Get email from primary_contact JSONB field
         email = None
@@ -182,7 +191,9 @@ class PaymentService:
             try:
                 bank_account_uuid = coerce_uuid(collection_bank_account_id)
             except ValueError:
-                logger.warning(f"Invalid collection bank account ID: {collection_bank_account_id}")
+                logger.warning(
+                    f"Invalid collection bank account ID: {collection_bank_account_id}"
+                )
 
         # Create payment intent
         intent = PaymentIntent(
@@ -272,7 +283,9 @@ class PaymentService:
 
                 if result.paid_at:
                     try:
-                        paid_at = datetime.fromisoformat(result.paid_at.replace("Z", "+00:00"))
+                        paid_at = datetime.fromisoformat(
+                            result.paid_at.replace("Z", "+00:00")
+                        )
                     except ValueError:
                         paid_at = datetime.now(timezone.utc)
                 else:
@@ -358,10 +371,12 @@ class PaymentService:
             .filter(
                 PaymentIntent.organization_id == self.organization_id,
                 PaymentIntent.direction == PaymentDirection.OUTBOUND,
-                PaymentIntent.status.in_([
-                    PaymentIntentStatus.PENDING,
-                    PaymentIntentStatus.PROCESSING,
-                ]),
+                PaymentIntent.status.in_(
+                    [
+                        PaymentIntentStatus.PENDING,
+                        PaymentIntentStatus.PROCESSING,
+                    ]
+                ),
             )
             .order_by(PaymentIntent.created_at.desc())
             .all()
@@ -420,7 +435,10 @@ class PaymentService:
             )
 
         # Only process PENDING or PROCESSING intents
-        if locked_intent.status not in [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]:
+        if locked_intent.status not in [
+            PaymentIntentStatus.PENDING,
+            PaymentIntentStatus.PROCESSING,
+        ]:
             raise HTTPException(
                 status_code=400,
                 detail=f"Cannot process payment with status '{locked_intent.status.value}'",
@@ -459,8 +477,8 @@ class PaymentService:
 
         # Create customer payment using the service
         from app.services.finance.ar.customer_payment import (
-            CustomerPaymentService,
             CustomerPaymentInput,
+            CustomerPaymentService,
             PaymentAllocationInput,
         )
 
@@ -512,7 +530,10 @@ class PaymentService:
                     # Log but don't fail - payment is still recorded
                     logger.warning(
                         f"Failed to auto-post payment {payment.payment_id}: {post_error}",
-                        extra={"payment_id": str(payment.payment_id), "error": str(post_error)},
+                        extra={
+                            "payment_id": str(payment.payment_id),
+                            "error": str(post_error),
+                        },
                     )
             else:
                 logger.info(
@@ -686,7 +707,9 @@ class PaymentService:
             .with_for_update(nowait=False)
         )
         if not claim:
-            raise HTTPException(status_code=404, detail=f"Expense claim {expense_claim_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Expense claim {expense_claim_id} not found"
+            )
         if claim.organization_id != self.organization_id:
             raise HTTPException(status_code=404, detail="Expense claim not found")
 
@@ -698,14 +721,18 @@ class PaymentService:
             )
 
         if claim.net_payable_amount is None or claim.net_payable_amount <= Decimal("0"):
-            raise HTTPException(status_code=400, detail="No amount payable for this claim")
+            raise HTTPException(
+                status_code=400, detail="No amount payable for this claim"
+            )
 
         # Get employee for recipient details
         from app.models.people.hr.employee import Employee
 
         employee = self.db.get(Employee, claim.employee_id)
         if not employee:
-            raise HTTPException(status_code=400, detail="Employee not found for expense claim")
+            raise HTTPException(
+                status_code=400, detail="Employee not found for expense claim"
+            )
 
         email = employee.work_email or employee.personal_email
         if not email:
@@ -723,7 +750,9 @@ class PaymentService:
             try:
                 bank_account_uuid = coerce_uuid(transfer_bank_account_id)
             except ValueError:
-                logger.warning(f"Invalid transfer bank account ID: {transfer_bank_account_id}")
+                logger.warning(
+                    f"Invalid transfer bank account ID: {transfer_bank_account_id}"
+                )
 
         # Generate unique reference
         short_uuid = uuid4().hex[:8]
@@ -905,7 +934,9 @@ class PaymentService:
                 },
             )
             # Process as successful immediately
-            intent.status = PaymentIntentStatus.PROCESSING  # Set first for the lock check
+            intent.status = (
+                PaymentIntentStatus.PROCESSING
+            )  # Set first for the lock check
             self.db.flush()
             self.process_successful_transfer(
                 intent=intent,
@@ -1042,7 +1073,9 @@ class PaymentService:
         system_user_id = None
         if claim and intent.bank_account_id:
             try:
-                from app.services.expense.expense_posting_adapter import ExpensePostingAdapter
+                from app.services.expense.expense_posting_adapter import (
+                    ExpensePostingAdapter,
+                )
 
                 # Get a system user ID for posting
                 system_user_id = claim.created_by_id
@@ -1068,7 +1101,9 @@ class PaymentService:
                             f"Auto-posted expense reimbursement {claim.claim_number} to GL",
                             extra={
                                 "claim_id": str(claim.claim_id),
-                                "journal_entry_id": str(posting_result.journal_entry_id),
+                                "journal_entry_id": str(
+                                    posting_result.journal_entry_id
+                                ),
                             },
                         )
                     else:
@@ -1094,7 +1129,8 @@ class PaymentService:
                 intent=intent,
                 fee_amount=fee_amount,
                 posting_date=completed_at.date(),
-                system_user_id=system_user_id or (claim.created_by_id if claim else None),
+                system_user_id=system_user_id
+                or (claim.created_by_id if claim else None),
             )
 
         logger.info(
@@ -1130,20 +1166,22 @@ class PaymentService:
 
         if not fee_account_id:
             logger.debug(
-                f"Transfer fee not posted - no fee account configured",
+                "Transfer fee not posted - no fee account configured",
                 extra={"intent_id": str(intent.intent_id), "fee": str(fee_amount)},
             )
             return
 
         if not system_user_id:
             logger.warning(
-                f"Transfer fee not posted - no user ID available",
+                "Transfer fee not posted - no user ID available",
                 extra={"intent_id": str(intent.intent_id)},
             )
             return
 
         try:
-            from app.services.expense.expense_posting_adapter import ExpensePostingAdapter
+            from app.services.expense.expense_posting_adapter import (
+                ExpensePostingAdapter,
+            )
 
             fee_account_uuid = coerce_uuid(fee_account_id)
 
@@ -1170,7 +1208,7 @@ class PaymentService:
             if fee_result.success:
                 intent.fee_journal_id = fee_result.journal_entry_id
                 logger.info(
-                    f"Posted transfer fee to GL",
+                    "Posted transfer fee to GL",
                     extra={
                         "intent_id": str(intent.intent_id),
                         "fee": str(fee_amount),
@@ -1399,7 +1437,10 @@ class PaymentService:
             return
 
         # Can only reverse COMPLETED or PROCESSING transfers
-        if intent.status not in [PaymentIntentStatus.COMPLETED, PaymentIntentStatus.PROCESSING]:
+        if intent.status not in [
+            PaymentIntentStatus.COMPLETED,
+            PaymentIntentStatus.PROCESSING,
+        ]:
             logger.warning(
                 f"Cannot reverse intent {intent.intent_id} with status '{intent.status.value}'"
             )
@@ -1464,7 +1505,7 @@ class PaymentService:
 
         system_user_id = claim.created_by_id
         if not system_user_id:
-            logger.warning(f"Cannot post reversal entries - no user ID")
+            logger.warning("Cannot post reversal entries - no user ID")
             return
         if intent.bank_account_id is None:
             logger.warning("Cannot post reversal entries - missing bank account")

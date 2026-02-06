@@ -10,6 +10,7 @@ This migration creates:
 - Tables: vehicle, vehicle_assignment, vehicle_document, maintenance_record,
           fuel_log_entry, vehicle_incident, vehicle_reservation
 """
+
 from alembic import op
 from app.alembic_utils import ensure_enum
 

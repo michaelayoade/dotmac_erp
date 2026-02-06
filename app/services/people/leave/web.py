@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from decimal import Decimal
 from typing import Any, Optional, cast
@@ -26,6 +27,8 @@ from app.services.people.leave.leave_service import (
 )
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
+
+logger = logging.getLogger(__name__)
 
 
 class LeaveWebService:
@@ -199,7 +202,9 @@ class LeaveWebService:
                 "error": error,
             }
         )
-        return templates.TemplateResponse(request, "people/leave/applications.html", context)
+        return templates.TemplateResponse(
+            request, "people/leave/applications.html", context
+        )
 
     def leave_allocations_response(
         self,
@@ -257,7 +262,9 @@ class LeaveWebService:
                 "error": error,
             }
         )
-        return templates.TemplateResponse(request, "people/leave/allocations.html", context)
+        return templates.TemplateResponse(
+            request, "people/leave/allocations.html", context
+        )
 
     def leave_holidays_response(
         self,
@@ -291,7 +298,9 @@ class LeaveWebService:
                 "has_next": result.has_next,
             }
         )
-        return templates.TemplateResponse(request, "people/leave/holidays.html", context)
+        return templates.TemplateResponse(
+            request, "people/leave/holidays.html", context
+        )
 
     def new_leave_type_form_response(
         self,
@@ -301,7 +310,9 @@ class LeaveWebService:
     ) -> HTMLResponse:
         """New leave type form."""
         context = base_context(request, auth, "New Leave Type", "leave", db=db)
-        return templates.TemplateResponse(request, "people/leave/leave_type_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/leave/leave_type_form.html", context
+        )
 
     async def create_leave_type_response(
         self,
@@ -324,16 +335,26 @@ class LeaveWebService:
             context = base_context(request, auth, "New Leave Type", "leave", db=db)
             context["error"] = "Leave type code and name are required."
             context["form_data"] = dict(form)
-            return templates.TemplateResponse(request, "people/leave/leave_type_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/leave/leave_type_form.html", context
+            )
 
         try:
             max_days = LeaveWebService._get_form_str(form, "max_days_per_year")
             max_continuous = LeaveWebService._get_form_str(form, "max_continuous_days")
             max_carry = LeaveWebService._get_form_str(form, "max_carry_forward_days")
-            carry_forward_expiry = LeaveWebService._get_form_str(form, "carry_forward_expiry_months")
-            encash_threshold = LeaveWebService._get_form_str(form, "encashment_threshold_days")
-            applicable_after_days = LeaveWebService._get_form_str(form, "applicable_after_days")
-            max_optional_leaves = LeaveWebService._get_form_str(form, "max_optional_leaves")
+            carry_forward_expiry = LeaveWebService._get_form_str(
+                form, "carry_forward_expiry_months"
+            )
+            encash_threshold = LeaveWebService._get_form_str(
+                form, "encashment_threshold_days"
+            )
+            applicable_after_days = LeaveWebService._get_form_str(
+                form, "applicable_after_days"
+            )
+            max_optional_leaves = LeaveWebService._get_form_str(
+                form, "max_optional_leaves"
+            )
 
             svc.create_leave_type(
                 org_id,
@@ -341,17 +362,32 @@ class LeaveWebService:
                 leave_type_name=leave_type_name,
                 max_days_per_year=Decimal(max_days) if max_days else None,
                 max_continuous_days=int(max_continuous) if max_continuous else None,
-                allow_carry_forward=LeaveWebService._get_form_str(form, "allow_carry_forward") == "true",
+                allow_carry_forward=LeaveWebService._get_form_str(
+                    form, "allow_carry_forward"
+                )
+                == "true",
                 max_carry_forward_days=Decimal(max_carry) if max_carry else None,
-                carry_forward_expiry_months=int(carry_forward_expiry) if carry_forward_expiry else None,
-                allow_encashment=LeaveWebService._get_form_str(form, "allow_encashment") == "true",
-                encashment_threshold_days=Decimal(encash_threshold) if encash_threshold else None,
+                carry_forward_expiry_months=int(carry_forward_expiry)
+                if carry_forward_expiry
+                else None,
+                allow_encashment=LeaveWebService._get_form_str(form, "allow_encashment")
+                == "true",
+                encashment_threshold_days=Decimal(encash_threshold)
+                if encash_threshold
+                else None,
                 is_lwp=LeaveWebService._get_form_str(form, "is_lwp") == "true",
-                is_optional=LeaveWebService._get_form_str(form, "is_optional") == "true",
-                is_compensatory=LeaveWebService._get_form_str(form, "is_compensatory") == "true",
-                include_holidays=LeaveWebService._get_form_str(form, "include_holidays") == "true",
-                applicable_after_days=int(applicable_after_days) if applicable_after_days else 0,
-                max_optional_leaves=int(max_optional_leaves) if max_optional_leaves else None,
+                is_optional=LeaveWebService._get_form_str(form, "is_optional")
+                == "true",
+                is_compensatory=LeaveWebService._get_form_str(form, "is_compensatory")
+                == "true",
+                include_holidays=LeaveWebService._get_form_str(form, "include_holidays")
+                == "true",
+                applicable_after_days=int(applicable_after_days)
+                if applicable_after_days
+                else 0,
+                max_optional_leaves=int(max_optional_leaves)
+                if max_optional_leaves
+                else None,
                 is_active=LeaveWebService._get_form_str(form, "is_active") == "true",
                 description=LeaveWebService._get_form_str(form, "description") or None,
             )
@@ -362,7 +398,9 @@ class LeaveWebService:
             context = base_context(request, auth, "New Leave Type", "leave", db=db)
             context["error"] = str(e)
             context["form_data"] = dict(form)
-            return templates.TemplateResponse(request, "people/leave/leave_type_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/leave/leave_type_form.html", context
+            )
 
     def edit_leave_type_form_response(
         self,
@@ -381,7 +419,9 @@ class LeaveWebService:
 
         context = base_context(request, auth, "Edit Leave Type", "leave", db=db)
         context["leave_type"] = leave_type
-        return templates.TemplateResponse(request, "people/leave/leave_type_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/leave/leave_type_form.html", context
+        )
 
     async def update_leave_type_response(
         self,
@@ -402,10 +442,18 @@ class LeaveWebService:
             max_days = LeaveWebService._get_form_str(form, "max_days_per_year")
             max_continuous = LeaveWebService._get_form_str(form, "max_continuous_days")
             max_carry = LeaveWebService._get_form_str(form, "max_carry_forward_days")
-            carry_forward_expiry = LeaveWebService._get_form_str(form, "carry_forward_expiry_months")
-            encash_threshold = LeaveWebService._get_form_str(form, "encashment_threshold_days")
-            applicable_after_days = LeaveWebService._get_form_str(form, "applicable_after_days")
-            max_optional_leaves = LeaveWebService._get_form_str(form, "max_optional_leaves")
+            carry_forward_expiry = LeaveWebService._get_form_str(
+                form, "carry_forward_expiry_months"
+            )
+            encash_threshold = LeaveWebService._get_form_str(
+                form, "encashment_threshold_days"
+            )
+            applicable_after_days = LeaveWebService._get_form_str(
+                form, "applicable_after_days"
+            )
+            max_optional_leaves = LeaveWebService._get_form_str(
+                form, "max_optional_leaves"
+            )
 
             svc.update_leave_type(
                 org_id,
@@ -413,17 +461,32 @@ class LeaveWebService:
                 leave_type_name=LeaveWebService._get_form_str(form, "leave_type_name"),
                 max_days_per_year=Decimal(max_days) if max_days else None,
                 max_continuous_days=int(max_continuous) if max_continuous else None,
-                allow_carry_forward=LeaveWebService._get_form_str(form, "allow_carry_forward") == "true",
+                allow_carry_forward=LeaveWebService._get_form_str(
+                    form, "allow_carry_forward"
+                )
+                == "true",
                 max_carry_forward_days=Decimal(max_carry) if max_carry else None,
-                carry_forward_expiry_months=int(carry_forward_expiry) if carry_forward_expiry else None,
-                allow_encashment=LeaveWebService._get_form_str(form, "allow_encashment") == "true",
-                encashment_threshold_days=Decimal(encash_threshold) if encash_threshold else None,
+                carry_forward_expiry_months=int(carry_forward_expiry)
+                if carry_forward_expiry
+                else None,
+                allow_encashment=LeaveWebService._get_form_str(form, "allow_encashment")
+                == "true",
+                encashment_threshold_days=Decimal(encash_threshold)
+                if encash_threshold
+                else None,
                 is_lwp=LeaveWebService._get_form_str(form, "is_lwp") == "true",
-                is_optional=LeaveWebService._get_form_str(form, "is_optional") == "true",
-                is_compensatory=LeaveWebService._get_form_str(form, "is_compensatory") == "true",
-                include_holidays=LeaveWebService._get_form_str(form, "include_holidays") == "true",
-                applicable_after_days=int(applicable_after_days) if applicable_after_days else None,
-                max_optional_leaves=int(max_optional_leaves) if max_optional_leaves else None,
+                is_optional=LeaveWebService._get_form_str(form, "is_optional")
+                == "true",
+                is_compensatory=LeaveWebService._get_form_str(form, "is_compensatory")
+                == "true",
+                include_holidays=LeaveWebService._get_form_str(form, "include_holidays")
+                == "true",
+                applicable_after_days=int(applicable_after_days)
+                if applicable_after_days
+                else None,
+                max_optional_leaves=int(max_optional_leaves)
+                if max_optional_leaves
+                else None,
                 is_active=LeaveWebService._get_form_str(form, "is_active") == "true",
                 description=LeaveWebService._get_form_str(form, "description") or None,
             )
@@ -435,10 +498,14 @@ class LeaveWebService:
             context["error"] = str(e)
             context["form_data"] = dict(form)
             try:
-                context["leave_type"] = svc.get_leave_type(org_id, coerce_uuid(leave_type_id))
+                context["leave_type"] = svc.get_leave_type(
+                    org_id, coerce_uuid(leave_type_id)
+                )
             except LeaveTypeNotFoundError:
                 pass
-            return templates.TemplateResponse(request, "people/leave/leave_type_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/leave/leave_type_form.html", context
+            )
 
     def new_allocation_form_response(
         self,
@@ -452,7 +519,9 @@ class LeaveWebService:
         context = base_context(request, auth, "New Leave Allocation", "leave", db=db)
         context["employees"] = self._get_employees(db, org_id)
         context["leave_types"] = svc.list_leave_types(org_id, is_active=True).items
-        return templates.TemplateResponse(request, "people/leave/allocation_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/leave/allocation_form.html", context
+        )
 
     async def create_allocation_response(
         self,
@@ -474,16 +543,24 @@ class LeaveWebService:
         to_date_str = LeaveWebService._get_form_str(form, "to_date")
         new_leaves = LeaveWebService._get_form_str(form, "new_leaves_allocated")
 
-        if not all([employee_id, leave_type_id, from_date_str, to_date_str, new_leaves]):
-            context = base_context(request, auth, "New Leave Allocation", "leave", db=db)
+        if not all(
+            [employee_id, leave_type_id, from_date_str, to_date_str, new_leaves]
+        ):
+            context = base_context(
+                request, auth, "New Leave Allocation", "leave", db=db
+            )
             context["error"] = "All required fields must be filled."
             context["form_data"] = dict(form)
             context["employees"] = self._get_employees(db, org_id)
             context["leave_types"] = svc.list_leave_types(org_id, is_active=True).items
-            return templates.TemplateResponse(request, "people/leave/allocation_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/leave/allocation_form.html", context
+            )
 
         try:
-            carry_forward = LeaveWebService._get_form_str(form, "carry_forward_leaves") or "0"
+            carry_forward = (
+                LeaveWebService._get_form_str(form, "carry_forward_leaves") or "0"
+            )
             svc.create_allocation(
                 org_id,
                 employee_id=coerce_uuid(employee_id),
@@ -498,20 +575,28 @@ class LeaveWebService:
             return RedirectResponse("/people/leave/allocations", status_code=303)
         except LeaveAllocationExistsError as e:
             db.rollback()
-            context = base_context(request, auth, "New Leave Allocation", "leave", db=db)
+            context = base_context(
+                request, auth, "New Leave Allocation", "leave", db=db
+            )
             context["error"] = str(e)
             context["form_data"] = dict(form)
             context["employees"] = self._get_employees(db, org_id)
             context["leave_types"] = svc.list_leave_types(org_id, is_active=True).items
-            return templates.TemplateResponse(request, "people/leave/allocation_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/leave/allocation_form.html", context
+            )
         except Exception as e:
             db.rollback()
-            context = base_context(request, auth, "New Leave Allocation", "leave", db=db)
+            context = base_context(
+                request, auth, "New Leave Allocation", "leave", db=db
+            )
             context["error"] = str(e)
             context["form_data"] = dict(form)
             context["employees"] = self._get_employees(db, org_id)
             context["leave_types"] = svc.list_leave_types(org_id, is_active=True).items
-            return templates.TemplateResponse(request, "people/leave/allocation_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/leave/allocation_form.html", context
+            )
 
     def view_allocation_response(
         self,
@@ -553,7 +638,9 @@ class LeaveWebService:
         context["applications"] = applications
         context["success"] = success
         context["error"] = error
-        return templates.TemplateResponse(request, "people/leave/allocation_detail.html", context)
+        return templates.TemplateResponse(
+            request, "people/leave/allocation_detail.html", context
+        )
 
     def edit_allocation_form_response(
         self,
@@ -574,7 +661,9 @@ class LeaveWebService:
         context["allocation"] = allocation
         context["employees"] = self._get_employees(db, org_id)
         context["leave_types"] = svc.list_leave_types(org_id, is_active=True).items
-        return templates.TemplateResponse(request, "people/leave/allocation_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/leave/allocation_form.html", context
+        )
 
     async def update_allocation_response(
         self,
@@ -592,8 +681,12 @@ class LeaveWebService:
         svc = LeaveService(db, auth)
 
         try:
-            new_leaves = LeaveWebService._get_form_str(form, "new_leaves_allocated") or "0"
-            carry_forward = LeaveWebService._get_form_str(form, "carry_forward_leaves") or "0"
+            new_leaves = (
+                LeaveWebService._get_form_str(form, "new_leaves_allocated") or "0"
+            )
+            carry_forward = (
+                LeaveWebService._get_form_str(form, "carry_forward_leaves") or "0"
+            )
             from_date_str = LeaveWebService._get_form_str(form, "from_date")
             to_date_str = LeaveWebService._get_form_str(form, "to_date")
 
@@ -607,19 +700,27 @@ class LeaveWebService:
                 notes=LeaveWebService._get_form_str(form, "notes") or None,
             )
             db.commit()
-            return RedirectResponse(f"/people/leave/allocations/{allocation_id}", status_code=303)
+            return RedirectResponse(
+                f"/people/leave/allocations/{allocation_id}", status_code=303
+            )
         except Exception as e:
             db.rollback()
-            context = base_context(request, auth, "Edit Leave Allocation", "leave", db=db)
+            context = base_context(
+                request, auth, "Edit Leave Allocation", "leave", db=db
+            )
             context["error"] = str(e)
             context["form_data"] = dict(form)
             try:
-                context["allocation"] = svc.get_allocation(org_id, coerce_uuid(allocation_id))
+                context["allocation"] = svc.get_allocation(
+                    org_id, coerce_uuid(allocation_id)
+                )
             except LeaveAllocationNotFoundError:
                 pass
             context["employees"] = self._get_employees(db, org_id)
             context["leave_types"] = svc.list_leave_types(org_id, is_active=True).items
-            return templates.TemplateResponse(request, "people/leave/allocation_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/leave/allocation_form.html", context
+            )
 
     def delete_allocation_response(
         self,
@@ -705,14 +806,18 @@ class LeaveWebService:
             if notes:
                 encash_note = f"Encashed {encash_days} days on {date.today().isoformat()}: {notes}"
             else:
-                encash_note = f"Encashed {encash_days} days on {date.today().isoformat()}"
+                encash_note = (
+                    f"Encashed {encash_days} days on {date.today().isoformat()}"
+                )
 
             if new_notes:
                 new_notes = f"{new_notes}\n{encash_note}"
             else:
                 new_notes = encash_note
 
-            svc.update_allocation(org_id, alloc_id, leaves_encashed=new_encashed, notes=new_notes)
+            svc.update_allocation(
+                org_id, alloc_id, leaves_encashed=new_encashed, notes=new_notes
+            )
             db.commit()
 
             success_msg = quote(f"Successfully encashed {encash_days} days")
@@ -746,7 +851,9 @@ class LeaveWebService:
         from_date_str = LeaveWebService._get_form_str(form, "from_date")
         to_date_str = LeaveWebService._get_form_str(form, "to_date")
         new_leaves = LeaveWebService._get_form_str(form, "new_leaves_allocated") or "0"
-        carry_forward = LeaveWebService._get_form_str(form, "carry_forward_leaves") or "0"
+        carry_forward = (
+            LeaveWebService._get_form_str(form, "carry_forward_leaves") or "0"
+        )
         notes = LeaveWebService._get_form_str(form, "notes") or None
 
         if not employee_ids:
@@ -793,11 +900,15 @@ class LeaveWebService:
             success_msg = quote(
                 f"Created {result['success_count']} allocation(s). {result['failed_count']} failed."
             )
-            return RedirectResponse(url=f"/people/leave/allocations?success={success_msg}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/leave/allocations?success={success_msg}", status_code=303
+            )
         except Exception as e:
             db.rollback()
             error_msg = quote(str(e))
-            return RedirectResponse(url=f"/people/leave/allocations?error={error_msg}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/leave/allocations?error={error_msg}", status_code=303
+            )
 
     def new_application_form_response(
         self,
@@ -811,7 +922,9 @@ class LeaveWebService:
         context = base_context(request, auth, "New Leave Application", "leave", db=db)
         context["employees"] = self._get_employees(db, org_id)
         context["leave_types"] = svc.list_leave_types(org_id, is_active=True).items
-        return templates.TemplateResponse(request, "people/leave/application_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/leave/application_form.html", context
+        )
 
     async def create_application_response(
         self,
@@ -833,12 +946,16 @@ class LeaveWebService:
         to_date_str = LeaveWebService._get_form_str(form, "to_date")
 
         if not all([employee_id, leave_type_id, from_date_str, to_date_str]):
-            context = base_context(request, auth, "New Leave Application", "leave", db=db)
+            context = base_context(
+                request, auth, "New Leave Application", "leave", db=db
+            )
             context["error"] = "Employee, leave type, and dates are required."
             context["form_data"] = dict(form)
             context["employees"] = self._get_employees(db, org_id)
             context["leave_types"] = svc.list_leave_types(org_id, is_active=True).items
-            return templates.TemplateResponse(request, "people/leave/application_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/leave/application_form.html", context
+            )
 
         try:
             half_day = LeaveWebService._get_form_str(form, "half_day") == "true"
@@ -856,30 +973,43 @@ class LeaveWebService:
                 from_date=date.fromisoformat(from_date_str),
                 to_date=date.fromisoformat(to_date_str),
                 half_day=half_day,
-                half_day_date=date.fromisoformat(half_day_date_str) if half_day_date_str else None,
+                half_day_date=date.fromisoformat(half_day_date_str)
+                if half_day_date_str
+                else None,
                 reason=LeaveWebService._get_form_str(form, "reason") or None,
                 leave_approver_id=leave_approver_id,
             )
             db.commit()
-            return RedirectResponse(f"/people/leave/applications/{application.application_id}", status_code=303)
+            return RedirectResponse(
+                f"/people/leave/applications/{application.application_id}",
+                status_code=303,
+            )
         except InsufficientLeaveBalanceError as e:
             db.rollback()
-            context = base_context(request, auth, "New Leave Application", "leave", db=db)
+            context = base_context(
+                request, auth, "New Leave Application", "leave", db=db
+            )
             context["error"] = (
                 f"Insufficient leave balance. Available: {e.available}, Requested: {e.requested}"
             )
             context["form_data"] = dict(form)
             context["employees"] = self._get_employees(db, org_id)
             context["leave_types"] = svc.list_leave_types(org_id, is_active=True).items
-            return templates.TemplateResponse(request, "people/leave/application_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/leave/application_form.html", context
+            )
         except Exception as e:
             db.rollback()
-            context = base_context(request, auth, "New Leave Application", "leave", db=db)
+            context = base_context(
+                request, auth, "New Leave Application", "leave", db=db
+            )
             context["error"] = str(e)
             context["form_data"] = dict(form)
             context["employees"] = self._get_employees(db, org_id)
             context["leave_types"] = svc.list_leave_types(org_id, is_active=True).items
-            return templates.TemplateResponse(request, "people/leave/application_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/leave/application_form.html", context
+            )
 
     def view_application_response(
         self,
@@ -912,7 +1042,9 @@ class LeaveWebService:
         context["employee"] = employee
         context["leave_type"] = leave_type
         context["approver"] = approver
-        return templates.TemplateResponse(request, "people/leave/application_detail.html", context)
+        return templates.TemplateResponse(
+            request, "people/leave/application_detail.html", context
+        )
 
     def edit_application_form_response(
         self,
@@ -933,7 +1065,9 @@ class LeaveWebService:
         context["application"] = application
         context["employees"] = self._get_employees(db, org_id)
         context["leave_types"] = svc.list_leave_types(org_id, is_active=True).items
-        return templates.TemplateResponse(request, "people/leave/application_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/leave/application_form.html", context
+        )
 
     async def update_application_response(
         self,
@@ -962,23 +1096,33 @@ class LeaveWebService:
                 from_date=date.fromisoformat(from_date_str) if from_date_str else None,
                 to_date=date.fromisoformat(to_date_str) if to_date_str else None,
                 half_day=half_day,
-                half_day_date=date.fromisoformat(half_day_date_str) if half_day_date_str else None,
+                half_day_date=date.fromisoformat(half_day_date_str)
+                if half_day_date_str
+                else None,
                 reason=LeaveWebService._get_form_str(form, "reason") or None,
             )
             db.commit()
-            return RedirectResponse(f"/people/leave/applications/{application_id}", status_code=303)
+            return RedirectResponse(
+                f"/people/leave/applications/{application_id}", status_code=303
+            )
         except Exception as e:
             db.rollback()
-            context = base_context(request, auth, "Edit Leave Application", "leave", db=db)
+            context = base_context(
+                request, auth, "Edit Leave Application", "leave", db=db
+            )
             context["error"] = str(e)
             context["form_data"] = dict(form)
             try:
-                context["application"] = svc.get_application(org_id, coerce_uuid(application_id))
+                context["application"] = svc.get_application(
+                    org_id, coerce_uuid(application_id)
+                )
             except LeaveApplicationNotFoundError:
                 pass
             context["employees"] = self._get_employees(db, org_id)
             context["leave_types"] = svc.list_leave_types(org_id, is_active=True).items
-            return templates.TemplateResponse(request, "people/leave/application_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/leave/application_form.html", context
+            )
 
     def approve_application_response(
         self,
@@ -1010,7 +1154,9 @@ class LeaveWebService:
             db.commit()
         except LeaveServiceError:
             db.rollback()
-        return RedirectResponse(f"/people/leave/applications/{application_id}", status_code=303)
+        return RedirectResponse(
+            f"/people/leave/applications/{application_id}", status_code=303
+        )
 
     async def reject_application_response(
         self,
@@ -1047,7 +1193,9 @@ class LeaveWebService:
             db.commit()
         except LeaveServiceError:
             db.rollback()
-        return RedirectResponse(f"/people/leave/applications/{application_id}", status_code=303)
+        return RedirectResponse(
+            f"/people/leave/applications/{application_id}", status_code=303
+        )
 
     def cancel_application_response(
         self,
@@ -1063,7 +1211,9 @@ class LeaveWebService:
             db.commit()
         except LeaveServiceError:
             db.rollback()
-        return RedirectResponse(f"/people/leave/applications/{application_id}", status_code=303)
+        return RedirectResponse(
+            f"/people/leave/applications/{application_id}", status_code=303
+        )
 
     def new_holiday_list_form_response(
         self,
@@ -1073,7 +1223,9 @@ class LeaveWebService:
     ) -> HTMLResponse:
         """New holiday list form."""
         context = base_context(request, auth, "New Holiday List", "leave", db=db)
-        return templates.TemplateResponse(request, "people/leave/holiday_list_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/leave/holiday_list_form.html", context
+        )
 
     async def create_holiday_list_response(
         self,
@@ -1098,22 +1250,31 @@ class LeaveWebService:
             context = base_context(request, auth, "New Holiday List", "leave", db=db)
             context["error"] = "List code, name, and dates are required."
             context["form_data"] = dict(form)
-            return templates.TemplateResponse(request, "people/leave/holiday_list_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/leave/holiday_list_form.html", context
+            )
 
         try:
             # Parse holidays from form
             holidays = []
             i = 0
             while True:
-                holiday_date = LeaveWebService._get_form_str(form, f"holidays[{i}][holiday_date]")
-                holiday_name = LeaveWebService._get_form_str(form, f"holidays[{i}][holiday_name]")
+                holiday_date = LeaveWebService._get_form_str(
+                    form, f"holidays[{i}][holiday_date]"
+                )
+                holiday_name = LeaveWebService._get_form_str(
+                    form, f"holidays[{i}][holiday_name]"
+                )
                 if not holiday_date or not holiday_name:
                     break
                 holidays.append(
                     {
                         "holiday_date": date.fromisoformat(holiday_date),
                         "holiday_name": holiday_name.strip(),
-                        "is_optional": LeaveWebService._get_form_str(form, f"holidays[{i}][is_optional]") == "on",
+                        "is_optional": LeaveWebService._get_form_str(
+                            form, f"holidays[{i}][is_optional]"
+                        )
+                        == "on",
                     }
                 )
                 i += 1
@@ -1137,7 +1298,9 @@ class LeaveWebService:
             context = base_context(request, auth, "New Holiday List", "leave", db=db)
             context["error"] = str(e)
             context["form_data"] = dict(form)
-            return templates.TemplateResponse(request, "people/leave/holiday_list_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/leave/holiday_list_form.html", context
+            )
 
     def view_holiday_list_response(
         self,
@@ -1156,7 +1319,9 @@ class LeaveWebService:
 
         context = base_context(request, auth, "Holiday List", "leave", db=db)
         context["holiday_list"] = holiday_list
-        return templates.TemplateResponse(request, "people/leave/holiday_list_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/leave/holiday_list_form.html", context
+        )
 
     def edit_holiday_list_form_response(
         self,
@@ -1175,7 +1340,9 @@ class LeaveWebService:
 
         context = base_context(request, auth, "Edit Holiday List", "leave", db=db)
         context["holiday_list"] = holiday_list
-        return templates.TemplateResponse(request, "people/leave/holiday_list_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/leave/holiday_list_form.html", context
+        )
 
     async def update_holiday_list_response(
         self,
@@ -1198,15 +1365,22 @@ class LeaveWebService:
             holidays = []
             i = 0
             while True:
-                holiday_date = LeaveWebService._get_form_str(form, f"holidays[{i}][holiday_date]")
-                holiday_name = LeaveWebService._get_form_str(form, f"holidays[{i}][holiday_name]")
+                holiday_date = LeaveWebService._get_form_str(
+                    form, f"holidays[{i}][holiday_date]"
+                )
+                holiday_name = LeaveWebService._get_form_str(
+                    form, f"holidays[{i}][holiday_name]"
+                )
                 if not holiday_date or not holiday_name:
                     break
                 holidays.append(
                     {
                         "holiday_date": date.fromisoformat(holiday_date),
                         "holiday_name": holiday_name.strip(),
-                        "is_optional": LeaveWebService._get_form_str(form, f"holidays[{i}][is_optional]") == "on",
+                        "is_optional": LeaveWebService._get_form_str(
+                            form, f"holidays[{i}][is_optional]"
+                        )
+                        == "on",
                     }
                 )
                 i += 1
@@ -1229,10 +1403,14 @@ class LeaveWebService:
             context["error"] = str(e)
             context["form_data"] = dict(form)
             try:
-                context["holiday_list"] = svc.get_holiday_list(org_id, coerce_uuid(holiday_list_id))
+                context["holiday_list"] = svc.get_holiday_list(
+                    org_id, coerce_uuid(holiday_list_id)
+                )
             except HolidayListNotFoundError:
                 pass
-            return templates.TemplateResponse(request, "people/leave/holiday_list_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/leave/holiday_list_form.html", context
+            )
 
     def delete_holiday_list_response(
         self,
@@ -1285,7 +1463,9 @@ class LeaveWebService:
                 "department_id": department_id,
             }
         )
-        return templates.TemplateResponse(request, "people/leave/reports/balance.html", context)
+        return templates.TemplateResponse(
+            request, "people/leave/reports/balance.html", context
+        )
 
     def leave_usage_report_response(
         self,
@@ -1313,7 +1493,9 @@ class LeaveWebService:
                 "end_date": end_date or report["end_date"].isoformat(),
             }
         )
-        return templates.TemplateResponse(request, "people/leave/reports/usage.html", context)
+        return templates.TemplateResponse(
+            request, "people/leave/reports/usage.html", context
+        )
 
     def leave_calendar_report_response(
         self,
@@ -1353,7 +1535,9 @@ class LeaveWebService:
                 "department_id": department_id,
             }
         )
-        return templates.TemplateResponse(request, "people/leave/reports/calendar.html", context)
+        return templates.TemplateResponse(
+            request, "people/leave/reports/calendar.html", context
+        )
 
     def leave_trends_report_response(
         self,
@@ -1375,7 +1559,9 @@ class LeaveWebService:
                 "months": months,
             }
         )
-        return templates.TemplateResponse(request, "people/leave/reports/trends.html", context)
+        return templates.TemplateResponse(
+            request, "people/leave/reports/trends.html", context
+        )
 
     async def bulk_approve_applications_response(
         self,
@@ -1423,7 +1609,9 @@ class LeaveWebService:
         success_msg = quote(
             f"Successfully approved {result['updated']} of {result['requested']} application(s)"
         )
-        return RedirectResponse(url=f"/people/leave/applications?success={success_msg}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/leave/applications?success={success_msg}", status_code=303
+        )
 
     async def bulk_reject_applications_response(
         self,
@@ -1439,7 +1627,9 @@ class LeaveWebService:
             form = await request.form()
 
         application_ids = form.getlist("application_ids")
-        rejection_reason = LeaveWebService._get_form_str(form, "rejection_reason") or "Rejected"
+        rejection_reason = (
+            LeaveWebService._get_form_str(form, "rejection_reason") or "Rejected"
+        )
 
         if not application_ids:
             return RedirectResponse(
@@ -1471,8 +1661,12 @@ class LeaveWebService:
         )
         db.commit()
 
-        success_msg = quote(f"Rejected {result['updated']} of {result['requested']} application(s)")
-        return RedirectResponse(url=f"/people/leave/applications?success={success_msg}", status_code=303)
+        success_msg = quote(
+            f"Rejected {result['updated']} of {result['requested']} application(s)"
+        )
+        return RedirectResponse(
+            url=f"/people/leave/applications?success={success_msg}", status_code=303
+        )
 
 
 leave_web_service = LeaveWebService()

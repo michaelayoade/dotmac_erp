@@ -29,7 +29,9 @@ def upgrade() -> None:
     # Enums
     ensure_enum(bind, "price_list_type", "SALES", "PURCHASE")
     ensure_enum(bind, "bom_type", "ASSEMBLY", "KIT", "PHANTOM")
-    ensure_enum(bind, "count_status", "DRAFT", "IN_PROGRESS", "COMPLETED", "POSTED", "CANCELLED")
+    ensure_enum(
+        bind, "count_status", "DRAFT", "IN_PROGRESS", "COMPLETED", "POSTED", "CANCELLED"
+    )
 
     # Inventory lot enhancements
     if inspector.has_table("inventory_lot", schema="inv"):
@@ -196,7 +198,9 @@ def upgrade() -> None:
             sa.Column("item_id", UUID(as_uuid=True), nullable=False),
             sa.Column("unit_price", sa.Numeric(20, 6), nullable=False),
             sa.Column("currency_code", sa.String(3), nullable=False),
-            sa.Column("min_quantity", sa.Numeric(20, 6), nullable=False, server_default="1"),
+            sa.Column(
+                "min_quantity", sa.Numeric(20, 6), nullable=False, server_default="1"
+            ),
             sa.Column("discount_percent", sa.Numeric(10, 4), nullable=True),
             sa.Column("discount_amount", sa.Numeric(20, 6), nullable=True),
             sa.Column("effective_from", sa.Date, nullable=True),
@@ -261,7 +265,9 @@ def upgrade() -> None:
                 nullable=False,
                 server_default="ASSEMBLY",
             ),
-            sa.Column("output_quantity", sa.Numeric(20, 6), nullable=False, server_default="1"),
+            sa.Column(
+                "output_quantity", sa.Numeric(20, 6), nullable=False, server_default="1"
+            ),
             sa.Column("output_uom", sa.String(20), nullable=False),
             sa.Column("version", sa.Numeric(5, 0), nullable=False, server_default="1"),
             sa.Column("is_default", sa.Boolean, nullable=False, server_default="true"),
@@ -306,8 +312,12 @@ def upgrade() -> None:
             sa.Column("component_item_id", UUID(as_uuid=True), nullable=False),
             sa.Column("quantity", sa.Numeric(20, 6), nullable=False),
             sa.Column("uom", sa.String(20), nullable=False),
-            sa.Column("scrap_percent", sa.Numeric(10, 4), nullable=False, server_default="0"),
-            sa.Column("line_number", sa.Numeric(5, 0), nullable=False, server_default="1"),
+            sa.Column(
+                "scrap_percent", sa.Numeric(10, 4), nullable=False, server_default="0"
+            ),
+            sa.Column(
+                "line_number", sa.Numeric(5, 0), nullable=False, server_default="1"
+            ),
             sa.Column("warehouse_id", UUID(as_uuid=True), nullable=True),
             sa.Column("is_active", sa.Boolean, nullable=False, server_default="true"),
             sa.Column(
@@ -359,8 +369,12 @@ def upgrade() -> None:
             sa.Column("warehouse_id", UUID(as_uuid=True), nullable=True),
             sa.Column("location_id", UUID(as_uuid=True), nullable=True),
             sa.Column("category_id", UUID(as_uuid=True), nullable=True),
-            sa.Column("is_full_count", sa.Boolean, nullable=False, server_default="false"),
-            sa.Column("is_cycle_count", sa.Boolean, nullable=False, server_default="false"),
+            sa.Column(
+                "is_full_count", sa.Boolean, nullable=False, server_default="false"
+            ),
+            sa.Column(
+                "is_cycle_count", sa.Boolean, nullable=False, server_default="false"
+            ),
             sa.Column(
                 "status",
                 postgresql.ENUM(
@@ -377,7 +391,9 @@ def upgrade() -> None:
             ),
             sa.Column("total_items", sa.Integer, nullable=False, server_default="0"),
             sa.Column("items_counted", sa.Integer, nullable=False, server_default="0"),
-            sa.Column("items_with_variance", sa.Integer, nullable=False, server_default="0"),
+            sa.Column(
+                "items_with_variance", sa.Integer, nullable=False, server_default="0"
+            ),
             sa.Column("adjustment_journal_entry_id", UUID(as_uuid=True), nullable=True),
             sa.Column("created_by_user_id", UUID(as_uuid=True), nullable=False),
             sa.Column("approved_by_user_id", UUID(as_uuid=True), nullable=True),

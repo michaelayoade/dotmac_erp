@@ -6,11 +6,12 @@ Provides view-focused data and operations for attendance web routes.
 
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from typing import Any, Optional, cast
-from uuid import UUID
 from urllib.parse import quote
+from uuid import UUID
 
 from fastapi import Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -22,6 +23,8 @@ from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.attendance import AttendanceService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
+
+logger = logging.getLogger(__name__)
 
 
 class AttendanceWebService:
@@ -105,6 +108,7 @@ class AttendanceWebService:
     def _get_employees(db: Session, org_id: UUID) -> list[Employee]:
         """Get active employees for dropdowns."""
         from sqlalchemy import select
+
         from app.models.person import Person
 
         stmt = (
@@ -207,7 +211,9 @@ class AttendanceWebService:
                 "error": error,
             }
         )
-        return templates.TemplateResponse(request, "people/attendance/records.html", context)
+        return templates.TemplateResponse(
+            request, "people/attendance/records.html", context
+        )
 
     @staticmethod
     def delete_attendance_record_response(
@@ -234,20 +240,21 @@ class AttendanceWebService:
             form = await request.form()
 
         employee_ids = form.getlist("employee_ids")
-        attendance_date_str = AttendanceWebService._get_form_str(form, "attendance_date")
+        attendance_date_str = AttendanceWebService._get_form_str(
+            form, "attendance_date"
+        )
         status_str = AttendanceWebService._get_form_str(form, "status")
         shift_type_id = AttendanceWebService._get_form_str(form, "shift_type_id")
 
         if not employee_ids:
             return RedirectResponse(
-                url="/people/attendance?error=No+employees+selected",
-                status_code=303
+                url="/people/attendance?error=No+employees+selected", status_code=303
             )
 
         if not attendance_date_str or not status_str:
             return RedirectResponse(
                 url="/people/attendance?error=Date+and+status+are+required",
-                status_code=303
+                status_code=303,
             )
 
         valid_ids = []
@@ -260,7 +267,7 @@ class AttendanceWebService:
         if not valid_ids:
             return RedirectResponse(
                 url="/people/attendance?error=No+valid+employees+selected",
-                status_code=303
+                status_code=303,
             )
 
         try:
@@ -279,11 +286,15 @@ class AttendanceWebService:
             success_msg = quote(
                 f"Marked attendance for {result['success_count']} employee(s). {result['failed_count']} failed."
             )
-            return RedirectResponse(url=f"/people/attendance?success={success_msg}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/attendance?success={success_msg}", status_code=303
+            )
         except Exception as e:
             db.rollback()
             error_msg = quote(str(e))
-            return RedirectResponse(url=f"/people/attendance?error={error_msg}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/attendance?error={error_msg}", status_code=303
+            )
 
     @staticmethod
     def attendance_shifts_response(
@@ -340,7 +351,9 @@ class AttendanceWebService:
                 "has_next": result.has_next,
             }
         )
-        return templates.TemplateResponse(request, "people/attendance/shifts.html", context)
+        return templates.TemplateResponse(
+            request, "people/attendance/shifts.html", context
+        )
 
     @staticmethod
     def new_attendance_form_response(
@@ -372,7 +385,9 @@ class AttendanceWebService:
         context["statuses"] = [s.value for s in AttendanceStatus]
         context["employees"] = employees
         context["shifts"] = shifts
-        return templates.TemplateResponse(request, "people/attendance/record_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/attendance/record_form.html", context
+        )
 
     @staticmethod
     async def create_attendance_response(
@@ -427,7 +442,9 @@ class AttendanceWebService:
             context["employees"] = employees
             context["shifts"] = shifts
             context["error"] = "Employee, date, and status are required."
-            return templates.TemplateResponse(request, "people/attendance/record_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/attendance/record_form.html", context
+            )
 
         try:
             org_id = coerce_uuid(auth.organization_id)
@@ -469,7 +486,9 @@ class AttendanceWebService:
             context["employees"] = employees
             context["shifts"] = shifts
             context["error"] = str(exc)
-            return templates.TemplateResponse(request, "people/attendance/record_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/attendance/record_form.html", context
+            )
 
     @staticmethod
     def new_shift_form_response(
@@ -483,7 +502,9 @@ class AttendanceWebService:
         context["form_data"] = {}
         context["form_action"] = "/people/attendance/shifts/new"
         context["is_edit"] = False
-        return templates.TemplateResponse(request, "people/attendance/shift_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/attendance/shift_form.html", context
+        )
 
     @staticmethod
     async def create_shift_response(
@@ -501,13 +522,23 @@ class AttendanceWebService:
         end_time = AttendanceWebService._get_form_str(form, "end_time")
         working_hours = AttendanceWebService._get_form_str(form, "working_hours")
         description = AttendanceWebService._get_form_str(form, "description")
-        late_entry_grace_period = AttendanceWebService._get_form_str(form, "late_entry_grace_period")
-        early_exit_grace_period = AttendanceWebService._get_form_str(form, "early_exit_grace_period")
+        late_entry_grace_period = AttendanceWebService._get_form_str(
+            form, "late_entry_grace_period"
+        )
+        early_exit_grace_period = AttendanceWebService._get_form_str(
+            form, "early_exit_grace_period"
+        )
         enable_half_day = AttendanceWebService._get_form_str(form, "enable_half_day")
-        half_day_threshold_hours = AttendanceWebService._get_form_str(form, "half_day_threshold_hours")
+        half_day_threshold_hours = AttendanceWebService._get_form_str(
+            form, "half_day_threshold_hours"
+        )
         enable_overtime = AttendanceWebService._get_form_str(form, "enable_overtime")
-        overtime_threshold_hours = AttendanceWebService._get_form_str(form, "overtime_threshold_hours")
-        break_duration_minutes = AttendanceWebService._get_form_str(form, "break_duration_minutes")
+        overtime_threshold_hours = AttendanceWebService._get_form_str(
+            form, "overtime_threshold_hours"
+        )
+        break_duration_minutes = AttendanceWebService._get_form_str(
+            form, "break_duration_minutes"
+        )
         is_active = AttendanceWebService._get_form_str(form, "is_active")
 
         svc = AttendanceService(db)
@@ -536,8 +567,12 @@ class AttendanceWebService:
             context["form_data"] = form_data
             context["form_action"] = "/people/attendance/shifts/new"
             context["is_edit"] = False
-            context["error"] = "Shift code, shift name, start time, and end time are required."
-            return templates.TemplateResponse(request, "people/attendance/shift_form.html", context)
+            context["error"] = (
+                "Shift code, shift name, start time, and end time are required."
+            )
+            return templates.TemplateResponse(
+                request, "people/attendance/shift_form.html", context
+            )
 
         try:
             svc.create_shift_type(
@@ -548,13 +583,27 @@ class AttendanceWebService:
                 end_time=AttendanceWebService._parse_time(end_time),
                 working_hours=AttendanceWebService._parse_decimal(working_hours),
                 description=description or None,
-                late_entry_grace_period=AttendanceWebService._parse_int(late_entry_grace_period, 0),
-                early_exit_grace_period=AttendanceWebService._parse_int(early_exit_grace_period, 0),
-                enable_half_day=AttendanceWebService._parse_bool(enable_half_day, False),
-                half_day_threshold_hours=AttendanceWebService._parse_decimal(half_day_threshold_hours),
-                enable_overtime=AttendanceWebService._parse_bool(enable_overtime, False),
-                overtime_threshold_hours=AttendanceWebService._parse_decimal(overtime_threshold_hours),
-                break_duration_minutes=AttendanceWebService._parse_int(break_duration_minutes, 60),
+                late_entry_grace_period=AttendanceWebService._parse_int(
+                    late_entry_grace_period, 0
+                ),
+                early_exit_grace_period=AttendanceWebService._parse_int(
+                    early_exit_grace_period, 0
+                ),
+                enable_half_day=AttendanceWebService._parse_bool(
+                    enable_half_day, False
+                ),
+                half_day_threshold_hours=AttendanceWebService._parse_decimal(
+                    half_day_threshold_hours
+                ),
+                enable_overtime=AttendanceWebService._parse_bool(
+                    enable_overtime, False
+                ),
+                overtime_threshold_hours=AttendanceWebService._parse_decimal(
+                    overtime_threshold_hours
+                ),
+                break_duration_minutes=AttendanceWebService._parse_int(
+                    break_duration_minutes, 60
+                ),
                 is_active=AttendanceWebService._parse_bool(is_active, False),
             )
             db.commit()
@@ -567,7 +616,9 @@ class AttendanceWebService:
             context["form_action"] = "/people/attendance/shifts/new"
             context["is_edit"] = False
             context["error"] = str(exc)
-            return templates.TemplateResponse(request, "people/attendance/shift_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/attendance/shift_form.html", context
+            )
 
     @staticmethod
     def edit_shift_form_response(
@@ -602,7 +653,9 @@ class AttendanceWebService:
         )
         context["form_action"] = f"/people/attendance/shifts/{shift_type_id}/edit"
         context["is_edit"] = True
-        return templates.TemplateResponse(request, "people/attendance/shift_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/attendance/shift_form.html", context
+        )
 
     @staticmethod
     async def update_shift_response(
@@ -621,13 +674,23 @@ class AttendanceWebService:
         end_time = AttendanceWebService._get_form_str(form, "end_time")
         working_hours = AttendanceWebService._get_form_str(form, "working_hours")
         description = AttendanceWebService._get_form_str(form, "description")
-        late_entry_grace_period = AttendanceWebService._get_form_str(form, "late_entry_grace_period")
-        early_exit_grace_period = AttendanceWebService._get_form_str(form, "early_exit_grace_period")
+        late_entry_grace_period = AttendanceWebService._get_form_str(
+            form, "late_entry_grace_period"
+        )
+        early_exit_grace_period = AttendanceWebService._get_form_str(
+            form, "early_exit_grace_period"
+        )
         enable_half_day = AttendanceWebService._get_form_str(form, "enable_half_day")
-        half_day_threshold_hours = AttendanceWebService._get_form_str(form, "half_day_threshold_hours")
+        half_day_threshold_hours = AttendanceWebService._get_form_str(
+            form, "half_day_threshold_hours"
+        )
         enable_overtime = AttendanceWebService._get_form_str(form, "enable_overtime")
-        overtime_threshold_hours = AttendanceWebService._get_form_str(form, "overtime_threshold_hours")
-        break_duration_minutes = AttendanceWebService._get_form_str(form, "break_duration_minutes")
+        overtime_threshold_hours = AttendanceWebService._get_form_str(
+            form, "overtime_threshold_hours"
+        )
+        break_duration_minutes = AttendanceWebService._get_form_str(
+            form, "break_duration_minutes"
+        )
         is_active = AttendanceWebService._get_form_str(form, "is_active")
 
         form_data = {
@@ -648,13 +711,19 @@ class AttendanceWebService:
         }
 
         if not shift_code or not shift_name or not start_time or not end_time:
-            context = base_context(request, auth, "Edit Shift Type", "attendance", db=db)
+            context = base_context(
+                request, auth, "Edit Shift Type", "attendance", db=db
+            )
             context["request"] = request
             context["form_data"] = form_data
             context["form_action"] = f"/people/attendance/shifts/{shift_type_id}/edit"
             context["is_edit"] = True
-            context["error"] = "Shift code, shift name, start time, and end time are required."
-            return templates.TemplateResponse(request, "people/attendance/shift_form.html", context)
+            context["error"] = (
+                "Shift code, shift name, start time, and end time are required."
+            )
+            return templates.TemplateResponse(
+                request, "people/attendance/shift_form.html", context
+            )
 
         try:
             svc = AttendanceService(db)
@@ -668,26 +737,44 @@ class AttendanceWebService:
                 end_time=AttendanceWebService._parse_time(end_time),
                 working_hours=AttendanceWebService._parse_decimal(working_hours),
                 description=description or None,
-                late_entry_grace_period=AttendanceWebService._parse_int(late_entry_grace_period, 0),
-                early_exit_grace_period=AttendanceWebService._parse_int(early_exit_grace_period, 0),
-                enable_half_day=AttendanceWebService._parse_bool(enable_half_day, False),
-                half_day_threshold_hours=AttendanceWebService._parse_decimal(half_day_threshold_hours),
-                enable_overtime=AttendanceWebService._parse_bool(enable_overtime, False),
-                overtime_threshold_hours=AttendanceWebService._parse_decimal(overtime_threshold_hours),
-                break_duration_minutes=AttendanceWebService._parse_int(break_duration_minutes, 60),
+                late_entry_grace_period=AttendanceWebService._parse_int(
+                    late_entry_grace_period, 0
+                ),
+                early_exit_grace_period=AttendanceWebService._parse_int(
+                    early_exit_grace_period, 0
+                ),
+                enable_half_day=AttendanceWebService._parse_bool(
+                    enable_half_day, False
+                ),
+                half_day_threshold_hours=AttendanceWebService._parse_decimal(
+                    half_day_threshold_hours
+                ),
+                enable_overtime=AttendanceWebService._parse_bool(
+                    enable_overtime, False
+                ),
+                overtime_threshold_hours=AttendanceWebService._parse_decimal(
+                    overtime_threshold_hours
+                ),
+                break_duration_minutes=AttendanceWebService._parse_int(
+                    break_duration_minutes, 60
+                ),
                 is_active=AttendanceWebService._parse_bool(is_active, False),
             )
             db.commit()
             return RedirectResponse(url="/people/attendance/shifts", status_code=303)
         except Exception as exc:
             db.rollback()
-            context = base_context(request, auth, "Edit Shift Type", "attendance", db=db)
+            context = base_context(
+                request, auth, "Edit Shift Type", "attendance", db=db
+            )
             context["request"] = request
             context["form_data"] = form_data
             context["form_action"] = f"/people/attendance/shifts/{shift_type_id}/edit"
             context["is_edit"] = True
             context["error"] = str(exc)
-            return templates.TemplateResponse(request, "people/attendance/shift_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/attendance/shift_form.html", context
+            )
 
     @staticmethod
     def attendance_summary_report_response(
@@ -699,7 +786,7 @@ class AttendanceWebService:
         department_id: Optional[str],
     ) -> HTMLResponse:
         """Attendance summary report page."""
-        from app.services.people.hr import OrganizationService, DepartmentFilters
+        from app.services.people.hr import DepartmentFilters, OrganizationService
 
         org_id = coerce_uuid(auth.organization_id)
         svc = AttendanceService(db)
@@ -717,15 +804,21 @@ class AttendanceWebService:
             PaginationParams(limit=200),
         ).items
 
-        context = base_context(request, auth, "Attendance Summary Report", "attendance", db=db)
-        context.update({
-            "report": report,
-            "departments": departments,
-            "start_date": start_date or report["start_date"].isoformat(),
-            "end_date": end_date or report["end_date"].isoformat(),
-            "department_id": department_id,
-        })
-        return templates.TemplateResponse(request, "people/attendance/reports/summary.html", context)
+        context = base_context(
+            request, auth, "Attendance Summary Report", "attendance", db=db
+        )
+        context.update(
+            {
+                "report": report,
+                "departments": departments,
+                "start_date": start_date or report["start_date"].isoformat(),
+                "end_date": end_date or report["end_date"].isoformat(),
+                "department_id": department_id,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/attendance/reports/summary.html", context
+        )
 
     @staticmethod
     def attendance_by_employee_report_response(
@@ -737,7 +830,7 @@ class AttendanceWebService:
         department_id: Optional[str],
     ) -> HTMLResponse:
         """Attendance by employee report page."""
-        from app.services.people.hr import OrganizationService, DepartmentFilters
+        from app.services.people.hr import DepartmentFilters, OrganizationService
 
         org_id = coerce_uuid(auth.organization_id)
         svc = AttendanceService(db)
@@ -755,15 +848,21 @@ class AttendanceWebService:
             PaginationParams(limit=200),
         ).items
 
-        context = base_context(request, auth, "Attendance by Employee", "attendance", db=db)
-        context.update({
-            "report": report,
-            "departments": departments,
-            "start_date": start_date or report["start_date"].isoformat(),
-            "end_date": end_date or report["end_date"].isoformat(),
-            "department_id": department_id,
-        })
-        return templates.TemplateResponse(request, "people/attendance/reports/by_employee.html", context)
+        context = base_context(
+            request, auth, "Attendance by Employee", "attendance", db=db
+        )
+        context.update(
+            {
+                "report": report,
+                "departments": departments,
+                "start_date": start_date or report["start_date"].isoformat(),
+                "end_date": end_date or report["end_date"].isoformat(),
+                "department_id": department_id,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/attendance/reports/by_employee.html", context
+        )
 
     @staticmethod
     def attendance_late_early_report_response(
@@ -775,7 +874,7 @@ class AttendanceWebService:
         department_id: Optional[str],
     ) -> HTMLResponse:
         """Late arrivals and early departures report page."""
-        from app.services.people.hr import OrganizationService, DepartmentFilters
+        from app.services.people.hr import DepartmentFilters, OrganizationService
 
         org_id = coerce_uuid(auth.organization_id)
         svc = AttendanceService(db)
@@ -794,14 +893,18 @@ class AttendanceWebService:
         ).items
 
         context = base_context(request, auth, "Late/Early Report", "attendance", db=db)
-        context.update({
-            "report": report,
-            "departments": departments,
-            "start_date": start_date or report["start_date"].isoformat(),
-            "end_date": end_date or report["end_date"].isoformat(),
-            "department_id": department_id,
-        })
-        return templates.TemplateResponse(request, "people/attendance/reports/late_early.html", context)
+        context.update(
+            {
+                "report": report,
+                "departments": departments,
+                "start_date": start_date or report["start_date"].isoformat(),
+                "end_date": end_date or report["end_date"].isoformat(),
+                "department_id": department_id,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/attendance/reports/late_early.html", context
+        )
 
     @staticmethod
     def attendance_trends_report_response(
@@ -816,12 +919,18 @@ class AttendanceWebService:
 
         report = svc.get_attendance_trends_report(org_id, months=months)
 
-        context = base_context(request, auth, "Attendance Trends Report", "attendance", db=db)
-        context.update({
-            "report": report,
-            "months": months,
-        })
-        return templates.TemplateResponse(request, "people/attendance/reports/trends.html", context)
+        context = base_context(
+            request, auth, "Attendance Trends Report", "attendance", db=db
+        )
+        context.update(
+            {
+                "report": report,
+                "months": months,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/attendance/reports/trends.html", context
+        )
 
     @staticmethod
     def attendance_requests_list_response(
@@ -863,23 +972,29 @@ class AttendanceWebService:
             pagination=PaginationParams(offset=0, limit=1),
         )
 
-        context = base_context(request, auth, "Attendance Requests", "attendance", db=db)
-        context.update({
-            "requests": result.items,
-            "pending_count": pending_result.total,
-            "statuses": [s.value for s in AttendanceRequestStatus],
-            "status": status,
-            "start_date": start_date,
-            "end_date": end_date,
-            "page": result.page,
-            "total_pages": result.total_pages,
-            "total": result.total,
-            "has_prev": result.has_prev,
-            "has_next": result.has_next,
-            "success": success,
-            "error": error,
-        })
-        return templates.TemplateResponse(request, "people/attendance/requests.html", context)
+        context = base_context(
+            request, auth, "Attendance Requests", "attendance", db=db
+        )
+        context.update(
+            {
+                "requests": result.items,
+                "pending_count": pending_result.total,
+                "statuses": [s.value for s in AttendanceRequestStatus],
+                "status": status,
+                "start_date": start_date,
+                "end_date": end_date,
+                "page": result.page,
+                "total_pages": result.total_pages,
+                "total": result.total,
+                "has_prev": result.has_prev,
+                "has_next": result.has_next,
+                "success": success,
+                "error": error,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/attendance/requests.html", context
+        )
 
     @staticmethod
     def attendance_request_new_form_response(
@@ -893,13 +1008,19 @@ class AttendanceWebService:
         org_id = coerce_uuid(auth.organization_id)
         employees = AttendanceWebService._get_employees(db, org_id)
 
-        context = base_context(request, auth, "New Attendance Request", "attendance", db=db)
-        context.update({
-            "employees": employees,
-            "form_data": form_data or {},
-            "error": error,
-        })
-        return templates.TemplateResponse(request, "people/attendance/request_form.html", context)
+        context = base_context(
+            request, auth, "New Attendance Request", "attendance", db=db
+        )
+        context.update(
+            {
+                "employees": employees,
+                "form_data": form_data or {},
+                "error": error,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/attendance/request_form.html", context
+        )
 
     async def create_attendance_request_response(
         self,
@@ -934,7 +1055,9 @@ class AttendanceWebService:
 
         from_date = AttendanceWebService._parse_date(from_date_str)
         to_date = AttendanceWebService._parse_date(to_date_str)
-        half_day_date = AttendanceWebService._parse_date(half_day_date_str) if half_day else None
+        half_day_date = (
+            AttendanceWebService._parse_date(half_day_date_str) if half_day else None
+        )
 
         if not from_date or not to_date:
             return self.attendance_request_new_form_response(
@@ -958,7 +1081,10 @@ class AttendanceWebService:
             )
             db.commit()
             success_msg = quote("Attendance request submitted")
-            return RedirectResponse(url=f"/people/attendance/requests?success={success_msg}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/attendance/requests?success={success_msg}",
+                status_code=303,
+            )
         except Exception as e:
             db.rollback()
             return self.attendance_request_new_form_response(
@@ -981,7 +1107,9 @@ class AttendanceWebService:
         svc.approve_attendance_request(org_id, coerce_uuid(request_id))
         db.commit()
         success_msg = quote("Attendance request approved successfully")
-        return RedirectResponse(url=f"/people/attendance/requests?success={success_msg}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/attendance/requests?success={success_msg}", status_code=303
+        )
 
     @staticmethod
     def reject_attendance_request_response(
@@ -995,7 +1123,9 @@ class AttendanceWebService:
         svc.reject_attendance_request(org_id, coerce_uuid(request_id))
         db.commit()
         success_msg = quote("Attendance request rejected")
-        return RedirectResponse(url=f"/people/attendance/requests?success={success_msg}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/attendance/requests?success={success_msg}", status_code=303
+        )
 
     @staticmethod
     async def bulk_approve_attendance_requests_response(
@@ -1012,7 +1142,7 @@ class AttendanceWebService:
         if not request_ids:
             return RedirectResponse(
                 url="/people/attendance/requests?error=No+requests+selected",
-                status_code=303
+                status_code=303,
             )
 
         valid_ids = []
@@ -1025,7 +1155,7 @@ class AttendanceWebService:
         if not valid_ids:
             return RedirectResponse(
                 url="/people/attendance/requests?error=No+valid+requests+selected",
-                status_code=303
+                status_code=303,
             )
 
         org_id = coerce_uuid(auth.organization_id)
@@ -1034,7 +1164,9 @@ class AttendanceWebService:
         db.commit()
 
         success_msg = quote(f"Approved {result['approved']} request(s)")
-        return RedirectResponse(url=f"/people/attendance/requests?success={success_msg}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/attendance/requests?success={success_msg}", status_code=303
+        )
 
     @staticmethod
     async def bulk_reject_attendance_requests_response(
@@ -1051,7 +1183,7 @@ class AttendanceWebService:
         if not request_ids:
             return RedirectResponse(
                 url="/people/attendance/requests?error=No+requests+selected",
-                status_code=303
+                status_code=303,
             )
 
         valid_ids = []
@@ -1064,7 +1196,7 @@ class AttendanceWebService:
         if not valid_ids:
             return RedirectResponse(
                 url="/people/attendance/requests?error=No+valid+requests+selected",
-                status_code=303
+                status_code=303,
             )
 
         org_id = coerce_uuid(auth.organization_id)
@@ -1073,7 +1205,9 @@ class AttendanceWebService:
         db.commit()
 
         success_msg = quote(f"Rejected {result['rejected']} request(s)")
-        return RedirectResponse(url=f"/people/attendance/requests?success={success_msg}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/attendance/requests?success={success_msg}", status_code=303
+        )
 
 
 attendance_web_service = AttendanceWebService()

@@ -1,6 +1,8 @@
 """
 Warehouse Sync Service - ERPNext to DotMac ERP.
 """
+
+import logging
 import uuid
 from datetime import datetime
 from typing import Any, Optional
@@ -12,6 +14,8 @@ from app.models.inventory.warehouse import Warehouse
 from app.services.erpnext.mappings.warehouses import WarehouseMapping
 
 from .base import BaseSyncService
+
+logger = logging.getLogger(__name__)
 
 
 class WarehouseSyncService(BaseSyncService[Warehouse]):

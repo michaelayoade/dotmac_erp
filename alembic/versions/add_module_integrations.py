@@ -22,7 +22,9 @@ depends_on = None
 
 def _get_columns(inspector, table_name: str, schema: str) -> set[str]:
     """Get set of column names for a table."""
-    return {column["name"] for column in inspector.get_columns(table_name, schema=schema)}
+    return {
+        column["name"] for column in inspector.get_columns(table_name, schema=schema)
+    }
 
 
 def _index_names(inspector, table_name: str, schema: str) -> set[str]:
@@ -135,7 +137,9 @@ def upgrade() -> None:
         if "inventory_transaction_id" not in ar_line_columns:
             op.add_column(
                 "invoice_line",
-                sa.Column("inventory_transaction_id", UUID(as_uuid=True), nullable=True),
+                sa.Column(
+                    "inventory_transaction_id", UUID(as_uuid=True), nullable=True
+                ),
                 schema="ar",
             )
             # Add FK to inv.inventory_transaction
@@ -177,10 +181,14 @@ def downgrade() -> None:
         ar_line_indexes = _index_names(inspector, "invoice_line", "ar")
 
         if "idx_invoice_line_lot" in ar_line_indexes:
-            op.drop_index("idx_invoice_line_lot", table_name="invoice_line", schema="ar")
+            op.drop_index(
+                "idx_invoice_line_lot", table_name="invoice_line", schema="ar"
+            )
 
         if "idx_invoice_line_warehouse" in ar_line_indexes:
-            op.drop_index("idx_invoice_line_warehouse", table_name="invoice_line", schema="ar")
+            op.drop_index(
+                "idx_invoice_line_warehouse", table_name="invoice_line", schema="ar"
+            )
 
         if "inventory_transaction_id" in ar_line_columns:
             op.drop_constraint(

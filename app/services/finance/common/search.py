@@ -6,7 +6,7 @@ Provides reusable search filter functions for list queries.
 
 from __future__ import annotations
 
-from typing import Any, Optional, Sequence, Type, TypeVar, Union
+from typing import Any, Optional, Sequence, TypeVar
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Query

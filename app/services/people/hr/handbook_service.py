@@ -6,13 +6,11 @@ Provides operations for managing HR policy documents and employee acknowledgment
 
 import hashlib
 import logging
-import os
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
@@ -408,7 +406,9 @@ class HRDocumentService:
         # Return relative path
         relative_path = f"{org_id}/{safe_name}"
 
-        logger.info("Saved HR document file: %s (%d bytes)", relative_path, len(file_content))
+        logger.info(
+            "Saved HR document file: %s (%d bytes)", relative_path, len(file_content)
+        )
 
         return relative_path, len(file_content), content_hash
 
@@ -450,7 +450,9 @@ class HRDocumentService:
             raise HRDocumentValidationError("Employee not found in this organization")
 
         if not doc.requires_acknowledgment:
-            raise HRDocumentValidationError("This document does not require acknowledgment")
+            raise HRDocumentValidationError(
+                "This document does not require acknowledgment"
+            )
 
         if doc.status != DocumentStatus.ACTIVE:
             raise HRDocumentValidationError("Can only acknowledge active documents")
@@ -466,7 +468,8 @@ class HRDocumentService:
             employee_id=employee_id,
             ip_address=ip_address,
             user_agent=user_agent,
-            confirmation_text=confirmation_text or "I have read and understood this document.",
+            confirmation_text=confirmation_text
+            or "I have read and understood this document.",
             signature_data=signature_data,
         )
 
@@ -479,7 +482,9 @@ class HRDocumentService:
             # Check if it's a unique constraint violation
             from sqlalchemy.exc import IntegrityError
 
-            if isinstance(e, IntegrityError) and "uq_hr_doc_ack_document_employee" in str(e):
+            if isinstance(
+                e, IntegrityError
+            ) and "uq_hr_doc_ack_document_employee" in str(e):
                 # Race condition - acknowledgment was created by another request
                 logger.info(
                     "Acknowledgment race condition for employee %s, document %s",
@@ -518,7 +523,9 @@ class HRDocumentService:
         return self.db.scalar(
             select(HRDocumentAcknowledgment)
             .join(HRDocument)
-            .join(Employee, HRDocumentAcknowledgment.employee_id == Employee.employee_id)
+            .join(
+                Employee, HRDocumentAcknowledgment.employee_id == Employee.employee_id
+            )
             .where(
                 HRDocument.organization_id == org_id,
                 Employee.organization_id == org_id,
@@ -545,7 +552,9 @@ class HRDocumentService:
             .where(HRDocumentAcknowledgment.document_id == document_id)
         )
 
-        count_query = query.with_only_columns(func.count(HRDocumentAcknowledgment.acknowledgment_id))
+        count_query = query.with_only_columns(
+            func.count(HRDocumentAcknowledgment.acknowledgment_id)
+        )
         total = self.db.scalar(count_query) or 0
 
         query = query.order_by(HRDocumentAcknowledgment.acknowledged_at.desc())
@@ -574,18 +583,23 @@ class HRDocumentService:
 
         # Get active documents requiring acknowledgment
         active_docs = self.db.scalars(
-            select(HRDocument).where(
+            select(HRDocument)
+            .where(
                 HRDocument.organization_id == org_id,
                 HRDocument.status == DocumentStatus.ACTIVE,
                 HRDocument.requires_acknowledgment == True,
                 HRDocument.effective_date <= date.today(),
-            ).where(
-                (HRDocument.expiry_date.is_(None)) | (HRDocument.expiry_date >= date.today())
+            )
+            .where(
+                (HRDocument.expiry_date.is_(None))
+                | (HRDocument.expiry_date >= date.today())
             )
         ).all()
 
         # Filter out already acknowledged (in memory - no N+1)
-        return [doc for doc in active_docs if doc.document_id not in acknowledged_doc_ids]
+        return [
+            doc for doc in active_docs if doc.document_id not in acknowledged_doc_ids
+        ]
 
     def get_employee_acknowledgments(
         self,
@@ -623,23 +637,33 @@ class HRDocumentService:
         doc = self.get_document(org_id, document_id)
 
         # Count active employees
-        total_employees = self.db.scalar(
-            select(func.count(Employee.employee_id)).where(
-                Employee.organization_id == org_id,
-                Employee.status == "active",
-                Employee.is_deleted == False,
+        total_employees = (
+            self.db.scalar(
+                select(func.count(Employee.employee_id)).where(
+                    Employee.organization_id == org_id,
+                    Employee.status == "active",
+                    Employee.is_deleted == False,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Count acknowledgments
-        acknowledged_count = self.db.scalar(
-            select(func.count(HRDocumentAcknowledgment.acknowledgment_id)).where(
-                HRDocumentAcknowledgment.document_id == document_id,
+        acknowledged_count = (
+            self.db.scalar(
+                select(func.count(HRDocumentAcknowledgment.acknowledgment_id)).where(
+                    HRDocumentAcknowledgment.document_id == document_id,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         pending_count = total_employees - acknowledged_count
-        percentage = int((acknowledged_count / total_employees * 100)) if total_employees > 0 else 0
+        percentage = (
+            int((acknowledged_count / total_employees * 100))
+            if total_employees > 0
+            else 0
+        )
 
         return {
             "total_employees": total_employees,
@@ -668,13 +692,16 @@ class HRDocumentService:
             return {}
 
         # Count active employees (one query - shared across all docs)
-        total_employees = self.db.scalar(
-            select(func.count(Employee.employee_id)).where(
-                Employee.organization_id == org_id,
-                Employee.status == "active",
-                Employee.is_deleted == False,
+        total_employees = (
+            self.db.scalar(
+                select(func.count(Employee.employee_id)).where(
+                    Employee.organization_id == org_id,
+                    Employee.status == "active",
+                    Employee.is_deleted == False,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Get acknowledgment counts for all documents in one query
         ack_rows = self.db.execute(
@@ -696,7 +723,11 @@ class HRDocumentService:
         for doc_id in document_ids:
             acknowledged_count = ack_counts.get(doc_id, 0)
             pending_count = max(0, total_employees - acknowledged_count)
-            percentage = int((acknowledged_count / total_employees * 100)) if total_employees > 0 else 0
+            percentage = (
+                int((acknowledged_count / total_employees * 100))
+                if total_employees > 0
+                else 0
+            )
 
             stats_map[doc_id] = {
                 "total_employees": total_employees,

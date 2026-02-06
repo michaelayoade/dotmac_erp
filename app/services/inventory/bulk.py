@@ -6,6 +6,7 @@ Provides bulk operations for inventory items.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from uuid import UUID
 
@@ -14,6 +15,8 @@ from sqlalchemy.orm import Session
 from app.models.inventory.item import Item
 from app.models.inventory.transaction import InventoryTransaction
 from app.services.bulk_actions import BulkActionService
+
+logger = logging.getLogger(__name__)
 
 
 class ItemBulkService(BulkActionService[Item]):

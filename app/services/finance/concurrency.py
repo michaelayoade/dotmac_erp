@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Any, Optional, Type, TypeVar, cast
 from uuid import UUID
 
-from sqlalchemy import update, inspect
+from sqlalchemy import inspect, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
@@ -20,27 +20,31 @@ from app.services.common import coerce_uuid
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class ConcurrencyError(Exception):
     """Raised when a concurrent modification is detected."""
+
     pass
 
 
 class StaleDataError(ConcurrencyError):
     """Raised when the entity version doesn't match expected version."""
+
     pass
 
 
 class InvalidStatusTransitionError(ConcurrencyError):
     """Raised when attempting an invalid status transition."""
+
     pass
 
 
 @dataclass
 class TransitionResult:
     """Result of an atomic status transition."""
+
     success: bool
     new_version: int = 0
     entity: Optional[Any] = None
@@ -166,7 +170,10 @@ def atomic_status_transition(
         if current_version != expected_version:
             logger.warning(
                 "Stale data: %s %s version mismatch (expected=%d, current=%d)",
-                model_class.__name__, entity_id, expected_version, current_version
+                model_class.__name__,
+                entity_id,
+                expected_version,
+                current_version,
             )
             return TransitionResult(
                 success=False,
@@ -176,7 +183,10 @@ def atomic_status_transition(
         if current_status != from_status:
             logger.warning(
                 "Invalid transition: %s %s status mismatch (expected=%s, current=%s)",
-                model_class.__name__, entity_id, from_status, current_status
+                model_class.__name__,
+                entity_id,
+                from_status,
+                current_status,
             )
             return TransitionResult(
                 success=False,
@@ -198,8 +208,12 @@ def atomic_status_transition(
 
     logger.debug(
         "Atomic transition: %s %s %s -> %s (version %d -> %d)",
-        model_class.__name__, entity_id, from_status, to_status,
-        expected_version, new_version
+        model_class.__name__,
+        entity_id,
+        from_status,
+        to_status,
+        expected_version,
+        new_version,
     )
 
     return TransitionResult(

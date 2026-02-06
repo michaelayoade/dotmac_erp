@@ -19,7 +19,7 @@ from app.services.people.training import TrainingService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
-from .base import logger, parse_uuid, parse_decimal, parse_int, parse_program_status
+from .base import logger, parse_decimal, parse_int, parse_program_status
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,9 @@ class ProgramWebService:
     ) -> dict:
         """Build context for program create/edit form."""
         org_svc = OrganizationService(db, organization_id)
-        departments = org_svc.list_departments(pagination=PaginationParams(limit=200)).items
+        departments = org_svc.list_departments(
+            pagination=PaginationParams(limit=200)
+        ).items
 
         program = None
         if program_id:
@@ -120,7 +122,9 @@ class ProgramWebService:
             "program_name": form_data.get("program_name", ""),
             "training_type": form_data.get("training_type", "INTERNAL"),
             "category": form_data.get("category") or None,
-            "department_id": coerce_uuid(form_data["department_id"]) if form_data.get("department_id") else None,
+            "department_id": coerce_uuid(form_data["department_id"])
+            if form_data.get("department_id")
+            else None,
             "description": form_data.get("description") or None,
             "duration_hours": parse_int(form_data.get("duration_hours")),
             "duration_days": parse_int(form_data.get("duration_days")),
@@ -153,7 +157,9 @@ class ProgramWebService:
                 db, coerce_uuid(auth.organization_id), search, status, category, page
             )
         )
-        return templates.TemplateResponse(request, "people/training/programs.html", context)
+        return templates.TemplateResponse(
+            request, "people/training/programs.html", context
+        )
 
     def program_new_form_response(
         self,
@@ -165,7 +171,9 @@ class ProgramWebService:
         context = base_context(request, auth, "New Training Program", "training", db=db)
         context["request"] = request
         context.update(self.program_form_context(db, coerce_uuid(auth.organization_id)))
-        return templates.TemplateResponse(request, "people/training/program_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/training/program_form.html", context
+        )
 
     def program_detail_response(
         self,
@@ -176,16 +184,22 @@ class ProgramWebService:
         success: Optional[str] = None,
     ) -> HTMLResponse | RedirectResponse:
         """Render program detail page."""
-        ctx = self.program_detail_context(db, coerce_uuid(auth.organization_id), program_id)
+        ctx = self.program_detail_context(
+            db, coerce_uuid(auth.organization_id), program_id
+        )
 
         if not ctx.get("program"):
             return RedirectResponse(url="/people/training/programs", status_code=303)
 
-        context = base_context(request, auth, ctx["program"].program_name, "training", db=db)
+        context = base_context(
+            request, auth, ctx["program"].program_name, "training", db=db
+        )
         context["request"] = request
         context.update(ctx)
         context["success"] = success
-        return templates.TemplateResponse(request, "people/training/program_detail.html", context)
+        return templates.TemplateResponse(
+            request, "people/training/program_detail.html", context
+        )
 
     def program_edit_form_response(
         self,
@@ -195,15 +209,21 @@ class ProgramWebService:
         program_id: str,
     ) -> HTMLResponse | RedirectResponse:
         """Render program edit form."""
-        ctx = self.program_form_context(db, coerce_uuid(auth.organization_id), program_id)
+        ctx = self.program_form_context(
+            db, coerce_uuid(auth.organization_id), program_id
+        )
 
         if not ctx.get("program"):
             return RedirectResponse(url="/people/training/programs", status_code=303)
 
-        context = base_context(request, auth, f"Edit {ctx['program'].program_code}", "training", db=db)
+        context = base_context(
+            request, auth, f"Edit {ctx['program'].program_code}", "training", db=db
+        )
         context["request"] = request
         context.update(ctx)
-        return templates.TemplateResponse(request, "people/training/program_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/training/program_form.html", context
+        )
 
     async def create_program_response(
         self,
@@ -227,12 +247,16 @@ class ProgramWebService:
         except Exception as e:
             db.rollback()
             logger.exception("create_program_response: failed")
-            context = base_context(request, auth, "New Training Program", "training", db=db)
+            context = base_context(
+                request, auth, "New Training Program", "training", db=db
+            )
             context["request"] = request
             context.update(self.program_form_context(db, org_id))
             context["form_data"] = dict(form_data)
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "people/training/program_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/training/program_form.html", context
+            )
 
     async def update_program_response(
         self,
@@ -261,7 +285,9 @@ class ProgramWebService:
             context["request"] = request
             context.update(self.program_form_context(db, org_id, program_id))
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "people/training/program_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/training/program_form.html", context
+            )
 
     def activate_program_response(
         self,

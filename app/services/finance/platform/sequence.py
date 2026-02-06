@@ -5,6 +5,7 @@ Provides gap-free, thread-safe sequence numbers with optional
 fiscal year reset capability.
 """
 
+import logging
 from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
@@ -13,9 +14,14 @@ from fastapi import HTTPException
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
-from app.models.finance.core_config.numbering_sequence import NumberingSequence, SequenceType
+from app.models.finance.core_config.numbering_sequence import (
+    NumberingSequence,
+    SequenceType,
+)
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 class SequenceService(ListResponseMixin):

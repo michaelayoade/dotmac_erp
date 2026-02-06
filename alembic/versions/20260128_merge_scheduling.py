@@ -6,7 +6,6 @@ Create Date: 2026-01-28
 
 Merges the scheduling migration with the existing merge head.
 """
-from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260128_merge_scheduling"

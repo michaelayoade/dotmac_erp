@@ -35,26 +35,33 @@ class TestMobileViewport:
 
         # Set auth cookie
         from urllib.parse import urlparse
+
         parsed = urlparse(base_url)
-        page.context.add_cookies([{
-            "name": "access_token",
-            "value": fresh_auth_tokens["access_token"],
-            "domain": parsed.hostname or "localhost",
-            "path": "/",
-        }])
+        page.context.add_cookies(
+            [
+                {
+                    "name": "access_token",
+                    "value": fresh_auth_tokens["access_token"],
+                    "domain": parsed.hostname or "localhost",
+                    "path": "/",
+                }
+            ]
+        )
 
         page.goto(f"{base_url}/dashboard")
         page.wait_for_load_state("networkidle")
 
         # Page should be visible and not broken
-        expect(page.locator("body")).to_be_visible()
+        expect(page.locator("main")).to_be_visible()
 
         # Content should not overflow horizontally
         body_width = page.evaluate("document.body.scrollWidth")
         viewport_width = MOBILE_VIEWPORT["width"]
 
         # Allow some tolerance for scrollbars
-        assert body_width <= viewport_width + 20, "Content overflows horizontally on mobile"
+        assert body_width <= viewport_width + 20, (
+            "Content overflows horizontally on mobile"
+        )
 
     def test_sidebar_mobile_collapse(self, page, base_url, fresh_auth_tokens):
         """Test sidebar collapses on mobile."""
@@ -64,13 +71,18 @@ class TestMobileViewport:
         page.set_viewport_size(MOBILE_VIEWPORT)
 
         from urllib.parse import urlparse
+
         parsed = urlparse(base_url)
-        page.context.add_cookies([{
-            "name": "access_token",
-            "value": fresh_auth_tokens["access_token"],
-            "domain": parsed.hostname or "localhost",
-            "path": "/",
-        }])
+        page.context.add_cookies(
+            [
+                {
+                    "name": "access_token",
+                    "value": fresh_auth_tokens["access_token"],
+                    "domain": parsed.hostname or "localhost",
+                    "path": "/",
+                }
+            ]
+        )
 
         page.goto(f"{base_url}/dashboard")
         page.wait_for_load_state("networkidle")
@@ -80,13 +92,16 @@ class TestMobileViewport:
         if sidebar.count() > 0:
             # Check if sidebar is hidden or has mobile class
             is_hidden = not sidebar.first.is_visible()
-            has_mobile_class = page.locator(
-                ".sidebar-collapsed, .sidebar-hidden, [class*='mobile']"
-            ).count() > 0
+            has_mobile_class = (
+                page.locator(
+                    ".sidebar-collapsed, .sidebar-hidden, [class*='mobile']"
+                ).count()
+                > 0
+            )
 
             # Either hidden or has mobile-specific styling
             # Just verify page works on mobile
-            expect(page.locator("body")).to_be_visible()
+            expect(page.locator("main")).to_be_visible()
 
     def test_tables_mobile_scroll(self, page, base_url, fresh_auth_tokens):
         """Test tables are scrollable on mobile."""
@@ -96,13 +111,18 @@ class TestMobileViewport:
         page.set_viewport_size(MOBILE_VIEWPORT)
 
         from urllib.parse import urlparse
+
         parsed = urlparse(base_url)
-        page.context.add_cookies([{
-            "name": "access_token",
-            "value": fresh_auth_tokens["access_token"],
-            "domain": parsed.hostname or "localhost",
-            "path": "/",
-        }])
+        page.context.add_cookies(
+            [
+                {
+                    "name": "access_token",
+                    "value": fresh_auth_tokens["access_token"],
+                    "domain": parsed.hostname or "localhost",
+                    "path": "/",
+                }
+            ]
+        )
 
         page.goto(f"{base_url}/ap/suppliers")
         page.wait_for_load_state("networkidle")
@@ -118,7 +138,7 @@ class TestMobileViewport:
                 ".table-responsive, .overflow-x-auto, [class*='overflow']"
             )
             # Just verify table is accessible
-            expect(page.locator("body")).to_be_visible()
+            expect(page.locator("main")).to_be_visible()
 
     def test_forms_mobile_layout(self, page, base_url, fresh_auth_tokens):
         """Test forms render correctly on mobile."""
@@ -128,13 +148,18 @@ class TestMobileViewport:
         page.set_viewport_size(MOBILE_VIEWPORT)
 
         from urllib.parse import urlparse
+
         parsed = urlparse(base_url)
-        page.context.add_cookies([{
-            "name": "access_token",
-            "value": fresh_auth_tokens["access_token"],
-            "domain": parsed.hostname or "localhost",
-            "path": "/",
-        }])
+        page.context.add_cookies(
+            [
+                {
+                    "name": "access_token",
+                    "value": fresh_auth_tokens["access_token"],
+                    "domain": parsed.hostname or "localhost",
+                    "path": "/",
+                }
+            ]
+        )
 
         page.goto(f"{base_url}/ap/suppliers/new")
         page.wait_for_load_state("networkidle")
@@ -157,13 +182,18 @@ class TestMobileViewport:
         page.set_viewport_size(MOBILE_VIEWPORT)
 
         from urllib.parse import urlparse
+
         parsed = urlparse(base_url)
-        page.context.add_cookies([{
-            "name": "access_token",
-            "value": fresh_auth_tokens["access_token"],
-            "domain": parsed.hostname or "localhost",
-            "path": "/",
-        }])
+        page.context.add_cookies(
+            [
+                {
+                    "name": "access_token",
+                    "value": fresh_auth_tokens["access_token"],
+                    "domain": parsed.hostname or "localhost",
+                    "path": "/",
+                }
+            ]
+        )
 
         page.goto(f"{base_url}/dashboard")
         page.wait_for_load_state("networkidle")
@@ -199,19 +229,24 @@ class TestTabletViewport:
         page.set_viewport_size(TABLET_VIEWPORT)
 
         from urllib.parse import urlparse
+
         parsed = urlparse(base_url)
-        page.context.add_cookies([{
-            "name": "access_token",
-            "value": fresh_auth_tokens["access_token"],
-            "domain": parsed.hostname or "localhost",
-            "path": "/",
-        }])
+        page.context.add_cookies(
+            [
+                {
+                    "name": "access_token",
+                    "value": fresh_auth_tokens["access_token"],
+                    "domain": parsed.hostname or "localhost",
+                    "path": "/",
+                }
+            ]
+        )
 
         page.goto(f"{base_url}/dashboard")
         page.wait_for_load_state("networkidle")
 
         # Page should be visible
-        expect(page.locator("body")).to_be_visible()
+        expect(page.locator("main")).to_be_visible()
 
         # Check for proper layout
         main_content = page.locator("main, .main-content, [role='main']")
@@ -226,13 +261,18 @@ class TestTabletViewport:
         page.set_viewport_size(TABLET_VIEWPORT)
 
         from urllib.parse import urlparse
+
         parsed = urlparse(base_url)
-        page.context.add_cookies([{
-            "name": "access_token",
-            "value": fresh_auth_tokens["access_token"],
-            "domain": parsed.hostname or "localhost",
-            "path": "/",
-        }])
+        page.context.add_cookies(
+            [
+                {
+                    "name": "access_token",
+                    "value": fresh_auth_tokens["access_token"],
+                    "domain": parsed.hostname or "localhost",
+                    "path": "/",
+                }
+            ]
+        )
 
         page.goto(f"{base_url}/dashboard")
         page.wait_for_load_state("networkidle")
@@ -241,7 +281,7 @@ class TestTabletViewport:
         sidebar = page.locator("aside, nav[class*='sidebar'], .sidebar")
         if sidebar.count() > 0:
             # Just verify sidebar exists and page works
-            expect(page.locator("body")).to_be_visible()
+            expect(page.locator("main")).to_be_visible()
 
     def test_tables_tablet_layout(self, page, base_url, fresh_auth_tokens):
         """Test tables render correctly on tablet."""
@@ -251,13 +291,18 @@ class TestTabletViewport:
         page.set_viewport_size(TABLET_VIEWPORT)
 
         from urllib.parse import urlparse
+
         parsed = urlparse(base_url)
-        page.context.add_cookies([{
-            "name": "access_token",
-            "value": fresh_auth_tokens["access_token"],
-            "domain": parsed.hostname or "localhost",
-            "path": "/",
-        }])
+        page.context.add_cookies(
+            [
+                {
+                    "name": "access_token",
+                    "value": fresh_auth_tokens["access_token"],
+                    "domain": parsed.hostname or "localhost",
+                    "path": "/",
+                }
+            ]
+        )
 
         page.goto(f"{base_url}/gl/accounts")
         page.wait_for_load_state("networkidle")
@@ -271,8 +316,12 @@ class TestTabletViewport:
             headers = page.locator("table thead th")
             if headers.count() > 0:
                 # Should have multiple visible columns
-                visible_count = sum(1 for i in range(headers.count()) if headers.nth(i).is_visible())
-                assert visible_count >= 2, "Table should show multiple columns on tablet"
+                visible_count = sum(
+                    1 for i in range(headers.count()) if headers.nth(i).is_visible()
+                )
+                assert visible_count >= 2, (
+                    "Table should show multiple columns on tablet"
+                )
 
 
 # =============================================================================
@@ -292,19 +341,24 @@ class TestDesktopViewport:
         page.set_viewport_size(DESKTOP_VIEWPORT)
 
         from urllib.parse import urlparse
+
         parsed = urlparse(base_url)
-        page.context.add_cookies([{
-            "name": "access_token",
-            "value": fresh_auth_tokens["access_token"],
-            "domain": parsed.hostname or "localhost",
-            "path": "/",
-        }])
+        page.context.add_cookies(
+            [
+                {
+                    "name": "access_token",
+                    "value": fresh_auth_tokens["access_token"],
+                    "domain": parsed.hostname or "localhost",
+                    "path": "/",
+                }
+            ]
+        )
 
         page.goto(f"{base_url}/dashboard")
         page.wait_for_load_state("networkidle")
 
         # Page should be visible
-        expect(page.locator("body")).to_be_visible()
+        expect(page.locator("main")).to_be_visible()
 
         # Content should not be too narrow
         main_content = page.locator("main, .main-content, [role='main']")
@@ -322,13 +376,18 @@ class TestDesktopViewport:
         page.set_viewport_size(DESKTOP_VIEWPORT)
 
         from urllib.parse import urlparse
+
         parsed = urlparse(base_url)
-        page.context.add_cookies([{
-            "name": "access_token",
-            "value": fresh_auth_tokens["access_token"],
-            "domain": parsed.hostname or "localhost",
-            "path": "/",
-        }])
+        page.context.add_cookies(
+            [
+                {
+                    "name": "access_token",
+                    "value": fresh_auth_tokens["access_token"],
+                    "domain": parsed.hostname or "localhost",
+                    "path": "/",
+                }
+            ]
+        )
 
         page.goto(f"{base_url}/dashboard")
         page.wait_for_load_state("networkidle")
@@ -346,13 +405,18 @@ class TestDesktopViewport:
         page.set_viewport_size(DESKTOP_VIEWPORT)
 
         from urllib.parse import urlparse
+
         parsed = urlparse(base_url)
-        page.context.add_cookies([{
-            "name": "access_token",
-            "value": fresh_auth_tokens["access_token"],
-            "domain": parsed.hostname or "localhost",
-            "path": "/",
-        }])
+        page.context.add_cookies(
+            [
+                {
+                    "name": "access_token",
+                    "value": fresh_auth_tokens["access_token"],
+                    "domain": parsed.hostname or "localhost",
+                    "path": "/",
+                }
+            ]
+        )
 
         page.goto(f"{base_url}/ap/suppliers")
         page.wait_for_load_state("networkidle")
@@ -386,13 +450,18 @@ class TestCrossViewportNavigation:
         page.set_viewport_size(MOBILE_VIEWPORT)
 
         from urllib.parse import urlparse
+
         parsed = urlparse(base_url)
-        page.context.add_cookies([{
-            "name": "access_token",
-            "value": fresh_auth_tokens["access_token"],
-            "domain": parsed.hostname or "localhost",
-            "path": "/",
-        }])
+        page.context.add_cookies(
+            [
+                {
+                    "name": "access_token",
+                    "value": fresh_auth_tokens["access_token"],
+                    "domain": parsed.hostname or "localhost",
+                    "path": "/",
+                }
+            ]
+        )
 
         page.goto(f"{base_url}/dashboard")
         page.wait_for_load_state("networkidle")
@@ -419,13 +488,18 @@ class TestCrossViewportNavigation:
             page.set_viewport_size(viewport)
 
             from urllib.parse import urlparse
+
             parsed = urlparse(base_url)
-            page.context.add_cookies([{
-                "name": "access_token",
-                "value": fresh_auth_tokens["access_token"],
-                "domain": parsed.hostname or "localhost",
-                "path": "/",
-            }])
+            page.context.add_cookies(
+                [
+                    {
+                        "name": "access_token",
+                        "value": fresh_auth_tokens["access_token"],
+                        "domain": parsed.hostname or "localhost",
+                        "path": "/",
+                    }
+                ]
+            )
 
             page.goto(f"{base_url}/dashboard")
             page.wait_for_load_state("networkidle")

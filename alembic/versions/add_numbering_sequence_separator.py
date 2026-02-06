@@ -17,8 +17,7 @@ depends_on = None
 
 def _has_column(inspector, table_name: str, column_name: str, schema: str) -> bool:
     return column_name in {
-        column["name"]
-        for column in inspector.get_columns(table_name, schema=schema)
+        column["name"] for column in inspector.get_columns(table_name, schema=schema)
     }
 
 

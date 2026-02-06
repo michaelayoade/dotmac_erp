@@ -118,11 +118,14 @@ class CategoryService:
             return None, f"Category code '{category_code}' already exists"
 
         # Get max display order
-        max_order = db.execute(
-            select(TicketCategory.display_order)
-            .where(TicketCategory.organization_id == organization_id)
-            .order_by(TicketCategory.display_order.desc())
-        ).scalar_one_or_none() or 0
+        max_order = (
+            db.execute(
+                select(TicketCategory.display_order)
+                .where(TicketCategory.organization_id == organization_id)
+                .order_by(TicketCategory.display_order.desc())
+            ).scalar_one_or_none()
+            or 0
+        )
         target_order = display_order if display_order is not None else max_order + 1
 
         category = TicketCategory(
@@ -217,9 +220,7 @@ class CategoryService:
         from app.models.support.ticket import Ticket
 
         ticket_count = db.execute(
-            select(Ticket.ticket_id)
-            .where(Ticket.category_id == category_id)
-            .limit(1)
+            select(Ticket.ticket_id).where(Ticket.category_id == category_id).limit(1)
         ).scalar_one_or_none()
 
         if ticket_count and hard_delete:
@@ -356,7 +357,9 @@ class CategoryService:
                 color=cast(Optional[str], cat_data.get("color")),
                 icon=cast(Optional[str], cat_data.get("icon")),
                 display_order=i + 1,
-                default_team_id=cast(Optional[uuid.UUID], cat_data.get("default_team_id")),
+                default_team_id=cast(
+                    Optional[uuid.UUID], cat_data.get("default_team_id")
+                ),
                 default_priority=cast(Optional[str], cat_data.get("default_priority")),
                 response_hours=cast(Optional[int], cat_data.get("response_hours")),
                 resolution_hours=cast(Optional[int], cat_data.get("resolution_hours")),

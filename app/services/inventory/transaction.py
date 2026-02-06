@@ -6,23 +6,28 @@ Manages inventory receipts, issues, transfers, and cost calculations.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
-from typing import List, Optional
+from datetime import date, datetime
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session
 
-from app.models.inventory.item import Item, CostingMethod
-from app.models.inventory.item_category import ItemCategory
-from app.models.inventory.warehouse import Warehouse
-from app.models.inventory.inventory_transaction import InventoryTransaction, TransactionType
 from app.models.inventory.inventory_lot import InventoryLot
+from app.models.inventory.inventory_transaction import (
+    InventoryTransaction,
+    TransactionType,
+)
+from app.models.inventory.item import CostingMethod, Item
+from app.models.inventory.warehouse import Warehouse
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -98,17 +103,27 @@ class InventoryTransactionService(ListResponseMixin):
             db.query(
                 func.sum(
                     case(
-                        (InventoryTransaction.transaction_type.in_([
-                            TransactionType.RECEIPT,
-                            TransactionType.RETURN,
-                            TransactionType.ASSEMBLY,
-                        ]), InventoryTransaction.quantity),
-                        (InventoryTransaction.transaction_type.in_([
-                            TransactionType.ISSUE,
-                            TransactionType.SALE,
-                            TransactionType.SCRAP,
-                            TransactionType.DISASSEMBLY,
-                        ]), -InventoryTransaction.quantity),
+                        (
+                            InventoryTransaction.transaction_type.in_(
+                                [
+                                    TransactionType.RECEIPT,
+                                    TransactionType.RETURN,
+                                    TransactionType.ASSEMBLY,
+                                ]
+                            ),
+                            InventoryTransaction.quantity,
+                        ),
+                        (
+                            InventoryTransaction.transaction_type.in_(
+                                [
+                                    TransactionType.ISSUE,
+                                    TransactionType.SALE,
+                                    TransactionType.SCRAP,
+                                    TransactionType.DISASSEMBLY,
+                                ]
+                            ),
+                            -InventoryTransaction.quantity,
+                        ),
                         else_=InventoryTransaction.quantity,
                     )
                 )
@@ -156,17 +171,27 @@ class InventoryTransactionService(ListResponseMixin):
             db.query(
                 func.sum(
                     case(
-                        (InventoryTransaction.transaction_type.in_([
-                            TransactionType.RECEIPT,
-                            TransactionType.RETURN,
-                            TransactionType.ASSEMBLY,
-                        ]), InventoryTransaction.quantity),
-                        (InventoryTransaction.transaction_type.in_([
-                            TransactionType.ISSUE,
-                            TransactionType.SALE,
-                            TransactionType.SCRAP,
-                            TransactionType.DISASSEMBLY,
-                        ]), -InventoryTransaction.quantity),
+                        (
+                            InventoryTransaction.transaction_type.in_(
+                                [
+                                    TransactionType.RECEIPT,
+                                    TransactionType.RETURN,
+                                    TransactionType.ASSEMBLY,
+                                ]
+                            ),
+                            InventoryTransaction.quantity,
+                        ),
+                        (
+                            InventoryTransaction.transaction_type.in_(
+                                [
+                                    TransactionType.ISSUE,
+                                    TransactionType.SALE,
+                                    TransactionType.SCRAP,
+                                    TransactionType.DISASSEMBLY,
+                                ]
+                            ),
+                            -InventoryTransaction.quantity,
+                        ),
                         else_=InventoryTransaction.quantity,
                     )
                 )
@@ -314,15 +339,23 @@ class InventoryTransactionService(ListResponseMixin):
             if not lot:
                 raise HTTPException(status_code=404, detail="Inventory lot not found")
             if lot.item_id != item.item_id:
-                raise HTTPException(status_code=400, detail="Inventory lot does not match item")
+                raise HTTPException(
+                    status_code=400, detail="Inventory lot does not match item"
+                )
             if lot.organization_id and lot.organization_id != item.organization_id:
                 raise HTTPException(status_code=404, detail="Inventory lot not found")
             if lot.warehouse_id and lot.warehouse_id != coerce_uuid(input.warehouse_id):
-                raise HTTPException(status_code=400, detail="Inventory lot does not match warehouse")
+                raise HTTPException(
+                    status_code=400, detail="Inventory lot does not match warehouse"
+                )
             if lot.organization_id is None:
                 lot.organization_id = item.organization_id
-            lot.quantity_on_hand = (lot.quantity_on_hand or Decimal("0")) + input.quantity
-            lot.quantity_available = lot.quantity_on_hand - (lot.quantity_allocated or Decimal("0"))
+            lot.quantity_on_hand = (
+                lot.quantity_on_hand or Decimal("0")
+            ) + input.quantity
+            lot.quantity_available = lot.quantity_on_hand - (
+                lot.quantity_allocated or Decimal("0")
+            )
             if lot.warehouse_id is None:
                 lot.warehouse_id = coerce_uuid(input.warehouse_id)
             return lot
@@ -341,7 +374,9 @@ class InventoryTransactionService(ListResponseMixin):
             item_id=item.item_id,
             warehouse_id=coerce_uuid(input.warehouse_id),
             lot_number=lot_number,
-            received_date=input.transaction_date.date() if hasattr(input.transaction_date, 'date') else input.transaction_date,
+            received_date=input.transaction_date.date()
+            if hasattr(input.transaction_date, "date")
+            else input.transaction_date,
             unit_cost=input.unit_cost,
             initial_quantity=input.quantity,
             quantity_on_hand=input.quantity,
@@ -463,9 +498,12 @@ class InventoryTransactionService(ListResponseMixin):
             total_cost = input.quantity * unit_cost
 
         # For lot-tracked items (not FIFO or Specific), consume from lot
-        if item.track_lots and lot_id and item.costing_method not in [
-            CostingMethod.FIFO, CostingMethod.SPECIFIC_IDENTIFICATION
-        ]:
+        if (
+            item.track_lots
+            and lot_id
+            and item.costing_method
+            not in [CostingMethod.FIFO, CostingMethod.SPECIFIC_IDENTIFICATION]
+        ):
             InventoryTransactionService._consume_from_lot(db, lot_id, input.quantity)
 
         # Create transaction
@@ -514,12 +552,17 @@ class InventoryTransactionService(ListResponseMixin):
         itm_id = coerce_uuid(item_id)
 
         # Get lots ordered by received date (oldest first)
-        lots = db.query(InventoryLot).filter(
-            InventoryLot.item_id == itm_id,
-            InventoryLot.quantity_on_hand > 0,
-            InventoryLot.is_active == True,
-            InventoryLot.is_quarantined == False,
-        ).order_by(InventoryLot.received_date.asc()).all()
+        lots = (
+            db.query(InventoryLot)
+            .filter(
+                InventoryLot.item_id == itm_id,
+                InventoryLot.quantity_on_hand > 0,
+                InventoryLot.is_active == True,
+                InventoryLot.is_quarantined == False,
+            )
+            .order_by(InventoryLot.received_date.asc())
+            .all()
+        )
 
         total_available = sum(lot.quantity_on_hand for lot in lots)
         if total_available < quantity:
@@ -541,7 +584,9 @@ class InventoryTransactionService(ListResponseMixin):
             layer_cost = consume_qty * lot.unit_cost
 
             lot.quantity_on_hand -= consume_qty
-            lot.quantity_available = lot.quantity_on_hand - (lot.quantity_allocated or Decimal("0"))
+            lot.quantity_available = lot.quantity_on_hand - (
+                lot.quantity_allocated or Decimal("0")
+            )
 
             remaining -= consume_qty
             total_cost += layer_cost
@@ -549,14 +594,18 @@ class InventoryTransactionService(ListResponseMixin):
             if first_lot_id is None:
                 first_lot_id = lot.lot_id
 
-            layers_used.append({
-                "lot_id": str(lot.lot_id),
-                "lot_number": lot.lot_number,
-                "quantity": str(consume_qty),
-                "unit_cost": str(lot.unit_cost),
-            })
+            layers_used.append(
+                {
+                    "lot_id": str(lot.lot_id),
+                    "lot_number": lot.lot_number,
+                    "quantity": str(consume_qty),
+                    "unit_cost": str(lot.unit_cost),
+                }
+            )
 
-        unit_cost = (total_cost / quantity).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+        unit_cost = (total_cost / quantity).quantize(
+            Decimal("0.000001"), rounding=ROUND_HALF_UP
+        )
 
         return {
             "unit_cost": unit_cost,
@@ -575,7 +624,9 @@ class InventoryTransactionService(ListResponseMixin):
         lot = db.get(InventoryLot, coerce_uuid(lot_id))
         if lot:
             lot.quantity_on_hand = (lot.quantity_on_hand or Decimal("0")) - quantity
-            lot.quantity_available = lot.quantity_on_hand - (lot.quantity_allocated or Decimal("0"))
+            lot.quantity_available = lot.quantity_on_hand - (
+                lot.quantity_allocated or Decimal("0")
+            )
 
     @staticmethod
     def create_adjustment(
@@ -639,7 +690,7 @@ class InventoryTransactionService(ListResponseMixin):
         if input.quantity < 0 and qty_before < abs(input.quantity):
             raise HTTPException(
                 status_code=400,
-                detail=f"Adjustment would result in negative inventory",
+                detail="Adjustment would result in negative inventory",
             )
         if lot and input.quantity < 0 and lot.quantity_on_hand < abs(input.quantity):
             raise HTTPException(
@@ -679,8 +730,12 @@ class InventoryTransactionService(ListResponseMixin):
         db.add(transaction)
 
         if lot:
-            lot.quantity_on_hand = (lot.quantity_on_hand or Decimal("0")) + input.quantity
-            lot.quantity_available = lot.quantity_on_hand - (lot.quantity_allocated or Decimal("0"))
+            lot.quantity_on_hand = (
+                lot.quantity_on_hand or Decimal("0")
+            ) + input.quantity
+            lot.quantity_available = lot.quantity_on_hand - (
+                lot.quantity_allocated or Decimal("0")
+            )
             if lot.warehouse_id is None:
                 lot.warehouse_id = wh_id
 
@@ -734,7 +789,9 @@ class InventoryTransactionService(ListResponseMixin):
 
         to_warehouse = db.get(Warehouse, to_wh_id)
         if not to_warehouse or to_warehouse.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Destination warehouse not found")
+            raise HTTPException(
+                status_code=404, detail="Destination warehouse not found"
+            )
 
         lot = None
         requires_lot = item.track_lots or item.costing_method == CostingMethod.FIFO
@@ -833,7 +890,9 @@ class InventoryTransactionService(ListResponseMixin):
 
         if lot:
             lot.warehouse_id = to_wh_id
-            lot.quantity_available = lot.quantity_on_hand - (lot.quantity_allocated or Decimal("0"))
+            lot.quantity_available = lot.quantity_on_hand - (
+                lot.quantity_allocated or Decimal("0")
+            )
 
         db.commit()
         db.refresh(issue_txn)
@@ -922,7 +981,7 @@ class InventoryTransactionService(ListResponseMixin):
         offset: int = 0,
     ) -> list[InventoryTransaction]:
         """List inventory transactions with optional filters."""
-        from datetime import date, datetime
+        from datetime import datetime
 
         query = db.query(InventoryTransaction)
 
@@ -932,9 +991,7 @@ class InventoryTransactionService(ListResponseMixin):
             )
 
         if item_id:
-            query = query.filter(
-                InventoryTransaction.item_id == coerce_uuid(item_id)
-            )
+            query = query.filter(InventoryTransaction.item_id == coerce_uuid(item_id))
 
         if warehouse_id:
             query = query.filter(
@@ -949,7 +1006,9 @@ class InventoryTransactionService(ListResponseMixin):
                 except ValueError:
                     pass  # Invalid type, skip filter
             if isinstance(transaction_type, TransactionType):
-                query = query.filter(InventoryTransaction.transaction_type == transaction_type)
+                query = query.filter(
+                    InventoryTransaction.transaction_type == transaction_type
+                )
 
         if fiscal_period_id:
             query = query.filter(

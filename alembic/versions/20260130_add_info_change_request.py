@@ -20,103 +20,188 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Create enums
-    info_change_type = postgresql.ENUM(
-        "BANK_DETAILS", "TAX_INFO", "PENSION_INFO", "NHF_INFO", "COMBINED",
-        name="info_change_type",
-        schema="hr",
-        create_type=False,
-    )
-    info_change_type.create(op.get_bind(), checkfirst=True)
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
 
-    info_change_status = postgresql.ENUM(
-        "PENDING", "APPROVED", "REJECTED", "CANCELLED", "EXPIRED",
-        name="info_change_status",
-        schema="hr",
-        create_type=False,
-    )
-    info_change_status.create(op.get_bind(), checkfirst=True)
+    # Create enums
+    existing_enums = [e["name"] for e in inspector.get_enums(schema="hr")]
+
+    if "info_change_type" not in existing_enums:
+        info_change_type = postgresql.ENUM(
+            "BANK_DETAILS",
+            "TAX_INFO",
+            "PENSION_INFO",
+            "NHF_INFO",
+            "COMBINED",
+            name="info_change_type",
+            schema="hr",
+            create_type=False,
+        )
+        info_change_type.create(bind, checkfirst=True)
+
+    if "info_change_status" not in existing_enums:
+        info_change_status = postgresql.ENUM(
+            "PENDING",
+            "APPROVED",
+            "REJECTED",
+            "CANCELLED",
+            "EXPIRED",
+            name="info_change_status",
+            schema="hr",
+            create_type=False,
+        )
+        info_change_status.create(bind, checkfirst=True)
 
     # Create the table
-    op.create_table(
-        "employee_info_change_request",
-        sa.Column("request_id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column(
-            "organization_id",
-            postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("core_org.organization.organization_id", ondelete="CASCADE"),
-            nullable=False,
-        ),
-        sa.Column(
-            "employee_id",
-            postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("hr.employee.employee_id", ondelete="CASCADE"),
-            nullable=False,
-        ),
-        sa.Column(
-            "change_type",
-            info_change_type,
-            nullable=False,
-        ),
-        sa.Column(
-            "status",
-            info_change_status,
-            nullable=False,
-            server_default="PENDING",
-        ),
-        sa.Column("proposed_changes", postgresql.JSONB(), nullable=False),
-        sa.Column("previous_values", postgresql.JSONB(), nullable=False),
-        sa.Column("requester_notes", sa.Text(), nullable=True),
-        sa.Column(
-            "reviewer_id",
-            postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("people.id", ondelete="SET NULL"),
-            nullable=True,
-        ),
-        sa.Column("reviewer_notes", sa.Text(), nullable=True),
-        sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
-        schema="hr",
-    )
+    if not inspector.has_table("employee_info_change_request", schema="hr"):
+        # Need enum references for columns even if already created
+        info_change_type = postgresql.ENUM(
+            "BANK_DETAILS",
+            "TAX_INFO",
+            "PENSION_INFO",
+            "NHF_INFO",
+            "COMBINED",
+            name="info_change_type",
+            schema="hr",
+            create_type=False,
+        )
+        info_change_status = postgresql.ENUM(
+            "PENDING",
+            "APPROVED",
+            "REJECTED",
+            "CANCELLED",
+            "EXPIRED",
+            name="info_change_status",
+            schema="hr",
+            create_type=False,
+        )
+
+        op.create_table(
+            "employee_info_change_request",
+            sa.Column("request_id", postgresql.UUID(as_uuid=True), primary_key=True),
+            sa.Column(
+                "organization_id",
+                postgresql.UUID(as_uuid=True),
+                sa.ForeignKey(
+                    "core_org.organization.organization_id", ondelete="CASCADE"
+                ),
+                nullable=False,
+            ),
+            sa.Column(
+                "employee_id",
+                postgresql.UUID(as_uuid=True),
+                sa.ForeignKey("hr.employee.employee_id", ondelete="CASCADE"),
+                nullable=False,
+            ),
+            sa.Column(
+                "change_type",
+                info_change_type,
+                nullable=False,
+            ),
+            sa.Column(
+                "status",
+                info_change_status,
+                nullable=False,
+                server_default="PENDING",
+            ),
+            sa.Column("proposed_changes", postgresql.JSONB(), nullable=False),
+            sa.Column("previous_values", postgresql.JSONB(), nullable=False),
+            sa.Column("requester_notes", sa.Text(), nullable=True),
+            sa.Column(
+                "reviewer_id",
+                postgresql.UUID(as_uuid=True),
+                sa.ForeignKey("people.id", ondelete="SET NULL"),
+                nullable=True,
+            ),
+            sa.Column("reviewer_notes", sa.Text(), nullable=True),
+            sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+            ),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
+            schema="hr",
+        )
 
     # Create indexes
-    op.create_index(
-        "idx_info_change_request_org",
-        "employee_info_change_request",
-        ["organization_id"],
-        schema="hr",
-    )
-    op.create_index(
-        "idx_info_change_request_employee",
-        "employee_info_change_request",
-        ["employee_id"],
-        schema="hr",
-    )
-    op.create_index(
-        "idx_info_change_request_status",
-        "employee_info_change_request",
-        ["organization_id", "status"],
-        schema="hr",
-    )
-    op.create_index(
-        "idx_info_change_request_pending",
-        "employee_info_change_request",
-        ["organization_id", "status", "created_at"],
-        schema="hr",
-    )
+    if inspector.has_table("employee_info_change_request", schema="hr"):
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes(
+                "employee_info_change_request", schema="hr"
+            )
+            if idx.get("name")
+        }
+        if "idx_info_change_request_org" not in indexes:
+            op.create_index(
+                "idx_info_change_request_org",
+                "employee_info_change_request",
+                ["organization_id"],
+                schema="hr",
+            )
+        if "idx_info_change_request_employee" not in indexes:
+            op.create_index(
+                "idx_info_change_request_employee",
+                "employee_info_change_request",
+                ["employee_id"],
+                schema="hr",
+            )
+        if "idx_info_change_request_status" not in indexes:
+            op.create_index(
+                "idx_info_change_request_status",
+                "employee_info_change_request",
+                ["organization_id", "status"],
+                schema="hr",
+            )
+        if "idx_info_change_request_pending" not in indexes:
+            op.create_index(
+                "idx_info_change_request_pending",
+                "employee_info_change_request",
+                ["organization_id", "status", "created_at"],
+                schema="hr",
+            )
 
 
 def downgrade() -> None:
-    # Drop indexes
-    op.drop_index("idx_info_change_request_pending", table_name="employee_info_change_request", schema="hr")
-    op.drop_index("idx_info_change_request_status", table_name="employee_info_change_request", schema="hr")
-    op.drop_index("idx_info_change_request_employee", table_name="employee_info_change_request", schema="hr")
-    op.drop_index("idx_info_change_request_org", table_name="employee_info_change_request", schema="hr")
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
 
-    # Drop table
-    op.drop_table("employee_info_change_request", schema="hr")
+    if inspector.has_table("employee_info_change_request", schema="hr"):
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes(
+                "employee_info_change_request", schema="hr"
+            )
+            if idx.get("name")
+        }
+        if "idx_info_change_request_pending" in indexes:
+            op.drop_index(
+                "idx_info_change_request_pending",
+                table_name="employee_info_change_request",
+                schema="hr",
+            )
+        if "idx_info_change_request_status" in indexes:
+            op.drop_index(
+                "idx_info_change_request_status",
+                table_name="employee_info_change_request",
+                schema="hr",
+            )
+        if "idx_info_change_request_employee" in indexes:
+            op.drop_index(
+                "idx_info_change_request_employee",
+                table_name="employee_info_change_request",
+                schema="hr",
+            )
+        if "idx_info_change_request_org" in indexes:
+            op.drop_index(
+                "idx_info_change_request_org",
+                table_name="employee_info_change_request",
+                schema="hr",
+            )
+
+        op.drop_table("employee_info_change_request", schema="hr")
 
     # Drop enums
     op.execute("DROP TYPE IF EXISTS hr.info_change_status")

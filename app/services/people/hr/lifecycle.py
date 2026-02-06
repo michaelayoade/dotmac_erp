@@ -1,6 +1,8 @@
 """Employee lifecycle service implementation."""
+
 from __future__ import annotations
 
+import logging
 from datetime import date
 from typing import Optional
 from uuid import UUID
@@ -13,10 +15,10 @@ from app.models.people.hr.lifecycle import (
     BoardingStatus,
     EmployeeOnboarding,
     EmployeeOnboardingActivity,
-    EmployeeSeparation,
-    EmployeeSeparationActivity,
     EmployeePromotion,
     EmployeePromotionDetail,
+    EmployeeSeparation,
+    EmployeeSeparationActivity,
     EmployeeTransfer,
     EmployeeTransferDetail,
     SeparationType,
@@ -29,6 +31,8 @@ from app.services.people.hr.errors import (
     SeparationNotFoundError,
     TransferNotFoundError,
 )
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["LifecycleService"]
 
@@ -63,7 +67,9 @@ class LifecycleService:
         status: Optional[BoardingStatus] = None,
         pagination: Optional[PaginationParams] = None,
     ) -> PaginatedResult[EmployeeOnboarding]:
-        query = select(EmployeeOnboarding).where(EmployeeOnboarding.organization_id == org_id)
+        query = select(EmployeeOnboarding).where(
+            EmployeeOnboarding.organization_id == org_id
+        )
 
         if employee_id:
             query = query.where(EmployeeOnboarding.employee_id == employee_id)
@@ -104,7 +110,9 @@ class LifecycleService:
             )
         )
         if not onboarding:
-            raise OnboardingNotFoundError(message=f"Onboarding {onboarding_id} not found")
+            raise OnboardingNotFoundError(
+                message=f"Onboarding {onboarding_id} not found"
+            )
         return onboarding
 
     def create_onboarding(
@@ -192,16 +200,25 @@ class LifecycleService:
         self.db.flush()
         return onboarding
 
-    def complete_onboarding(self, org_id: UUID, onboarding_id: UUID) -> EmployeeOnboarding:
+    def complete_onboarding(
+        self, org_id: UUID, onboarding_id: UUID
+    ) -> EmployeeOnboarding:
         onboarding = self.get_onboarding(org_id, onboarding_id)
-        if onboarding.status not in {BoardingStatus.PENDING, BoardingStatus.IN_PROGRESS}:
+        if onboarding.status not in {
+            BoardingStatus.PENDING,
+            BoardingStatus.IN_PROGRESS,
+        }:
             raise LifecycleStatusError(onboarding.status.value, "complete onboarding")
         onboarding.status = BoardingStatus.COMPLETED
         self.db.flush()
         return onboarding
 
     def complete_onboarding_activity(
-        self, org_id: UUID, onboarding_id: UUID, activity_id: UUID, completed: bool = True
+        self,
+        org_id: UUID,
+        onboarding_id: UUID,
+        activity_id: UUID,
+        completed: bool = True,
     ) -> EmployeeOnboardingActivity:
         """Mark an onboarding activity as complete or incomplete."""
         onboarding = self.get_onboarding(org_id, onboarding_id)
@@ -224,7 +241,9 @@ class LifecycleService:
         self.db.flush()
         return activity
 
-    def get_onboarding_for_employee(self, org_id: UUID, employee_id: UUID) -> EmployeeOnboarding | None:
+    def get_onboarding_for_employee(
+        self, org_id: UUID, employee_id: UUID
+    ) -> EmployeeOnboarding | None:
         """Get the active onboarding record for an employee (if any)."""
         return self.db.scalar(
             select(EmployeeOnboarding)
@@ -248,7 +267,9 @@ class LifecycleService:
         status: Optional[BoardingStatus] = None,
         pagination: Optional[PaginationParams] = None,
     ) -> PaginatedResult[EmployeeSeparation]:
-        query = select(EmployeeSeparation).where(EmployeeSeparation.organization_id == org_id)
+        query = select(EmployeeSeparation).where(
+            EmployeeSeparation.organization_id == org_id
+        )
 
         if employee_id:
             query = query.where(EmployeeSeparation.employee_id == employee_id)
@@ -289,7 +310,9 @@ class LifecycleService:
             )
         )
         if not separation:
-            raise SeparationNotFoundError(message=f"Separation {separation_id} not found")
+            raise SeparationNotFoundError(
+                message=f"Separation {separation_id} not found"
+            )
         return separation
 
     def create_separation(
@@ -380,9 +403,14 @@ class LifecycleService:
         self.db.flush()
         return separation
 
-    def complete_separation(self, org_id: UUID, separation_id: UUID) -> EmployeeSeparation:
+    def complete_separation(
+        self, org_id: UUID, separation_id: UUID
+    ) -> EmployeeSeparation:
         separation = self.get_separation(org_id, separation_id)
-        if separation.status not in {BoardingStatus.PENDING, BoardingStatus.IN_PROGRESS}:
+        if separation.status not in {
+            BoardingStatus.PENDING,
+            BoardingStatus.IN_PROGRESS,
+        }:
             raise LifecycleStatusError(separation.status.value, "complete separation")
         separation.status = BoardingStatus.COMPLETED
         self.db.flush()
@@ -399,7 +427,9 @@ class LifecycleService:
         employee_id: Optional[UUID] = None,
         pagination: Optional[PaginationParams] = None,
     ) -> PaginatedResult[EmployeePromotion]:
-        query = select(EmployeePromotion).where(EmployeePromotion.organization_id == org_id)
+        query = select(EmployeePromotion).where(
+            EmployeePromotion.organization_id == org_id
+        )
 
         if employee_id:
             query = query.where(EmployeePromotion.employee_id == employee_id)
@@ -514,7 +544,9 @@ class LifecycleService:
         employee_id: Optional[UUID] = None,
         pagination: Optional[PaginationParams] = None,
     ) -> PaginatedResult[EmployeeTransfer]:
-        query = select(EmployeeTransfer).where(EmployeeTransfer.organization_id == org_id)
+        query = select(EmployeeTransfer).where(
+            EmployeeTransfer.organization_id == org_id
+        )
 
         if employee_id:
             query = query.where(EmployeeTransfer.employee_id == employee_id)
@@ -523,9 +555,7 @@ class LifecycleService:
         query = query.order_by(EmployeeTransfer.transfer_date.desc())
 
         count_subq = (
-            query.with_only_columns(EmployeeTransfer.transfer_id)
-            .distinct()
-            .subquery()
+            query.with_only_columns(EmployeeTransfer.transfer_id).distinct().subquery()
         )
         count_query = select(func.count()).select_from(count_subq)
         total = self.db.scalar(count_query) or 0

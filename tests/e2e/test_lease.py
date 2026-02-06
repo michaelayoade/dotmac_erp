@@ -19,8 +19,12 @@ class TestLeaseContracts:
         authenticated_page.goto(f"{base_url}/lease/contracts")
         authenticated_page.wait_for_load_state("networkidle")
 
-        expect(authenticated_page.locator("h1", has_text="Lease Contracts").first).to_be_visible()
-        expect(authenticated_page.locator("a[href='/lease/contracts/new']")).to_be_visible()
+        expect(
+            authenticated_page.locator("h1", has_text="Lease Contracts").first
+        ).to_be_visible()
+        expect(
+            authenticated_page.locator("a[href='/lease/contracts/new']")
+        ).to_be_visible()
 
     @pytest.mark.e2e
     def test_contract_form_loads(self, authenticated_page: Page, base_url: str):
@@ -41,10 +45,14 @@ class TestLeaseContractDetail:
         authenticated_page.goto(f"{base_url}/lease/contracts/{lease_id}")
         authenticated_page.wait_for_load_state("networkidle")
 
-        expect(authenticated_page.get_by_text("Lease contract not found")).to_be_visible()
+        expect(
+            authenticated_page.get_by_text("Lease contract not found")
+        ).to_be_visible()
 
     @pytest.mark.e2e
-    def test_contract_schedule_empty_state(self, authenticated_page: Page, base_url: str):
+    def test_contract_schedule_empty_state(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Ensure schedule page shows empty state for missing contract."""
         lease_id = str(uuid4())
         authenticated_page.goto(f"{base_url}/lease/contracts/{lease_id}/schedule")
@@ -73,7 +81,9 @@ class TestLeaseModifications:
     """Test lease modifications page."""
 
     @pytest.mark.e2e
-    def test_modifications_page_empty_state(self, authenticated_page: Page, base_url: str):
+    def test_modifications_page_empty_state(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Ensure modifications page loads and shows empty state."""
         authenticated_page.goto(f"{base_url}/lease/modifications")
         authenticated_page.wait_for_load_state("networkidle")
@@ -85,7 +95,9 @@ class TestLeaseVariablePayments:
     """Test lease variable payments page."""
 
     @pytest.mark.e2e
-    def test_variable_payments_empty_state(self, authenticated_page: Page, base_url: str):
+    def test_variable_payments_empty_state(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Ensure variable payments page loads and shows empty state."""
         authenticated_page.goto(f"{base_url}/lease/variable-payments")
         authenticated_page.wait_for_load_state("networkidle")

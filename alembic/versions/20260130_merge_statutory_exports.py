@@ -6,8 +6,6 @@ Create Date: 2026-01-30
 
 Merge all existing heads to enable statutory export migrations.
 """
-from alembic import op
-
 
 revision = "20260130_merge_statutory_exports"
 down_revision = (

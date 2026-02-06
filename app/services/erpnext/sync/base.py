@@ -1,6 +1,7 @@
 """
 Base Sync Service for ERPNext to DotMac ERP migration.
 """
+
 import logging
 import uuid
 from abc import ABC, abstractmethod
@@ -209,8 +210,16 @@ class BaseSyncService(ABC, Generic[T]):
             return True
 
         # Normalize timestamps for comparison (strip timezone info)
-        source_ts = source_modified.replace(tzinfo=None) if source_modified.tzinfo else source_modified
-        stored_ts = sync_entity.source_modified.replace(tzinfo=None) if sync_entity.source_modified.tzinfo else sync_entity.source_modified
+        source_ts = (
+            source_modified.replace(tzinfo=None)
+            if source_modified.tzinfo
+            else source_modified
+        )
+        stored_ts = (
+            sync_entity.source_modified.replace(tzinfo=None)
+            if sync_entity.source_modified.tzinfo
+            else sync_entity.source_modified
+        )
 
         # Update if source is newer
         return source_ts > stored_ts

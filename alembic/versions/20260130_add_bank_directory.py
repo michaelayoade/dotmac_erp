@@ -5,6 +5,7 @@ Revises: 20260130_add_scheduling_audit_ids
 Create Date: 2026-01-30
 
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -123,5 +124,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_bank_directory_bank_name", table_name="bank_directory", schema="core_org")
+    op.drop_index(
+        "ix_bank_directory_bank_name", table_name="bank_directory", schema="core_org"
+    )
     op.drop_table("bank_directory", schema="core_org")

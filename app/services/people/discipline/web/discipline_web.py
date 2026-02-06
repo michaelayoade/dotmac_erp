@@ -10,38 +10,37 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime
 from typing import Optional
+from urllib.parse import quote
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from urllib.parse import quote
+from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.orm import Session
 
 from app.models.people.discipline import (
-    CaseStatus,
-    ViolationType,
-    SeverityLevel,
     ActionType,
+    CaseStatus,
     DocumentType,
+    SeverityLevel,
+    ViolationType,
 )
-from app.services.common import coerce_uuid, ValidationError
-from pydantic import ValidationError as PydanticValidationError
-from app.services.people.discipline import DisciplineService
-from app.services.common import PaginationParams
-from app.services.people.hr import EmployeeService
-from app.services.people.hr.employee_types import EmployeeFilters
 from app.models.people.hr import Employee, EmployeeStatus
 from app.models.person import Person
 from app.schemas.people.discipline import (
-    DisciplinaryCaseCreate,
-    DisciplinaryCaseUpdate,
-    IssueQueryRequest,
-    ScheduleHearingRequest,
-    RecordDecisionRequest,
     CaseActionCreate,
-    CaseWitnessCreate,
     CaseListFilter,
+    CaseWitnessCreate,
+    DisciplinaryCaseCreate,
+    IssueQueryRequest,
+    RecordDecisionRequest,
+    ScheduleHearingRequest,
 )
+from app.services.common import PaginationParams, ValidationError, coerce_uuid
+from app.services.formatters import parse_date
+from app.services.people.discipline import DisciplineService
+from app.services.people.hr import EmployeeService
+from app.services.people.hr.employee_types import EmployeeFilters
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -54,31 +53,6 @@ def parse_uuid(value: Optional[str]) -> Optional[UUID]:
         return None
     try:
         return UUID(value.strip())
-    except (ValueError, TypeError):
-        return None
-
-
-def parse_date(value: Optional[str]) -> Optional[date]:
-    """Parse string to date, returning None if invalid."""
-    if not value or value.strip() == "":
-        return None
-    try:
-        clean_value = value.strip()
-        try:
-            return date.fromisoformat(clean_value)
-        except ValueError:
-            # Accept full ISO datetime strings and coerce to date.
-            return datetime.fromisoformat(clean_value).date()
-    except (ValueError, TypeError):
-        return None
-
-
-def parse_datetime(value: Optional[str]) -> Optional[datetime]:
-    """Parse string to datetime, returning None if invalid."""
-    if not value or value.strip() == "":
-        return None
-    try:
-        return datetime.fromisoformat(value.strip())
     except (ValueError, TypeError):
         return None
 

@@ -25,46 +25,45 @@ from sqlalchemy.orm import Session
 
 from app.schemas.bulk_actions import BulkActionRequest, BulkExportRequest
 from app.services.common import coerce_uuid
-from app.services.finance.common.attachment import attachment_service
-from app.web.deps import WebAuthContext
-
 from app.services.finance.ap.web.base import (
-    # Parsing utilities
-    parse_date,
-    format_date,
-    format_currency,
-    format_file_size,
-    parse_supplier_type,
-    parse_invoice_status,
-    parse_payment_status,
-    # Display utilities
-    supplier_display_name,
-    invoice_status_label,
-    payment_status_label,
-    # View transformers
-    supplier_option_view,
-    supplier_form_view,
-    supplier_list_view,
-    supplier_detail_view,
-    invoice_line_view,
-    invoice_detail_view,
-    payment_detail_view,
+    # Data classes
+    InvoiceStats,
     allocation_view,
+    calculate_supplier_balance_trends,
+    format_currency,
+    format_date,
+    format_file_size,
     # Reference data queries
     get_accounts,
     get_cost_centers,
     get_projects,
-    calculate_supplier_balance_trends,
-    # Data classes
-    InvoiceStats,
+    invoice_detail_view,
+    invoice_line_view,
+    invoice_status_label,
+    # Parsing utilities
+    parse_date,
+    parse_invoice_status,
+    parse_payment_status,
+    parse_supplier_type,
+    payment_detail_view,
+    payment_status_label,
+    supplier_detail_view,
+    # Display utilities
+    supplier_display_name,
+    supplier_form_view,
+    supplier_list_view,
+    # View transformers
+    supplier_option_view,
 )
-
-# Import the modular service components
-from app.services.finance.ap.web.supplier_web import SupplierWebService
+from app.services.finance.ap.web.goods_receipt_web import GoodsReceiptWebService
 from app.services.finance.ap.web.invoice_web import InvoiceWebService
 from app.services.finance.ap.web.payment_web import PaymentWebService
 from app.services.finance.ap.web.purchase_order_web import PurchaseOrderWebService
-from app.services.finance.ap.web.goods_receipt_web import GoodsReceiptWebService
+
+# Import the modular service components
+from app.services.finance.ap.web.supplier_web import SupplierWebService
+from app.services.finance.common.attachment import attachment_service
+from app.web.deps import WebAuthContext
 
 
 class APWebService(
@@ -106,12 +105,16 @@ class APWebService(
         )
 
         if not attachment or attachment.organization_id != auth.organization_id:
-            return RedirectResponse(url="/finance/ap/invoices?error=Attachment+not+found", status_code=303)
+            return RedirectResponse(
+                url="/finance/ap/invoices?error=Attachment+not+found", status_code=303
+            )
 
         file_path = attachment_service.get_file_path(attachment)
 
         if not file_path.exists():
-            return RedirectResponse(url="/finance/ap/invoices?error=File+not+found", status_code=303)
+            return RedirectResponse(
+                url="/finance/ap/invoices?error=File+not+found", status_code=303
+            )
 
         return FileResponse(
             path=str(file_path),
@@ -133,7 +136,9 @@ class APWebService(
         )
 
         if not attachment or attachment.organization_id != auth.organization_id:
-            return RedirectResponse(url="/finance/ap/invoices?error=Attachment+not+found", status_code=303)
+            return RedirectResponse(
+                url="/finance/ap/invoices?error=Attachment+not+found", status_code=303
+            )
 
         entity_type = attachment.entity_type
         entity_id = attachment.entity_id

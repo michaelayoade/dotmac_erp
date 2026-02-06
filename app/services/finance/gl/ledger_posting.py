@@ -7,27 +7,29 @@ All ledger postings MUST go through this service.
 
 from __future__ import annotations
 
+import logging
+import uuid as uuid_lib
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Any, List, Optional
+from typing import List, Optional
 from uuid import UUID
-import uuid as uuid_lib
 
 from fastapi import HTTPException
-from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
+from app.models.finance.gl.account import Account
 from app.models.finance.gl.fiscal_period import FiscalPeriod
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
 from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
 from app.models.finance.gl.posting_batch import BatchStatus, PostingBatch
-from app.models.finance.gl.account import Account
 from app.services.common import coerce_uuid
 from app.services.finance.gl.period_guard import PeriodGuardService
 from app.services.finance.platform.outbox_publisher import OutboxPublisher
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -140,8 +142,7 @@ class LedgerPostingService(ListResponseMixin):
         # 1. Validate idempotency key
         if not request.idempotency_key:
             raise HTTPException(
-                status_code=400,
-                detail="Idempotency key is required for ledger posting"
+                status_code=400, detail="Idempotency key is required for ledger posting"
             )
 
         # 2. Check for existing batch with same idempotency key
@@ -167,7 +168,7 @@ class LedgerPostingService(ListResponseMixin):
             else:
                 raise HTTPException(
                     status_code=409,
-                    detail=f"Batch with idempotency key in status '{existing_batch.status.value}'"
+                    detail=f"Batch with idempotency key in status '{existing_batch.status.value}'",
                 )
 
         # 3. Validate journal entry exists
@@ -184,7 +185,7 @@ class LedgerPostingService(ListResponseMixin):
         if journal.status not in {JournalStatus.APPROVED, JournalStatus.DRAFT}:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot post journal with status '{journal.status.value}'"
+                detail=f"Cannot post journal with status '{journal.status.value}'",
             )
 
         # 4. Validate period is open
@@ -216,7 +217,9 @@ class LedgerPostingService(ListResponseMixin):
             batch_description=f"Journal {journal.journal_number}",
             total_entries=len(entries),
             status=BatchStatus.PROCESSING,
-            submitted_by_user_id=coerce_uuid(request.posted_by_user_id) if request.posted_by_user_id else journal.created_by_user_id,
+            submitted_by_user_id=coerce_uuid(request.posted_by_user_id)
+            if request.posted_by_user_id
+            else journal.created_by_user_id,
             correlation_id=request.correlation_id,
         )
         db.add(batch)
@@ -256,14 +259,20 @@ class LedgerPostingService(ListResponseMixin):
                 original_debit_amount=entry.original_debit_amount,
                 original_credit_amount=entry.original_credit_amount,
                 exchange_rate=entry.exchange_rate,
-                business_unit_id=coerce_uuid(entry.business_unit_id) if entry.business_unit_id else None,
-                cost_center_id=coerce_uuid(entry.cost_center_id) if entry.cost_center_id else None,
+                business_unit_id=coerce_uuid(entry.business_unit_id)
+                if entry.business_unit_id
+                else None,
+                cost_center_id=coerce_uuid(entry.cost_center_id)
+                if entry.cost_center_id
+                else None,
                 project_id=coerce_uuid(entry.project_id) if entry.project_id else None,
                 segment_id=coerce_uuid(entry.segment_id) if entry.segment_id else None,
                 source_module=request.source_module,
                 source_document_type=journal.source_document_type,
                 source_document_id=journal.source_document_id,
-                posted_by_user_id=coerce_uuid(request.posted_by_user_id) if request.posted_by_user_id else journal.created_by_user_id,
+                posted_by_user_id=coerce_uuid(request.posted_by_user_id)
+                if request.posted_by_user_id
+                else journal.created_by_user_id,
                 correlation_id=request.correlation_id,
             )
             db.add(ledger_line)
@@ -281,7 +290,11 @@ class LedgerPostingService(ListResponseMixin):
         journal.status = JournalStatus.POSTED
         journal.posting_batch_id = batch.batch_id
         journal.posted_at = datetime.now(timezone.utc)
-        journal.posted_by_user_id = coerce_uuid(request.posted_by_user_id) if request.posted_by_user_id else journal.created_by_user_id
+        journal.posted_by_user_id = (
+            coerce_uuid(request.posted_by_user_id)
+            if request.posted_by_user_id
+            else journal.created_by_user_id
+        )
 
         # 13. Commit the transaction
         db.commit()
@@ -334,7 +347,9 @@ class LedgerPostingService(ListResponseMixin):
                 credit_amount_functional=line.credit_amount_functional,
                 original_currency_code=line.currency_code,
                 original_debit_amount=line.debit_amount if line.currency_code else None,
-                original_credit_amount=line.credit_amount if line.currency_code else None,
+                original_credit_amount=line.credit_amount
+                if line.currency_code
+                else None,
                 exchange_rate=line.exchange_rate,
                 business_unit_id=line.business_unit_id,
                 cost_center_id=line.cost_center_id,
@@ -354,17 +369,20 @@ class LedgerPostingService(ListResponseMixin):
         if abs(total_debit - total_credit) > LedgerPostingService.BALANCE_TOLERANCE:
             raise HTTPException(
                 status_code=400,
-                detail=f"Journal is unbalanced: debits={total_debit}, credits={total_credit}"
+                detail=f"Journal is unbalanced: debits={total_debit}, credits={total_credit}",
             )
 
     @staticmethod
     def _validate_functional_amounts(entries: list[PostingEntry]) -> None:
         """Validate that functional currency amounts are provided."""
         for i, entry in enumerate(entries):
-            if entry.debit_amount_functional == 0 and entry.credit_amount_functional == 0:
+            if (
+                entry.debit_amount_functional == 0
+                and entry.credit_amount_functional == 0
+            ):
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Line {i+1}: functional currency amounts cannot both be zero"
+                    detail=f"Line {i + 1}: functional currency amounts cannot both be zero",
                 )
 
     @staticmethod
@@ -463,16 +481,22 @@ class LedgerPostingService(ListResponseMixin):
         )
 
         if journal_entry_id:
-            query = query.filter(PostedLedgerLine.journal_entry_id == coerce_uuid(journal_entry_id))
+            query = query.filter(
+                PostedLedgerLine.journal_entry_id == coerce_uuid(journal_entry_id)
+            )
 
         if posting_batch_id:
-            query = query.filter(PostedLedgerLine.posting_batch_id == coerce_uuid(posting_batch_id))
+            query = query.filter(
+                PostedLedgerLine.posting_batch_id == coerce_uuid(posting_batch_id)
+            )
 
         if account_id:
             query = query.filter(PostedLedgerLine.account_id == coerce_uuid(account_id))
 
         if fiscal_period_id:
-            query = query.filter(PostedLedgerLine.fiscal_period_id == coerce_uuid(fiscal_period_id))
+            query = query.filter(
+                PostedLedgerLine.fiscal_period_id == coerce_uuid(fiscal_period_id)
+            )
 
         if from_date:
             query = query.filter(PostedLedgerLine.posting_date >= from_date)

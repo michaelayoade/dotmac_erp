@@ -8,7 +8,7 @@ import hashlib
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, List, Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from sqlalchemy import and_
@@ -116,13 +116,11 @@ class AuditLogService(ListResponseMixin):
             )
 
             db.add(audit_log)
-            db.commit()
-            db.refresh(audit_log)
+            db.flush()
 
             return audit_log.audit_id
         except SQLAlchemyError as e:
-            db.rollback()
-            logger.error(f"Failed to write audit log: {e}")
+            logger.error("Failed to write audit log: %s", e)
             raise
 
     @staticmethod

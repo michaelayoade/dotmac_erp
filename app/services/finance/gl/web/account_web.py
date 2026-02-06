@@ -17,23 +17,23 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.finance.gl.account import Account, AccountType, NormalBalance
-from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
 from app.models.finance.gl.account_balance import AccountBalance, BalanceType
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 from app.services.audit_info import get_audit_service
 from app.services.common import coerce_uuid
-from app.services.finance.platform.currency_context import get_currency_context
-from app.services.finance.platform.org_context import org_context_service
 from app.services.finance.gl.web.base import (
-    account_form_view,
     account_detail_view,
+    account_form_view,
     category_option_view,
     format_currency,
     ifrs_label,
     parse_category,
 )
+from app.services.finance.platform.currency_context import get_currency_context
+from app.services.finance.platform.org_context import org_context_service
+from app.templates import templates
+from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +53,16 @@ def _calculate_account_balances(
             AccountBalance.account_id,
             AccountBalance.net_balance,
         )
-        .join(FiscalPeriod, AccountBalance.fiscal_period_id == FiscalPeriod.fiscal_period_id)
+        .join(
+            FiscalPeriod,
+            AccountBalance.fiscal_period_id == FiscalPeriod.fiscal_period_id,
+        )
         .filter(
             AccountBalance.account_id.in_(account_ids),
             AccountBalance.balance_type == BalanceType.ACTUAL,
-            FiscalPeriod.status.in_([PeriodStatus.SOFT_CLOSED, PeriodStatus.HARD_CLOSED]),
+            FiscalPeriod.status.in_(
+                [PeriodStatus.SOFT_CLOSED, PeriodStatus.HARD_CLOSED]
+            ),
         )
         .order_by(FiscalPeriod.end_date.desc())
         .all()
@@ -86,7 +91,9 @@ def _calculate_account_balance_trends(
         db.query(FiscalPeriod)
         .filter(
             FiscalPeriod.organization_id == coerce_uuid(organization_id),
-            FiscalPeriod.status.in_([PeriodStatus.SOFT_CLOSED, PeriodStatus.HARD_CLOSED]),
+            FiscalPeriod.status.in_(
+                [PeriodStatus.SOFT_CLOSED, PeriodStatus.HARD_CLOSED]
+            ),
         )
         .order_by(FiscalPeriod.end_date.desc())
         .limit(periods)
@@ -140,7 +147,11 @@ class AccountWebService:
         """Get context for account listing page."""
         logger.debug(
             "list_accounts_context: org=%s search=%r category=%s status=%s page=%d",
-            organization_id, search, category, status, page
+            organization_id,
+            search,
+            category,
+            status,
+            page,
         )
         org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
@@ -173,14 +184,15 @@ class AccountWebService:
 
         total_count = query.with_entities(func.count(Account.account_id)).scalar() or 0
         accounts = (
-            query.order_by(Account.account_code)
-            .limit(limit)
-            .offset(offset)
-            .all()
+            query.order_by(Account.account_code).limit(limit).offset(offset).all()
         )
 
         audit_service = get_audit_service(db)
-        creator_ids = [account.created_by_user_id for account in accounts if account.created_by_user_id]
+        creator_ids = [
+            account.created_by_user_id
+            for account in accounts
+            if account.created_by_user_id
+        ]
         creator_names = audit_service.get_user_names_batch(creator_ids)
 
         account_ids = [a.account_id for a in accounts]
@@ -203,7 +215,9 @@ class AccountWebService:
                     "category": category_label,
                     "normal_balance": account.normal_balance.value,
                     "balance": format_currency(account_balance, functional_currency),
-                    "balance_trend": trend if trend and any(v != 0 for v in trend) else None,
+                    "balance_trend": trend
+                    if trend and any(v != 0 for v in trend)
+                    else None,
                     "is_active": account.is_active,
                     "created_at": account.created_at,
                     "created_by_user_id": account.created_by_user_id,
@@ -240,8 +254,7 @@ class AccountWebService:
     ) -> dict:
         """Get context for account create/edit form."""
         logger.debug(
-            "account_form_context: org=%s account_id=%s",
-            organization_id, account_id
+            "account_form_context: org=%s account_id=%s", organization_id, account_id
         )
         org_id = coerce_uuid(organization_id)
         account = None
@@ -268,7 +281,11 @@ class AccountWebService:
                 ("EQT", "Equity", IFRSCategory.EQUITY),
                 ("REV", "Revenue", IFRSCategory.REVENUE),
                 ("EXP", "Expenses", IFRSCategory.EXPENSES),
-                ("OCI", "Other Comprehensive Income", IFRSCategory.OTHER_COMPREHENSIVE_INCOME),
+                (
+                    "OCI",
+                    "Other Comprehensive Income",
+                    IFRSCategory.OTHER_COMPREHENSIVE_INCOME,
+                ),
             ]
             seeded = []
             for index, (code, name, ifrs_cat) in enumerate(defaults, start=1):
@@ -314,8 +331,7 @@ class AccountWebService:
     ) -> dict:
         """Get context for account detail page."""
         logger.debug(
-            "account_detail_context: org=%s account_id=%s",
-            organization_id, account_id
+            "account_detail_context: org=%s account_id=%s", organization_id, account_id
         )
         org_id = coerce_uuid(organization_id)
         account = db.get(Account, coerce_uuid(account_id))
@@ -348,7 +364,9 @@ class AccountWebService:
         """Create a new GL account. Returns (account, error)."""
         logger.debug(
             "create_account: org=%s code=%s name=%s",
-            organization_id, account_code, account_name
+            organization_id,
+            account_code,
+            account_name,
         )
         org_id = coerce_uuid(organization_id)
 
@@ -401,7 +419,9 @@ class AccountWebService:
             db.add(account)
             db.commit()
             db.refresh(account)
-            logger.info("create_account: created %s for org %s", account.account_code, org_id)
+            logger.info(
+                "create_account: created %s for org %s", account.account_code, org_id
+            )
             return account, None
 
         except Exception as e:
@@ -433,8 +453,7 @@ class AccountWebService:
     ) -> tuple[Optional[Account], Optional[str]]:
         """Update an existing GL account. Returns (account, error)."""
         logger.debug(
-            "update_account: org=%s account_id=%s",
-            organization_id, account_id
+            "update_account: org=%s account_id=%s", organization_id, account_id
         )
         org_id = coerce_uuid(organization_id)
         acct_id = coerce_uuid(account_id)
@@ -488,7 +507,9 @@ class AccountWebService:
 
             db.commit()
             db.refresh(account)
-            logger.info("update_account: updated %s for org %s", account.account_code, org_id)
+            logger.info(
+                "update_account: updated %s for org %s", account.account_code, org_id
+            )
             return account, None
 
         except Exception as e:
@@ -504,8 +525,7 @@ class AccountWebService:
     ) -> Optional[str]:
         """Delete a GL account. Returns error message or None on success."""
         logger.debug(
-            "delete_account: org=%s account_id=%s",
-            organization_id, account_id
+            "delete_account: org=%s account_id=%s", organization_id, account_id
         )
         org_id = coerce_uuid(organization_id)
         acct_id = coerce_uuid(account_id)
@@ -515,6 +535,7 @@ class AccountWebService:
             return "Account not found"
 
         from app.models.finance.gl.journal_entry_line import JournalEntryLine
+
         line_count = (
             db.query(JournalEntryLine)
             .filter(JournalEntryLine.account_id == acct_id)
@@ -579,7 +600,9 @@ class AccountWebService:
         """Render new account form page."""
         context = base_context(request, auth, "New Account", "gl")
         context.update(self.account_form_context(db, str(auth.organization_id)))
-        return templates.TemplateResponse(request, "finance/gl/account_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/gl/account_form.html", context
+        )
 
     def account_detail_response(
         self,
@@ -597,7 +620,9 @@ class AccountWebService:
                 account_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/gl/account_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/gl/account_detail.html", context
+        )
 
     def account_edit_form_response(
         self,
@@ -615,7 +640,9 @@ class AccountWebService:
                 account_id=account_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/gl/account_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/gl/account_form.html", context
+        )
 
     def create_account_response(
         self,
@@ -642,9 +669,12 @@ class AccountWebService:
         """Handle account creation form submission."""
         org_id = auth.organization_id
         assert org_id is not None
-        currency_code = default_currency_code or org_context_service.get_functional_currency(
-            db,
-            org_id,
+        currency_code = (
+            default_currency_code
+            or org_context_service.get_functional_currency(
+                db,
+                org_id,
+            )
         )
 
         account, error = self.create_account(
@@ -690,9 +720,13 @@ class AccountWebService:
                 "is_cash_equivalent": is_cash_equivalent,
                 "is_financial_instrument": is_financial_instrument,
             }
-            return templates.TemplateResponse(request, "finance/gl/account_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/gl/account_form.html", context
+            )
 
-        return RedirectResponse(url=f"/finance/gl/accounts/{account.account_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/finance/gl/accounts/{account.account_id}", status_code=303
+        )
 
     def update_account_response(
         self,
@@ -720,9 +754,12 @@ class AccountWebService:
         """Handle account update form submission."""
         org_id = auth.organization_id
         assert org_id is not None
-        currency_code = default_currency_code or org_context_service.get_functional_currency(
-            db,
-            org_id,
+        currency_code = (
+            default_currency_code
+            or org_context_service.get_functional_currency(
+                db,
+                org_id,
+            )
         )
 
         _, error = self.update_account(
@@ -757,9 +794,13 @@ class AccountWebService:
                 )
             )
             context["error"] = error
-            return templates.TemplateResponse(request, "finance/gl/account_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/gl/account_form.html", context
+            )
 
-        return RedirectResponse(url=f"/finance/gl/accounts/{account_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/finance/gl/accounts/{account_id}", status_code=303
+        )
 
     def delete_account_response(
         self,
@@ -781,6 +822,8 @@ class AccountWebService:
                 )
             )
             context["error"] = error
-            return templates.TemplateResponse(request, "finance/gl/account_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/gl/account_detail.html", context
+            )
 
         return RedirectResponse(url="/finance/gl/accounts", status_code=303)

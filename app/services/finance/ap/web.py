@@ -6,8 +6,9 @@ Provides view-focused data for AP web routes.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
+import logging
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Optional
@@ -18,58 +19,71 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, load_only
 
-from app.models.finance.ap.payment_batch import APBatchStatus
-from app.models.finance.ap.supplier import Supplier, SupplierType
-from app.models.finance.ap.supplier_invoice import SupplierInvoice, SupplierInvoiceStatus, SupplierInvoiceType
-from app.models.finance.ap.supplier_payment import SupplierPayment, APPaymentStatus
-from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
+from app.config import settings
 from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
-from app.models.finance.ap.purchase_order import PurchaseOrder, POStatus
-from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.goods_receipt import GoodsReceipt, ReceiptStatus
 from app.models.finance.ap.goods_receipt_line import GoodsReceiptLine
+from app.models.finance.ap.payment_batch import APBatchStatus
+from app.models.finance.ap.purchase_order import POStatus, PurchaseOrder
+from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
+from app.models.finance.ap.supplier import Supplier, SupplierType
+from app.models.finance.ap.supplier_invoice import (
+    SupplierInvoice,
+    SupplierInvoiceStatus,
+    SupplierInvoiceType,
+)
+from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
+from app.models.finance.ap.supplier_payment import (
+    APPaymentMethod,
+    APPaymentStatus,
+    SupplierPayment,
+)
+from app.models.finance.banking.bank_account import BankAccountStatus
+from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.core_org.cost_center import CostCenter
 from app.models.finance.core_org.project import Project
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
-from app.models.finance.banking.bank_account import BankAccountStatus
-from app.models.finance.ap.supplier_payment import APPaymentMethod
-from app.models.finance.common.attachment import AttachmentCategory
-from app.config import settings
 from app.services.audit_info import get_audit_service
 from app.services.common import coerce_uuid
 from app.services.finance.ap.ap_aging import ap_aging_service
-from app.services.finance.ap.goods_receipt import goods_receipt_service, GoodsReceiptInput, GRLineInput
+from app.services.finance.ap.goods_receipt import (
+    GoodsReceiptInput,
+    GRLineInput,
+    goods_receipt_service,
+)
 from app.services.finance.ap.payment_batch import payment_batch_service
-from app.services.finance.ap.purchase_order import purchase_order_service, PurchaseOrderInput, POLineInput
+from app.services.finance.ap.purchase_order import (
+    POLineInput,
+    PurchaseOrderInput,
+    purchase_order_service,
+)
 from app.services.finance.ap.supplier import SupplierInput, supplier_service
 from app.services.finance.ap.supplier_invoice import (
     InvoiceLineInput,
     SupplierInvoiceInput,
     supplier_invoice_service,
 )
-from app.services.finance.ap.supplier_payment import supplier_payment_service
-from app.services.finance.banking.bank_account import bank_account_service
-from app.services.finance.common.attachment import attachment_service, AttachmentInput
-from app.services.finance.platform.org_context import org_context_service
-from app.services.finance.platform.currency_context import get_currency_context
-from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
 from app.services.finance.ap.supplier_payment import (
-    supplier_payment_service,
-    SupplierPaymentInput,
     PaymentAllocationInput,
+    SupplierPaymentInput,
+    supplier_payment_service,
 )
-from app.models.finance.ap.supplier_payment import APPaymentMethod, APPaymentStatus
-from app.services.finance.common.attachment import attachment_service
-from app.services.finance.platform.currency_context import get_currency_context
+from app.services.finance.banking.bank_account import bank_account_service
 from app.services.finance.common import (
-    parse_date,
-    format_date,
     format_currency,
+    format_date,
     format_file_size,
+    parse_date,
     parse_enum_safe,
 )
+from app.services.finance.common.attachment import AttachmentInput, attachment_service
+from app.services.finance.platform.currency_context import get_currency_context
+from app.services.finance.platform.org_context import org_context_service
+from app.templates import templates
+from app.web.deps import WebAuthContext, base_context
+
+logger = logging.getLogger(__name__)
 
 # Keep aliases for backward compatibility with existing code
 _parse_date = parse_date
@@ -110,7 +124,7 @@ def _calculate_supplier_balance_trends(
         if i == 0:
             as_of_date = today
         else:
-            month_start = (today.replace(day=1) - relativedelta(months=i))
+            month_start = today.replace(day=1) - relativedelta(months=i)
             # Last day of that month
             next_month = month_start + relativedelta(months=1)
             as_of_date = next_month - timedelta(days=1)
@@ -122,18 +136,23 @@ def _calculate_supplier_balance_trends(
             db.query(
                 SupplierInvoice.supplier_id,
                 func.coalesce(
-                    func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
+                    func.sum(
+                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
+                    ),
+                    0,
                 ).label("balance"),
             )
             .filter(
                 SupplierInvoice.organization_id == organization_id,
                 SupplierInvoice.supplier_id.in_(supplier_ids),
                 SupplierInvoice.invoice_date <= as_of_date,
-                SupplierInvoice.status.in_([
-                    SupplierInvoiceStatus.POSTED,
-                    SupplierInvoiceStatus.PARTIALLY_PAID,
-                    SupplierInvoiceStatus.PAID,  # Include paid to see historical
-                ]),
+                SupplierInvoice.status.in_(
+                    [
+                        SupplierInvoiceStatus.POSTED,
+                        SupplierInvoiceStatus.PARTIALLY_PAID,
+                        SupplierInvoiceStatus.PAID,  # Include paid to see historical
+                    ]
+                ),
             )
             .group_by(SupplierInvoice.supplier_id)
             .all()
@@ -155,8 +174,12 @@ def _supplier_option_view(supplier: Supplier) -> dict:
         "currency_code": supplier.currency_code,
         "payment_terms_days": supplier.payment_terms_days,
         # WHT fields for payment form
-        "withholding_tax_applicable": getattr(supplier, "withholding_tax_applicable", False),
-        "withholding_tax_code_id": str(supplier.withholding_tax_code_id) if getattr(supplier, "withholding_tax_code_id", None) else "",
+        "withholding_tax_applicable": getattr(
+            supplier, "withholding_tax_applicable", False
+        ),
+        "withholding_tax_code_id": str(supplier.withholding_tax_code_id)
+        if getattr(supplier, "withholding_tax_code_id", None)
+        else "",
     }
 
 
@@ -194,7 +217,9 @@ def _supplier_list_view(
         "contact_email": contact.get("email"),
         "payment_terms_days": supplier.payment_terms_days,
         "balance": _format_currency(balance, supplier.currency_code),
-        "balance_trend": balance_trend if balance_trend and any(v > 0 for v in balance_trend) else None,
+        "balance_trend": balance_trend
+        if balance_trend and any(v > 0 for v in balance_trend)
+        else None,
         "is_active": supplier.is_active,
         # Audit info
         "created_at": supplier.created_at,
@@ -239,7 +264,9 @@ def _invoice_line_view(line: SupplierInvoiceLine, currency_code: str) -> dict:
     }
 
 
-def _invoice_detail_view(invoice: SupplierInvoice, supplier: Optional[Supplier]) -> dict:
+def _invoice_detail_view(
+    invoice: SupplierInvoice, supplier: Optional[Supplier]
+) -> dict:
     balance = invoice.total_amount - invoice.amount_paid
     today = date.today()
     return {
@@ -261,12 +288,15 @@ def _invoice_detail_view(invoice: SupplierInvoice, supplier: Optional[Supplier])
         "status": _invoice_status_label(invoice.status),
         "is_overdue": (
             invoice.due_date < today
-            and invoice.status not in {SupplierInvoiceStatus.PAID, SupplierInvoiceStatus.VOID}
+            and invoice.status
+            not in {SupplierInvoiceStatus.PAID, SupplierInvoiceStatus.VOID}
         ),
     }
 
 
-def _payment_detail_view(payment: SupplierPayment, supplier: Optional[Supplier]) -> dict:
+def _payment_detail_view(
+    payment: SupplierPayment, supplier: Optional[Supplier]
+) -> dict:
     return {
         "payment_id": payment.payment_id,
         "payment_number": payment.payment_number,
@@ -290,7 +320,9 @@ def _allocation_view(
         "allocation_id": allocation.allocation_id,
         "invoice_id": allocation.invoice_id,
         "invoice_number": invoice.invoice_number if invoice else "",
-        "allocated_amount": _format_currency(allocation.allocated_amount, currency_code),
+        "allocated_amount": _format_currency(
+            allocation.allocated_amount, currency_code
+        ),
         "discount_taken": _format_currency(allocation.discount_taken, currency_code),
         "exchange_difference": _format_currency(
             allocation.exchange_difference,
@@ -413,10 +445,10 @@ class APWebService:
             legal_name=form_data.get("supplier_name", ""),
             trading_name=form_data.get("supplier_name"),
             tax_identification_number=form_data.get("tax_id"),
-                currency_code=form_data.get(
-                    "currency_code",
-                    settings.default_functional_currency_code,
-                ),
+            currency_code=form_data.get(
+                "currency_code",
+                settings.default_functional_currency_code,
+            ),
             payment_terms_days=int(form_data.get("payment_terms_days", 30)),
             ap_control_account_id=(
                 UUID(form_data["default_payable_account_id"])
@@ -453,8 +485,12 @@ class APWebService:
                 # Handle both new tax_code_ids array and legacy tax_code_id field
                 tax_code_ids = []
                 if line.get("tax_code_ids"):
-                    tax_code_ids = [UUID(tc_id) for tc_id in line["tax_code_ids"] if tc_id]
-                legacy_tax_code_id = UUID(line["tax_code_id"]) if line.get("tax_code_id") else None
+                    tax_code_ids = [
+                        UUID(tc_id) for tc_id in line["tax_code_ids"] if tc_id
+                    ]
+                legacy_tax_code_id = (
+                    UUID(line["tax_code_id"]) if line.get("tax_code_id") else None
+                )
 
                 lines.append(
                     InvoiceLineInput(
@@ -469,7 +505,9 @@ class APWebService:
                         cost_center_id=UUID(line["cost_center_id"])
                         if line.get("cost_center_id")
                         else None,
-                        project_id=UUID(line["project_id"]) if line.get("project_id") else None,
+                        project_id=UUID(line["project_id"])
+                        if line.get("project_id")
+                        else None,
                     )
                 )
 
@@ -520,12 +558,11 @@ class APWebService:
                 | (Supplier.tax_identification_number.ilike(search_pattern))
             )
 
-        total_count = query.with_entities(func.count(Supplier.supplier_id)).scalar() or 0
+        total_count = (
+            query.with_entities(func.count(Supplier.supplier_id)).scalar() or 0
+        )
         suppliers = (
-            query.order_by(Supplier.legal_name)
-            .limit(limit)
-            .offset(offset)
-            .all()
+            query.order_by(Supplier.legal_name).limit(limit).offset(offset).all()
         )
 
         open_statuses = [
@@ -536,7 +573,10 @@ class APWebService:
             db.query(
                 SupplierInvoice.supplier_id,
                 func.coalesce(
-                    func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
+                    func.sum(
+                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
+                    ),
+                    0,
                 ).label("balance"),
             )
             .filter(
@@ -572,21 +612,23 @@ class APWebService:
         total_suppliers = (
             db.query(func.count(Supplier.supplier_id))
             .filter(Supplier.organization_id == org_id)
-            .scalar() or 0
+            .scalar()
+            or 0
         )
         active_count = (
             db.query(func.count(Supplier.supplier_id))
             .filter(Supplier.organization_id == org_id, Supplier.is_active == True)
-            .scalar() or 0
+            .scalar()
+            or 0
         )
-        total_payables_raw = (
-            db.query(func.coalesce(func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0))
-            .filter(
-                SupplierInvoice.organization_id == org_id,
-                SupplierInvoice.status.in_(open_statuses),
+        total_payables_raw = db.query(
+            func.coalesce(
+                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
             )
-            .scalar() or Decimal("0")
-        )
+        ).filter(
+            SupplierInvoice.organization_id == org_id,
+            SupplierInvoice.status.in_(open_statuses),
+        ).scalar() or Decimal("0")
         overdue_count = (
             db.query(func.count(SupplierInvoice.invoice_id))
             .filter(
@@ -594,7 +636,8 @@ class APWebService:
                 SupplierInvoice.status.in_(open_statuses),
                 SupplierInvoice.due_date < date.today(),
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
 
         return {
@@ -661,21 +704,16 @@ class APWebService:
             SupplierInvoiceStatus.PARTIALLY_PAID,
         ]
 
-        balance = (
-            db.query(
-                func.coalesce(
-                    func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid),
-                    0,
-                )
+        balance = db.query(
+            func.coalesce(
+                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid),
+                0,
             )
-            .filter(
-                SupplierInvoice.organization_id == org_id,
-                SupplierInvoice.supplier_id == supplier.supplier_id,
-                SupplierInvoice.status.in_(open_statuses),
-            )
-            .scalar()
-            or Decimal("0")
-        )
+        ).filter(
+            SupplierInvoice.organization_id == org_id,
+            SupplierInvoice.supplier_id == supplier.supplier_id,
+            SupplierInvoice.status.in_(open_statuses),
+        ).scalar() or Decimal("0")
 
         invoices = (
             db.query(SupplierInvoice)
@@ -768,7 +806,9 @@ class APWebService:
         )
 
         if supplier_id:
-            query = query.filter(SupplierInvoice.supplier_id == coerce_uuid(supplier_id))
+            query = query.filter(
+                SupplierInvoice.supplier_id == coerce_uuid(supplier_id)
+            )
         if status_value:
             query = query.filter(SupplierInvoice.status == status_value)
         if from_date:
@@ -785,7 +825,9 @@ class APWebService:
                 )
             )
 
-        total_count = query.with_entities(func.count(SupplierInvoice.invoice_id)).scalar() or 0
+        total_count = (
+            query.with_entities(func.count(SupplierInvoice.invoice_id)).scalar() or 0
+        )
         invoices = (
             query.order_by(SupplierInvoice.invoice_date.desc())
             .limit(limit)
@@ -798,45 +840,38 @@ class APWebService:
             SupplierInvoiceStatus.PARTIALLY_PAID,
         ]
         stats_base = query.with_entities(SupplierInvoice)
-        outstanding_filter = stats_base.filter(SupplierInvoice.status.in_(open_statuses))
-
-        total_outstanding = (
-            outstanding_filter.with_entities(
-                func.coalesce(
-                    func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
-                )
-            ).scalar()
-            or Decimal("0")
+        outstanding_filter = stats_base.filter(
+            SupplierInvoice.status.in_(open_statuses)
         )
 
-        past_due = (
-            outstanding_filter.filter(SupplierInvoice.due_date < today)
-            .with_entities(
-                func.coalesce(
-                    func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
-                )
+        total_outstanding = outstanding_filter.with_entities(
+            func.coalesce(
+                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
             )
-            .scalar()
-            or Decimal("0")
-        )
+        ).scalar() or Decimal("0")
+
+        past_due = outstanding_filter.filter(
+            SupplierInvoice.due_date < today
+        ).with_entities(
+            func.coalesce(
+                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
+            )
+        ).scalar() or Decimal("0")
 
         due_this_week_end = today + timedelta(days=7)
-        due_this_week = (
-            outstanding_filter.filter(
-                SupplierInvoice.due_date >= today,
-                SupplierInvoice.due_date <= due_this_week_end,
+        due_this_week = outstanding_filter.filter(
+            SupplierInvoice.due_date >= today,
+            SupplierInvoice.due_date <= due_this_week_end,
+        ).with_entities(
+            func.coalesce(
+                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
             )
-            .with_entities(
-                func.coalesce(
-                    func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
-                )
-            )
-            .scalar()
-            or Decimal("0")
-        )
+        ).scalar() or Decimal("0")
 
         pending_count = (
-            stats_base.filter(SupplierInvoice.status == SupplierInvoiceStatus.PENDING_APPROVAL)
+            stats_base.filter(
+                SupplierInvoice.status == SupplierInvoiceStatus.PENDING_APPROVAL
+            )
             .with_entities(func.count(SupplierInvoice.invoice_id))
             .scalar()
             or 0
@@ -859,7 +894,8 @@ class APWebService:
                     "status": _invoice_status_label(invoice.status),
                     "is_overdue": (
                         invoice.due_date < today
-                        and invoice.status not in {SupplierInvoiceStatus.PAID, SupplierInvoiceStatus.VOID}
+                        and invoice.status
+                        not in {SupplierInvoiceStatus.PAID, SupplierInvoiceStatus.VOID}
                     ),
                 }
             )
@@ -906,9 +942,9 @@ class APWebService:
         supplier_id: Optional[str] = None,
         po_id: Optional[str] = None,
     ) -> dict:
-        from app.models.finance.tax.tax_code import TaxCode, TaxType
-        from app.models.inventory.item import Item
+        from app.models.finance.tax.tax_code import TaxCode
         from app.models.fixed_assets.asset_category import AssetCategory
+        from app.models.inventory.item import Item
 
         org_id = coerce_uuid(organization_id)
         suppliers_list = [
@@ -930,16 +966,20 @@ class APWebService:
                 "tax_code": tax.tax_code,
                 "tax_name": tax.tax_name,
                 "tax_rate": float(tax.tax_rate),
-                "rate_display": float((tax.tax_rate * 100).quantize(Decimal("0.01"))) if tax.tax_rate < 1 else float(tax.tax_rate),
+                "rate_display": float((tax.tax_rate * 100).quantize(Decimal("0.01")))
+                if tax.tax_rate < 1
+                else float(tax.tax_rate),
                 "is_inclusive": tax.is_inclusive,
                 "is_compound": tax.is_compound,
                 "is_recoverable": getattr(tax, "is_recoverable", True),
             }
-            for tax in db.query(TaxCode).filter(
+            for tax in db.query(TaxCode)
+            .filter(
                 TaxCode.organization_id == org_id,
                 TaxCode.is_active == True,
                 TaxCode.applies_to_purchases == True,
-            ).all()
+            )
+            .all()
         ]
 
         # Pre-populated data from PO
@@ -962,7 +1002,9 @@ class APWebService:
                     "po_id": str(po.po_id),
                     "po_number": po.po_number,
                     "supplier_id": str(po.supplier_id),
-                    "supplier_name": _supplier_display_name(supplier) if supplier else "",
+                    "supplier_name": _supplier_display_name(supplier)
+                    if supplier
+                    else "",
                     "currency_code": po.currency_code,
                     "total_amount": float(po.total_amount) if po.total_amount else 0,
                 }
@@ -978,15 +1020,19 @@ class APWebService:
                     .all()
                 )
                 for line in lines:
-                    po_lines.append({
-                        "line_id": str(line.line_id),
-                        "line_number": line.line_number,
-                        "description": line.description,
-                        "quantity": float(line.quantity_ordered),
-                        "unit_price": float(line.unit_price),
-                        "amount": float(line.quantity_ordered * line.unit_price),
-                        "expense_account_id": str(line.expense_account_id) if line.expense_account_id else "",
-                    })
+                    po_lines.append(
+                        {
+                            "line_id": str(line.line_id),
+                            "line_number": line.line_number,
+                            "description": line.description,
+                            "quantity": float(line.quantity_ordered),
+                            "unit_price": float(line.unit_price),
+                            "amount": float(line.quantity_ordered * line.unit_price),
+                            "expense_account_id": str(line.expense_account_id)
+                            if line.expense_account_id
+                            else "",
+                        }
+                    )
 
         # Get inventory items for AP → INV integration
         items_list = [
@@ -994,14 +1040,20 @@ class APWebService:
                 "item_id": str(item.item_id),
                 "item_code": item.item_code,
                 "item_name": item.item_name,
-                "unit_price": float(item.last_purchase_cost) if item.last_purchase_cost else 0,
+                "unit_price": float(item.last_purchase_cost)
+                if item.last_purchase_cost
+                else 0,
                 "uom": item.base_uom,
             }
-            for item in db.query(Item).filter(
+            for item in db.query(Item)
+            .filter(
                 Item.organization_id == org_id,
                 Item.is_active == True,
                 Item.is_purchaseable == True,
-            ).order_by(Item.item_code).limit(200).all()
+            )
+            .order_by(Item.item_code)
+            .limit(200)
+            .all()
         ]
 
         # Get asset accounts for capitalization (AP → FA integration)
@@ -1015,10 +1067,13 @@ class APWebService:
                 "category_name": cat.category_name,
                 "threshold": float(cat.capitalization_threshold),
             }
-            for cat in db.query(AssetCategory).filter(
+            for cat in db.query(AssetCategory)
+            .filter(
                 AssetCategory.organization_id == org_id,
                 AssetCategory.is_active == True,
-            ).order_by(AssetCategory.category_code).all()
+            )
+            .order_by(AssetCategory.category_code)
+            .all()
         ]
 
         context = {
@@ -1066,9 +1121,7 @@ class APWebService:
             organization_id=org_id,
             invoice_id=invoice.invoice_id,
         )
-        lines_view = [
-            _invoice_line_view(line, invoice.currency_code) for line in lines
-        ]
+        lines_view = [_invoice_line_view(line, invoice.currency_code) for line in lines]
 
         # Get attachments
         attachments = attachment_service.list_for_entity(
@@ -1125,7 +1178,9 @@ class APWebService:
         )
 
         if supplier_id:
-            query = query.filter(SupplierPayment.supplier_id == coerce_uuid(supplier_id))
+            query = query.filter(
+                SupplierPayment.supplier_id == coerce_uuid(supplier_id)
+            )
         if status_value:
             query = query.filter(SupplierPayment.status == status_value)
         if from_date:
@@ -1141,7 +1196,9 @@ class APWebService:
                 )
             )
 
-        total_count = query.with_entities(func.count(SupplierPayment.payment_id)).scalar() or 0
+        total_count = (
+            query.with_entities(func.count(SupplierPayment.payment_id)).scalar() or 0
+        )
         payments = (
             query.order_by(SupplierPayment.payment_date.desc())
             .limit(limit)
@@ -1269,7 +1326,8 @@ class APWebService:
                 "id": str(code.tax_code_id),
                 "code": code.tax_code,
                 "name": code.tax_name,
-                "rate": float(code.tax_rate) * 100,  # Convert decimal to percentage for display
+                "rate": float(code.tax_rate)
+                * 100,  # Convert decimal to percentage for display
             }
             for code in wht_codes
         ]
@@ -1399,9 +1457,7 @@ class APWebService:
             )
             aging_data = [summary]
         else:
-            aging_data = ap_aging_service.get_aging_by_supplier(
-                db, org_id, ref_date
-            )
+            aging_data = ap_aging_service.get_aging_by_supplier(db, org_id, ref_date)
 
         suppliers_list = [
             _supplier_option_view(supplier)
@@ -1437,54 +1493,66 @@ class APWebService:
         else:
             dpo = 0
 
-        aging_summary = {
-            "total": fmt(grand_total),
-            "invoice_count": total_invoices,
-            "current": fmt(total_current),
-            "current_pct": _pct(total_current, grand_total),
-            "days_30": fmt(total_30),
-            "days_30_pct": _pct(total_30, grand_total),
-            "days_60": fmt(total_60),
-            "days_60_pct": _pct(total_60, grand_total),
-            "days_90": fmt(total_90),
-            "days_90_pct": _pct(total_90, grand_total),
-            "days_90_raw": float(total_90),
-            "dpo": dpo,
-        } if aging_data else None
+        aging_summary = (
+            {
+                "total": fmt(grand_total),
+                "invoice_count": total_invoices,
+                "current": fmt(total_current),
+                "current_pct": _pct(total_current, grand_total),
+                "days_30": fmt(total_30),
+                "days_30_pct": _pct(total_30, grand_total),
+                "days_60": fmt(total_60),
+                "days_60_pct": _pct(total_60, grand_total),
+                "days_90": fmt(total_90),
+                "days_90_pct": _pct(total_90, grand_total),
+                "days_90_raw": float(total_90),
+                "dpo": dpo,
+            }
+            if aging_data
+            else None
+        )
 
         # Per-supplier rows for the table
         supplier_aging = []
         for r in aging_data:
             row_total = r.current + r.days_31_60 + r.days_61_90 + r.over_90
-            supplier_aging.append({
-                "supplier_id": r.supplier_id,
-                "supplier_name": r.supplier_name,
-                "supplier_code": r.supplier_code,
-                "current": fmt(r.current),
-                "current_raw": float(r.current),
-                "days_30": fmt(r.days_31_60),
-                "days_30_raw": float(r.days_31_60),
-                "days_60": fmt(r.days_61_90),
-                "days_60_raw": float(r.days_61_90),
-                "days_90": fmt(r.over_90),
-                "days_90_raw": float(r.over_90),
-                "total": fmt(row_total),
-                "current_pct": _pct(r.current, row_total),
-                "days_30_pct": _pct(r.days_31_60, row_total),
-                "days_60_pct": _pct(r.days_61_90, row_total),
-                "days_90_pct": _pct(r.over_90, row_total),
-            })
+            supplier_aging.append(
+                {
+                    "supplier_id": r.supplier_id,
+                    "supplier_name": r.supplier_name,
+                    "supplier_code": r.supplier_code,
+                    "current": fmt(r.current),
+                    "current_raw": float(r.current),
+                    "days_30": fmt(r.days_31_60),
+                    "days_30_raw": float(r.days_31_60),
+                    "days_60": fmt(r.days_61_90),
+                    "days_60_raw": float(r.days_61_90),
+                    "days_90": fmt(r.over_90),
+                    "days_90_raw": float(r.over_90),
+                    "total": fmt(row_total),
+                    "current_pct": _pct(r.current, row_total),
+                    "days_30_pct": _pct(r.days_31_60, row_total),
+                    "days_60_pct": _pct(r.days_61_90, row_total),
+                    "days_90_pct": _pct(r.over_90, row_total),
+                }
+            )
 
         # Chart data JSON for the <script> tag
-        aging_chart_data = json.dumps({
-            "buckets": {
-                "current": float(total_current),
-                "days_30": float(total_30),
-                "days_60": float(total_60),
-                "days_90": float(total_90),
-            },
-            "currency": currency,
-        }) if aging_data else "{}"
+        aging_chart_data = (
+            json.dumps(
+                {
+                    "buckets": {
+                        "current": float(total_current),
+                        "days_30": float(total_30),
+                        "days_60": float(total_60),
+                        "days_90": float(total_90),
+                    },
+                    "currency": currency,
+                }
+            )
+            if aging_data
+            else "{}"
+        )
 
         return {
             "aging_summary": aging_summary,
@@ -1494,7 +1562,6 @@ class APWebService:
             "as_of_date": as_of_date or _format_date(ref_date or date.today()),
             "aging_chart_data": aging_chart_data,
         }
-
 
     @staticmethod
     def delete_supplier(
@@ -1573,7 +1640,9 @@ class APWebService:
         )
 
         if allocation_count > 0:
-            return f"Cannot delete invoice with {allocation_count} payment allocation(s)."
+            return (
+                f"Cannot delete invoice with {allocation_count} payment allocation(s)."
+            )
 
         try:
             # Delete invoice lines first
@@ -1641,7 +1710,9 @@ class APWebService:
                 settings.default_functional_currency_code,
             ),
             amount=Decimal(str(data.get("amount", 0))),
-            bank_account_id=UUID(data["bank_account_id"]) if data.get("bank_account_id") else None,
+            bank_account_id=UUID(data["bank_account_id"])
+            if data.get("bank_account_id")
+            else None,
             reference=data.get("reference"),
             description=data.get("description"),
             allocations=allocations,
@@ -1751,7 +1822,8 @@ class APWebService:
                 PurchaseOrder.organization_id == org_id,
                 PurchaseOrder.status == POStatus.DRAFT,
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
         pending_count = (
             db.query(func.count(PurchaseOrder.po_id))
@@ -1759,38 +1831,41 @@ class APWebService:
                 PurchaseOrder.organization_id == org_id,
                 PurchaseOrder.status == POStatus.PENDING_APPROVAL,
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
-        approved_total = (
-            db.query(func.coalesce(func.sum(PurchaseOrder.total_amount), 0))
-            .filter(
-                PurchaseOrder.organization_id == org_id,
-                PurchaseOrder.status == POStatus.APPROVED,
+        approved_total = db.query(
+            func.coalesce(func.sum(PurchaseOrder.total_amount), 0)
+        ).filter(
+            PurchaseOrder.organization_id == org_id,
+            PurchaseOrder.status == POStatus.APPROVED,
+        ).scalar() or Decimal("0")
+        open_total = db.query(
+            func.coalesce(
+                func.sum(PurchaseOrder.total_amount - PurchaseOrder.amount_received), 0
             )
-            .scalar() or Decimal("0")
-        )
-        open_total = (
-            db.query(func.coalesce(func.sum(PurchaseOrder.total_amount - PurchaseOrder.amount_received), 0))
-            .filter(
-                PurchaseOrder.organization_id == org_id,
-                PurchaseOrder.status.in_([POStatus.APPROVED, POStatus.PARTIALLY_RECEIVED]),
-            )
-            .scalar() or Decimal("0")
-        )
+        ).filter(
+            PurchaseOrder.organization_id == org_id,
+            PurchaseOrder.status.in_([POStatus.APPROVED, POStatus.PARTIALLY_RECEIVED]),
+        ).scalar() or Decimal("0")
 
         orders_view = []
         for po, supplier in orders:
-            orders_view.append({
-                "po_id": po.po_id,
-                "po_number": po.po_number,
-                "supplier_name": _supplier_display_name(supplier),
-                "po_date": _format_date(po.po_date),
-                "expected_delivery_date": _format_date(po.expected_delivery_date),
-                "total_amount": _format_currency(po.total_amount, po.currency_code),
-                "amount_received": _format_currency(po.amount_received, po.currency_code),
-                "status": po.status.value,
-                "currency_code": po.currency_code,
-            })
+            orders_view.append(
+                {
+                    "po_id": po.po_id,
+                    "po_number": po.po_number,
+                    "supplier_name": _supplier_display_name(supplier),
+                    "po_date": _format_date(po.po_date),
+                    "expected_delivery_date": _format_date(po.expected_delivery_date),
+                    "total_amount": _format_currency(po.total_amount, po.currency_code),
+                    "amount_received": _format_currency(
+                        po.amount_received, po.currency_code
+                    ),
+                    "status": po.status.value,
+                    "currency_code": po.currency_code,
+                }
+            )
 
         suppliers_list = [
             _supplier_option_view(supplier)
@@ -1851,18 +1926,20 @@ class APWebService:
 
         lines_view = []
         for line in lines:
-            lines_view.append({
-                "line_id": line.line_id,
-                "line_number": line.line_number,
-                "description": line.description,
-                "quantity_ordered": line.quantity_ordered,
-                "quantity_received": line.quantity_received,
-                "quantity_invoiced": line.quantity_invoiced,
-                "unit_price": _format_currency(line.unit_price, po.currency_code),
-                "line_amount": _format_currency(line.line_amount, po.currency_code),
-                "tax_amount": _format_currency(line.tax_amount, po.currency_code),
-                "item_id": line.item_id,
-            })
+            lines_view.append(
+                {
+                    "line_id": line.line_id,
+                    "line_number": line.line_number,
+                    "description": line.description,
+                    "quantity_ordered": line.quantity_ordered,
+                    "quantity_received": line.quantity_received,
+                    "quantity_invoiced": line.quantity_invoiced,
+                    "unit_price": _format_currency(line.unit_price, po.currency_code),
+                    "line_amount": _format_currency(line.line_amount, po.currency_code),
+                    "tax_amount": _format_currency(line.tax_amount, po.currency_code),
+                    "item_id": line.item_id,
+                }
+            )
 
         order_view = {
             "po_id": po.po_id,
@@ -1896,16 +1973,19 @@ class APWebService:
             line_count = (
                 db.query(func.count(GoodsReceiptLine.line_id))
                 .filter(GoodsReceiptLine.receipt_id == gr.receipt_id)
-                .scalar() or 0
+                .scalar()
+                or 0
             )
-            receipts_view.append({
-                "receipt_id": gr.receipt_id,
-                "receipt_number": gr.receipt_number,
-                "receipt_date": _format_date(gr.receipt_date),
-                "status": gr.status.value,
-                "line_count": line_count,
-                "notes": gr.notes,
-            })
+            receipts_view.append(
+                {
+                    "receipt_id": gr.receipt_id,
+                    "receipt_number": gr.receipt_number,
+                    "receipt_date": _format_date(gr.receipt_date),
+                    "status": gr.status.value,
+                    "line_count": line_count,
+                    "notes": gr.notes,
+                }
+            )
 
         # Get attachments
         attachments = attachment_service.list_for_entity(
@@ -1960,6 +2040,7 @@ class APWebService:
 
         # Get inventory items for selection
         from app.models.inventory.item import Item
+
         items = (
             db.query(Item)
             .filter(
@@ -1976,7 +2057,9 @@ class APWebService:
                 "item_id": item.item_id,
                 "item_code": item.item_code,
                 "item_name": item.item_name,
-                "standard_cost": float(item.standard_cost) if item.standard_cost else None,
+                "standard_cost": float(item.standard_cost)
+                if item.standard_cost
+                else None,
                 "currency_code": item.currency_code,
             }
             for item in items
@@ -2005,15 +2088,21 @@ class APWebService:
                     .all()
                 )
                 for line in po_lines:
-                    lines.append({
-                        "line_id": str(line.line_id),
-                        "item_id": str(line.item_id) if line.item_id else "",
-                        "description": line.description,
-                        "quantity": float(line.quantity_ordered),
-                        "unit_price": float(line.unit_price),
-                        "tax_amount": float(line.tax_amount) if line.tax_amount else 0,
-                        "expense_account_id": str(line.expense_account_id) if line.expense_account_id else "",
-                    })
+                    lines.append(
+                        {
+                            "line_id": str(line.line_id),
+                            "item_id": str(line.item_id) if line.item_id else "",
+                            "description": line.description,
+                            "quantity": float(line.quantity_ordered),
+                            "unit_price": float(line.unit_price),
+                            "tax_amount": float(line.tax_amount)
+                            if line.tax_amount
+                            else 0,
+                            "expense_account_id": str(line.expense_account_id)
+                            if line.expense_account_id
+                            else "",
+                        }
+                    )
 
         context = {
             "order": order,
@@ -2087,7 +2176,9 @@ class APWebService:
                 )
             )
 
-        total_count = query.with_entities(func.count(GoodsReceipt.receipt_id)).scalar() or 0
+        total_count = (
+            query.with_entities(func.count(GoodsReceipt.receipt_id)).scalar() or 0
+        )
         receipts = (
             query.order_by(GoodsReceipt.receipt_date.desc())
             .limit(limit)
@@ -2102,7 +2193,8 @@ class APWebService:
                 GoodsReceipt.organization_id == org_id,
                 GoodsReceipt.status == ReceiptStatus.RECEIVED,
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
         inspecting_count = (
             db.query(func.count(GoodsReceipt.receipt_id))
@@ -2110,7 +2202,8 @@ class APWebService:
                 GoodsReceipt.organization_id == org_id,
                 GoodsReceipt.status == ReceiptStatus.INSPECTING,
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
         accepted_count = (
             db.query(func.count(GoodsReceipt.receipt_id))
@@ -2118,7 +2211,8 @@ class APWebService:
                 GoodsReceipt.organization_id == org_id,
                 GoodsReceipt.status == ReceiptStatus.ACCEPTED,
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
 
         receipts_view = []
@@ -2127,19 +2221,22 @@ class APWebService:
             line_count = (
                 db.query(func.count(GoodsReceiptLine.line_id))
                 .filter(GoodsReceiptLine.receipt_id == gr.receipt_id)
-                .scalar() or 0
+                .scalar()
+                or 0
             )
-            receipts_view.append({
-                "receipt_id": gr.receipt_id,
-                "receipt_number": gr.receipt_number,
-                "supplier_name": _supplier_display_name(supplier),
-                "po_number": po.po_number,
-                "po_id": po.po_id,
-                "receipt_date": _format_date(gr.receipt_date),
-                "status": gr.status.value,
-                "line_count": line_count,
-                "notes": gr.notes,
-            })
+            receipts_view.append(
+                {
+                    "receipt_id": gr.receipt_id,
+                    "receipt_number": gr.receipt_number,
+                    "supplier_name": _supplier_display_name(supplier),
+                    "po_number": po.po_number,
+                    "po_id": po.po_id,
+                    "receipt_date": _format_date(gr.receipt_date),
+                    "status": gr.status.value,
+                    "line_count": line_count,
+                    "notes": gr.notes,
+                }
+            )
 
         suppliers_list = [
             _supplier_option_view(supplier)
@@ -2194,7 +2291,10 @@ class APWebService:
 
         lines = (
             db.query(GoodsReceiptLine, PurchaseOrderLine)
-            .join(PurchaseOrderLine, GoodsReceiptLine.po_line_id == PurchaseOrderLine.line_id)
+            .join(
+                PurchaseOrderLine,
+                GoodsReceiptLine.po_line_id == PurchaseOrderLine.line_id,
+            )
             .filter(GoodsReceiptLine.receipt_id == receipt_uuid)
             .order_by(GoodsReceiptLine.line_number)
             .all()
@@ -2202,18 +2302,22 @@ class APWebService:
 
         lines_view = []
         for gr_line, po_line in lines:
-            lines_view.append({
-                "line_id": gr_line.line_id,
-                "line_number": gr_line.line_number,
-                "description": po_line.description,
-                "quantity_ordered": po_line.quantity_ordered,
-                "quantity_received": gr_line.quantity_received,
-                "quantity_accepted": gr_line.quantity_accepted,
-                "quantity_rejected": gr_line.quantity_rejected,
-                "rejection_reason": gr_line.rejection_reason,
-                "lot_number": gr_line.lot_number,
-                "unit_price": _format_currency(po_line.unit_price, po.currency_code) if po else None,
-            })
+            lines_view.append(
+                {
+                    "line_id": gr_line.line_id,
+                    "line_number": gr_line.line_number,
+                    "description": po_line.description,
+                    "quantity_ordered": po_line.quantity_ordered,
+                    "quantity_received": gr_line.quantity_received,
+                    "quantity_accepted": gr_line.quantity_accepted,
+                    "quantity_rejected": gr_line.quantity_rejected,
+                    "rejection_reason": gr_line.rejection_reason,
+                    "lot_number": gr_line.lot_number,
+                    "unit_price": _format_currency(po_line.unit_price, po.currency_code)
+                    if po
+                    else None,
+                }
+            )
 
         receipt_view = {
             "receipt_id": gr.receipt_id,
@@ -2260,7 +2364,9 @@ class APWebService:
                 "po_date": _format_date(po.po_date),
                 "status": po.status.value,
                 "total_amount": _format_currency(po.total_amount, po.currency_code),
-            } if po else None,
+            }
+            if po
+            else None,
             "lines": lines_view,
             "attachments": attachments_view,
         }
@@ -2290,15 +2396,17 @@ class APWebService:
 
         po_list = []
         for po, supplier in pos:
-            po_list.append({
-                "po_id": str(po.po_id),
-                "po_number": po.po_number,
-                "supplier_id": str(po.supplier_id),
-                "supplier_name": _supplier_display_name(supplier),
-                "po_date": _format_date(po.po_date),
-                "total_amount": _format_currency(po.total_amount, po.currency_code),
-                "currency_code": po.currency_code,
-            })
+            po_list.append(
+                {
+                    "po_id": str(po.po_id),
+                    "po_number": po.po_number,
+                    "supplier_id": str(po.supplier_id),
+                    "supplier_name": _supplier_display_name(supplier),
+                    "po_date": _format_date(po.po_date),
+                    "total_amount": _format_currency(po.total_amount, po.currency_code),
+                    "currency_code": po.currency_code,
+                }
+            )
 
         # If a specific PO is selected, get its lines
         selected_po = None
@@ -2312,7 +2420,9 @@ class APWebService:
                     "po_id": str(po.po_id),
                     "po_number": po.po_number,
                     "supplier_id": str(po.supplier_id),
-                    "supplier_name": _supplier_display_name(supplier) if supplier else "",
+                    "supplier_name": _supplier_display_name(supplier)
+                    if supplier
+                    else "",
                     "po_date": _format_date(po.po_date),
                     "currency_code": po.currency_code,
                 }
@@ -2327,18 +2437,21 @@ class APWebService:
                 for line in lines:
                     remaining = line.quantity_ordered - line.quantity_received
                     if remaining > 0:
-                        po_lines.append({
-                            "line_id": str(line.line_id),
-                            "line_number": line.line_number,
-                            "description": line.description,
-                            "quantity_ordered": float(line.quantity_ordered),
-                            "quantity_received": float(line.quantity_received),
-                            "quantity_remaining": float(remaining),
-                            "unit_price": float(line.unit_price),
-                        })
+                        po_lines.append(
+                            {
+                                "line_id": str(line.line_id),
+                                "line_number": line.line_number,
+                                "description": line.description,
+                                "quantity_ordered": float(line.quantity_ordered),
+                                "quantity_received": float(line.quantity_received),
+                                "quantity_remaining": float(remaining),
+                                "unit_price": float(line.unit_price),
+                            }
+                        )
 
         # Get warehouses for selection
         from app.models.inventory.warehouse import Warehouse
+
         warehouses = (
             db.query(Warehouse)
             .filter(
@@ -2395,7 +2508,9 @@ class APWebService:
     ) -> HTMLResponse:
         context = base_context(request, auth, "New Supplier", "ap")
         context.update(self.supplier_form_context(db, str(auth.organization_id)))
-        return templates.TemplateResponse(request, "finance/ap/supplier_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/supplier_form.html", context
+        )
 
     def supplier_detail_response(
         self,
@@ -2412,7 +2527,9 @@ class APWebService:
                 supplier_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ap/supplier_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/supplier_detail.html", context
+        )
 
     def supplier_edit_form_response(
         self,
@@ -2422,8 +2539,12 @@ class APWebService:
         supplier_id: str,
     ) -> HTMLResponse:
         context = base_context(request, auth, "Edit Supplier", "ap")
-        context.update(self.supplier_form_context(db, str(auth.organization_id), supplier_id))
-        return templates.TemplateResponse(request, "finance/ap/supplier_form.html", context)
+        context.update(
+            self.supplier_form_context(db, str(auth.organization_id), supplier_id)
+        )
+        return templates.TemplateResponse(
+            request, "finance/ap/supplier_form.html", context
+        )
 
     async def create_supplier_response(
         self,
@@ -2452,7 +2573,9 @@ class APWebService:
             context.update(self.supplier_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
             context["form_data"] = dict(form_data)
-            return templates.TemplateResponse(request, "finance/ap/supplier_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/supplier_form.html", context
+            )
 
     async def update_supplier_response(
         self,
@@ -2480,10 +2603,14 @@ class APWebService:
 
         except Exception as e:
             context = base_context(request, auth, "Edit Supplier", "ap")
-            context.update(self.supplier_form_context(db, str(auth.organization_id), supplier_id))
+            context.update(
+                self.supplier_form_context(db, str(auth.organization_id), supplier_id)
+            )
             context["error"] = str(e)
             context["form_data"] = dict(form_data)
-            return templates.TemplateResponse(request, "finance/ap/supplier_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/supplier_form.html", context
+            )
 
     def delete_supplier_response(
         self,
@@ -2504,7 +2631,9 @@ class APWebService:
                 )
             )
             context["error"] = error
-            return templates.TemplateResponse(request, "finance/ap/supplier_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/supplier_detail.html", context
+            )
 
         return RedirectResponse(url="/finance/ap/suppliers", status_code=303)
 
@@ -2544,13 +2673,17 @@ class APWebService:
         db: Session,
     ) -> HTMLResponse:
         context = base_context(request, auth, "New AP Invoice", "ap")
-        context.update(self.invoice_form_context(
-            db,
-            str(auth.organization_id),
-            supplier_id=supplier_id,
-            po_id=po_id,
-        ))
-        return templates.TemplateResponse(request, "finance/ap/invoice_form.html", context)
+        context.update(
+            self.invoice_form_context(
+                db,
+                str(auth.organization_id),
+                supplier_id=supplier_id,
+                po_id=po_id,
+            )
+        )
+        return templates.TemplateResponse(
+            request, "finance/ap/invoice_form.html", context
+        )
 
     async def create_invoice_response(
         self,
@@ -2595,7 +2728,9 @@ class APWebService:
             context.update(self.invoice_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
             context["form_data"] = data
-            return templates.TemplateResponse(request, "finance/ap/invoice_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/invoice_form.html", context
+            )
 
     def invoice_detail_response(
         self,
@@ -2612,7 +2747,9 @@ class APWebService:
                 invoice_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ap/invoice_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/invoice_detail.html", context
+        )
 
     def delete_invoice_response(
         self,
@@ -2633,7 +2770,9 @@ class APWebService:
                 )
             )
             context["error"] = error
-            return templates.TemplateResponse(request, "finance/ap/invoice_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/invoice_detail.html", context
+            )
 
         return RedirectResponse(url="/finance/ap/invoices", status_code=303)
 
@@ -2697,7 +2836,9 @@ class APWebService:
             ],
         }
 
-        return templates.TemplateResponse(request, "finance/ap/invoice_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/invoice_form.html", context
+        )
 
     async def update_invoice_response(
         self,
@@ -2747,7 +2888,9 @@ class APWebService:
             context.update(self.invoice_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
             context["form_data"] = data
-            return templates.TemplateResponse(request, "finance/ap/invoice_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/invoice_form.html", context
+            )
 
     def submit_invoice_response(
         self,
@@ -2890,7 +3033,9 @@ class APWebService:
                 str(auth.organization_id),
             )
         )
-        return templates.TemplateResponse(request, "finance/ap/payment_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/payment_form.html", context
+        )
 
     def payment_detail_response(
         self,
@@ -2907,7 +3052,9 @@ class APWebService:
                 payment_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ap/payment_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/payment_detail.html", context
+        )
 
     async def create_payment_response(
         self,
@@ -2952,7 +3099,9 @@ class APWebService:
             context.update(self.payment_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
             context["form_data"] = data
-            return templates.TemplateResponse(request, "finance/ap/payment_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/payment_form.html", context
+            )
 
     def delete_payment_response(
         self,
@@ -2973,7 +3122,9 @@ class APWebService:
                 )
             )
             context["error"] = error
-            return templates.TemplateResponse(request, "finance/ap/payment_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/payment_detail.html", context
+            )
 
         return RedirectResponse(url="/finance/ap/payments", status_code=303)
 
@@ -3007,7 +3158,9 @@ class APWebService:
             "payment_number": payment.payment_number,
             "supplier_id": payment.supplier_id,
             "payment_date": payment.payment_date,
-            "payment_method": payment.payment_method.value if payment.payment_method else "",
+            "payment_method": payment.payment_method.value
+            if payment.payment_method
+            else "",
             "currency_code": payment.currency_code,
             "amount": payment.amount,
             "reference": payment.reference,
@@ -3015,7 +3168,9 @@ class APWebService:
             "bank_account_id": payment.bank_account_id,
         }
 
-        return templates.TemplateResponse(request, "finance/ap/payment_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/payment_form.html", context
+        )
 
     async def update_payment_response(
         self,
@@ -3051,7 +3206,9 @@ class APWebService:
             context.update(self.payment_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
             context["form_data"] = data
-            return templates.TemplateResponse(request, "finance/ap/payment_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/payment_form.html", context
+            )
 
     def approve_payment_response(
         self,
@@ -3155,12 +3312,16 @@ class APWebService:
         )
 
         context = base_context(request, auth, "Payment Batches", "ap")
-        context.update({
-            "batches": batches,
-            "status": status or "",
-            "page": page,
-        })
-        return templates.TemplateResponse(request, "finance/ap/payment_batches.html", context)
+        context.update(
+            {
+                "batches": batches,
+                "status": status or "",
+                "page": page,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "finance/ap/payment_batches.html", context
+        )
 
     def payment_batch_new_form_response(
         self,
@@ -3195,13 +3356,17 @@ class APWebService:
         ]
 
         context = base_context(request, auth, "New Payment Batch", "ap")
-        context.update({
-            "bank_accounts": bank_accounts,
-            "invoices": invoices_view,
-            "payment_methods": [method.value for method in APPaymentMethod],
-        })
+        context.update(
+            {
+                "bank_accounts": bank_accounts,
+                "invoices": invoices_view,
+                "payment_methods": [method.value for method in APPaymentMethod],
+            }
+        )
         context.update(get_currency_context(db, str(auth.organization_id)))
-        return templates.TemplateResponse(request, "finance/ap/payment_batch_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/payment_batch_form.html", context
+        )
 
     def list_purchase_orders_response(
         self,
@@ -3228,7 +3393,9 @@ class APWebService:
                 page=page,
             )
         )
-        return templates.TemplateResponse(request, "finance/ap/purchase_orders.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/purchase_orders.html", context
+        )
 
     def purchase_order_new_form_response(
         self,
@@ -3238,7 +3405,9 @@ class APWebService:
     ) -> HTMLResponse:
         context = base_context(request, auth, "New Purchase Order", "ap")
         context.update(self.purchase_order_form_context(db, str(auth.organization_id)))
-        return templates.TemplateResponse(request, "finance/ap/purchase_order_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/purchase_order_form.html", context
+        )
 
     def purchase_order_detail_response(
         self,
@@ -3255,7 +3424,9 @@ class APWebService:
                 po_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ap/purchase_order_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/purchase_order_detail.html", context
+        )
 
     def purchase_order_edit_form_response(
         self,
@@ -3265,10 +3436,14 @@ class APWebService:
         po_id: str,
     ) -> HTMLResponse | RedirectResponse:
         context = base_context(request, auth, "Edit Purchase Order", "ap")
-        context.update(self.purchase_order_form_context(db, str(auth.organization_id), po_id))
+        context.update(
+            self.purchase_order_form_context(db, str(auth.organization_id), po_id)
+        )
         if not context.get("order"):
             return RedirectResponse(url="/finance/ap/purchase-orders", status_code=303)
-        return templates.TemplateResponse(request, "finance/ap/purchase_order_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/purchase_order_form.html", context
+        )
 
     async def create_purchase_order_response(
         self,
@@ -3292,21 +3467,41 @@ class APWebService:
             lines = []
             for line in lines_data:
                 if line.get("description"):
-                    lines.append(POLineInput(
-                        item_id=UUID(line["item_id"]) if line.get("item_id") else None,
-                        description=line.get("description", ""),
-                        quantity_ordered=Decimal(str(line.get("quantity", line.get("quantity_ordered", 1)))),
-                        unit_price=Decimal(str(line.get("unit_price", 0))),
-                        expense_account_id=UUID(line["expense_account_id"])
-                        if line.get("expense_account_id")
-                        else None,
-                        tax_code_id=UUID(line["tax_code_id"]) if line.get("tax_code_id") else None,
-                        cost_center_id=UUID(line["cost_center_id"]) if line.get("cost_center_id") else None,
-                        project_id=UUID(line["project_id"]) if line.get("project_id") else None,
-                    ))
+                    lines.append(
+                        POLineInput(
+                            item_id=UUID(line["item_id"])
+                            if line.get("item_id")
+                            else None,
+                            description=line.get("description", ""),
+                            quantity_ordered=Decimal(
+                                str(
+                                    line.get(
+                                        "quantity", line.get("quantity_ordered", 1)
+                                    )
+                                )
+                            ),
+                            unit_price=Decimal(str(line.get("unit_price", 0))),
+                            expense_account_id=UUID(line["expense_account_id"])
+                            if line.get("expense_account_id")
+                            else None,
+                            tax_code_id=UUID(line["tax_code_id"])
+                            if line.get("tax_code_id")
+                            else None,
+                            cost_center_id=UUID(line["cost_center_id"])
+                            if line.get("cost_center_id")
+                            else None,
+                            project_id=UUID(line["project_id"])
+                            if line.get("project_id")
+                            else None,
+                        )
+                    )
 
             po_date_str = data.get("po_date")
-            po_date = datetime.strptime(po_date_str, "%Y-%m-%d").date() if po_date_str else None
+            po_date = (
+                datetime.strptime(po_date_str, "%Y-%m-%d").date()
+                if po_date_str
+                else None
+            )
 
             expected_delivery_str = data.get("expected_delivery_date")
             expected_delivery = (
@@ -3315,7 +3510,9 @@ class APWebService:
                 else None
             )
 
-            currency_code = data.get("currency_code") or org_context_service.get_functional_currency(
+            currency_code = data.get(
+                "currency_code"
+            ) or org_context_service.get_functional_currency(
                 db,
                 auth.organization_id,
             )
@@ -3349,10 +3546,14 @@ class APWebService:
                 return JSONResponse(status_code=400, content={"detail": str(e)})
 
             context = base_context(request, auth, "New Purchase Order", "ap")
-            context.update(self.purchase_order_form_context(db, str(auth.organization_id)))
+            context.update(
+                self.purchase_order_form_context(db, str(auth.organization_id))
+            )
             context["error"] = str(e)
             context["form_data"] = data
-            return templates.TemplateResponse(request, "finance/ap/purchase_order_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/purchase_order_form.html", context
+            )
 
     def submit_purchase_order_response(
         self,
@@ -3381,7 +3582,9 @@ class APWebService:
                 )
             )
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "finance/ap/purchase_order_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/purchase_order_detail.html", context
+            )
 
     def approve_purchase_order_response(
         self,
@@ -3411,7 +3614,9 @@ class APWebService:
                 )
             )
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "finance/ap/purchase_order_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/purchase_order_detail.html", context
+            )
 
     def cancel_purchase_order_response(
         self,
@@ -3440,7 +3645,9 @@ class APWebService:
                 )
             )
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "finance/ap/purchase_order_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/purchase_order_detail.html", context
+            )
 
     def list_goods_receipts_response(
         self,
@@ -3469,7 +3676,9 @@ class APWebService:
                 page=page,
             )
         )
-        return templates.TemplateResponse(request, "finance/ap/goods_receipts.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/goods_receipts.html", context
+        )
 
     def goods_receipt_new_form_response(
         self,
@@ -3479,8 +3688,12 @@ class APWebService:
         db: Session,
     ) -> HTMLResponse:
         context = base_context(request, auth, "New Goods Receipt", "ap")
-        context.update(self.goods_receipt_form_context(db, str(auth.organization_id), po_id))
-        return templates.TemplateResponse(request, "finance/ap/goods_receipt_form.html", context)
+        context.update(
+            self.goods_receipt_form_context(db, str(auth.organization_id), po_id)
+        )
+        return templates.TemplateResponse(
+            request, "finance/ap/goods_receipt_form.html", context
+        )
 
     def goods_receipt_detail_response(
         self,
@@ -3497,7 +3710,9 @@ class APWebService:
                 receipt_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ap/goods_receipt_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/goods_receipt_detail.html", context
+        )
 
     async def create_goods_receipt_response(
         self,
@@ -3522,11 +3737,13 @@ class APWebService:
             for line in lines_data:
                 qty = Decimal(str(line.get("quantity_to_receive", 0)))
                 if qty > 0:
-                    lines.append(GRLineInput(
-                        po_line_id=UUID(line["line_id"]),
-                        quantity_received=qty,
-                        lot_number=line.get("lot_number"),
-                    ))
+                    lines.append(
+                        GRLineInput(
+                            po_line_id=UUID(line["line_id"]),
+                            quantity_received=qty,
+                            lot_number=line.get("lot_number"),
+                        )
+                    )
 
             if not lines:
                 raise ValueError("No items to receive")
@@ -3541,7 +3758,9 @@ class APWebService:
             input_data = GoodsReceiptInput(
                 po_id=UUID(data["po_id"]),
                 receipt_date=receipt_date,
-                warehouse_id=UUID(data["warehouse_id"]) if data.get("warehouse_id") else None,
+                warehouse_id=UUID(data["warehouse_id"])
+                if data.get("warehouse_id")
+                else None,
                 notes=data.get("notes"),
                 lines=lines,
             )
@@ -3566,14 +3785,18 @@ class APWebService:
                 return JSONResponse(status_code=400, content={"detail": str(e)})
 
             context = base_context(request, auth, "New Goods Receipt", "ap")
-            context.update(self.goods_receipt_form_context(
-                db,
-                str(auth.organization_id),
-                data.get("po_id"),
-            ))
+            context.update(
+                self.goods_receipt_form_context(
+                    db,
+                    str(auth.organization_id),
+                    data.get("po_id"),
+                )
+            )
             context["error"] = str(e)
             context["form_data"] = data
-            return templates.TemplateResponse(request, "finance/ap/goods_receipt_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/goods_receipt_form.html", context
+            )
 
     def start_inspection_response(
         self,
@@ -3602,7 +3825,9 @@ class APWebService:
                 )
             )
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "finance/ap/goods_receipt_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/goods_receipt_detail.html", context
+            )
 
     def accept_all_response(
         self,
@@ -3631,7 +3856,9 @@ class APWebService:
                 )
             )
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "finance/ap/goods_receipt_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/goods_receipt_detail.html", context
+            )
 
     def aging_report_response(
         self,
@@ -3906,12 +4133,16 @@ class APWebService:
         attachment = attachment_service.get(db, auth.organization_id, attachment_id)
 
         if not attachment or attachment.organization_id != auth.organization_id:
-            return RedirectResponse(url="/finance/ap/invoices?error=Attachment+not+found", status_code=303)
+            return RedirectResponse(
+                url="/finance/ap/invoices?error=Attachment+not+found", status_code=303
+            )
 
         file_path = attachment_service.get_file_path(attachment)
 
         if not file_path.exists():
-            return RedirectResponse(url="/finance/ap/invoices?error=File+not+found", status_code=303)
+            return RedirectResponse(
+                url="/finance/ap/invoices?error=File+not+found", status_code=303
+            )
 
         return FileResponse(
             path=str(file_path),
@@ -3928,7 +4159,9 @@ class APWebService:
         attachment = attachment_service.get(db, auth.organization_id, attachment_id)
 
         if not attachment or attachment.organization_id != auth.organization_id:
-            return RedirectResponse(url="/finance/ap/invoices?error=Attachment+not+found", status_code=303)
+            return RedirectResponse(
+                url="/finance/ap/invoices?error=Attachment+not+found", status_code=303
+            )
 
         entity_type = attachment.entity_type
         entity_id = attachment.entity_id

@@ -7,6 +7,7 @@ This module provides:
 - Base error classes for service layer
 """
 
+import logging
 import uuid
 from dataclasses import dataclass, field
 from typing import Generic, List, Optional, TypeVar
@@ -16,6 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import Select
 
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 

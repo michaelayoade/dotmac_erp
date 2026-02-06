@@ -2,27 +2,31 @@
 
 Services for managing job descriptions and competency frameworks.
 """
+
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import select, func, and_
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.people.hr import (
     Competency,
     CompetencyCategory,
-    JobDescription,
-    JobDescriptionStatus,
-    JobDescriptionCompetency,
-    Designation,
     Department,
+    Designation,
+    JobDescription,
+    JobDescriptionCompetency,
+    JobDescriptionStatus,
 )
 from app.services.common import PaginatedResult, PaginationParams, paginate
 from app.services.people.hr.errors import ValidationError
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.auth import Principal
@@ -199,7 +203,10 @@ class CompetencyService:
             raise CompetencyNotFoundError(f"Competency {competency_id} not found")
 
         # Check for code uniqueness if changing code
-        if "competency_code" in data and data["competency_code"] != competency.competency_code:
+        if (
+            "competency_code" in data
+            and data["competency_code"] != competency.competency_code
+        ):
             existing = self.get_competency_by_code(data["competency_code"])
             if existing:
                 raise DuplicateCodeError(
@@ -266,7 +273,10 @@ class JobDescriptionService:
         if entity_id is None:
             return
         record = self.db.get(model, entity_id)
-        if not record or getattr(record, "organization_id", None) != self.organization_id:
+        if (
+            not record
+            or getattr(record, "organization_id", None) != self.organization_id
+        ):
             raise ValidationError(f"{label} {entity_id} not found")
         if getattr(record, "is_deleted", False):
             raise ValidationError(f"{label} {entity_id} not found")
@@ -386,7 +396,9 @@ class JobDescriptionService:
         # Check for duplicate code
         existing = self.get_job_description_by_code(jd_code)
         if existing:
-            raise DuplicateCodeError(f"Job description with code '{jd_code}' already exists")
+            raise DuplicateCodeError(
+                f"Job description with code '{jd_code}' already exists"
+            )
 
         self._validate_org_reference(Designation, designation_id, "Designation")
         self._validate_org_reference(Department, department_id, "Department")
@@ -442,9 +454,13 @@ class JobDescriptionService:
                 )
 
         if "designation_id" in data:
-            self._validate_org_reference(Designation, data["designation_id"], "Designation")
+            self._validate_org_reference(
+                Designation, data["designation_id"], "Designation"
+            )
         if "department_id" in data:
-            self._validate_org_reference(Department, data["department_id"], "Department")
+            self._validate_org_reference(
+                Department, data["department_id"], "Department"
+            )
 
         allowed_fields = {
             "jd_code",

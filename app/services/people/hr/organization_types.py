@@ -3,12 +3,16 @@
 These dataclasses define the contract for department, designation, and team operations.
 They are framework-agnostic (no Pydantic, no FastAPI).
 """
+
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     # Department types

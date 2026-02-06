@@ -18,18 +18,24 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.domain_settings import SettingDomain
-from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimItem, ExpenseClaimStatus
+from app.models.expense.expense_claim import (
+    ExpenseClaim,
+    ExpenseClaimItem,
+    ExpenseClaimStatus,
+)
 from app.models.people.hr.employee import Employee
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.expense.expense_service import (
+    ExpenseClaimStatusError,
     ExpenseService,
     ExpenseServiceError,
-    ExpenseClaimStatusError,
 )
 from app.services.finance.platform.authorization import AuthorizationService
 from app.services.settings_spec import resolve_value
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
+
+logger = logging.getLogger(__name__)
 
 
 class ExpenseClaimsWebService:
@@ -132,7 +138,9 @@ class ExpenseClaimsWebService:
             can_approve = AuthorizationService.check_any_permission(
                 db, auth.person_id, approve_perms, org_id
             )
-        can_submit = (auth.is_admin or can_approve) and claim.status == ExpenseClaimStatus.DRAFT
+        can_submit = (
+            auth.is_admin or can_approve
+        ) and claim.status == ExpenseClaimStatus.DRAFT
         can_reject = auth.is_admin
         if not can_reject and auth.person_id:
             can_reject = AuthorizationService.check_permission(
@@ -143,7 +151,9 @@ class ExpenseClaimsWebService:
             ExpenseClaimStatus.PENDING_APPROVAL,
         }
         paystack_enabled = resolve_value(db, SettingDomain.payments, "paystack_enabled")
-        transfers_enabled = resolve_value(db, SettingDomain.payments, "paystack_transfers_enabled")
+        transfers_enabled = resolve_value(
+            db, SettingDomain.payments, "paystack_transfers_enabled"
+        )
 
         # Check for existing active payment intent to prevent duplicate payments
         has_active_payment = False
@@ -153,7 +163,10 @@ class ExpenseClaimsWebService:
                 PaymentIntentStatus,
             )
 
-            active_statuses = [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]
+            active_statuses = [
+                PaymentIntentStatus.PENDING,
+                PaymentIntentStatus.PROCESSING,
+            ]
             has_active_payment = (
                 db.query(PaymentIntent)
                 .filter(
@@ -205,7 +218,9 @@ class ExpenseClaimsWebService:
                 ]
             )
         ):
-            return RedirectResponse("/expense/claims/list?error=permission", status_code=302)
+            return RedirectResponse(
+                "/expense/claims/list?error=permission", status_code=302
+            )
 
         org_id = coerce_uuid(auth.organization_id)
         claim_uuid = coerce_uuid(claim_id)
@@ -220,18 +235,26 @@ class ExpenseClaimsWebService:
                 )
             db.commit()
         except ExpenseClaimStatusError:
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=invalid_status", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=invalid_status", status_code=303
+            )
         except ExpenseServiceError as exc:
             message = quote(str(exc))
-            return RedirectResponse(f"/expense/claims/{claim_id}?error={message}", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error={message}", status_code=303
+            )
         except Exception:
             logging.getLogger(__name__).exception(
                 "Expense claim submit failed",
                 extra={"claim_id": claim_id},
             )
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=submit_failed", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=submit_failed", status_code=303
+            )
 
-        return RedirectResponse(f"/expense/claims/{claim_id}?action=submitted", status_code=303)
+        return RedirectResponse(
+            f"/expense/claims/{claim_id}?action=submitted", status_code=303
+        )
 
     @staticmethod
     def approve_claim_response(
@@ -246,7 +269,9 @@ class ExpenseClaimsWebService:
                 "expense:claims:approve:tier3",
             ]
         ):
-            return RedirectResponse("/expense/claims/list?error=permission", status_code=302)
+            return RedirectResponse(
+                "/expense/claims/list?error=permission", status_code=302
+            )
 
         org_id = coerce_uuid(auth.organization_id)
         claim_uuid = coerce_uuid(claim_id)
@@ -270,16 +295,22 @@ class ExpenseClaimsWebService:
             db.commit()
         except ExpenseClaimStatusError:
             db.rollback()
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=invalid_status", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=invalid_status", status_code=303
+            )
         except Exception:
             db.rollback()
             logging.getLogger(__name__).exception(
                 "Expense claim approval failed",
                 extra={"claim_id": claim_id},
             )
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=approve_failed", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=approve_failed", status_code=303
+            )
 
-        return RedirectResponse(f"/expense/claims/{claim_id}?action=approved", status_code=303)
+        return RedirectResponse(
+            f"/expense/claims/{claim_id}?action=approved", status_code=303
+        )
 
     @staticmethod
     def reject_claim_response(
@@ -295,7 +326,9 @@ class ExpenseClaimsWebService:
                 "expense:claims:approve:tier3",
             ]
         ):
-            return RedirectResponse("/expense/claims/list?error=permission", status_code=302)
+            return RedirectResponse(
+                "/expense/claims/list?error=permission", status_code=302
+            )
 
         org_id = coerce_uuid(auth.organization_id)
         claim_uuid = coerce_uuid(claim_id)
@@ -325,16 +358,22 @@ class ExpenseClaimsWebService:
             db.commit()
         except ExpenseClaimStatusError:
             db.rollback()
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=invalid_status", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=invalid_status", status_code=303
+            )
         except Exception:
             db.rollback()
             logging.getLogger(__name__).exception(
                 "Expense claim rejection failed",
                 extra={"claim_id": claim_id},
             )
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=reject_failed", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=reject_failed", status_code=303
+            )
 
-        return RedirectResponse(f"/expense/claims/{claim_id}?action=rejected", status_code=303)
+        return RedirectResponse(
+            f"/expense/claims/{claim_id}?action=rejected", status_code=303
+        )
 
     @staticmethod
     def categories_list_response(
@@ -412,7 +451,9 @@ class ExpenseClaimsWebService:
                 "errors": {},
             }
         )
-        return templates.TemplateResponse(request, "expense/category_form.html", context)
+        return templates.TemplateResponse(
+            request, "expense/category_form.html", context
+        )
 
     @staticmethod
     async def create_category_response(
@@ -430,10 +471,19 @@ class ExpenseClaimsWebService:
         category_code = ExpenseClaimsWebService._form_str(form, "category_code")
         category_name = ExpenseClaimsWebService._form_str(form, "category_name")
         description = ExpenseClaimsWebService._form_str(form, "description")
-        expense_account_id = ExpenseClaimsWebService._form_str(form, "expense_account_id")
+        expense_account_id = ExpenseClaimsWebService._form_str(
+            form, "expense_account_id"
+        )
         max_amount = ExpenseClaimsWebService._form_str(form, "max_amount_per_claim")
-        requires_receipt = ExpenseClaimsWebService._form_str(form, "requires_receipt") in {"1", "true", "on", "yes"}
-        is_active = ExpenseClaimsWebService._form_str(form, "is_active") in {"1", "true", "on", "yes"}
+        requires_receipt = ExpenseClaimsWebService._form_str(
+            form, "requires_receipt"
+        ) in {"1", "true", "on", "yes"}
+        is_active = ExpenseClaimsWebService._form_str(form, "is_active") in {
+            "1",
+            "true",
+            "on",
+            "yes",
+        }
 
         errors = {}
         if not category_code:
@@ -454,7 +504,9 @@ class ExpenseClaimsWebService:
         if errors:
             expense_accounts = (
                 db.query(Account)
-                .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+                .join(
+                    AccountCategory, Account.category_id == AccountCategory.category_id
+                )
                 .filter(
                     Account.organization_id == org_id,
                     AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
@@ -480,7 +532,9 @@ class ExpenseClaimsWebService:
                     "errors": errors,
                 }
             )
-            return templates.TemplateResponse(request, "expense/category_form.html", context)
+            return templates.TemplateResponse(
+                request, "expense/category_form.html", context
+            )
 
         try:
             svc.create_category(
@@ -488,7 +542,9 @@ class ExpenseClaimsWebService:
                 category_code=category_code,
                 category_name=category_name,
                 description=description or None,
-                expense_account_id=coerce_uuid(expense_account_id) if expense_account_id else None,
+                expense_account_id=coerce_uuid(expense_account_id)
+                if expense_account_id
+                else None,
                 max_amount_per_claim=max_amount_value,
                 requires_receipt=requires_receipt if requires_receipt else False,
                 is_active=is_active if is_active else False,
@@ -498,7 +554,9 @@ class ExpenseClaimsWebService:
             db.rollback()
             expense_accounts = (
                 db.query(Account)
-                .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+                .join(
+                    AccountCategory, Account.category_id == AccountCategory.category_id
+                )
                 .filter(
                     Account.organization_id == org_id,
                     AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
@@ -524,7 +582,9 @@ class ExpenseClaimsWebService:
                     "errors": {"_": str(exc)},
                 }
             )
-            return templates.TemplateResponse(request, "expense/category_form.html", context)
+            return templates.TemplateResponse(
+                request, "expense/category_form.html", context
+            )
 
         return RedirectResponse(url="/expense/categories", status_code=303)
 
@@ -563,7 +623,9 @@ class ExpenseClaimsWebService:
                 "errors": {},
             }
         )
-        return templates.TemplateResponse(request, "expense/category_form.html", context)
+        return templates.TemplateResponse(
+            request, "expense/category_form.html", context
+        )
 
     @staticmethod
     async def update_category_response(
@@ -582,10 +644,19 @@ class ExpenseClaimsWebService:
         category_code = ExpenseClaimsWebService._form_str(form, "category_code")
         category_name = ExpenseClaimsWebService._form_str(form, "category_name")
         description = ExpenseClaimsWebService._form_str(form, "description")
-        expense_account_id = ExpenseClaimsWebService._form_str(form, "expense_account_id")
+        expense_account_id = ExpenseClaimsWebService._form_str(
+            form, "expense_account_id"
+        )
         max_amount = ExpenseClaimsWebService._form_str(form, "max_amount_per_claim")
-        requires_receipt = ExpenseClaimsWebService._form_str(form, "requires_receipt") in {"1", "true", "on", "yes"}
-        is_active = ExpenseClaimsWebService._form_str(form, "is_active") in {"1", "true", "on", "yes"}
+        requires_receipt = ExpenseClaimsWebService._form_str(
+            form, "requires_receipt"
+        ) in {"1", "true", "on", "yes"}
+        is_active = ExpenseClaimsWebService._form_str(form, "is_active") in {
+            "1",
+            "true",
+            "on",
+            "yes",
+        }
 
         errors = {}
         if not category_code:
@@ -606,7 +677,9 @@ class ExpenseClaimsWebService:
         if errors:
             expense_accounts = (
                 db.query(Account)
-                .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+                .join(
+                    AccountCategory, Account.category_id == AccountCategory.category_id
+                )
                 .filter(
                     Account.organization_id == org_id,
                     AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
@@ -633,7 +706,9 @@ class ExpenseClaimsWebService:
                     "errors": errors,
                 }
             )
-            return templates.TemplateResponse(request, "expense/category_form.html", context)
+            return templates.TemplateResponse(
+                request, "expense/category_form.html", context
+            )
 
         svc.update_category(
             org_id,
@@ -641,7 +716,9 @@ class ExpenseClaimsWebService:
             category_code=category_code,
             category_name=category_name,
             description=description or None,
-            expense_account_id=coerce_uuid(expense_account_id) if expense_account_id else None,
+            expense_account_id=coerce_uuid(expense_account_id)
+            if expense_account_id
+            else None,
             max_amount_per_claim=max_amount_value,
             requires_receipt=requires_receipt,
             is_active=is_active,
@@ -683,12 +760,16 @@ class ExpenseClaimsWebService:
         )
 
         context = base_context(request, auth, "Expense Summary Report", "expense")
-        context.update({
-            "report": report_data,
-            "start_date": start_date or report_data["start_date"].isoformat(),
-            "end_date": end_date or report_data["end_date"].isoformat(),
-        })
-        return templates.TemplateResponse(request, "expense/reports/summary.html", context)
+        context.update(
+            {
+                "report": report_data,
+                "start_date": start_date or report_data["start_date"].isoformat(),
+                "end_date": end_date or report_data["end_date"].isoformat(),
+            }
+        )
+        return templates.TemplateResponse(
+            request, "expense/reports/summary.html", context
+        )
 
     @staticmethod
     def expense_by_category_report_response(
@@ -711,12 +792,16 @@ class ExpenseClaimsWebService:
         )
 
         context = base_context(request, auth, "Expense by Category Report", "expense")
-        context.update({
-            "report": report_data,
-            "start_date": start_date or report_data["start_date"].isoformat(),
-            "end_date": end_date or report_data["end_date"].isoformat(),
-        })
-        return templates.TemplateResponse(request, "expense/reports/by_category.html", context)
+        context.update(
+            {
+                "report": report_data,
+                "start_date": start_date or report_data["start_date"].isoformat(),
+                "end_date": end_date or report_data["end_date"].isoformat(),
+            }
+        )
+        return templates.TemplateResponse(
+            request, "expense/reports/by_category.html", context
+        )
 
     @staticmethod
     def expense_by_employee_report_response(
@@ -727,7 +812,7 @@ class ExpenseClaimsWebService:
         end_date: Optional[str],
         department_id: Optional[str],
     ) -> HTMLResponse:
-        from app.services.people.hr import OrganizationService, DepartmentFilters
+        from app.services.people.hr import DepartmentFilters, OrganizationService
 
         org_id = coerce_uuid(auth.organization_id)
         svc = ExpenseService(db)
@@ -750,14 +835,18 @@ class ExpenseClaimsWebService:
         ).items
 
         context = base_context(request, auth, "Expense by Employee Report", "expense")
-        context.update({
-            "report": report_data,
-            "departments": departments,
-            "start_date": start_date or report_data["start_date"].isoformat(),
-            "end_date": end_date or report_data["end_date"].isoformat(),
-            "department_id": department_id,
-        })
-        return templates.TemplateResponse(request, "expense/reports/by_employee.html", context)
+        context.update(
+            {
+                "report": report_data,
+                "departments": departments,
+                "start_date": start_date or report_data["start_date"].isoformat(),
+                "end_date": end_date or report_data["end_date"].isoformat(),
+                "department_id": department_id,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "expense/reports/by_employee.html", context
+        )
 
     @staticmethod
     def expense_trends_report_response(
@@ -772,11 +861,15 @@ class ExpenseClaimsWebService:
         report_data = svc.get_expense_trends_report(org_id, months=months)
 
         context = base_context(request, auth, "Expense Trends Report", "expense")
-        context.update({
-            "report": report_data,
-            "months": months,
-        })
-        return templates.TemplateResponse(request, "expense/reports/trends.html", context)
+        context.update(
+            {
+                "report": report_data,
+                "months": months,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "expense/reports/trends.html", context
+        )
 
     @staticmethod
     def cash_advances_list_response(
@@ -806,17 +899,21 @@ class ExpenseClaimsWebService:
         )
 
         context = base_context(request, auth, "Cash Advances", "advances")
-        context.update({
-            "advances": result.items,
-            "status": status,
-            "statuses": [s.value for s in CashAdvanceStatus],
-            "page": page,
-            "total_pages": result.total_pages,
-            "total": result.total,
-            "has_prev": result.has_prev,
-            "has_next": result.has_next,
-        })
-        return templates.TemplateResponse(request, "expense/advances/list.html", context)
+        context.update(
+            {
+                "advances": result.items,
+                "status": status,
+                "statuses": [s.value for s in CashAdvanceStatus],
+                "page": page,
+                "total_pages": result.total_pages,
+                "total": result.total,
+                "has_prev": result.has_prev,
+                "has_next": result.has_next,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "expense/advances/list.html", context
+        )
 
     @staticmethod
     def cash_advance_detail_response(
@@ -826,7 +923,10 @@ class ExpenseClaimsWebService:
         advance_id: str,
     ) -> HTMLResponse:
         from app.models.expense.cash_advance import CashAdvanceStatus
-        from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus
+        from app.models.finance.banking.bank_account import (
+            BankAccount,
+            BankAccountStatus,
+        )
 
         org_id = coerce_uuid(auth.organization_id)
         svc = ExpenseService(db)
@@ -837,31 +937,50 @@ class ExpenseClaimsWebService:
             context = base_context(request, auth, "Cash Advance", "advances")
             context["advance"] = None
             context["error"] = "Advance not found"
-            return templates.TemplateResponse(request, "expense/advances/detail.html", context)
+            return templates.TemplateResponse(
+                request, "expense/advances/detail.html", context
+            )
 
-        bank_accounts = db.query(BankAccount).filter(
-            BankAccount.organization_id == org_id,
-            BankAccount.status == BankAccountStatus.active,
-        ).order_by(BankAccount.account_name).all()
+        bank_accounts = (
+            db.query(BankAccount)
+            .filter(
+                BankAccount.organization_id == org_id,
+                BankAccount.status == BankAccountStatus.active,
+            )
+            .order_by(BankAccount.account_name)
+            .all()
+        )
 
         linked_claims = []
-        if advance.status in [CashAdvanceStatus.DISBURSED, CashAdvanceStatus.PARTIALLY_SETTLED]:
+        if advance.status in [
+            CashAdvanceStatus.DISBURSED,
+            CashAdvanceStatus.PARTIALLY_SETTLED,
+        ]:
             claims = svc.list_claims(
                 org_id,
                 employee_id=advance.employee_id,
                 pagination=PaginationParams(offset=0, limit=20),
             )
-            linked_claims = [c for c in claims.items if c.cash_advance_id == advance.advance_id]
+            linked_claims = [
+                c for c in claims.items if c.cash_advance_id == advance.advance_id
+            ]
 
-        context = base_context(request, auth, f"Advance {advance.advance_number}", "advances")
-        context.update({
-            "advance": advance,
-            "bank_accounts": bank_accounts,
-            "linked_claims": linked_claims,
-            "can_disburse": advance.status == CashAdvanceStatus.APPROVED,
-            "can_settle": advance.status in [CashAdvanceStatus.DISBURSED, CashAdvanceStatus.PARTIALLY_SETTLED],
-        })
-        return templates.TemplateResponse(request, "expense/advances/detail.html", context)
+        context = base_context(
+            request, auth, f"Advance {advance.advance_number}", "advances"
+        )
+        context.update(
+            {
+                "advance": advance,
+                "bank_accounts": bank_accounts,
+                "linked_claims": linked_claims,
+                "can_disburse": advance.status == CashAdvanceStatus.APPROVED,
+                "can_settle": advance.status
+                in [CashAdvanceStatus.DISBURSED, CashAdvanceStatus.PARTIALLY_SETTLED],
+            }
+        )
+        return templates.TemplateResponse(
+            request, "expense/advances/detail.html", context
+        )
 
     @staticmethod
     def disburse_cash_advance_response(

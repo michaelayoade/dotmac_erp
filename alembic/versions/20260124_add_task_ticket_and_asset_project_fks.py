@@ -10,6 +10,7 @@ Revises: 20260124_ticket_contact
 Create Date: 2026-01-24
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -100,7 +101,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Remove FK and rename custodian column back
-    op.drop_constraint("fk_asset_custodian_employee", "asset", schema="fa", type_="foreignkey")
+    op.drop_constraint(
+        "fk_asset_custodian_employee", "asset", schema="fa", type_="foreignkey"
+    )
     op.alter_column(
         "asset",
         "custodian_employee_id",

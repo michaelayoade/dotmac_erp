@@ -4,6 +4,8 @@ HR Export Services - Push DotMac HR data to ERPNext.
 During transition, changes to employees/departments in DotMac
 need to sync back to ERPNext to maintain consistency.
 """
+
+import logging
 import uuid
 from datetime import date, datetime
 from typing import Any, Optional
@@ -13,11 +15,12 @@ from sqlalchemy.orm import Session
 
 from app.models.people.hr.department import Department
 from app.models.people.hr.employee import Employee, EmployeeStatus, Gender
-from app.models.sync import SyncEntity, SyncStatus
 from app.services.erpnext.client import ERPNextClient
+from app.services.formatters import format_date as _base_format_date
 
 from .base import BaseExportService
 
+logger = logging.getLogger(__name__)
 
 # Status mapping: DotMac → ERPNext
 EMPLOYEE_STATUS_EXPORT_MAP = {
@@ -201,6 +204,4 @@ class EmployeeExportService(BaseExportService[Employee]):
 
 def _format_date(d: Optional[date]) -> Optional[str]:
     """Format date for ERPNext API (YYYY-MM-DD)."""
-    if d:
-        return d.isoformat()
-    return None
+    return _base_format_date(d) or None

@@ -10,6 +10,7 @@ This migration adds version columns to key tables for optimistic locking:
 - gl.journal_entry
 - audit.approval_request
 """
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -27,7 +28,9 @@ def upgrade() -> None:
     def has_column(schema: str, table: str, column: str) -> bool:
         if not inspector.has_table(table, schema=schema):
             return False
-        return any(col["name"] == column for col in inspector.get_columns(table, schema=schema))
+        return any(
+            col["name"] == column for col in inspector.get_columns(table, schema=schema)
+        )
 
     # Add version column to ap.supplier_invoice
     if not has_column("ap", "supplier_invoice", "version"):

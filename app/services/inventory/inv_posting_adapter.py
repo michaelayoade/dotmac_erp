@@ -12,6 +12,7 @@ Posts inventory movements (receipts, issues, adjustments) to the general ledger.
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from typing import Optional
 from uuid import UUID
@@ -21,11 +22,13 @@ from sqlalchemy.orm import Session
 # Import from modular posting package
 from app.services.inventory.posting import (
     INVPostingResult,
-    post_receipt,
-    post_issue,
     post_adjustment,
+    post_issue,
+    post_receipt,
     post_transaction,
 )
+
+logger = logging.getLogger(__name__)
 
 # Re-export for backward compatibility
 __all__ = [

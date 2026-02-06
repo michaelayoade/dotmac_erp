@@ -4,6 +4,7 @@ Chart of Accounts Importer.
 Imports accounts from Zoho Books CSV export into the IFRS-based chart of accounts.
 """
 
+import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
@@ -15,6 +16,7 @@ from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 
 from .base import BaseImporter, FieldMapping, ImportConfig
 
+logger = logging.getLogger(__name__)
 
 # Mapping from Zoho account types to IFRS categories and normal balance
 ZOHO_ACCOUNT_TYPE_MAPPING = {
@@ -195,8 +197,13 @@ class AccountImporter(BaseImporter[Account]):
             FieldMapping("Account Code", "account_code", required=False),
             FieldMapping("Description", "description", required=False),
             FieldMapping("Account Type", "zoho_account_type", required=True),
-            FieldMapping("Account Status", "is_active", required=False,
-                         transformer=lambda v: v != "Inactive", default=True),
+            FieldMapping(
+                "Account Status",
+                "is_active",
+                required=False,
+                transformer=lambda v: v != "Inactive",
+                default=True,
+            ),
             FieldMapping("Currency", "default_currency_code", required=False),
             FieldMapping("Parent Account", "parent_account_name", required=False),
         ]

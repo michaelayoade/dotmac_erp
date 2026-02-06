@@ -5,6 +5,7 @@ Revises: 957c67719857
 Create Date: 2026-02-01
 
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -26,7 +27,9 @@ def upgrade() -> None:
         return
 
     # Check if index already exists (idempotent)
-    indexes = {idx["name"] for idx in inspector.get_indexes("crm_sync_mapping", schema="sync")}
+    indexes = {
+        idx["name"] for idx in inspector.get_indexes("crm_sync_mapping", schema="sync")
+    }
     if "idx_crm_sync_status" not in indexes:
         op.create_index(
             "idx_crm_sync_status",
@@ -41,6 +44,11 @@ def downgrade() -> None:
     inspector = sa.inspect(bind)
 
     if inspector.has_table("crm_sync_mapping", schema="sync"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("crm_sync_mapping", schema="sync")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("crm_sync_mapping", schema="sync")
+        }
         if "idx_crm_sync_status" in indexes:
-            op.drop_index("idx_crm_sync_status", table_name="crm_sync_mapping", schema="sync")
+            op.drop_index(
+                "idx_crm_sync_status", table_name="crm_sync_mapping", schema="sync"
+            )

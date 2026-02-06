@@ -106,7 +106,8 @@
                         <tr class="group">
                             {{ bulk_select_cell(invoice.invoice_id) }}
                             <td>
-                                <a href="/finance/ar/invoices/{{ invoice.invoice_id }}" class="font-mono text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                                <a href="/finance/ar/invoices/{{ invoice.invoice_id }}" class="inline-flex items-center gap-2 font-mono text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 transition-colors">
+                                    <span class="h-5 w-0.5 rounded-full bg-teal-400 dark:bg-teal-500 opacity-60"></span>
                                     {{ invoice.invoice_number }}
                                 </a>
                             </td>
@@ -114,14 +115,16 @@
                             <p class="text-sm font-medium text-slate-900 dark:text-white">{{ invoice.customer_name }}</p>
                         </td>
                         <td class="text-slate-600 dark:text-slate-400">{{ invoice.invoice_date }}</td>
-                        <td class="{{ 'text-rose-600 dark:text-rose-400 font-medium' if invoice.is_overdue else 'text-slate-600 dark:text-slate-400' }}">
-                            {{ invoice.due_date }}
+                        <td>
                             {% if invoice.is_overdue %}
-                            <span class="text-xs">(Overdue)</span>
+                            <span class="text-rose-600 dark:text-rose-400 font-medium">{{ invoice.due_date }}</span>
+                            <span class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400">Overdue</span>
+                            {% else %}
+                            <span class="text-slate-600 dark:text-slate-400">{{ invoice.due_date }}</span>
                             {% endif %}
                         </td>
-                        <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ invoice.total_amount | default("₦0.00") }}</td>
-                        <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ invoice.balance | default("₦0.00") }}</td>
+                        <td class="text-right font-mono text-sm text-slate-500 dark:text-slate-400">{{ invoice.total_amount | default("₦0.00") }}</td>
+                        <td class="text-right font-mono font-semibold text-slate-900 dark:text-white">{{ invoice.balance | default("₦0.00") }}</td>
                         <td class="text-center">
                             {{ status_badge(invoice.status, 'sm') }}
                         </td>

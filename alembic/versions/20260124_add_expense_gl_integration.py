@@ -7,6 +7,7 @@ Revision ID: 20260124_expense_gl
 Revises:
 Create Date: 2026-01-24
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID

@@ -1,6 +1,8 @@
 """
 Item Sync Service - ERPNext to DotMac ERP.
 """
+
+import logging
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -12,10 +14,11 @@ from sqlalchemy.orm import Session
 from app.models.finance.gl.account import Account
 from app.models.inventory.item import Item
 from app.models.inventory.item_category import ItemCategory
-from app.services.erpnext.mappings.items import ItemMapping, ItemCategoryMapping
+from app.services.erpnext.mappings.items import ItemCategoryMapping, ItemMapping
 
 from .base import BaseSyncService
 
+logger = logging.getLogger(__name__)
 
 # Default account codes for item categories
 # These should match the chart of accounts in the target organization
@@ -71,12 +74,16 @@ class ItemCategorySyncService(BaseSyncService[ItemCategory]):
             DEFAULT_ADJUSTMENT_ACCOUNT,
         ]
 
-        accounts = self.db.execute(
-            select(Account).where(
-                Account.organization_id == self.organization_id,
-                Account.account_code.in_(account_codes),
+        accounts = (
+            self.db.execute(
+                select(Account).where(
+                    Account.organization_id == self.organization_id,
+                    Account.account_code.in_(account_codes),
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         for acc in accounts:
             self._default_accounts[acc.account_code] = acc.account_id

@@ -23,7 +23,13 @@ depends_on = None
 def upgrade() -> None:
     # Create email_module enum
     email_module_enum = postgresql.ENUM(
-        "PAYROLL", "HR", "EXPENSE", "FINANCE", "SUPPORT", "SYSTEM", "MARKETING",
+        "PAYROLL",
+        "HR",
+        "EXPENSE",
+        "FINANCE",
+        "SUPPORT",
+        "SYSTEM",
+        "MARKETING",
         name="email_module",
         create_type=False,
     )
@@ -55,7 +61,9 @@ def upgrade() -> None:
         sa.Column("is_active", sa.Boolean(), default=True),
         sa.Column("pool_size", sa.Integer(), default=5),
         sa.Column("timeout_seconds", sa.Integer(), default=30),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now()
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_by_id",
@@ -90,10 +98,13 @@ def upgrade() -> None:
             sa.ForeignKey("email_profile.profile_id", ondelete="CASCADE"),
             nullable=False,
         ),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now()
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
         sa.UniqueConstraint(
-            "organization_id", "module",
+            "organization_id",
+            "module",
             name="uq_module_email_routing_org_module",
         ),
     )

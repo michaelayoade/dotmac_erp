@@ -8,6 +8,7 @@ This migration creates:
 - support schema for helpdesk/ticket tracking
 - support.ticket table for syncing ERPNext Issue/HD Ticket
 """
+
 from alembic import op
 from app.alembic_utils import ensure_enum
 

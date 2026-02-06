@@ -5,21 +5,30 @@ Generates MAT-MR-YYYY-##### numbers with a yearly reset and
 bootstrap from existing request_number values.
 """
 
+import logging
 from datetime import date
 from uuid import UUID
 
 from sqlalchemy import Integer, cast, func, select
 from sqlalchemy.orm import Session
 
-from app.models.finance.core_config.numbering_sequence import NumberingSequence, ResetFrequency, SequenceType
+from app.models.finance.core_config.numbering_sequence import (
+    NumberingSequence,
+    ResetFrequency,
+    SequenceType,
+)
 from app.models.inventory.material_request import MaterialRequest
+
+logger = logging.getLogger(__name__)
 
 
 class MaterialRequestNumberingService:
     """Generate material request numbers with yearly resets."""
 
     @staticmethod
-    def _get_or_create_sequence(db: Session, organization_id: UUID) -> NumberingSequence:
+    def _get_or_create_sequence(
+        db: Session, organization_id: UUID
+    ) -> NumberingSequence:
         sequence = (
             db.query(NumberingSequence)
             .filter(
@@ -58,19 +67,16 @@ class MaterialRequestNumberingService:
         year: int,
     ) -> int:
         prefix = f"MAT-MR-{year}-"
-        stmt = (
-            select(
-                func.max(
-                    cast(
-                        func.substring(MaterialRequest.request_number, r"([0-9]+)$"),
-                        Integer,
-                    )
+        stmt = select(
+            func.max(
+                cast(
+                    func.substring(MaterialRequest.request_number, r"([0-9]+)$"),
+                    Integer,
                 )
             )
-            .where(
-                MaterialRequest.organization_id == organization_id,
-                MaterialRequest.request_number.like(f"{prefix}%"),
-            )
+        ).where(
+            MaterialRequest.organization_id == organization_id,
+            MaterialRequest.request_number.like(f"{prefix}%"),
         )
         return int(db.scalar(stmt) or 0)
 

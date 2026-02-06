@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 
 from app.models.finance.ap.supplier_invoice import SupplierInvoice
 from app.services.common import coerce_uuid
-
 from app.services.finance.ap.posting.result import APPostingResult
 
 
@@ -49,9 +48,7 @@ def reverse_invoice_posting(
         return APPostingResult(success=False, message="Invoice not found")
 
     if not invoice.journal_entry_id:
-        return APPostingResult(
-            success=False, message="Invoice has not been posted"
-        )
+        return APPostingResult(success=False, message="Invoice has not been posted")
 
     try:
         result = ReversalService.create_reversal(
@@ -74,6 +71,4 @@ def reverse_invoice_posting(
         )
 
     except HTTPException as e:
-        return APPostingResult(
-            success=False, message=f"Reversal failed: {e.detail}"
-        )
+        return APPostingResult(success=False, message=f"Reversal failed: {e.detail}")

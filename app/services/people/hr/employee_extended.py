@@ -3,30 +3,33 @@
 Services for managing employee documents, qualifications, certifications,
 dependents, and skills.
 """
+
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.people.hr import (
+    DocumentType,
     Employee,
-    EmployeeDocument,
-    EmployeeQualification,
     EmployeeCertification,
     EmployeeDependent,
+    EmployeeDocument,
+    EmployeeQualification,
     EmployeeSkill,
-    Skill,
-    DocumentType,
     QualificationType,
     RelationshipType,
+    Skill,
     SkillCategory,
 )
-from app.services.common import PaginatedResult, PaginationParams, paginate
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.auth import Principal
@@ -48,36 +51,43 @@ __all__ = [
 
 class EmployeeExtendedDataError(Exception):
     """Base exception for employee extended data errors."""
+
     pass
 
 
 class DocumentNotFoundError(EmployeeExtendedDataError):
     """Document not found."""
+
     pass
 
 
 class QualificationNotFoundError(EmployeeExtendedDataError):
     """Qualification not found."""
+
     pass
 
 
 class CertificationNotFoundError(EmployeeExtendedDataError):
     """Certification not found."""
+
     pass
 
 
 class DependentNotFoundError(EmployeeExtendedDataError):
     """Dependent not found."""
+
     pass
 
 
 class SkillNotFoundError(EmployeeExtendedDataError):
     """Skill not found."""
+
     pass
 
 
 class EmployeeSkillNotFoundError(EmployeeExtendedDataError):
     """Employee skill not found."""
+
     pass
 
 
@@ -131,8 +141,8 @@ class EmployeeDocumentService:
             query = query.where(EmployeeDocument.is_verified == is_verified)
         if not include_expired:
             query = query.where(
-                (EmployeeDocument.expiry_date == None) |
-                (EmployeeDocument.expiry_date >= date.today())
+                (EmployeeDocument.expiry_date == None)
+                | (EmployeeDocument.expiry_date >= date.today())
             )
 
         query = query.order_by(EmployeeDocument.uploaded_at.desc())
@@ -237,15 +247,20 @@ class EmployeeDocumentService:
         cutoff = date.today()
         end_date = date.today()
         from datetime import timedelta
+
         end_date = cutoff + timedelta(days=days_until_expiry)
 
-        query = select(EmployeeDocument).where(
-            EmployeeDocument.organization_id == self.organization_id,
-            EmployeeDocument.is_deleted == False,
-            EmployeeDocument.expiry_date != None,
-            EmployeeDocument.expiry_date >= cutoff,
-            EmployeeDocument.expiry_date <= end_date,
-        ).options(selectinload(EmployeeDocument.employee))
+        query = (
+            select(EmployeeDocument)
+            .where(
+                EmployeeDocument.organization_id == self.organization_id,
+                EmployeeDocument.is_deleted == False,
+                EmployeeDocument.expiry_date != None,
+                EmployeeDocument.expiry_date >= cutoff,
+                EmployeeDocument.expiry_date <= end_date,
+            )
+            .options(selectinload(EmployeeDocument.employee))
+        )
 
         return list(self.db.scalars(query).all())
 
@@ -366,9 +381,19 @@ class EmployeeQualificationService:
         """Update a qualification."""
         qual = self.get_qualification(qualification_id)
         allowed_fields = {
-            "qualification_type", "qualification_name", "institution_name",
-            "field_of_study", "institution_location", "start_date", "end_date",
-            "is_ongoing", "grade", "score", "max_score", "document_id", "notes",
+            "qualification_type",
+            "qualification_name",
+            "institution_name",
+            "field_of_study",
+            "institution_location",
+            "start_date",
+            "end_date",
+            "is_ongoing",
+            "grade",
+            "score",
+            "max_score",
+            "document_id",
+            "notes",
         }
         for key, value in kwargs.items():
             if key in allowed_fields and value is not None:
@@ -438,9 +463,9 @@ class EmployeeCertificationService:
 
         if not include_expired:
             query = query.where(
-                (EmployeeCertification.does_not_expire == True) |
-                (EmployeeCertification.expiry_date == None) |
-                (EmployeeCertification.expiry_date >= date.today())
+                (EmployeeCertification.does_not_expire == True)
+                | (EmployeeCertification.expiry_date == None)
+                | (EmployeeCertification.expiry_date >= date.today())
             )
 
         query = query.order_by(EmployeeCertification.issue_date.desc())
@@ -506,9 +531,16 @@ class EmployeeCertificationService:
         """Update a certification."""
         cert = self.get_certification(certification_id)
         allowed_fields = {
-            "certification_name", "issuing_authority", "issue_date",
-            "expiry_date", "does_not_expire", "credential_id", "credential_url",
-            "renewal_reminder_days", "document_id", "notes",
+            "certification_name",
+            "issuing_authority",
+            "issue_date",
+            "expiry_date",
+            "does_not_expire",
+            "credential_id",
+            "credential_url",
+            "renewal_reminder_days",
+            "document_id",
+            "notes",
         }
         for key, value in kwargs.items():
             if key in allowed_fields and value is not None:
@@ -539,29 +571,38 @@ class EmployeeCertificationService:
     ) -> List[EmployeeCertification]:
         """Get certifications expiring within specified days."""
         from datetime import timedelta
+
         cutoff = date.today()
         end_date = cutoff + timedelta(days=days_until_expiry)
 
-        query = select(EmployeeCertification).where(
-            EmployeeCertification.organization_id == self.organization_id,
-            EmployeeCertification.is_deleted == False,
-            EmployeeCertification.does_not_expire == False,
-            EmployeeCertification.expiry_date != None,
-            EmployeeCertification.expiry_date >= cutoff,
-            EmployeeCertification.expiry_date <= end_date,
-        ).options(selectinload(EmployeeCertification.employee))
+        query = (
+            select(EmployeeCertification)
+            .where(
+                EmployeeCertification.organization_id == self.organization_id,
+                EmployeeCertification.is_deleted == False,
+                EmployeeCertification.does_not_expire == False,
+                EmployeeCertification.expiry_date != None,
+                EmployeeCertification.expiry_date >= cutoff,
+                EmployeeCertification.expiry_date <= end_date,
+            )
+            .options(selectinload(EmployeeCertification.employee))
+        )
 
         return list(self.db.scalars(query).all())
 
     def get_certifications_needing_reminder(self) -> List[EmployeeCertification]:
         """Get certifications that need renewal reminders."""
-        query = select(EmployeeCertification).where(
-            EmployeeCertification.organization_id == self.organization_id,
-            EmployeeCertification.is_deleted == False,
-            EmployeeCertification.does_not_expire == False,
-            EmployeeCertification.expiry_date != None,
-            EmployeeCertification.expiry_date >= date.today(),
-        ).options(selectinload(EmployeeCertification.employee))
+        query = (
+            select(EmployeeCertification)
+            .where(
+                EmployeeCertification.organization_id == self.organization_id,
+                EmployeeCertification.is_deleted == False,
+                EmployeeCertification.does_not_expire == False,
+                EmployeeCertification.expiry_date != None,
+                EmployeeCertification.expiry_date >= date.today(),
+            )
+            .options(selectinload(EmployeeCertification.employee))
+        )
 
         certs = list(self.db.scalars(query).all())
         return [c for c in certs if c.needs_renewal_reminder]
@@ -693,11 +734,20 @@ class EmployeeDependentService:
         """Update a dependent."""
         dep = self.get_dependent(dependent_id)
         allowed_fields = {
-            "full_name", "relationship", "date_of_birth", "gender",
-            "phone", "email", "address", "is_emergency_contact",
-            "emergency_contact_priority", "is_beneficiary",
-            "beneficiary_percentage", "is_covered_under_insurance",
-            "insurance_id", "notes",
+            "full_name",
+            "relationship",
+            "date_of_birth",
+            "gender",
+            "phone",
+            "email",
+            "address",
+            "is_emergency_contact",
+            "emergency_contact_priority",
+            "is_beneficiary",
+            "beneficiary_percentage",
+            "is_covered_under_insurance",
+            "insurance_id",
+            "notes",
         }
         for key, value in kwargs.items():
             if key in allowed_fields and value is not None:
@@ -940,7 +990,9 @@ class EmployeeSkillService:
             employee_id=employee_id,
             skill_id=skill_id,
             proficiency_level=proficiency_level,
-            years_experience=Decimal(str(years_experience)) if years_experience is not None else None,
+            years_experience=Decimal(str(years_experience))
+            if years_experience is not None
+            else None,
             last_used_date=last_used_date,
             is_primary=is_primary,
             is_certified=is_certified,

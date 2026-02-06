@@ -6,36 +6,33 @@ This is used to set up initial balances when migrating from another system.
 """
 
 import csv
-from dataclasses import dataclass, field
-from datetime import date, datetime
+import logging
+from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.account import Account
+from app.models.finance.gl.fiscal_period import FiscalPeriod
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
-from app.models.finance.gl.fiscal_period import FiscalPeriod
 from app.services.finance.import_export.base import (
-    BaseImporter,
     ImportConfig,
-    ImportResult,
-    ImportStatus,
-    FieldMapping,
-    PreviewResult,
-    ColumnMapping,
-    ValidationRule,
     detect_csv_format,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class BalanceType(str, Enum):
     """Type of balance entry."""
+
     DEBIT = "DEBIT"
     CREDIT = "CREDIT"
 
@@ -43,6 +40,7 @@ class BalanceType(str, Enum):
 @dataclass
 class OpeningBalanceLine:
     """Represents a single opening balance line."""
+
     account_name: str
     account_type: str
     debit: Decimal
@@ -58,6 +56,7 @@ class OpeningBalanceLine:
 @dataclass
 class OpeningBalancePreview:
     """Preview result for opening balance import."""
+
     total_rows: int
     total_debit: Decimal
     total_credit: Decimal
@@ -104,6 +103,7 @@ class OpeningBalancePreview:
 @dataclass
 class OpeningBalanceResult:
     """Result of opening balance import."""
+
     success: bool
     journal_entry_id: Optional[UUID]
     journal_number: Optional[str]
@@ -117,7 +117,9 @@ class OpeningBalanceResult:
         """Convert to dictionary for API response."""
         return {
             "success": self.success,
-            "journal_entry_id": str(self.journal_entry_id) if self.journal_entry_id else None,
+            "journal_entry_id": str(self.journal_entry_id)
+            if self.journal_entry_id
+            else None,
             "journal_number": self.journal_number,
             "total_debit": float(self.total_debit),
             "total_credit": float(self.total_credit),
@@ -148,7 +150,12 @@ class OpeningBalanceImporter:
     ACCOUNT_TYPE_COLS = ["Account Type", "AccountType", "Type", "account_type"]
     DEBIT_COLS = ["Debit", "debit", "Debit Amount", "Dr", "DR"]
     CREDIT_COLS = ["Credit", "credit", "Credit Amount", "Cr", "CR"]
-    NORMAL_BALANCE_COLS = ["Normal Balance", "NormalBalance", "normal_balance", "Balance Type"]
+    NORMAL_BALANCE_COLS = [
+        "Normal Balance",
+        "NormalBalance",
+        "normal_balance",
+        "Balance Type",
+    ]
     NOTES_COLS = ["Notes", "notes", "Description", "Memo", "Comment"]
     COA_MATCH_COLS = ["COA Match", "COA_Match", "Matched Account", "GL Account"]
 
@@ -161,7 +168,9 @@ class OpeningBalanceImporter:
     def _load_accounts(self) -> None:
         """Load all accounts for the organization into cache."""
         result = self.db.execute(
-            select(Account).where(Account.organization_id == self.config.organization_id)
+            select(Account).where(
+                Account.organization_id == self.config.organization_id
+            )
         )
         for account in result.scalars():
             # Cache by multiple keys for flexible matching
@@ -188,7 +197,9 @@ class OpeningBalanceImporter:
         # Clean string
         s = str(value).strip()
         s = s.replace(",", "")  # Remove thousands separator
-        s = s.replace("₦", "").replace("N", "").replace("$", "")  # Remove currency symbols
+        s = (
+            s.replace("₦", "").replace("N", "").replace("$", "")
+        )  # Remove currency symbols
         s = s.strip()
 
         if not s or s == "0":
@@ -199,7 +210,9 @@ class OpeningBalanceImporter:
         except InvalidOperation as exc:
             raise ValueError(f"Invalid decimal value: {value}") from exc
 
-    def _match_account(self, account_name: str, coa_match: Optional[str] = None) -> Optional[Account]:
+    def _match_account(
+        self, account_name: str, coa_match: Optional[str] = None
+    ) -> Optional[Account]:
         """
         Find matching account in Chart of Accounts.
 
@@ -281,7 +294,9 @@ class OpeningBalanceImporter:
         type_col = self._find_column(rows[0] if rows else {}, self.ACCOUNT_TYPE_COLS)
         debit_col = self._find_column(rows[0] if rows else {}, self.DEBIT_COLS)
         credit_col = self._find_column(rows[0] if rows else {}, self.CREDIT_COLS)
-        balance_col = self._find_column(rows[0] if rows else {}, self.NORMAL_BALANCE_COLS)
+        balance_col = self._find_column(
+            rows[0] if rows else {}, self.NORMAL_BALANCE_COLS
+        )
         notes_col = self._find_column(rows[0] if rows else {}, self.NOTES_COLS)
         coa_col = self._find_column(rows[0] if rows else {}, self.COA_MATCH_COLS)
 
@@ -299,16 +314,28 @@ class OpeningBalanceImporter:
             account_name = str(row.get(name_col, "") or "").strip() if name_col else ""
             account_type = str(row.get(type_col, "") or "").strip() if type_col else ""
             try:
-                debit = self._parse_decimal(row.get(debit_col)) if debit_col else Decimal("0")
+                debit = (
+                    self._parse_decimal(row.get(debit_col))
+                    if debit_col
+                    else Decimal("0")
+                )
             except ValueError as exc:
                 errors.append(f"Row {idx}: {exc}")
                 debit = Decimal("0")
             try:
-                credit = self._parse_decimal(row.get(credit_col)) if credit_col else Decimal("0")
+                credit = (
+                    self._parse_decimal(row.get(credit_col))
+                    if credit_col
+                    else Decimal("0")
+                )
             except ValueError as exc:
                 errors.append(f"Row {idx}: {exc}")
                 credit = Decimal("0")
-            balance_str = str(row.get(balance_col, "DEBIT") or "DEBIT").upper() if balance_col else "DEBIT"
+            balance_str = (
+                str(row.get(balance_col, "DEBIT") or "DEBIT").upper()
+                if balance_col
+                else "DEBIT"
+            )
             notes = str(row.get(notes_col, "") or "") if notes_col else ""
             coa_match = str(row.get(coa_col, "") or "") if coa_col else ""
 
@@ -350,7 +377,9 @@ class OpeningBalanceImporter:
         is_balanced = difference < Decimal("0.01")
 
         if not is_balanced:
-            errors.append(f"Unbalanced: Debits ({total_debit:,.2f}) != Credits ({total_credit:,.2f}), Difference: {difference:,.2f}")
+            errors.append(
+                f"Unbalanced: Debits ({total_debit:,.2f}) != Credits ({total_credit:,.2f}), Difference: {difference:,.2f}"
+            )
 
         return OpeningBalancePreview(
             total_rows=len(rows),
@@ -396,7 +425,11 @@ class OpeningBalanceImporter:
 
         if preview.validation_errors and not auto_create_accounts:
             # Check if only unmatched accounts errors
-            non_match_errors = [e for e in preview.validation_errors if "Unmatched" not in e and "unmatched" not in e.lower()]
+            non_match_errors = [
+                e
+                for e in preview.validation_errors
+                if "Unmatched" not in e and "unmatched" not in e.lower()
+            ]
             if non_match_errors:
                 return OpeningBalanceResult(
                     success=False,
@@ -416,7 +449,9 @@ class OpeningBalanceImporter:
                 total_debit=preview.total_debit,
                 total_credit=preview.total_credit,
                 lines_created=0,
-                errors=["Auto-create accounts is not implemented. Please create missing accounts first."],
+                errors=[
+                    "Auto-create accounts is not implemented. Please create missing accounts first."
+                ],
                 warnings=[],
             )
 
@@ -428,7 +463,9 @@ class OpeningBalanceImporter:
                 total_debit=preview.total_debit,
                 total_credit=preview.total_credit,
                 lines_created=0,
-                errors=[f"Journal is unbalanced: Debits={preview.total_debit:,.2f}, Credits={preview.total_credit:,.2f}"],
+                errors=[
+                    f"Journal is unbalanced: Debits={preview.total_debit:,.2f}, Credits={preview.total_credit:,.2f}"
+                ],
                 warnings=[],
             )
 
@@ -464,7 +501,7 @@ class OpeningBalanceImporter:
         if max_num:
             try:
                 num = int(max_num.replace("OB-", "")) + 1
-            except:
+            except (ValueError, AttributeError):
                 num = 1
         else:
             num = 1
@@ -509,7 +546,9 @@ class OpeningBalanceImporter:
                     )
                     continue
                 else:
-                    errors.append(f"Line {idx}: Account '{line.account_name}' not found in Chart of Accounts")
+                    errors.append(
+                        f"Line {idx}: Account '{line.account_name}' not found in Chart of Accounts"
+                    )
                     continue
 
             journal_line = JournalEntryLine(

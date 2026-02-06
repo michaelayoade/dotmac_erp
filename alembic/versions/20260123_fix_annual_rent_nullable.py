@@ -10,6 +10,7 @@ mismatch by:
 1. Setting any NULL values to 0
 2. Altering the column to NOT NULL with default 0
 """
+
 import sqlalchemy as sa
 from alembic import op
 

@@ -6,28 +6,27 @@ Usage:
 """
 
 from .base import (
-    parse_uuid,
-    parse_date,
-    parse_int,
-    parse_decimal,
+    COMPONENT_TYPES,
+    DEFAULT_PAGE_SIZE,
+    ENTRY_STATUSES,
+    PAYROLL_FREQUENCIES,
+    SLIP_STATUSES,
     parse_bool,
     parse_component_type,
-    parse_slip_status,
-    parse_payroll_frequency,
+    parse_date,
+    parse_decimal,
     parse_entry_status,
-    COMPONENT_TYPES,
-    SLIP_STATUSES,
-    PAYROLL_FREQUENCIES,
-    ENTRY_STATUSES,
-    DEFAULT_PAGE_SIZE,
+    parse_int,
+    parse_payroll_frequency,
+    parse_slip_status,
+    parse_uuid,
 )
-
 from .component_web import ComponentWebService
+from .report_web import ReportWebService
+from .run_web import RunWebService
 from .slip_web import SlipWebService
 from .structure_web import StructureWebService
-from .run_web import RunWebService
 from .tax_web import TaxWebService
-from .report_web import ReportWebService
 
 
 class PayrollWebService(

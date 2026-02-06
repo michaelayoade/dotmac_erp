@@ -10,10 +10,10 @@ The main APPostingAdapter in ar_posting_adapter.py serves as a facade
 that delegates to the functions in this package.
 """
 
-from app.services.finance.ar.posting.result import ARPostingResult
+from app.services.finance.ar.posting.helpers import create_tax_transactions
 from app.services.finance.ar.posting.invoice import post_invoice
 from app.services.finance.ar.posting.payment import post_payment
-from app.services.finance.ar.posting.helpers import create_tax_transactions
+from app.services.finance.ar.posting.result import ARPostingResult
 
 __all__ = [
     "ARPostingResult",

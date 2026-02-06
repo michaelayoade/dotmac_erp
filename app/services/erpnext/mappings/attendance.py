@@ -5,6 +5,8 @@ Maps ERPNext Attendance DocTypes to DotMac attendance schema:
 - Shift Type → attendance.shift_type
 - Attendance → attendance.attendance
 """
+
+import logging
 from datetime import time as datetime_time
 from decimal import Decimal
 from typing import Any
@@ -18,6 +20,7 @@ from .base import (
     parse_decimal,
 )
 
+logger = logging.getLogger(__name__)
 
 # ERPNext Attendance status to DotMac AttendanceStatus
 ATTENDANCE_STATUS_MAP = {

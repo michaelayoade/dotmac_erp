@@ -15,6 +15,7 @@ Columns added:
 - hr_probation_days: Default probation period
 - hr_attendance_mode: Attendance marking mode
 """
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -32,7 +33,9 @@ def upgrade() -> None:
     def has_column(schema: str, table: str, column: str) -> bool:
         if not inspector.has_table(table, schema=schema):
             return False
-        return any(col["name"] == column for col in inspector.get_columns(table, schema=schema))
+        return any(
+            col["name"] == column for col in inspector.get_columns(table, schema=schema)
+        )
 
     # Add HR settings columns to organization table
     if not has_column("core_org", "organization", "hr_employee_id_format"):

@@ -6,9 +6,10 @@ Manages intercompany balances, matching, and reconciliation (IFRS 10).
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
 
@@ -20,6 +21,8 @@ from app.models.finance.cons.intercompany_balance import IntercompanyBalance
 from app.models.finance.cons.legal_entity import LegalEntity
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -104,7 +107,9 @@ class IntercompanyService(ListResponseMixin):
         # Validate entities belong to group
         from_entity = db.get(LegalEntity, input.from_entity_id)
         if not from_entity or from_entity.group_id != grp_id:
-            raise HTTPException(status_code=404, detail="From entity not found in group")
+            raise HTTPException(
+                status_code=404, detail="From entity not found in group"
+            )
 
         to_entity = db.get(LegalEntity, input.to_entity_id)
         if not to_entity or to_entity.group_id != grp_id:
@@ -136,7 +141,9 @@ class IntercompanyService(ListResponseMixin):
             )
 
         # Calculate initial difference (will be updated during matching)
-        difference = input.from_entity_functional_amount + input.to_entity_functional_amount
+        difference = (
+            input.from_entity_functional_amount + input.to_entity_functional_amount
+        )
 
         balance = IntercompanyBalance(
             fiscal_period_id=input.fiscal_period_id,
@@ -229,7 +236,8 @@ class IntercompanyService(ListResponseMixin):
                 # From entity records a receivable (+), To entity records a payable (-)
                 # They should net to zero if matched
                 difference = abs(
-                    balance.reporting_currency_amount + reciprocal.reporting_currency_amount
+                    balance.reporting_currency_amount
+                    + reciprocal.reporting_currency_amount
                 )
 
                 is_matched = difference <= tolerance
@@ -238,7 +246,9 @@ class IntercompanyService(ListResponseMixin):
                 if not is_matched:
                     if balance.from_entity_currency != reciprocal.to_entity_currency:
                         difference_reason = "Currency mismatch"
-                    elif abs(balance.from_entity_amount) != abs(reciprocal.to_entity_amount):
+                    elif abs(balance.from_entity_amount) != abs(
+                        reciprocal.to_entity_amount
+                    ):
                         difference_reason = "Transaction amount mismatch"
                     else:
                         difference_reason = "Exchange rate difference"
@@ -265,7 +275,9 @@ class IntercompanyService(ListResponseMixin):
                     to_entity_code=entity_map.get(balance.to_entity_id, "Unknown"),
                     balance_type=balance.balance_type,
                     from_amount=balance.reporting_currency_amount,
-                    to_amount=reciprocal.reporting_currency_amount if reciprocal else Decimal("0"),
+                    to_amount=reciprocal.reporting_currency_amount
+                    if reciprocal
+                    else Decimal("0"),
                     difference=balance.difference_amount,
                     is_matched=balance.is_matched,
                     difference_reason=balance.difference_reason,
@@ -397,10 +409,16 @@ class IntercompanyService(ListResponseMixin):
         results = (
             db.query(
                 IntercompanyBalance.balance_type,
-                func.sum(IntercompanyBalance.from_entity_functional_amount).label("total_from"),
-                func.sum(IntercompanyBalance.to_entity_functional_amount).label("total_to"),
+                func.sum(IntercompanyBalance.from_entity_functional_amount).label(
+                    "total_from"
+                ),
+                func.sum(IntercompanyBalance.to_entity_functional_amount).label(
+                    "total_to"
+                ),
                 func.sum(IntercompanyBalance.difference_amount).label("total_diff"),
-                func.sum(func.cast(IntercompanyBalance.is_matched, Integer)).label("matched"),
+                func.sum(func.cast(IntercompanyBalance.is_matched, Integer)).label(
+                    "matched"
+                ),
                 func.count(IntercompanyBalance.balance_id).label("total_count"),
             )
             .filter(
@@ -522,7 +540,9 @@ class IntercompanyService(ListResponseMixin):
         """Get an intercompany balance by ID."""
         balance = db.get(IntercompanyBalance, coerce_uuid(balance_id))
         if not balance:
-            raise HTTPException(status_code=404, detail="Intercompany balance not found")
+            raise HTTPException(
+                status_code=404, detail="Intercompany balance not found"
+            )
         return balance
 
     @staticmethod

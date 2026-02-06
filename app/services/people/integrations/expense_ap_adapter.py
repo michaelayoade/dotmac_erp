@@ -3,6 +3,7 @@ Expense → AP Integration Adapter.
 
 Creates AP supplier invoices from approved expense claims.
 """
+
 import logging
 import uuid
 from dataclasses import dataclass
@@ -16,11 +17,10 @@ from sqlalchemy.orm import Session
 
 from app.models.people.exp import (
     ExpenseClaim,
-    ExpenseClaimItem,
-    ExpenseClaimStatus,
     ExpenseClaimAction,
-    ExpenseClaimActionType,
     ExpenseClaimActionStatus,
+    ExpenseClaimActionType,
+    ExpenseClaimStatus,
 )
 from app.models.people.hr import Employee
 
@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class APPostingResult:
     """Result of posting expense claim to AP."""
+
     success: bool
     supplier_invoice_id: Optional[uuid.UUID] = None
     error_message: Optional[str] = None
@@ -74,26 +75,25 @@ class ExpenseAPAdapter:
             claim = db.get(ExpenseClaim, claim_id)
             if not claim:
                 return APPostingResult(
-                    success=False,
-                    error_message=f"Expense claim {claim_id} not found"
+                    success=False, error_message=f"Expense claim {claim_id} not found"
                 )
 
             if claim.organization_id != org_id:
                 return APPostingResult(
                     success=False,
-                    error_message="Expense claim does not belong to this organization"
+                    error_message="Expense claim does not belong to this organization",
                 )
 
             if claim.status != ExpenseClaimStatus.APPROVED:
                 return APPostingResult(
                     success=False,
-                    error_message=f"Expense claim must be APPROVED, current status: {claim.status}"
+                    error_message=f"Expense claim must be APPROVED, current status: {claim.status}",
                 )
 
             if claim.supplier_invoice_id is not None:
                 return APPostingResult(
                     success=False,
-                    error_message="Expense claim already has an associated invoice"
+                    error_message="Expense claim already has an associated invoice",
                 )
 
             action_key = f"EXPENSE:{claim_id}:{ExpenseClaimActionType.CREATE_SUPPLIER_INVOICE.value}:v1"
@@ -123,19 +123,16 @@ class ExpenseAPAdapter:
             employee = db.get(Employee, claim.employee_id)
             if not employee:
                 return APPostingResult(
-                    success=False,
-                    error_message="Employee not found"
+                    success=False, error_message="Employee not found"
                 )
 
             # Import AP services (deferred to avoid circular imports)
-            from app.services.finance.ap.supplier import SupplierService
-            from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
             from app.models.finance.ap.supplier_invoice import SupplierInvoiceType
             from app.services.finance.ap import (
-                SupplierInput,
-                SupplierInvoiceInput,
                 InvoiceLineInput,
+                SupplierInvoiceInput,
             )
+            from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
 
             # Get or create employee as internal supplier
             supplier = ExpenseAPAdapter._get_or_create_internal_supplier(
@@ -146,9 +143,8 @@ class ExpenseAPAdapter:
             lines = []
             for item in claim.items:
                 # Use item-level account override or category default
-                expense_account_id = (
-                    item.expense_account_id
-                    or (item.category.expense_account_id if item.category else None)
+                expense_account_id = item.expense_account_id or (
+                    item.category.expense_account_id if item.category else None
                 )
 
                 if expense_account_id is None:
@@ -158,18 +154,20 @@ class ExpenseAPAdapter:
                     )
                     continue
 
-                lines.append(InvoiceLineInput(
-                    expense_account_id=expense_account_id,
-                    description=item.description,
-                    quantity=Decimal("1"),
-                    unit_price=item.approved_amount or item.claimed_amount,
-                    cost_center_id=item.cost_center_id or claim.cost_center_id,
-                ))
+                lines.append(
+                    InvoiceLineInput(
+                        expense_account_id=expense_account_id,
+                        description=item.description,
+                        quantity=Decimal("1"),
+                        unit_price=item.approved_amount or item.claimed_amount,
+                        cost_center_id=item.cost_center_id or claim.cost_center_id,
+                    )
+                )
 
             if not lines:
                 return APPostingResult(
                     success=False,
-                    error_message="No valid expense items with GL accounts"
+                    error_message="No valid expense items with GL accounts",
                 )
 
             # Create the supplier invoice
@@ -197,7 +195,8 @@ class ExpenseAPAdapter:
                 select(ExpenseClaimAction).where(
                     ExpenseClaimAction.organization_id == org_id,
                     ExpenseClaimAction.claim_id == claim_id,
-                    ExpenseClaimAction.action_type == ExpenseClaimActionType.CREATE_SUPPLIER_INVOICE,
+                    ExpenseClaimAction.action_type
+                    == ExpenseClaimActionType.CREATE_SUPPLIER_INVOICE,
                 )
             ).scalar_one_or_none()
             if action_record:
@@ -219,7 +218,8 @@ class ExpenseAPAdapter:
                     select(ExpenseClaimAction).where(
                         ExpenseClaimAction.organization_id == org_id,
                         ExpenseClaimAction.claim_id == claim_id,
-                        ExpenseClaimAction.action_type == ExpenseClaimActionType.CREATE_SUPPLIER_INVOICE,
+                        ExpenseClaimAction.action_type
+                        == ExpenseClaimActionType.CREATE_SUPPLIER_INVOICE,
                     )
                 ).scalar_one_or_none()
                 if action_record:
@@ -247,8 +247,8 @@ class ExpenseAPAdapter:
         Internal suppliers are used for expense reimbursements.
         """
         from app.models.finance.ap.supplier import Supplier, SupplierType
-        from app.services.finance.ap.supplier import SupplierService
         from app.services.finance.ap import SupplierInput
+        from app.services.finance.ap.supplier import SupplierService
 
         # Try to find existing internal supplier for this employee
         # Convention: internal supplier code = EMP-{employee_code}
@@ -266,7 +266,11 @@ class ExpenseAPAdapter:
         # Create new internal supplier
         # Get employee's name from related person
         person = employee.person
-        supplier_name = f"{person.first_name} {person.last_name}" if person else employee.employee_code
+        supplier_name = (
+            f"{person.first_name} {person.last_name}"
+            if person
+            else employee.employee_code
+        )
 
         supplier_input = SupplierInput(
             supplier_code=supplier_code,
@@ -276,9 +280,7 @@ class ExpenseAPAdapter:
             payment_terms_days=0,  # Immediate payment
         )
 
-        supplier = SupplierService.create_supplier(
-            db, org_id, supplier_input
-        )
+        supplier = SupplierService.create_supplier(db, org_id, supplier_input)
 
         logger.info(
             f"Created internal supplier {supplier.supplier_id} for employee {employee.employee_id}"
@@ -303,8 +305,7 @@ class ExpenseAPAdapter:
             claim = db.get(ExpenseClaim, claim_id)
             if not claim or not claim.supplier_invoice_id:
                 return APPostingResult(
-                    success=False,
-                    error_message="Claim has no associated AP invoice"
+                    success=False, error_message="Claim has no associated AP invoice"
                 )
 
             # Import AP posting adapter

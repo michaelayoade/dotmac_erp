@@ -22,7 +22,9 @@ class TestAPSupplierCreateWorkflow:
         expect(authenticated_page).to_have_url(re.compile(r".*/ap/suppliers/new.*"))
 
     @pytest.mark.e2e
-    def test_supplier_form_has_all_fields(self, authenticated_page: Page, base_url: str):
+    def test_supplier_form_has_all_fields(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that supplier form has all required fields."""
         authenticated_page.goto(f"{base_url}/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -34,7 +36,9 @@ class TestAPSupplierCreateWorkflow:
         expect(form.locator("select[name='currency_code']")).to_be_visible()
 
     @pytest.mark.e2e
-    def test_supplier_form_has_payment_terms(self, authenticated_page: Page, base_url: str):
+    def test_supplier_form_has_payment_terms(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that supplier form has payment terms section."""
         authenticated_page.goto(f"{base_url}/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -45,15 +49,21 @@ class TestAPSupplierCreateWorkflow:
         expect(form.locator("select[name='payment_method']")).to_be_visible()
 
     @pytest.mark.e2e
-    def test_supplier_form_has_gl_accounts(self, authenticated_page: Page, base_url: str):
+    def test_supplier_form_has_gl_accounts(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that supplier form has GL account dropdowns."""
         authenticated_page.goto(f"{base_url}/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
         expect(form).to_be_visible()
-        expect(form.locator("select[name='default_expense_account_id']")).to_be_visible()
-        expect(form.locator("select[name='default_payable_account_id']")).to_be_visible()
+        expect(
+            form.locator("select[name='default_expense_account_id']")
+        ).to_be_visible()
+        expect(
+            form.locator("select[name='default_payable_account_id']")
+        ).to_be_visible()
 
     @pytest.mark.e2e
     def test_create_supplier_workflow(self, authenticated_page: Page, base_url: str):
@@ -69,7 +79,9 @@ class TestAPSupplierCreateWorkflow:
 
         # Fill required fields
         authenticated_page.fill("input[name='supplier_code']", supplier_code)
-        authenticated_page.fill("input[name='supplier_name']", f"Test Supplier {unique_id}")
+        authenticated_page.fill(
+            "input[name='supplier_name']", f"Test Supplier {unique_id}"
+        )
 
         # Select currency
         currency_select = authenticated_page.locator("select[name='currency_code']")
@@ -94,7 +106,10 @@ class TestAPSupplierCreateWorkflow:
         # Check for success (redirect or success message)
         is_success = (
             "/ap/suppliers" in authenticated_page.url
-            or authenticated_page.locator(".success, .alert-success, :text('successfully')").count() > 0
+            or authenticated_page.locator(
+                ".success, .alert-success, :text('successfully')"
+            ).count()
+            > 0
         )
         errors = authenticated_page.locator(".error, .alert-error, .alert-danger")
         expect(errors).to_have_count(0)
@@ -112,7 +127,9 @@ class TestAPSupplierListWorkflow:
         expect(authenticated_page).to_have_url(re.compile(r".*/ap/suppliers.*"))
 
     @pytest.mark.e2e
-    def test_suppliers_list_has_new_button(self, authenticated_page: Page, base_url: str):
+    def test_suppliers_list_has_new_button(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that suppliers list has new button."""
         authenticated_page.goto(f"{base_url}/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
@@ -144,7 +161,9 @@ class TestAPInvoiceCreateWorkflow:
         expect(authenticated_page).to_have_url(re.compile(r".*/ap/invoices/new.*"))
 
     @pytest.mark.e2e
-    def test_invoice_form_has_supplier_select(self, authenticated_page: Page, base_url: str):
+    def test_invoice_form_has_supplier_select(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that invoice form has supplier selection."""
         authenticated_page.goto(f"{base_url}/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -208,7 +227,9 @@ class TestAPInvoiceListWorkflow:
         expect(authenticated_page).to_have_url(re.compile(r".*/ap/invoices.*"))
 
     @pytest.mark.e2e
-    def test_invoices_list_has_status_filter(self, authenticated_page: Page, base_url: str):
+    def test_invoices_list_has_status_filter(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that invoices list has status filter."""
         authenticated_page.goto(f"{base_url}/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
@@ -217,7 +238,9 @@ class TestAPInvoiceListWorkflow:
         expect(status_filter).to_be_visible()
 
     @pytest.mark.e2e
-    def test_invoices_list_has_supplier_filter(self, authenticated_page: Page, base_url: str):
+    def test_invoices_list_has_supplier_filter(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that invoices list has supplier filter."""
         authenticated_page.goto(f"{base_url}/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
@@ -268,7 +291,9 @@ class TestAPPaymentWorkflow:
         expect(form).to_be_visible()
 
     @pytest.mark.e2e
-    def test_payment_form_has_supplier_select(self, authenticated_page: Page, base_url: str):
+    def test_payment_form_has_supplier_select(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that payment form has supplier selection."""
         authenticated_page.goto(f"{base_url}/ap/payments/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -304,7 +329,9 @@ class TestAPAgingReport:
         authenticated_page.goto(f"{base_url}/ap/aging")
         authenticated_page.wait_for_load_state("networkidle")
 
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("AP Aging Report")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "AP Aging Report"
+        )
 
     @pytest.mark.e2e
     def test_aging_report_shows_buckets(self, authenticated_page: Page, base_url: str):
@@ -323,7 +350,9 @@ class TestAPPaymentBatchWorkflow:
         """Test that payment batches list loads."""
         authenticated_page.goto(f"{base_url}/ap/payment-batches")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("Payment Batches")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "Payment Batches"
+        )
 
     @pytest.mark.e2e
     def test_new_payment_batch_form(self, authenticated_page: Page, base_url: str):
@@ -333,10 +362,14 @@ class TestAPPaymentBatchWorkflow:
 
         form = authenticated_page.locator("form").first
         expect(form).to_be_visible()
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("New Payment Batch")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "New Payment Batch"
+        )
 
     @pytest.mark.e2e
-    def test_payment_batch_has_bank_account(self, authenticated_page: Page, base_url: str):
+    def test_payment_batch_has_bank_account(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that payment batch form has bank account selection."""
         authenticated_page.goto(f"{base_url}/ap/payment-batches/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -356,7 +389,7 @@ class TestAPResponsiveDesign:
         authenticated_page.set_viewport_size({"width": 375, "height": 667})
         authenticated_page.goto(f"{base_url}/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
     @pytest.mark.e2e
     def test_ap_invoices_mobile(self, authenticated_page: Page, base_url: str):
@@ -364,7 +397,7 @@ class TestAPResponsiveDesign:
         authenticated_page.set_viewport_size({"width": 375, "height": 667})
         authenticated_page.goto(f"{base_url}/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
     @pytest.mark.e2e
     def test_supplier_form_tablet(self, authenticated_page: Page, base_url: str):
@@ -372,4 +405,4 @@ class TestAPResponsiveDesign:
         authenticated_page.set_viewport_size({"width": 768, "height": 1024})
         authenticated_page.goto(f"{base_url}/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()

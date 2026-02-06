@@ -45,16 +45,14 @@ class TestSalesOrdersList:
             authenticated_page.keyboard.press("Enter")
             authenticated_page.wait_for_load_state("networkidle")
 
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_orders_list_by_status(self, authenticated_page, base_url):
         """Test sales orders list status filter."""
         authenticated_page.goto(f"{base_url}/sales-orders")
         authenticated_page.wait_for_load_state("networkidle")
 
-        status_filter = authenticated_page.locator(
-            "select[name='status'], #status"
-        )
+        status_filter = authenticated_page.locator("select[name='status'], #status")
         if status_filter.count() > 0:
             expect(status_filter.first).to_be_visible()
 
@@ -183,9 +181,7 @@ class TestSalesOrderDetail:
             order_link.click()
             authenticated_page.wait_for_load_state("networkidle")
 
-            lines = authenticated_page.locator(
-                "table, .line-items, [class*='lines']"
-            )
+            lines = authenticated_page.locator("table, .line-items, [class*='lines']")
             if lines.count() > 0:
                 expect(lines.first).to_be_visible()
 

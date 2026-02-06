@@ -1,4 +1,5 @@
 {% extends "admin/base_admin.html" %}
+{% from "components/_file_upload.html" import file_upload_zone %}
 
 {% block page_title %}Branding{% endblock %}
 {% block page_subtitle %}Configure logo and visual identity{% endblock %}
@@ -48,54 +49,35 @@
     </div>
     {% endif %}
 
-    <form method="POST" action="/admin/settings/branding" class="space-y-6">
+    <form method="POST" action="/admin/settings/branding" enctype="multipart/form-data" class="space-y-6">
         <!-- Logo Settings -->
         <div class="admin-card p-6">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Logo</h2>
             <div class="space-y-6">
                 <div>
-                    <label for="logo_url" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Main Logo URL</label>
-                    <input type="url" id="logo_url" name="logo_url"
-                           value="{{ branding.logo_url or (organization.logo_url or '') if branding is defined and branding else (organization.logo_url or '' if organization else '') }}"
-                           placeholder="https://www.company.com/logo.png"
-                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Primary logo used in navigation and reports. Recommended size: 200x50px</p>
+                    {{ file_upload_zone(
+                        name="logo_file",
+                        label="Main Logo Upload",
+                        hint="Primary logo used in navigation and reports. Recommended: 200x50px. Max 5MB.",
+                        accept="image/*",
+                        max_size_mb=5,
+                        preview="image",
+                        current_url=(branding.logo_url if branding and branding.logo_url else (organization.logo_url if organization is defined and organization and organization.logo_url else "")),
+                        remove_name="remove_logo"
+                    ) }}
                 </div>
-                {% if branding and branding.logo_url %}
-                <div class="p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Current Logo Preview:</p>
-                    <img src="{{ branding.logo_url }}" alt="Company Logo" class="max-h-16 object-contain">
-                </div>
-                {% elif organization and organization.logo_url %}
-                <div class="p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Current Logo Preview:</p>
-                    <img src="{{ organization.logo_url }}" alt="Company Logo" class="max-h-16 object-contain">
-                </div>
-                {% endif %}
 
                 <div>
-                    <label for="favicon_url" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Favicon URL</label>
-                    <input type="url" id="favicon_url" name="favicon_url"
-                           value="{{ branding.favicon_url or '' if branding else '' }}"
-                           placeholder="https://www.company.com/favicon.ico"
-                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Browser tab icon. Recommended: 32x32px .ico or .png</p>
-                </div>
-                <div>
-                    <label for="email_logo_url" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email Logo URL</label>
-                    <input type="url" id="email_logo_url" name="email_logo_url"
-                           value="{{ email_logo_url or '' }}"
-                           placeholder="https://www.company.com/email-logo.png"
-                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Logo for email headers. Recommended: 200x50px</p>
-                </div>
-                <div>
-                    <label for="report_logo_url" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Report Logo URL</label>
-                    <input type="url" id="report_logo_url" name="report_logo_url"
-                           value="{{ report_logo_url or '' }}"
-                           placeholder="https://www.company.com/report-logo.png"
-                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Logo for PDF reports and documents</p>
+                    {{ file_upload_zone(
+                        name="favicon_file",
+                        label="Favicon Upload",
+                        hint="Browser tab icon. Recommended: 32x32px .ico or .png. Max 2MB.",
+                        accept="image/*",
+                        max_size_mb=2,
+                        preview="icon",
+                        current_url=(branding.favicon_url if branding and branding.favicon_url else ""),
+                        remove_name="remove_favicon"
+                    ) }}
                 </div>
             </div>
         </div>

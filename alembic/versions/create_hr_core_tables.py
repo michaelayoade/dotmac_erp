@@ -11,6 +11,7 @@ This migration creates the HR Core tables:
 - hr.employee_grade
 - hr.employee
 """
+
 from alembic import op
 from app.alembic_utils import ensure_enum
 

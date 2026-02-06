@@ -7,9 +7,9 @@ when lines are marked for capitalization.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -17,10 +17,12 @@ from sqlalchemy.orm import Session
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import SupplierInvoice
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
-from app.models.fixed_assets.asset import Asset, AssetStatus
+from app.models.fixed_assets.asset import Asset
 from app.models.fixed_assets.asset_category import AssetCategory
 from app.services.common import coerce_uuid
-from app.services.fixed_assets.asset import AssetService, AssetInput
+from app.services.fixed_assets.asset import AssetInput, AssetService
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -72,7 +74,10 @@ class CapitalizationService:
 
         threshold = category.capitalization_threshold or Decimal("0")
         if amount < threshold:
-            return False, f"Amount {amount} is below capitalization threshold {threshold}"
+            return (
+                False,
+                f"Amount {amount} is below capitalization threshold {threshold}",
+            )
 
         return True, "Amount meets capitalization threshold"
 
@@ -157,7 +162,8 @@ class CapitalizationService:
                 source_type="SUPPLIER_INVOICE",
                 source_document_id=invoice.invoice_id,
                 supplier_id=supplier.supplier_id,
-                invoice_reference=invoice.supplier_invoice_number or invoice.invoice_number,
+                invoice_reference=invoice.supplier_invoice_number
+                or invoice.invoice_number,
                 exchange_rate=invoice.exchange_rate or Decimal("1.0"),
             )
 
@@ -175,7 +181,9 @@ class CapitalizationService:
                 created_asset_ids.append(asset.asset_id)
 
             except Exception as e:
-                errors.append(f"Line {line.line_number}: Failed to create asset - {str(e)}")
+                errors.append(
+                    f"Line {line.line_number}: Failed to create asset - {str(e)}"
+                )
 
         # Determine overall result
         if created_asset_ids:

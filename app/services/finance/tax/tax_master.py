@@ -6,9 +6,10 @@ Manages tax codes, rates, and jurisdiction configuration.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import List, Optional
 from uuid import UUID
 
@@ -19,6 +20,8 @@ from app.models.finance.tax.tax_code import TaxCode, TaxType
 from app.models.finance.tax.tax_jurisdiction import TaxJurisdiction
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -205,9 +208,9 @@ class TaxCodeService(ListResponseMixin):
         # Calculate tax
         if tax_code.is_inclusive:
             # Tax is included in base amount
-            tax_amount = (base_amount * tax_code.tax_rate / (Decimal("1") + tax_code.tax_rate)).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
+            tax_amount = (
+                base_amount * tax_code.tax_rate / (Decimal("1") + tax_code.tax_rate)
+            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             net_base = base_amount - tax_amount
         else:
             # Tax is additional
@@ -341,13 +344,17 @@ class TaxCodeService(ListResponseMixin):
         query = db.query(TaxCode)
 
         if organization_id:
-            query = query.filter(TaxCode.organization_id == coerce_uuid(organization_id))
+            query = query.filter(
+                TaxCode.organization_id == coerce_uuid(organization_id)
+            )
 
         if tax_type:
             query = query.filter(TaxCode.tax_type == tax_type)
 
         if jurisdiction_id:
-            query = query.filter(TaxCode.jurisdiction_id == coerce_uuid(jurisdiction_id))
+            query = query.filter(
+                TaxCode.jurisdiction_id == coerce_uuid(jurisdiction_id)
+            )
 
         if is_active is not None:
             query = query.filter(TaxCode.is_active == is_active)
@@ -575,7 +582,9 @@ class TaxJurisdictionService(ListResponseMixin):
             raise HTTPException(status_code=400, detail="No future rate defined")
 
         jurisdiction.current_tax_rate = jurisdiction.future_tax_rate
-        jurisdiction.tax_rate_effective_from = jurisdiction.future_rate_effective_from or date.today()
+        jurisdiction.tax_rate_effective_from = (
+            jurisdiction.future_rate_effective_from or date.today()
+        )
         jurisdiction.future_tax_rate = None
         jurisdiction.future_rate_effective_from = None
 
@@ -633,7 +642,9 @@ class TaxJurisdictionService(ListResponseMixin):
             query = query.filter(TaxJurisdiction.country_code == country_code)
 
         if jurisdiction_level:
-            query = query.filter(TaxJurisdiction.jurisdiction_level == jurisdiction_level)
+            query = query.filter(
+                TaxJurisdiction.jurisdiction_level == jurisdiction_level
+            )
 
         if is_active is not None:
             query = query.filter(TaxJurisdiction.is_active == is_active)
@@ -671,7 +682,9 @@ class TaxJurisdictionService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Jurisdiction not found")
 
         if not jurisdiction.is_active:
-            raise HTTPException(status_code=400, detail="Jurisdiction is already inactive")
+            raise HTTPException(
+                status_code=400, detail="Jurisdiction is already inactive"
+            )
 
         # Check for active tax codes in this jurisdiction
         active_codes = (

@@ -15,6 +15,7 @@ Supports multiple CSV formats:
 """
 
 import csv
+import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -22,11 +23,25 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, Generic, List, Optional, Sequence, Set, Tuple, Type, TypeVar, Union
-from uuid import UUID, uuid4
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generic,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # COLUMN ALIASES FOR MULTI-FORMAT SUPPORT
@@ -36,214 +51,374 @@ from sqlalchemy.orm import Session
 COLUMN_ALIASES: Dict[str, List[str]] = {
     # Account fields
     "account_name": [
-        "Account Name", "AccountName", "Name", "account_name",
-        "Account", "GL Account", "GL Account Name", "Ledger Name",
+        "Account Name",
+        "AccountName",
+        "Name",
+        "account_name",
+        "Account",
+        "GL Account",
+        "GL Account Name",
+        "Ledger Name",
         # QuickBooks
-        "Account:Name", "FullyQualifiedName",
+        "Account:Name",
+        "FullyQualifiedName",
         # Sage
-        "Nominal Name", "Nominal Account Name",
+        "Nominal Name",
+        "Nominal Account Name",
         # Xero
-        "Account name", "*Account Name",
+        "Account name",
+        "*Account Name",
     ],
     "account_code": [
-        "Account Code", "AccountCode", "Code", "account_code",
-        "GL Code", "Account Number", "Account No", "Acct No",
+        "Account Code",
+        "AccountCode",
+        "Code",
+        "account_code",
+        "GL Code",
+        "Account Number",
+        "Account No",
+        "Acct No",
         # QuickBooks
-        "Account:Code", "AcctNum",
+        "Account:Code",
+        "AcctNum",
         # Sage
-        "Nominal Code", "N/C",
+        "Nominal Code",
+        "N/C",
         # Xero
-        "Account Code", "*Code",
+        "Account Code",
+        "*Code",
     ],
     "account_type": [
-        "Account Type", "AccountType", "Type", "account_type",
-        "Category", "Account Category",
+        "Account Type",
+        "AccountType",
+        "Type",
+        "account_type",
+        "Category",
+        "Account Category",
         # QuickBooks
-        "Account:Type", "AccountType", "Classification",
+        "Account:Type",
+        "AccountType",
+        "Classification",
         # Sage
-        "Account Type", "Type",
+        "Account Type",
+        "Type",
         # Xero
-        "Account Type", "*Type",
+        "Account Type",
+        "*Type",
     ],
-
     # Contact fields
     "display_name": [
-        "Display Name", "DisplayName", "Name", "display_name",
-        "Contact Name", "Full Name", "Company/Name",
+        "Display Name",
+        "DisplayName",
+        "Name",
+        "display_name",
+        "Contact Name",
+        "Full Name",
+        "Company/Name",
         # QuickBooks
-        "DisplayName", "PrintOnCheckName", "CompanyName",
+        "DisplayName",
+        "PrintOnCheckName",
+        "CompanyName",
         # Sage
-        "Account Name", "Name",
+        "Account Name",
+        "Name",
         # Xero
-        "Contact Name", "*ContactName", "Name",
+        "Contact Name",
+        "*ContactName",
+        "Name",
     ],
     "company_name": [
-        "Company Name", "CompanyName", "Company", "company_name",
-        "Business Name", "Organization", "Org Name",
+        "Company Name",
+        "CompanyName",
+        "Company",
+        "company_name",
+        "Business Name",
+        "Organization",
+        "Org Name",
         # QuickBooks
-        "CompanyName", "Company",
+        "CompanyName",
+        "Company",
         # Sage
-        "Company", "Organisation",
+        "Company",
+        "Organisation",
         # Xero
         "Company Name",
     ],
     "email": [
-        "Email", "email", "Email Address", "E-mail", "EmailAddress",
-        "Primary Email", "Contact Email",
+        "Email",
+        "email",
+        "Email Address",
+        "E-mail",
+        "EmailAddress",
+        "Primary Email",
+        "Contact Email",
         # QuickBooks
-        "PrimaryEmailAddr:Address", "Email",
+        "PrimaryEmailAddr:Address",
+        "Email",
         # Sage
-        "E-mail", "Email Address",
+        "E-mail",
+        "Email Address",
         # Xero
-        "Email", "EmailAddress",
+        "Email",
+        "EmailAddress",
     ],
     "phone": [
-        "Phone", "phone", "Phone Number", "Telephone", "Tel",
-        "Mobile", "Primary Phone", "Work Phone",
+        "Phone",
+        "phone",
+        "Phone Number",
+        "Telephone",
+        "Tel",
+        "Mobile",
+        "Primary Phone",
+        "Work Phone",
         # QuickBooks
-        "PrimaryPhone:FreeFormNumber", "Phone",
+        "PrimaryPhone:FreeFormNumber",
+        "Phone",
         # Sage
-        "Telephone", "Tel No",
+        "Telephone",
+        "Tel No",
         # Xero
-        "Phone", "PhoneNumber",
+        "Phone",
+        "PhoneNumber",
     ],
     "billing_address": [
-        "Billing Address", "Address", "billing_address",
-        "Street Address", "Address Line 1",
+        "Billing Address",
+        "Address",
+        "billing_address",
+        "Street Address",
+        "Address Line 1",
         # QuickBooks
-        "BillAddr:Line1", "BillingAddress",
+        "BillAddr:Line1",
+        "BillingAddress",
         # Sage
-        "Address 1", "Invoice Address",
+        "Address 1",
+        "Invoice Address",
         # Xero
-        "AddressLine1", "Billing Address",
+        "AddressLine1",
+        "Billing Address",
     ],
-
     # Item fields
     "item_name": [
-        "Item Name", "ItemName", "Name", "item_name",
-        "Product Name", "Product", "Service Name",
+        "Item Name",
+        "ItemName",
+        "Name",
+        "item_name",
+        "Product Name",
+        "Product",
+        "Service Name",
         # QuickBooks
-        "Name", "FullyQualifiedName", "Item",
+        "Name",
+        "FullyQualifiedName",
+        "Item",
         # Sage
-        "Stock Item", "Product Name",
+        "Stock Item",
+        "Product Name",
         # Xero
-        "Item Name", "*Name", "ItemCode",
+        "Item Name",
+        "*Name",
+        "ItemCode",
     ],
     "item_code": [
-        "Item Code", "ItemCode", "Code", "SKU", "Product Code",
-        "Part Number", "Part No", "item_code", "sku",
+        "Item Code",
+        "ItemCode",
+        "Code",
+        "SKU",
+        "Product Code",
+        "Part Number",
+        "Part No",
+        "item_code",
+        "sku",
         # QuickBooks
-        "SKU", "Sku",
+        "SKU",
+        "Sku",
         # Sage
-        "Stock Code", "Product Code",
+        "Stock Code",
+        "Product Code",
         # Xero
-        "Item Code", "Code",
+        "Item Code",
+        "Code",
     ],
     "unit_price": [
-        "Unit Price", "Price", "Rate", "Selling Price",
-        "Sales Price", "unit_price", "price",
+        "Unit Price",
+        "Price",
+        "Rate",
+        "Selling Price",
+        "Sales Price",
+        "unit_price",
+        "price",
         # QuickBooks
-        "UnitPrice", "Rate",
+        "UnitPrice",
+        "Rate",
         # Sage
-        "Sales Price", "Unit Price",
+        "Sales Price",
+        "Unit Price",
         # Xero
-        "Unit Price", "SalesUnitPrice",
+        "Unit Price",
+        "SalesUnitPrice",
     ],
     "cost_price": [
-        "Cost Price", "Cost", "Purchase Price", "Buy Price",
-        "cost_price", "cost",
+        "Cost Price",
+        "Cost",
+        "Purchase Price",
+        "Buy Price",
+        "cost_price",
+        "cost",
         # QuickBooks
-        "PurchaseCost", "Cost",
+        "PurchaseCost",
+        "Cost",
         # Sage
-        "Cost Price", "Purchase Price",
+        "Cost Price",
+        "Purchase Price",
         # Xero
-        "Cost Price", "PurchaseUnitPrice",
+        "Cost Price",
+        "PurchaseUnitPrice",
     ],
-
     # Financial fields
     "amount": [
-        "Amount", "Total", "Value", "amount", "total",
-        "Net Amount", "Gross Amount", "Line Amount",
+        "Amount",
+        "Total",
+        "Value",
+        "amount",
+        "total",
+        "Net Amount",
+        "Gross Amount",
+        "Line Amount",
         # QuickBooks
-        "Amount", "TotalAmt",
+        "Amount",
+        "TotalAmt",
         # Sage
-        "Net", "Amount",
+        "Net",
+        "Amount",
         # Xero
-        "Amount", "LineAmount",
+        "Amount",
+        "LineAmount",
     ],
     "tax_amount": [
-        "Tax Amount", "Tax", "VAT", "GST", "Sales Tax",
-        "tax_amount", "tax", "vat",
+        "Tax Amount",
+        "Tax",
+        "VAT",
+        "GST",
+        "Sales Tax",
+        "tax_amount",
+        "tax",
+        "vat",
         # QuickBooks
-        "TaxAmt", "Tax",
+        "TaxAmt",
+        "Tax",
         # Sage
-        "VAT", "Tax Amount",
+        "VAT",
+        "Tax Amount",
         # Xero
-        "TaxAmount", "Tax",
+        "TaxAmount",
+        "Tax",
     ],
     "currency": [
-        "Currency", "Currency Code", "currency", "currency_code",
-        "Curr", "CurrencyCode",
+        "Currency",
+        "Currency Code",
+        "currency",
+        "currency_code",
+        "Curr",
+        "CurrencyCode",
         # QuickBooks
-        "CurrencyRef:value", "Currency",
+        "CurrencyRef:value",
+        "Currency",
         # Sage
-        "Currency", "Currency Code",
+        "Currency",
+        "Currency Code",
         # Xero
-        "Currency", "CurrencyCode",
+        "Currency",
+        "CurrencyCode",
     ],
-
     # Date fields
     "date": [
-        "Date", "date", "Transaction Date", "Trans Date",
-        "Entry Date", "Doc Date",
+        "Date",
+        "date",
+        "Transaction Date",
+        "Trans Date",
+        "Entry Date",
+        "Doc Date",
         # QuickBooks
-        "TxnDate", "Date",
+        "TxnDate",
+        "Date",
         # Sage
-        "Date", "Trans Date",
+        "Date",
+        "Trans Date",
         # Xero
-        "Date", "DateString",
+        "Date",
+        "DateString",
     ],
     "due_date": [
-        "Due Date", "DueDate", "due_date", "Payment Due",
-        "Due", "Terms Date",
+        "Due Date",
+        "DueDate",
+        "due_date",
+        "Payment Due",
+        "Due",
+        "Terms Date",
         # QuickBooks
-        "DueDate", "Due Date",
+        "DueDate",
+        "Due Date",
         # Sage
         "Due Date",
         # Xero
-        "DueDate", "Due Date",
+        "DueDate",
+        "Due Date",
     ],
-
     # Invoice fields
     "invoice_number": [
-        "Invoice Number", "Invoice No", "InvoiceNumber", "Invoice #",
-        "Inv No", "Doc No", "Reference", "invoice_number",
+        "Invoice Number",
+        "Invoice No",
+        "InvoiceNumber",
+        "Invoice #",
+        "Inv No",
+        "Doc No",
+        "Reference",
+        "invoice_number",
         # QuickBooks
-        "DocNumber", "RefNumber", "Invoice No.",
+        "DocNumber",
+        "RefNumber",
+        "Invoice No.",
         # Sage
-        "Invoice No", "Inv No",
+        "Invoice No",
+        "Inv No",
         # Xero
-        "InvoiceNumber", "Invoice Number",
+        "InvoiceNumber",
+        "Invoice Number",
     ],
     "customer_name": [
-        "Customer Name", "Customer", "CustomerName", "customer_name",
-        "Client Name", "Client", "Bill To",
+        "Customer Name",
+        "Customer",
+        "CustomerName",
+        "customer_name",
+        "Client Name",
+        "Client",
+        "Bill To",
         # QuickBooks
-        "CustomerRef:name", "Customer:DisplayName",
+        "CustomerRef:name",
+        "Customer:DisplayName",
         # Sage
-        "Customer", "Account Name",
+        "Customer",
+        "Account Name",
         # Xero
-        "Contact", "ContactName",
+        "Contact",
+        "ContactName",
     ],
     "vendor_name": [
-        "Vendor Name", "Vendor", "VendorName", "Supplier Name",
-        "Supplier", "vendor_name", "supplier_name",
+        "Vendor Name",
+        "Vendor",
+        "VendorName",
+        "Supplier Name",
+        "Supplier",
+        "vendor_name",
+        "supplier_name",
         # QuickBooks
-        "VendorRef:name", "Vendor:DisplayName",
+        "VendorRef:name",
+        "Vendor:DisplayName",
         # Sage
-        "Supplier", "Account Name",
+        "Supplier",
+        "Account Name",
         # Xero
-        "Contact", "ContactName",
+        "Contact",
+        "ContactName",
     ],
 }
 
@@ -253,9 +428,7 @@ COLUMN_ALIASES: Dict[str, List[str]] = {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Email validation pattern
-EMAIL_PATTERN = re.compile(
-    r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-)
+EMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
 
 # Phone number pattern (flexible to handle various international formats)
 PHONE_PATTERN = re.compile(
@@ -267,40 +440,117 @@ CURRENCY_PATTERN = re.compile(r"^[A-Z]{3}$")
 
 # Valid ISO currency codes (subset of common ones)
 VALID_CURRENCY_CODES = {
-    "NGN", "USD", "EUR", "GBP", "CAD", "AUD", "JPY", "CNY", "INR", "ZAR",
-    "AED", "CHF", "SEK", "NOK", "DKK", "NZD", "SGD", "HKD", "KRW", "MXN",
-    "BRL", "RUB", "TRY", "PLN", "THB", "MYR", "IDR", "PHP", "VND", "EGP",
-    "KES", "GHS", "TZS", "UGX", "XOF", "XAF",
+    "NGN",
+    "USD",
+    "EUR",
+    "GBP",
+    "CAD",
+    "AUD",
+    "JPY",
+    "CNY",
+    "INR",
+    "ZAR",
+    "AED",
+    "CHF",
+    "SEK",
+    "NOK",
+    "DKK",
+    "NZD",
+    "SGD",
+    "HKD",
+    "KRW",
+    "MXN",
+    "BRL",
+    "RUB",
+    "TRY",
+    "PLN",
+    "THB",
+    "MYR",
+    "IDR",
+    "PHP",
+    "VND",
+    "EGP",
+    "KES",
+    "GHS",
+    "TZS",
+    "UGX",
+    "XOF",
+    "XAF",
 }
 
 # Account type mappings for validation
 VALID_ACCOUNT_TYPES = {
     # Zoho Books types
-    "other_asset", "other_current_asset", "cash", "bank", "fixed_asset",
-    "other_current_liability", "credit_card", "long_term_liability",
-    "other_liability", "equity", "income", "other_income", "expense",
-    "cost_of_goods_sold", "other_expense", "accounts_receivable",
-    "accounts_payable", "stock", "payment_clearing",
+    "other_asset",
+    "other_current_asset",
+    "cash",
+    "bank",
+    "fixed_asset",
+    "other_current_liability",
+    "credit_card",
+    "long_term_liability",
+    "other_liability",
+    "equity",
+    "income",
+    "other_income",
+    "expense",
+    "cost_of_goods_sold",
+    "other_expense",
+    "accounts_receivable",
+    "accounts_payable",
+    "stock",
+    "payment_clearing",
     # QuickBooks types
-    "bank", "accounts receivable", "other current asset", "fixed asset",
-    "other asset", "accounts payable", "credit card", "other current liability",
-    "long term liability", "equity", "income", "cost of goods sold",
-    "expense", "other income", "other expense",
+    "bank",
+    "accounts receivable",
+    "other current asset",
+    "fixed asset",
+    "other asset",
+    "accounts payable",
+    "credit card",
+    "other current liability",
+    "long term liability",
+    "equity",
+    "income",
+    "cost of goods sold",
+    "expense",
+    "other income",
+    "other expense",
     # Xero types
-    "bank", "current", "fixed", "inventory", "non-current",
-    "prepayment", "receivable", "liability", "current liability",
-    "non-current liability", "equity", "direct costs",
-    "expense", "overhead", "revenue", "sales", "other income",
+    "bank",
+    "current",
+    "fixed",
+    "inventory",
+    "non-current",
+    "prepayment",
+    "receivable",
+    "liability",
+    "current liability",
+    "non-current liability",
+    "equity",
+    "direct costs",
+    "expense",
+    "overhead",
+    "revenue",
+    "sales",
+    "other income",
     # Sage types
-    "current assets", "fixed assets", "current liabilities",
-    "long term liabilities", "capital & reserves", "sales", "purchases",
-    "direct expenses", "overheads",
+    "current assets",
+    "fixed assets",
+    "current liabilities",
+    "long term liabilities",
+    "capital & reserves",
+    "sales",
+    "purchases",
+    "direct expenses",
+    "overheads",
 }
 
 
 @dataclass
 class ValidationRule:
     """Defines a validation rule for a field."""
+
     field_name: str
     rule_type: str  # required, pattern, min_length, max_length, min_value, max_value, choices, custom
     value: Any = None
@@ -324,64 +574,111 @@ class ValidationRule:
 
         elif self.rule_type == "min_length":
             if len(str_value) < self.value:
-                return False, self.message or f"'{self.field_name}' must be at least {self.value} characters"
+                return (
+                    False,
+                    self.message
+                    or f"'{self.field_name}' must be at least {self.value} characters",
+                )
 
         elif self.rule_type == "max_length":
             if len(str_value) > self.value:
-                return False, self.message or f"'{self.field_name}' must not exceed {self.value} characters"
+                return (
+                    False,
+                    self.message
+                    or f"'{self.field_name}' must not exceed {self.value} characters",
+                )
 
         elif self.rule_type == "min_value":
             try:
                 num = Decimal(re.sub(r"[^\d.\-]", "", str_value))
                 if num < self.value:
-                    return False, self.message or f"'{self.field_name}' must be at least {self.value}"
-            except:
+                    return (
+                        False,
+                        self.message
+                        or f"'{self.field_name}' must be at least {self.value}",
+                    )
+            except (ValueError, TypeError, ArithmeticError):
                 return False, f"'{self.field_name}' must be a valid number"
 
         elif self.rule_type == "max_value":
             try:
                 num = Decimal(re.sub(r"[^\d.\-]", "", str_value))
                 if num > self.value:
-                    return False, self.message or f"'{self.field_name}' must not exceed {self.value}"
-            except:
+                    return (
+                        False,
+                        self.message
+                        or f"'{self.field_name}' must not exceed {self.value}",
+                    )
+            except (ValueError, TypeError, ArithmeticError):
                 return False, f"'{self.field_name}' must be a valid number"
 
         elif self.rule_type == "choices":
             normalized = str_value.lower().replace(" ", "_").replace("-", "_")
-            valid_choices = {str(c).lower().replace(" ", "_").replace("-", "_") for c in self.value}
+            valid_choices = {
+                str(c).lower().replace(" ", "_").replace("-", "_") for c in self.value
+            }
             if normalized not in valid_choices:
-                return False, self.message or f"'{self.field_name}' must be one of: {', '.join(sorted(self.value)[:10])}"
+                return (
+                    False,
+                    self.message
+                    or f"'{self.field_name}' must be one of: {', '.join(sorted(self.value)[:10])}",
+                )
 
         elif self.rule_type == "email":
             if not EMAIL_PATTERN.match(str_value):
-                return False, self.message or f"'{self.field_name}' must be a valid email address"
+                return (
+                    False,
+                    self.message
+                    or f"'{self.field_name}' must be a valid email address",
+                )
 
         elif self.rule_type == "phone":
             # Clean phone number before validation
             cleaned = re.sub(r"[\s\-\.\(\)]", "", str_value)
-            if not (cleaned.isdigit() or (cleaned.startswith("+") and cleaned[1:].isdigit())):
-                return False, self.message or f"'{self.field_name}' must be a valid phone number"
+            if not (
+                cleaned.isdigit() or (cleaned.startswith("+") and cleaned[1:].isdigit())
+            ):
+                return (
+                    False,
+                    self.message or f"'{self.field_name}' must be a valid phone number",
+                )
             if len(cleaned) < 7 or len(cleaned) > 20:
-                return False, self.message or f"'{self.field_name}' must be a valid phone number"
+                return (
+                    False,
+                    self.message or f"'{self.field_name}' must be a valid phone number",
+                )
 
         elif self.rule_type == "currency":
             upper_value = str_value.upper()
             if upper_value not in VALID_CURRENCY_CODES:
-                return False, self.message or f"'{self.field_name}' must be a valid ISO currency code (e.g., USD, NGN)"
+                return (
+                    False,
+                    self.message
+                    or f"'{self.field_name}' must be a valid ISO currency code (e.g., USD, NGN)",
+                )
 
         elif self.rule_type == "positive":
             try:
                 num = Decimal(re.sub(r"[^\d.\-]", "", str_value))
                 if num < 0:
-                    return False, self.message or f"'{self.field_name}' must be positive"
-            except:
+                    return (
+                        False,
+                        self.message or f"'{self.field_name}' must be positive",
+                    )
+            except (ValueError, TypeError, ArithmeticError):
                 return False, f"'{self.field_name}' must be a valid number"
 
         elif self.rule_type == "date":
             # Try to parse the date
             date_formats = [
-                "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y",
-                "%Y/%m/%d", "%d %b %Y", "%d %B %Y", "%b %d, %Y"
+                "%Y-%m-%d",
+                "%d/%m/%Y",
+                "%m/%d/%Y",
+                "%d-%m-%Y",
+                "%Y/%m/%d",
+                "%d %b %Y",
+                "%d %B %Y",
+                "%b %d, %Y",
             ]
             parsed = False
             for fmt in date_formats:
@@ -392,7 +689,10 @@ class ValidationRule:
                 except ValueError:
                     continue
             if not parsed:
-                return False, self.message or f"'{self.field_name}' must be a valid date"
+                return (
+                    False,
+                    self.message or f"'{self.field_name}' must be a valid date",
+                )
 
         elif self.rule_type == "custom":
             # Custom validation function
@@ -414,6 +714,7 @@ class ValidationRule:
 
 class ImportStatus(str, Enum):
     """Status of an import operation."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -424,6 +725,7 @@ class ImportStatus(str, Enum):
 @dataclass
 class ImportError:
     """Represents an import error."""
+
     row_number: int
     field: Optional[str]
     value: Optional[str]
@@ -438,6 +740,7 @@ class ImportError:
 @dataclass
 class ImportWarning:
     """Represents an import warning (non-fatal issue)."""
+
     row_number: int
     field: Optional[str]
     message: str
@@ -451,6 +754,7 @@ class ImportWarning:
 @dataclass
 class ImportResult:
     """Result of an import operation."""
+
     entity_type: str
     status: ImportStatus = ImportStatus.PENDING
     total_rows: int = 0
@@ -470,7 +774,13 @@ class ImportResult:
             return 0.0
         return (self.imported_count / self.total_rows) * 100
 
-    def add_error(self, row: int, message: str, field: Optional[str] = None, value: Optional[str] = None):
+    def add_error(
+        self,
+        row: int,
+        message: str,
+        field: Optional[str] = None,
+        value: Optional[str] = None,
+    ):
         """Add an error to the result."""
         self.errors.append(ImportError(row, field, value, message))
         self.error_count += 1
@@ -499,6 +809,7 @@ class ImportResult:
 @dataclass
 class FieldMapping:
     """Defines mapping from source CSV field to target model field."""
+
     source_field: str  # CSV column name
     target_field: str  # Model attribute name
     required: bool = False
@@ -517,6 +828,7 @@ class FieldMapping:
 @dataclass
 class ImportConfig:
     """Configuration for an import operation."""
+
     organization_id: UUID
     user_id: UUID
     skip_duplicates: bool = True
@@ -534,6 +846,7 @@ class ImportConfig:
 @dataclass
 class ColumnMapping:
     """Represents a detected or suggested column mapping."""
+
     source_column: str  # Column name in the CSV
     target_field: str  # Standard field name
     confidence: float  # 0.0 to 1.0
@@ -543,6 +856,7 @@ class ColumnMapping:
 @dataclass
 class PreviewResult:
     """Result of a file preview operation with visual data."""
+
     entity_type: str
     total_rows: int
     detected_columns: List[str]
@@ -606,19 +920,37 @@ def detect_csv_format(columns: Sequence[str]) -> str:
     column_set = {c.lower() for c in columns}
 
     # Zoho Books indicators
-    zoho_indicators = {"account name", "account type", "zoho", "display name as", "currency code"}
+    zoho_indicators = {
+        "account name",
+        "account type",
+        "zoho",
+        "display name as",
+        "currency code",
+    }
     if len(column_set & zoho_indicators) >= 2:
         return "zoho"
 
     # QuickBooks indicators
-    qb_indicators = {"fullyqualifiedname", "acctnum", "txndate", "docnumber", "customerref"}
+    qb_indicators = {
+        "fullyqualifiedname",
+        "acctnum",
+        "txndate",
+        "docnumber",
+        "customerref",
+    }
     if any(c in str(columns) for c in ["CustomerRef:", "VendorRef:", "AccountRef:"]):
         return "quickbooks"
     if len(column_set & qb_indicators) >= 1:
         return "quickbooks"
 
     # Xero indicators
-    xero_indicators = {"contactname", "*name", "invoicenumber", "duedate", "emailaddress"}
+    xero_indicators = {
+        "contactname",
+        "*name",
+        "invoicenumber",
+        "duedate",
+        "emailaddress",
+    }
     if any(c.startswith("*") for c in columns):
         return "xero"
     if len(column_set & xero_indicators) >= 2:
@@ -656,6 +988,7 @@ def find_account_by_subledger_type(
         Account UUID if found, None otherwise
     """
     from sqlalchemy import select
+
     from app.models.finance.gl.account import Account
 
     result = db.execute(
@@ -681,6 +1014,7 @@ def find_account_by_name_pattern(
         Account UUID if found, None otherwise
     """
     from sqlalchemy import select
+
     from app.models.finance.gl.account import Account
 
     result = db.execute(
@@ -751,7 +1085,7 @@ class BaseImporter(ABC, Generic[T]):
                     self.result.add_error(
                         row_num,
                         f"Required field '{mapping.source_field}' is missing or empty",
-                        mapping.source_field
+                        mapping.source_field,
                     )
                     is_valid = False
 
@@ -774,7 +1108,7 @@ class BaseImporter(ABC, Generic[T]):
                 self.result.add_warning(
                     row_num,
                     f"Failed to transform value '{source_value}': {str(e)}",
-                    mapping.source_field
+                    mapping.source_field,
                 )
                 transformed[mapping.target_field] = mapping.default
 
@@ -791,6 +1125,7 @@ class BaseImporter(ABC, Generic[T]):
             ImportResult with statistics and any errors
         """
         import time
+
         start_time = time.time()
 
         file_path = Path(file_path)
@@ -840,6 +1175,7 @@ class BaseImporter(ABC, Generic[T]):
             ImportResult with statistics and any errors
         """
         import time
+
         start_time = time.time()
 
         self.result.status = ImportStatus.IN_PROGRESS
@@ -883,7 +1219,7 @@ class BaseImporter(ABC, Generic[T]):
                         self.result.skipped_count += 1
                         self.result.add_warning(
                             idx,
-                            f"Duplicate entry skipped (key: {self.get_unique_key(row)})"
+                            f"Duplicate entry skipped (key: {self.get_unique_key(row)})",
                         )
                         continue
 
@@ -951,7 +1287,9 @@ class BaseImporter(ABC, Generic[T]):
         raise ValueError(f"Cannot parse date: {value}")
 
     @staticmethod
-    def parse_decimal(value: Any, thousands_sep: str = ",", decimal_sep: str = ".") -> Optional[Decimal]:
+    def parse_decimal(
+        value: Any, thousands_sep: str = ",", decimal_sep: str = "."
+    ) -> Optional[Decimal]:
         """Parse a string to Decimal, handling various formats."""
         if value is None or value == "":
             return None
@@ -1003,7 +1341,9 @@ class BaseImporter(ABC, Generic[T]):
         return s
 
     @staticmethod
-    def parse_enum(value: Any, enum_class: Type[Enum], default: Optional[Enum] = None) -> Optional[Enum]:
+    def parse_enum(
+        value: Any, enum_class: Type[Enum], default: Optional[Enum] = None
+    ) -> Optional[Enum]:
         """Parse a string to an enum value."""
         if value is None or value == "":
             return default
@@ -1019,7 +1359,9 @@ class BaseImporter(ABC, Generic[T]):
             except KeyError:
                 if default:
                     return default
-                raise ValueError(f"Invalid enum value: {value} for {enum_class.__name__}")
+                raise ValueError(
+                    f"Invalid enum value: {value} for {enum_class.__name__}"
+                )
 
     # === Preview and Validation Methods ===
 
@@ -1108,7 +1450,9 @@ class BaseImporter(ABC, Generic[T]):
 
                 # Calculate similarity score
                 col_norm = col.lower().replace("_", " ").replace("-", " ")
-                source_norm = mapping.source_field.lower().replace("_", " ").replace("-", " ")
+                source_norm = (
+                    mapping.source_field.lower().replace("_", " ").replace("-", " ")
+                )
 
                 # Check for substring match
                 if source_norm in col_norm or col_norm in source_norm:
@@ -1137,7 +1481,9 @@ class BaseImporter(ABC, Generic[T]):
 
         return mappings
 
-    def preview_file(self, file_path: Union[str, Path], max_rows: int = 10) -> PreviewResult:
+    def preview_file(
+        self, file_path: Union[str, Path], max_rows: int = 10
+    ) -> PreviewResult:
         """
         Preview a CSV file with column mapping suggestions and validation.
 
@@ -1273,7 +1619,7 @@ class BaseImporter(ABC, Generic[T]):
         try:
             with open(file_path, "r", encoding=self.config.encoding) as f:
                 total_rows = sum(1 for _ in f) - 1  # Subtract header
-        except:
+        except (OSError, UnicodeDecodeError):
             total_rows = len(rows)
 
         is_valid = len(missing_required) == 0 and len(errors) == 0
@@ -1304,7 +1650,9 @@ class BaseImporter(ABC, Generic[T]):
             value = row.get(rule.field_name)
             valid, error_msg = rule.validate(value)
             if not valid:
-                self.result.add_error(row_num, error_msg or "Invalid value", rule.field_name, str(value))
+                self.result.add_error(
+                    row_num, error_msg or "Invalid value", rule.field_name, str(value)
+                )
                 is_valid = False
 
         return is_valid

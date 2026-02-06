@@ -6,15 +6,17 @@ Provides bulk operations for customer master data.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
-from app.models.finance.ar.invoice import Invoice, InvoiceStatus
+from app.models.finance.ar.invoice import Invoice
 from app.services.bulk_actions import BulkActionService
+
+logger = logging.getLogger(__name__)
 
 
 class CustomerBulkService(BulkActionService[Customer]):

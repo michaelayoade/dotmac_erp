@@ -1,3 +1,6 @@
+import logging
+from typing import Any
+
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
@@ -6,8 +9,12 @@ from app.schemas.scheduler import ScheduledTaskCreate, ScheduledTaskUpdate
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
 
+logger = logging.getLogger(__name__)
 
-def _apply_ordering(query, order_by, order_dir, allowed_columns):
+
+def _apply_ordering(
+    query: Any, order_by: str, order_dir: str, allowed_columns: dict[str, Any]
+) -> Any:
     if order_by not in allowed_columns:
         raise HTTPException(
             status_code=400,
@@ -19,11 +26,11 @@ def _apply_ordering(query, order_by, order_dir, allowed_columns):
     return query.order_by(column.asc())
 
 
-def _apply_pagination(query, limit, offset):
+def _apply_pagination(query: Any, limit: int, offset: int) -> Any:
     return query.limit(limit).offset(offset)
 
 
-def _validate_schedule_type(value):
+def _validate_schedule_type(value: str | None) -> ScheduleType | None:
     if value is None:
         return None
     if isinstance(value, ScheduleType):
@@ -36,7 +43,7 @@ def _validate_schedule_type(value):
 
 class ScheduledTasks(ListResponseMixin):
     @staticmethod
-    def create(db: Session, payload: ScheduledTaskCreate):
+    def create(db: Session, payload: ScheduledTaskCreate) -> ScheduledTask:
         if payload.interval_seconds < 1:
             raise HTTPException(status_code=400, detail="interval_seconds must be >= 1")
         task = ScheduledTask(**payload.model_dump())
@@ -46,7 +53,7 @@ class ScheduledTasks(ListResponseMixin):
         return task
 
     @staticmethod
-    def get(db: Session, task_id: str):
+    def get(db: Session, task_id: str) -> ScheduledTask:
         task = db.get(ScheduledTask, coerce_uuid(task_id))
         if not task:
             raise HTTPException(status_code=404, detail="Scheduled task not found")
@@ -60,7 +67,7 @@ class ScheduledTasks(ListResponseMixin):
         order_dir: str,
         limit: int,
         offset: int,
-    ):
+    ) -> list[ScheduledTask]:
         query = db.query(ScheduledTask)
         if enabled is not None:
             query = query.filter(ScheduledTask.enabled == enabled)
@@ -73,7 +80,9 @@ class ScheduledTasks(ListResponseMixin):
         return _apply_pagination(query, limit, offset).all()
 
     @staticmethod
-    def update(db: Session, task_id: str, payload: ScheduledTaskUpdate):
+    def update(
+        db: Session, task_id: str, payload: ScheduledTaskUpdate
+    ) -> ScheduledTask:
         task = db.get(ScheduledTask, coerce_uuid(task_id))
         if not task:
             raise HTTPException(status_code=404, detail="Scheduled task not found")
@@ -92,7 +101,7 @@ class ScheduledTasks(ListResponseMixin):
         return task
 
     @staticmethod
-    def delete(db: Session, task_id: str):
+    def delete(db: Session, task_id: str) -> None:
         task = db.get(ScheduledTask, coerce_uuid(task_id))
         if not task:
             raise HTTPException(status_code=404, detail="Scheduled task not found")

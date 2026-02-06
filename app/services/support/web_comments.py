@@ -12,9 +12,9 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.services.common import coerce_uuid
+from app.services.support.attachment import attachment_service
 from app.services.support.comment import comment_service
 from app.services.support.ticket import ticket_service
-from app.services.support.attachment import attachment_service
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
@@ -68,9 +68,11 @@ class CommentWebService:
                     comment_id=comment.comment_id,
                 )
                 if error or not attachment:
-                    logger.warning("Failed to attach file to comment: %s", error or "unknown error")
+                    logger.warning(
+                        "Failed to attach file to comment: %s", error or "unknown error"
+                    )
             db.commit()
-        except Exception as e:
+        except Exception:
             db.rollback()
             logger.exception("Failed to add comment")
 
@@ -94,7 +96,7 @@ class CommentWebService:
         try:
             comment_service.delete_comment(db, org_id, cid)
             db.commit()
-        except Exception as e:
+        except Exception:
             db.rollback()
             logger.exception("Failed to delete comment")
 

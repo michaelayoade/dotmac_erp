@@ -8,6 +8,7 @@ Provides CRUD operations for OrganizationBranding and dynamic CSS generation.
 from __future__ import annotations
 
 import colorsys
+import logging
 import re
 from typing import Optional
 from uuid import UUID
@@ -15,13 +16,14 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.finance.core_org import OrganizationBranding, Organization
+from app.models.finance.core_org import Organization, OrganizationBranding
 from app.schemas.finance.branding import (
     BrandingCreate,
     BrandingUpdate,
     ColorPaletteResponse,
 )
 
+logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Color Utilities
@@ -180,8 +182,12 @@ class CSSGenerator:
         if branding.primary_color:
             palette = generate_color_palette(branding.primary_color)
             lines.append(f"  --teal: {palette.shade_500};")
-            lines.append(f"  --teal-light: {branding.primary_light or palette.shade_100};")
-            lines.append(f"  --teal-dark: {branding.primary_dark or palette.shade_700};")
+            lines.append(
+                f"  --teal-light: {branding.primary_light or palette.shade_100};"
+            )
+            lines.append(
+                f"  --teal-dark: {branding.primary_dark or palette.shade_700};"
+            )
             lines.append(f"  --brand-primary: {palette.shade_500};")
             lines.append(f"  --brand-primary-50: {palette.shade_50};")
             lines.append(f"  --brand-primary-100: {palette.shade_100};")
@@ -195,7 +201,9 @@ class CSSGenerator:
         if branding.accent_color:
             palette = generate_color_palette(branding.accent_color)
             lines.append(f"  --gold: {palette.shade_500};")
-            lines.append(f"  --gold-light: {branding.accent_light or palette.shade_100};")
+            lines.append(
+                f"  --gold-light: {branding.accent_light or palette.shade_100};"
+            )
             lines.append(f"  --gold-dark: {branding.accent_dark or palette.shade_700};")
             lines.append(f"  --brand-accent: {palette.shade_500};")
 
@@ -209,18 +217,19 @@ class CSSGenerator:
 
         # Typography
         if branding.font_family_display:
-            lines.append(f'  --font-display: "{branding.font_family_display}", system-ui, sans-serif;')
+            lines.append(
+                f'  --font-display: "{branding.font_family_display}", system-ui, sans-serif;'
+            )
         if branding.font_family_body:
-            lines.append(f'  --font-body: "{branding.font_family_body}", system-ui, sans-serif;')
+            lines.append(
+                f'  --font-body: "{branding.font_family_body}", system-ui, sans-serif;'
+            )
         if branding.font_family_mono:
             lines.append(f'  --font-mono: "{branding.font_family_mono}", monospace;')
 
         # Border radius
         if branding.border_radius:
-            radius = self.BORDER_RADIUS_MAP.get(
-                branding.border_radius.value,
-                "8px"
-            )
+            radius = self.BORDER_RADIUS_MAP.get(branding.border_radius.value, "8px")
             lines.append(f"  --border-radius-base: {radius};")
             lines.append(f"  --border-radius-card: {radius};")
             lines.append(f"  --border-radius-btn: {radius};")
@@ -263,7 +272,9 @@ class CSSGenerator:
             lines.append("/* Button Style: Outline */")
             lines.append(".btn-primary, .btn-teal {")
             lines.append("  background: transparent !important;")
-            lines.append("  border: 2px solid var(--brand-primary, var(--teal)) !important;")
+            lines.append(
+                "  border: 2px solid var(--brand-primary, var(--teal)) !important;"
+            )
             lines.append("  color: var(--brand-primary, var(--teal)) !important;")
             lines.append("}")
             lines.append(".btn-primary:hover, .btn-teal:hover {")
@@ -296,7 +307,9 @@ class CSSGenerator:
             lines.append("")
             lines.append("/* Sidebar Style: Brand */")
             lines.append(".sidebar, [data-sidebar] {")
-            lines.append("  background: var(--brand-primary-700, var(--teal-dark)) !important;")
+            lines.append(
+                "  background: var(--brand-primary-700, var(--teal-dark)) !important;"
+            )
             lines.append("}")
             lines.append(".sidebar a, [data-sidebar] a {")
             lines.append("  color: rgba(255, 255, 255, 0.9) !important;")
@@ -361,7 +374,9 @@ class BrandingService:
         )
         return self.db.execute(stmt).scalar_one_or_none()
 
-    def get_or_create(self, org_id: UUID, user_id: Optional[UUID] = None) -> OrganizationBranding:
+    def get_or_create(
+        self, org_id: UUID, user_id: Optional[UUID] = None
+    ) -> OrganizationBranding:
         """Get existing branding or create a new one with defaults."""
         branding = self.get_by_org_id(org_id)
         if branding:
@@ -382,12 +397,16 @@ class BrandingService:
         self.db.flush()
         return branding
 
-    def create(self, data: BrandingCreate, user_id: Optional[UUID] = None) -> OrganizationBranding:
+    def create(
+        self, data: BrandingCreate, user_id: Optional[UUID] = None
+    ) -> OrganizationBranding:
         """Create new branding configuration."""
         # Check if branding already exists
         existing = self.get_by_org_id(data.organization_id)
         if existing:
-            raise ValueError(f"Branding already exists for organization {data.organization_id}")
+            raise ValueError(
+                f"Branding already exists for organization {data.organization_id}"
+            )
 
         # Auto-derive brand mark if not provided
         brand_mark = data.brand_mark
@@ -454,7 +473,9 @@ class BrandingService:
         # Auto-derive brand mark if display name changed but brand mark not provided
         if "display_name" in update_data and "brand_mark" not in update_data:
             if update_data["display_name"] and not branding.brand_mark:
-                update_data["brand_mark"] = derive_brand_mark(update_data["display_name"])
+                update_data["brand_mark"] = derive_brand_mark(
+                    update_data["display_name"]
+                )
 
         # Auto-generate color variants if base color changed
         if "primary_color" in update_data and update_data["primary_color"]:
@@ -527,18 +548,88 @@ def get_or_create_branding(
 
 
 FONT_PRESETS = [
-    {"name": "DM Sans", "family": "DM Sans", "category": "sans-serif", "weights": [400, 500, 600, 700]},
-    {"name": "Inter", "family": "Inter", "category": "sans-serif", "weights": [400, 500, 600, 700]},
-    {"name": "Plus Jakarta Sans", "family": "Plus Jakarta Sans", "category": "sans-serif", "weights": [400, 500, 600, 700]},
-    {"name": "Satoshi", "family": "Satoshi", "category": "sans-serif", "weights": [400, 500, 700]},
-    {"name": "Space Grotesk", "family": "Space Grotesk", "category": "sans-serif", "weights": [400, 500, 600, 700]},
-    {"name": "Outfit", "family": "Outfit", "category": "sans-serif", "weights": [400, 500, 600, 700]},
-    {"name": "Sora", "family": "Sora", "category": "sans-serif", "weights": [400, 500, 600, 700]},
-    {"name": "Manrope", "family": "Manrope", "category": "sans-serif", "weights": [400, 500, 600, 700]},
-    {"name": "Source Serif 4", "family": "Source Serif 4", "category": "serif", "weights": [400, 600, 700]},
-    {"name": "Fraunces", "family": "Fraunces", "category": "serif", "weights": [400, 500, 600, 700]},
-    {"name": "Lora", "family": "Lora", "category": "serif", "weights": [400, 500, 600, 700]},
-    {"name": "JetBrains Mono", "family": "JetBrains Mono", "category": "monospace", "weights": [400, 500, 600]},
-    {"name": "Fira Code", "family": "Fira Code", "category": "monospace", "weights": [400, 500, 600]},
-    {"name": "IBM Plex Mono", "family": "IBM Plex Mono", "category": "monospace", "weights": [400, 500, 600]},
+    {
+        "name": "DM Sans",
+        "family": "DM Sans",
+        "category": "sans-serif",
+        "weights": [400, 500, 600, 700],
+    },
+    {
+        "name": "Inter",
+        "family": "Inter",
+        "category": "sans-serif",
+        "weights": [400, 500, 600, 700],
+    },
+    {
+        "name": "Plus Jakarta Sans",
+        "family": "Plus Jakarta Sans",
+        "category": "sans-serif",
+        "weights": [400, 500, 600, 700],
+    },
+    {
+        "name": "Satoshi",
+        "family": "Satoshi",
+        "category": "sans-serif",
+        "weights": [400, 500, 700],
+    },
+    {
+        "name": "Space Grotesk",
+        "family": "Space Grotesk",
+        "category": "sans-serif",
+        "weights": [400, 500, 600, 700],
+    },
+    {
+        "name": "Outfit",
+        "family": "Outfit",
+        "category": "sans-serif",
+        "weights": [400, 500, 600, 700],
+    },
+    {
+        "name": "Sora",
+        "family": "Sora",
+        "category": "sans-serif",
+        "weights": [400, 500, 600, 700],
+    },
+    {
+        "name": "Manrope",
+        "family": "Manrope",
+        "category": "sans-serif",
+        "weights": [400, 500, 600, 700],
+    },
+    {
+        "name": "Source Serif 4",
+        "family": "Source Serif 4",
+        "category": "serif",
+        "weights": [400, 600, 700],
+    },
+    {
+        "name": "Fraunces",
+        "family": "Fraunces",
+        "category": "serif",
+        "weights": [400, 500, 600, 700],
+    },
+    {
+        "name": "Lora",
+        "family": "Lora",
+        "category": "serif",
+        "weights": [400, 500, 600, 700],
+    },
+    {
+        "name": "JetBrains Mono",
+        "family": "JetBrains Mono",
+        "category": "monospace",
+        "weights": [400, 500, 600],
+    },
+    {
+        "name": "Fira Code",
+        "family": "Fira Code",
+        "category": "monospace",
+        "weights": [400, 500, 600],
+    },
+    {
+        "name": "IBM Plex Mono",
+        "family": "IBM Plex Mono",
+        "category": "monospace",
+        "weights": [400, 500, 600],
+    },
 ]

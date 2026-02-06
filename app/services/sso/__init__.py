@@ -30,7 +30,7 @@ Example configuration for SSO Client (App #2, #3):
     SSO_PROVIDER_URL=https://sso.company.com
 """
 
-from .token_validator import SSOTokenValidator
 from .session_sync import SSOSessionSync
+from .token_validator import SSOTokenValidator
 
 __all__ = ["SSOTokenValidator", "SSOSessionSync"]

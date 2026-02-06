@@ -51,8 +51,12 @@ def upgrade() -> None:
         # Create numbering_sequence table
         op.create_table(
             "numbering_sequence",
-            sa.Column("sequence_id", UUID(as_uuid=True), primary_key=True,
-                      server_default=sa.text("gen_random_uuid()")),
+            sa.Column(
+                "sequence_id",
+                UUID(as_uuid=True),
+                primary_key=True,
+                server_default=sa.text("gen_random_uuid()"),
+            ),
             sa.Column("organization_id", UUID(as_uuid=True), nullable=False),
             sa.Column(
                 "sequence_type",
@@ -76,23 +80,25 @@ def upgrade() -> None:
                 ),
                 nullable=False,
             ),
-
             # Format components
             sa.Column("prefix", sa.String(20), nullable=False, server_default=""),
             sa.Column("suffix", sa.String(10), nullable=False, server_default=""),
             sa.Column("separator", sa.String(5), nullable=False, server_default="-"),
             sa.Column("min_digits", sa.Integer, nullable=False, server_default="4"),
-
             # Date inclusion
-            sa.Column("include_year", sa.Boolean, nullable=False, server_default="true"),
-            sa.Column("include_month", sa.Boolean, nullable=False, server_default="true"),
+            sa.Column(
+                "include_year", sa.Boolean, nullable=False, server_default="true"
+            ),
+            sa.Column(
+                "include_month", sa.Boolean, nullable=False, server_default="true"
+            ),
             sa.Column("year_format", sa.Integer, nullable=False, server_default="4"),
-
             # Current sequence tracking
-            sa.Column("current_number", sa.BigInteger, nullable=False, server_default="0"),
+            sa.Column(
+                "current_number", sa.BigInteger, nullable=False, server_default="0"
+            ),
             sa.Column("current_year", sa.Integer, nullable=True),
             sa.Column("current_month", sa.Integer, nullable=True),
-
             # Reset behavior
             sa.Column(
                 "reset_frequency",
@@ -106,24 +112,29 @@ def upgrade() -> None:
                 nullable=False,
                 server_default="MONTHLY",
             ),
-
             # Legacy fields
-            sa.Column("fiscal_year_reset", sa.Boolean, nullable=False, server_default="false"),
+            sa.Column(
+                "fiscal_year_reset", sa.Boolean, nullable=False, server_default="false"
+            ),
             sa.Column("fiscal_year_id", UUID(as_uuid=True), nullable=True),
-
             # Timestamps
             sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=True),
-            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False,
-                      server_default=sa.text("now()")),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                nullable=False,
+                server_default=sa.text("now()"),
+            ),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
-
             # Constraints
             sa.ForeignKeyConstraint(
                 ["organization_id"],
                 ["core_org.organization.organization_id"],
                 name="fk_numbering_org",
             ),
-            sa.UniqueConstraint("organization_id", "sequence_type", name="uq_sequence_type"),
+            sa.UniqueConstraint(
+                "organization_id", "sequence_type", name="uq_sequence_type"
+            ),
             schema="core_config",
         )
 
@@ -137,9 +148,7 @@ def upgrade() -> None:
     else:
         existing_indexes = {
             idx["name"]
-            for idx in inspector.get_indexes(
-                "numbering_sequence", schema="core_config"
-            )
+            for idx in inspector.get_indexes("numbering_sequence", schema="core_config")
         }
         if "ix_numbering_sequence_org_type" not in existing_indexes:
             op.create_index(

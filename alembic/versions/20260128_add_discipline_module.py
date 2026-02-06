@@ -11,9 +11,9 @@ Creates tables for the discipline module:
 - hr.case_document
 - hr.case_response
 """
+
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = "20260128_discipline"
@@ -26,7 +26,8 @@ def upgrade() -> None:
     conn = op.get_bind()
 
     # Create enum types using raw SQL with exception handling
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         DO $$ BEGIN
             CREATE TYPE hr.violation_type AS ENUM (
                 'MISCONDUCT', 'GROSS_MISCONDUCT', 'ATTENDANCE', 'PERFORMANCE',
@@ -35,16 +36,20 @@ def upgrade() -> None:
             );
         EXCEPTION WHEN duplicate_object THEN null;
         END $$;
-    """))
+    """)
+    )
 
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         DO $$ BEGIN
             CREATE TYPE hr.severity_level AS ENUM ('MINOR', 'MODERATE', 'MAJOR', 'CRITICAL');
         EXCEPTION WHEN duplicate_object THEN null;
         END $$;
-    """))
+    """)
+    )
 
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         DO $$ BEGIN
             CREATE TYPE hr.case_status AS ENUM (
                 'DRAFT', 'QUERY_ISSUED', 'RESPONSE_RECEIVED', 'UNDER_INVESTIGATION',
@@ -53,9 +58,11 @@ def upgrade() -> None:
             );
         EXCEPTION WHEN duplicate_object THEN null;
         END $$;
-    """))
+    """)
+    )
 
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         DO $$ BEGIN
             CREATE TYPE hr.action_type AS ENUM (
                 'VERBAL_WARNING', 'WRITTEN_WARNING', 'FINAL_WARNING',
@@ -65,9 +72,11 @@ def upgrade() -> None:
             );
         EXCEPTION WHEN duplicate_object THEN null;
         END $$;
-    """))
+    """)
+    )
 
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         DO $$ BEGIN
             CREATE TYPE hr.document_type AS ENUM (
                 'EVIDENCE', 'QUERY_LETTER', 'EMPLOYEE_RESPONSE', 'WITNESS_STATEMENT',
@@ -76,10 +85,12 @@ def upgrade() -> None:
             );
         EXCEPTION WHEN duplicate_object THEN null;
         END $$;
-    """))
+    """)
+    )
 
     # Create tables using raw SQL to avoid SQLAlchemy enum issues
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         CREATE TABLE IF NOT EXISTS hr.disciplinary_case (
             case_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             organization_id UUID NOT NULL REFERENCES core_org.organization(organization_id),
@@ -117,19 +128,25 @@ def upgrade() -> None:
             status_changed_at TIMESTAMPTZ,
             status_changed_by_id UUID REFERENCES people(id)
         );
-    """))
+    """)
+    )
 
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         CREATE INDEX IF NOT EXISTS ix_discipline_case_org_status
         ON hr.disciplinary_case(organization_id, status);
-    """))
+    """)
+    )
 
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         CREATE INDEX IF NOT EXISTS ix_discipline_case_employee
         ON hr.disciplinary_case(employee_id);
-    """))
+    """)
+    )
 
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         CREATE TABLE IF NOT EXISTS hr.case_witness (
             witness_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             case_id UUID NOT NULL REFERENCES hr.disciplinary_case(case_id) ON DELETE CASCADE,
@@ -140,13 +157,17 @@ def upgrade() -> None:
             statement_date TIMESTAMPTZ,
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         );
-    """))
+    """)
+    )
 
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         CREATE INDEX IF NOT EXISTS ix_case_witness_case_id ON hr.case_witness(case_id);
-    """))
+    """)
+    )
 
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         CREATE TABLE IF NOT EXISTS hr.case_action (
             action_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             case_id UUID NOT NULL REFERENCES hr.disciplinary_case(case_id) ON DELETE CASCADE,
@@ -161,13 +182,17 @@ def upgrade() -> None:
             issued_by_id UUID REFERENCES hr.employee(employee_id),
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         );
-    """))
+    """)
+    )
 
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         CREATE INDEX IF NOT EXISTS ix_case_action_case_id ON hr.case_action(case_id);
-    """))
+    """)
+    )
 
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         CREATE TABLE IF NOT EXISTS hr.case_document (
             document_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             case_id UUID NOT NULL REFERENCES hr.disciplinary_case(case_id) ON DELETE CASCADE,
@@ -181,13 +206,17 @@ def upgrade() -> None:
             uploaded_by_id UUID REFERENCES hr.employee(employee_id),
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         );
-    """))
+    """)
+    )
 
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         CREATE INDEX IF NOT EXISTS ix_case_document_case_id ON hr.case_document(case_id);
-    """))
+    """)
+    )
 
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         CREATE TABLE IF NOT EXISTS hr.case_response (
             response_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             case_id UUID NOT NULL REFERENCES hr.disciplinary_case(case_id) ON DELETE CASCADE,
@@ -197,11 +226,14 @@ def upgrade() -> None:
             submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             acknowledged_at TIMESTAMPTZ
         );
-    """))
+    """)
+    )
 
-    conn.execute(sa.text("""
+    conn.execute(
+        sa.text("""
         CREATE INDEX IF NOT EXISTS ix_case_response_case_id ON hr.case_response(case_id);
-    """))
+    """)
+    )
 
 
 def downgrade() -> None:

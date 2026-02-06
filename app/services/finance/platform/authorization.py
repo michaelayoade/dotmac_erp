@@ -5,6 +5,7 @@ Extends existing RBAC with data scope validation and segregation of duties
 (SoD) enforcement for IFRS accounting operations.
 """
 
+import logging
 from typing import Optional
 from uuid import UUID
 
@@ -16,6 +17,8 @@ from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 class AuthorizationService(ListResponseMixin):
@@ -52,11 +55,7 @@ class AuthorizationService(ListResponseMixin):
             return False
 
         # Get user's roles
-        person_roles = (
-            db.query(PersonRole)
-            .filter(PersonRole.person_id == uid)
-            .all()
-        )
+        person_roles = db.query(PersonRole).filter(PersonRole.person_id == uid).all()
 
         if not person_roles:
             return False
@@ -254,12 +253,18 @@ class AuthorizationService(ListResponseMixin):
         if rule == "CANNOT_BE_CREATOR":
             creator_id = context.get("created_by_user_id")
             if creator_id and coerce_uuid(creator_id) == uid:
-                return (False, "Segregation of duties: approver cannot be document creator")
+                return (
+                    False,
+                    "Segregation of duties: approver cannot be document creator",
+                )
 
         elif rule == "CANNOT_BE_PREVIOUS_APPROVER":
             previous_approvers = context.get("previous_approvers", [])
             if uid in [coerce_uuid(a) for a in previous_approvers if a]:
-                return (False, "Segregation of duties: user already approved at previous level")
+                return (
+                    False,
+                    "Segregation of duties: user already approved at previous level",
+                )
 
         return (True, None)
 
@@ -287,11 +292,7 @@ class AuthorizationService(ListResponseMixin):
             return []
 
         # Get user's roles
-        person_roles = (
-            db.query(PersonRole)
-            .filter(PersonRole.person_id == uid)
-            .all()
-        )
+        person_roles = db.query(PersonRole).filter(PersonRole.person_id == uid).all()
 
         if not person_roles:
             return []
@@ -314,9 +315,7 @@ class AuthorizationService(ListResponseMixin):
         # Get permission keys
         permission_ids = [rp.permission_id for rp in role_permissions]
         permissions = (
-            db.query(Permission)
-            .filter(Permission.id.in_(permission_ids))
-            .all()
+            db.query(Permission).filter(Permission.id.in_(permission_ids)).all()
         )
 
         return [p.key for p in permissions]

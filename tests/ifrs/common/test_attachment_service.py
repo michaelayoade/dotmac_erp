@@ -6,7 +6,7 @@ import os
 import tempfile
 from io import BytesIO
 from pathlib import Path
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -149,7 +149,9 @@ class TestGetUploadPath:
     def test_get_upload_path_creates_directory(self, org_id):
         """Test that upload path creates directory structure."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("app.services.finance.common.attachment.UPLOAD_BASE_DIR", tmpdir):
+            with patch(
+                "app.services.finance.common.attachment.UPLOAD_BASE_DIR", tmpdir
+            ):
                 path = AttachmentService.get_upload_path(org_id, "SUPPLIER_INVOICE")
                 assert path.exists()
                 assert str(org_id) in str(path)
@@ -158,7 +160,9 @@ class TestGetUploadPath:
     def test_get_upload_path_lowercases_entity_type(self, org_id):
         """Test that entity type is lowercased in path."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("app.services.finance.common.attachment.UPLOAD_BASE_DIR", tmpdir):
+            with patch(
+                "app.services.finance.common.attachment.UPLOAD_BASE_DIR", tmpdir
+            ):
                 path = AttachmentService.get_upload_path(org_id, "PURCHASE_ORDER")
                 assert "purchase_order" in str(path)
 
@@ -171,8 +175,12 @@ class TestSaveFile:
         file_content = BytesIO(b"PDF file content here")
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("app.services.finance.common.attachment.UPLOAD_BASE_DIR", tmpdir):
-                with patch("app.services.finance.common.attachment.Attachment") as MockAttachmentClass:
+            with patch(
+                "app.services.finance.common.attachment.UPLOAD_BASE_DIR", tmpdir
+            ):
+                with patch(
+                    "app.services.finance.common.attachment.Attachment"
+                ) as MockAttachmentClass:
                     mock_attachment = MockAttachment(
                         organization_id=org_id,
                         entity_id=uuid4(),
@@ -188,7 +196,9 @@ class TestSaveFile:
                     mock_db.commit.assert_called_once()
                     mock_db.refresh.assert_called_once()
 
-    def test_save_file_invalid_content_type_fails(self, mock_db, org_id, user_id, entity_id):
+    def test_save_file_invalid_content_type_fails(
+        self, mock_db, org_id, user_id, entity_id
+    ):
         """Test that invalid content type is rejected."""
         invalid_input = AttachmentInput(
             entity_type="SUPPLIER_INVOICE",
@@ -206,7 +216,9 @@ class TestSaveFile:
 
         assert "not allowed" in str(exc.value)
 
-    def test_save_file_exceeds_max_size_fails(self, mock_db, org_id, user_id, entity_id):
+    def test_save_file_exceeds_max_size_fails(
+        self, mock_db, org_id, user_id, entity_id
+    ):
         """Test that files exceeding max size are rejected."""
         valid_input = AttachmentInput(
             entity_type="SUPPLIER_INVOICE",
@@ -219,13 +231,15 @@ class TestSaveFile:
         large_content = BytesIO(b"x" * (MAX_FILE_SIZE + 1000))
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("app.services.finance.common.attachment.UPLOAD_BASE_DIR", tmpdir):
+            with patch(
+                "app.services.finance.common.attachment.UPLOAD_BASE_DIR", tmpdir
+            ):
                 with pytest.raises(ValueError) as exc:
                     AttachmentService.save_file(
                         mock_db, org_id, valid_input, large_content, user_id
                     )
 
-                assert "exceeds maximum" in str(exc.value)
+                assert "too large" in str(exc.value).lower()
 
 
 class TestGetAttachment:
@@ -237,7 +251,9 @@ class TestGetAttachment:
         mock_db.get.return_value = attachment
 
         with patch("app.services.finance.common.attachment.Attachment"):
-            result = AttachmentService.get(mock_db, attachment.organization_id, str(attachment.attachment_id))
+            result = AttachmentService.get(
+                mock_db, attachment.organization_id, str(attachment.attachment_id)
+            )
 
         assert result == attachment
 
@@ -258,7 +274,9 @@ class TestGetFilePath:
         """Test that full path is returned."""
         attachment = MockAttachment(file_path="org123/invoice/file.pdf")
 
-        with patch("app.services.finance.common.attachment.UPLOAD_BASE_DIR", "/uploads"):
+        with patch(
+            "app.services.finance.common.attachment.UPLOAD_BASE_DIR", "/uploads"
+        ):
             result = AttachmentService.get_file_path(attachment)
 
         assert str(result) == "/uploads/org123/invoice/file.pdf"
@@ -320,7 +338,9 @@ class TestDeleteAttachment:
             f.write(b"test content")
             f.flush()
 
-            with patch.object(AttachmentService, "get_file_path", return_value=Path(f.name)):
+            with patch.object(
+                AttachmentService, "get_file_path", return_value=Path(f.name)
+            ):
                 with patch("app.services.finance.common.attachment.Attachment"):
                     result = AttachmentService.delete(
                         mock_db, str(attachment.attachment_id), org_id
@@ -425,9 +445,15 @@ class TestAllowedContentTypes:
     def test_office_docs_allowed(self):
         """Test that Office documents are allowed."""
         assert "application/msword" in ALLOWED_CONTENT_TYPES
-        assert "application/vnd.openxmlformats-officedocument.wordprocessingml.document" in ALLOWED_CONTENT_TYPES
+        assert (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            in ALLOWED_CONTENT_TYPES
+        )
         assert "application/vnd.ms-excel" in ALLOWED_CONTENT_TYPES
-        assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in ALLOWED_CONTENT_TYPES
+        assert (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            in ALLOWED_CONTENT_TYPES
+        )
 
     def test_text_files_allowed(self):
         """Test that text files are allowed."""

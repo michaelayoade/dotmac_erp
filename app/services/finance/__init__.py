@@ -4,13 +4,6 @@ IFRS Accounting Services.
 This package contains service implementations for the IFRS accounting system.
 """
 
-from app.services.finance import platform
-from app.services.finance import gl
-from app.services.finance import ap
-from app.services.finance import ar
-from app.services.finance import lease
-from app.services.finance import tax
-from app.services.finance import cons
-from app.services.finance import rpt
+from app.services.finance import ap, ar, cons, gl, lease, platform, rpt, tax
 
 __all__ = ["platform", "gl", "ap", "ar", "lease", "tax", "cons", "rpt"]

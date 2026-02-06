@@ -6,8 +6,8 @@ Manages chart of accounts entries including creation, updates, and queries.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
@@ -17,14 +17,15 @@ from sqlalchemy.orm import Session
 from app.models.finance.gl.account import Account, AccountType, NormalBalance
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.services.common import coerce_uuid
-from app.services.response import ListResponseMixin
 from app.services.finance.common import (
-    validate_unique_code,
+    apply_search_filter,
     get_org_scoped_entity,
     toggle_entity_status,
-    apply_search_filter,
+    validate_unique_code,
 )
+from app.services.response import ListResponseMixin
 
+logger = logging.getLogger(__name__)
 
 # Standard chart of accounts code prefixes by IFRS category
 IFRS_CODE_PREFIXES = {
@@ -349,7 +350,9 @@ class ChartOfAccountsService(ListResponseMixin):
         query = db.query(Account)
 
         if organization_id:
-            query = query.filter(Account.organization_id == coerce_uuid(organization_id))
+            query = query.filter(
+                Account.organization_id == coerce_uuid(organization_id)
+            )
 
         if category_id:
             query = query.filter(Account.category_id == coerce_uuid(category_id))
@@ -413,7 +416,11 @@ class ChartOfAccountsService(ListResponseMixin):
             raise_on_missing=False,
         )
         if not category:
-            return {"suggested_code": None, "prefix": None, "error": "Category not found"}
+            return {
+                "suggested_code": None,
+                "prefix": None,
+                "error": "Category not found",
+            }
 
         ifrs_category = category.ifrs_category
         prefix = IFRS_CODE_PREFIXES.get(ifrs_category, "9")

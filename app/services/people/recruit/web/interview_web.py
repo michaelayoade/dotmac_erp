@@ -25,12 +25,12 @@ from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
 from .base import (
+    INTERVIEW_TYPES,
     logger,
-    parse_uuid,
     parse_date,
     parse_int,
     parse_status,
-    INTERVIEW_TYPES,
+    parse_uuid,
 )
 
 logger = logging.getLogger(__name__)
@@ -127,7 +127,9 @@ class InterviewWebService:
         interview = None
         if interview_id:
             try:
-                interview = svc.get_interview(organization_id, coerce_uuid(interview_id))
+                interview = svc.get_interview(
+                    organization_id, coerce_uuid(interview_id)
+                )
             except Exception:
                 interview = None
 
@@ -173,15 +175,21 @@ class InterviewWebService:
         scheduled_from = None
         scheduled_to = None
         if scheduled_date and scheduled_time_from and scheduled_time_to:
-            scheduled_from = datetime.fromisoformat(f"{scheduled_date}T{scheduled_time_from}")
-            scheduled_to = datetime.fromisoformat(f"{scheduled_date}T{scheduled_time_to}")
+            scheduled_from = datetime.fromisoformat(
+                f"{scheduled_date}T{scheduled_time_from}"
+            )
+            scheduled_to = datetime.fromisoformat(
+                f"{scheduled_date}T{scheduled_time_to}"
+            )
 
         return {
             "round": InterviewRound(form_data.get("round")),
             "interview_type": form_data.get("interview_type", "IN_PERSON"),
             "scheduled_from": scheduled_from,
             "scheduled_to": scheduled_to,
-            "interviewer_id": coerce_uuid(form_data["interviewer_id"]) if form_data.get("interviewer_id") else None,
+            "interviewer_id": coerce_uuid(form_data["interviewer_id"])
+            if form_data.get("interviewer_id")
+            else None,
             "location": form_data.get("location") or None,
             "meeting_link": form_data.get("meeting_link") or None,
         }
@@ -217,7 +225,9 @@ class InterviewWebService:
                 page=page,
             )
         )
-        return templates.TemplateResponse(request, "people/recruit/interviews.html", context)
+        return templates.TemplateResponse(
+            request, "people/recruit/interviews.html", context
+        )
 
     def interview_new_form_response(
         self,
@@ -236,7 +246,9 @@ class InterviewWebService:
                 applicant_id=applicant_id,
             )
         )
-        return templates.TemplateResponse(request, "people/recruit/interview_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/recruit/interview_form.html", context
+        )
 
     def interview_detail_response(
         self,
@@ -256,7 +268,9 @@ class InterviewWebService:
         context = base_context(request, auth, "Interview Details", "recruit", db=db)
         context["request"] = request
         context.update(ctx)
-        return templates.TemplateResponse(request, "people/recruit/interview_detail.html", context)
+        return templates.TemplateResponse(
+            request, "people/recruit/interview_detail.html", context
+        )
 
     def interview_edit_form_response(
         self,
@@ -276,7 +290,9 @@ class InterviewWebService:
         context = base_context(request, auth, "Edit Interview", "recruit", db=db)
         context["request"] = request
         context.update(ctx)
-        return templates.TemplateResponse(request, "people/recruit/interview_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/recruit/interview_form.html", context
+        )
 
     async def create_interview_response(
         self,
@@ -305,12 +321,16 @@ class InterviewWebService:
         except Exception as e:
             db.rollback()
             logger.exception("create_interview_response: failed")
-            context = base_context(request, auth, "Schedule Interview", "recruit", db=db)
+            context = base_context(
+                request, auth, "Schedule Interview", "recruit", db=db
+            )
             context["request"] = request
             context.update(self.interview_form_context(db, org_id))
             context["form_data"] = dict(form_data)
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "people/recruit/interview_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/recruit/interview_form.html", context
+            )
 
     async def update_interview_response(
         self,
@@ -339,7 +359,9 @@ class InterviewWebService:
             context["request"] = request
             context.update(self.interview_form_context(db, org_id, interview_id))
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "people/recruit/interview_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/recruit/interview_form.html", context
+            )
 
     async def cancel_interview_response(
         self,
@@ -360,7 +382,9 @@ class InterviewWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url=f"/people/recruit/interviews/{interview_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/recruit/interviews/{interview_id}", status_code=303
+        )
 
     async def record_interview_feedback_response(
         self,
@@ -389,4 +413,6 @@ class InterviewWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url=f"/people/recruit/interviews/{interview_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/recruit/interviews/{interview_id}", status_code=303
+        )

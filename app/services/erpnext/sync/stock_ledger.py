@@ -4,6 +4,7 @@ Stock Ledger Entry Sync Service - ERPNext to DotMac ERP.
 Imports ERPNext Stock Ledger Entries as inv.inventory_transaction records.
 Each SLE represents a single stock movement at a specific warehouse.
 """
+
 import logging
 import uuid
 from datetime import date, datetime, timezone
@@ -134,7 +135,9 @@ class StockLedgerSyncService(BaseSyncService[InventoryTransaction]):
         return None
 
     @staticmethod
-    def _parse_posting_datetime(posting_date: Optional[str], posting_time: Optional[str]) -> datetime:
+    def _parse_posting_datetime(
+        posting_date: Optional[str], posting_time: Optional[str]
+    ) -> datetime:
         """Build timezone-aware datetime from ERPNext posting_date + posting_time."""
         if not posting_date:
             return datetime.now(timezone.utc)
@@ -185,7 +188,9 @@ class StockLedgerSyncService(BaseSyncService[InventoryTransaction]):
 
         warehouse_id = self._resolve_warehouse_id(warehouse_code)
         if not warehouse_id:
-            raise ValueError(f"Cannot resolve warehouse_id for warehouse={warehouse_code}")
+            raise ValueError(
+                f"Cannot resolve warehouse_id for warehouse={warehouse_code}"
+            )
 
         posting_date = self._parse_date(posting_date_str)
         fiscal_period_id = self._resolve_fiscal_period_id(posting_date)
@@ -193,14 +198,18 @@ class StockLedgerSyncService(BaseSyncService[InventoryTransaction]):
             raise ValueError(f"Cannot resolve fiscal period for date={posting_date}")
 
         # Build transaction datetime
-        transaction_date = self._parse_posting_datetime(posting_date_str, posting_time_str)
+        transaction_date = self._parse_posting_datetime(
+            posting_date_str, posting_time_str
+        )
 
         # Determine transaction type from the mapping
         transaction_type_str = data.get("transaction_type", "RECEIPT")
         try:
             transaction_type = TransactionType(transaction_type_str)
         except ValueError:
-            transaction_type = TransactionType.RECEIPT if actual_qty > 0 else TransactionType.ISSUE
+            transaction_type = (
+                TransactionType.RECEIPT if actual_qty > 0 else TransactionType.ISSUE
+            )
 
         # Quantities: store as absolute value
         quantity = abs(actual_qty) if actual_qty else Decimal("0")

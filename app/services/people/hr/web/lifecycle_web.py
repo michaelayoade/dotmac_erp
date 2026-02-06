@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date as date_type
 from typing import Any, Optional, cast
 from urllib.parse import quote
@@ -12,15 +13,20 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.person import Person
 from app.models.people.hr import Employee
-from app.models.people.hr.checklist_template import ChecklistTemplate, ChecklistTemplateType
+from app.models.people.hr.checklist_template import (
+    ChecklistTemplate,
+    ChecklistTemplateType,
+)
+from app.models.person import Person
 from app.services.common import ValidationError, coerce_uuid
-from app.services.people.hr import EmployeeService, BulkUpdateData
+from app.services.people.hr import BulkUpdateData, EmployeeService
 from app.services.people.hr.lifecycle import LifecycleService
 from app.services.people.hr.web import hr_web_service
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
+
+logger = logging.getLogger(__name__)
 
 
 class LifecycleWebService:
@@ -66,7 +72,9 @@ class LifecycleWebService:
         context["employee"] = employee
         context["person"] = person
         context["templates"] = templates_list
-        return templates.TemplateResponse(request, "people/hr/onboarding_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/hr/onboarding_form.html", context
+        )
 
     @staticmethod
     async def create_onboarding_response(
@@ -94,10 +102,12 @@ class LifecycleWebService:
             if template:
                 template_name = template.template_name
                 for item in sorted(template.items, key=lambda x: x.sequence):
-                    activities.append({
-                        "activity_name": item.item_name,
-                        "sequence": item.sequence,
-                    })
+                    activities.append(
+                        {
+                            "activity_name": item.item_name,
+                            "sequence": item.sequence,
+                        }
+                    )
 
         lifecycle_svc.create_onboarding(
             org_id,
@@ -111,7 +121,9 @@ class LifecycleWebService:
         )
         db.commit()
 
-        return RedirectResponse(url=f"/people/hr/employees/{employee_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/hr/employees/{employee_id}", status_code=303
+        )
 
     @staticmethod
     async def start_onboarding_response(
@@ -127,7 +139,9 @@ class LifecycleWebService:
             lifecycle_svc.start_onboarding(org_id, onboarding.onboarding_id)
             db.commit()
 
-        return RedirectResponse(url=f"/people/hr/employees/{employee_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/hr/employees/{employee_id}", status_code=303
+        )
 
     @staticmethod
     async def toggle_onboarding_activity_response(
@@ -156,7 +170,9 @@ class LifecycleWebService:
             )
             db.commit()
 
-        return RedirectResponse(url=f"/people/hr/employees/{employee_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/hr/employees/{employee_id}", status_code=303
+        )
 
     @staticmethod
     async def complete_onboarding_response(
@@ -172,7 +188,9 @@ class LifecycleWebService:
             lifecycle_svc.complete_onboarding(org_id, onboarding.onboarding_id)
             db.commit()
 
-        return RedirectResponse(url=f"/people/hr/employees/{employee_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/hr/employees/{employee_id}", status_code=303
+        )
 
     @staticmethod
     async def create_employee_user_credentials_response(
@@ -203,7 +221,9 @@ class LifecycleWebService:
                 must_change_password=must_change,
             )
             db.commit()
-            return RedirectResponse(url=f"/people/hr/employees/{employee_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/hr/employees/{employee_id}", status_code=303
+            )
         except ValidationError as exc:
             db.rollback()
             response = hr_web_service.employee_detail_response(
@@ -255,7 +275,9 @@ class LifecycleWebService:
         try:
             svc.link_employee_to_person(employee_id, person_uuid)
             db.commit()
-            return RedirectResponse(url=f"/people/hr/employees/{employee_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/hr/employees/{employee_id}", status_code=303
+            )
         except ValidationError as exc:
             db.rollback()
             response = hr_web_service.employee_detail_response(
@@ -325,6 +347,7 @@ class LifecycleWebService:
         status_enum = None
         if status:
             from app.models.people.hr import EmployeeStatus as EmpStatus
+
             try:
                 status_enum = EmpStatus(status.upper())
             except ValueError:
@@ -343,7 +366,7 @@ class LifecycleWebService:
         if not valid_ids:
             return RedirectResponse(
                 url="/people/hr/employees?error=No+valid+employees+selected",
-                status_code=303
+                status_code=303,
             )
 
         data = BulkUpdateData(
@@ -358,7 +381,9 @@ class LifecycleWebService:
         db.commit()
 
         success_msg = quote(f"Successfully updated {len(valid_ids)} employee(s)")
-        return RedirectResponse(url=f"/people/hr/employees?success={success_msg}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/hr/employees?success={success_msg}", status_code=303
+        )
 
     @staticmethod
     async def bulk_delete_employees_response(
@@ -384,7 +409,7 @@ class LifecycleWebService:
         if not valid_ids:
             return RedirectResponse(
                 url="/people/hr/employees?error=No+valid+employees+selected",
-                status_code=303
+                status_code=303,
             )
 
         org_id = coerce_uuid(auth.organization_id)
@@ -393,7 +418,9 @@ class LifecycleWebService:
         db.commit()
 
         success_msg = quote(f"Successfully deleted {len(valid_ids)} employee(s)")
-        return RedirectResponse(url=f"/people/hr/employees?success={success_msg}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/hr/employees?success={success_msg}", status_code=303
+        )
 
     @staticmethod
     def list_promotions_response(
@@ -410,17 +437,21 @@ class LifecycleWebService:
         pagination = PaginationParams.from_page(page, per_page=20)
 
         emp_uuid = coerce_uuid(employee_id) if employee_id else None
-        result = lifecycle_svc.list_promotions(org_id, employee_id=emp_uuid, pagination=pagination)
+        result = lifecycle_svc.list_promotions(
+            org_id, employee_id=emp_uuid, pagination=pagination
+        )
 
         context = base_context(request, auth, "Promotions", "employees", db=db)
-        context.update({
-            "promotions": result.items,
-            "employee_id": employee_id,
-            "page": result.page,
-            "total_pages": result.total_pages,
-            "has_prev": result.has_prev,
-            "has_next": result.has_next,
-        })
+        context.update(
+            {
+                "promotions": result.items,
+                "employee_id": employee_id,
+                "page": result.page,
+                "total_pages": result.total_pages,
+                "has_prev": result.has_prev,
+                "has_next": result.has_next,
+            }
+        )
         return templates.TemplateResponse(request, "people/hr/promotions.html", context)
 
     @staticmethod
@@ -431,7 +462,11 @@ class LifecycleWebService:
         db: Session,
     ) -> HTMLResponse:
         from app.services.common import PaginationParams
-        from app.services.people.hr import DepartmentFilters, DesignationFilters, OrganizationService
+        from app.services.people.hr import (
+            DepartmentFilters,
+            DesignationFilters,
+            OrganizationService,
+        )
 
         org_id = coerce_uuid(auth.organization_id)
         svc = EmployeeService(db, org_id)
@@ -448,14 +483,18 @@ class LifecycleWebService:
         ).items
 
         context = base_context(request, auth, "Record Promotion", "employees", db=db)
-        context.update({
-            "employee": employee,
-            "designations": designations,
-            "departments": departments,
-            "form_data": {},
-            "errors": {},
-        })
-        return templates.TemplateResponse(request, "people/hr/promotion_form.html", context)
+        context.update(
+            {
+                "employee": employee,
+                "designations": designations,
+                "departments": departments,
+                "form_data": {},
+                "errors": {},
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/hr/promotion_form.html", context
+        )
 
     @staticmethod
     async def create_promotion_response(
@@ -480,45 +519,61 @@ class LifecycleWebService:
         employee = svc.get_employee(employee_id)
 
         try:
-            promotion_date = date_type.fromisoformat(promotion_date_str) if promotion_date_str else date_type.today()
+            promotion_date = (
+                date_type.fromisoformat(promotion_date_str)
+                if promotion_date_str
+                else date_type.today()
+            )
         except ValueError:
             promotion_date = date_type.today()
 
         details = []
 
         if new_designation_id:
-            current_designation = employee.designation.designation_name if employee.designation else "-"
+            current_designation = (
+                employee.designation.designation_name if employee.designation else "-"
+            )
             from app.models.people.hr import Designation
+
             new_desig = db.get(Designation, coerce_uuid(new_designation_id))
             if new_desig:
-                details.append({
-                    "property_name": "Designation",
-                    "current_value": current_designation,
-                    "new_value": new_desig.designation_name,
-                })
+                details.append(
+                    {
+                        "property_name": "Designation",
+                        "current_value": current_designation,
+                        "new_value": new_desig.designation_name,
+                    }
+                )
                 employee.designation_id = coerce_uuid(new_designation_id)
 
         if new_department_id:
-            current_department = employee.department.department_name if employee.department else "-"
+            current_department = (
+                employee.department.department_name if employee.department else "-"
+            )
             from app.models.people.hr import Department
+
             new_dept = db.get(Department, coerce_uuid(new_department_id))
             if new_dept:
-                details.append({
-                    "property_name": "Department",
-                    "current_value": current_department,
-                    "new_value": new_dept.department_name,
-                })
+                details.append(
+                    {
+                        "property_name": "Department",
+                        "current_value": current_department,
+                        "new_value": new_dept.department_name,
+                    }
+                )
                 employee.department_id = coerce_uuid(new_department_id)
 
         if new_reports_to_id:
             current_manager = employee.manager.full_name if employee.manager else "-"
             new_manager = db.get(Employee, coerce_uuid(new_reports_to_id))
             if new_manager:
-                details.append({
-                    "property_name": "Reports To",
-                    "current_value": current_manager,
-                    "new_value": new_manager.full_name,
-                })
+                details.append(
+                    {
+                        "property_name": "Reports To",
+                        "current_value": current_manager,
+                        "new_value": new_manager.full_name,
+                    }
+                )
                 employee.reports_to_id = coerce_uuid(new_reports_to_id)
 
         lifecycle_svc.create_promotion(
@@ -530,7 +585,10 @@ class LifecycleWebService:
         )
         db.commit()
 
-        return RedirectResponse(url=f"/people/hr/employees/{employee_id}?success=Promotion+recorded", status_code=303)
+        return RedirectResponse(
+            url=f"/people/hr/employees/{employee_id}?success=Promotion+recorded",
+            status_code=303,
+        )
 
     @staticmethod
     def promotion_detail_response(
@@ -541,8 +599,6 @@ class LifecycleWebService:
         auth: WebAuthContext,
         db: Session,
     ) -> HTMLResponse | RedirectResponse:
-        from app.models.people.hr.lifecycle import EmployeePromotion
-
         org_id = coerce_uuid(auth.organization_id)
         lifecycle_svc = LifecycleService(db)
 
@@ -554,13 +610,17 @@ class LifecycleWebService:
         employee = db.get(Employee, promotion.employee_id)
 
         context = base_context(request, auth, "Promotion Details", "employees", db=db)
-        context.update({
-            "promotion": promotion,
-            "employee": employee,
-            "success": success,
-            "error": error,
-        })
-        return templates.TemplateResponse(request, "people/hr/promotion_detail.html", context)
+        context.update(
+            {
+                "promotion": promotion,
+                "employee": employee,
+                "success": success,
+                "error": error,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/hr/promotion_detail.html", context
+        )
 
     @staticmethod
     def list_transfers_response(
@@ -577,17 +637,21 @@ class LifecycleWebService:
         pagination = PaginationParams.from_page(page, per_page=20)
 
         emp_uuid = coerce_uuid(employee_id) if employee_id else None
-        result = lifecycle_svc.list_transfers(org_id, employee_id=emp_uuid, pagination=pagination)
+        result = lifecycle_svc.list_transfers(
+            org_id, employee_id=emp_uuid, pagination=pagination
+        )
 
         context = base_context(request, auth, "Transfers", "employees", db=db)
-        context.update({
-            "transfers": result.items,
-            "employee_id": employee_id,
-            "page": result.page,
-            "total_pages": result.total_pages,
-            "has_prev": result.has_prev,
-            "has_next": result.has_next,
-        })
+        context.update(
+            {
+                "transfers": result.items,
+                "employee_id": employee_id,
+                "page": result.page,
+                "total_pages": result.total_pages,
+                "has_prev": result.has_prev,
+                "has_next": result.has_next,
+            }
+        )
         return templates.TemplateResponse(request, "people/hr/transfers.html", context)
 
     @staticmethod
@@ -598,7 +662,11 @@ class LifecycleWebService:
         db: Session,
     ) -> HTMLResponse:
         from app.services.common import PaginationParams
-        from app.services.people.hr import DepartmentFilters, DesignationFilters, OrganizationService
+        from app.services.people.hr import (
+            DepartmentFilters,
+            DesignationFilters,
+            OrganizationService,
+        )
 
         org_id = coerce_uuid(auth.organization_id)
         svc = EmployeeService(db, org_id)
@@ -615,14 +683,18 @@ class LifecycleWebService:
         ).items
 
         context = base_context(request, auth, "Record Transfer", "employees", db=db)
-        context.update({
-            "employee": employee,
-            "designations": designations,
-            "departments": departments,
-            "form_data": {},
-            "errors": {},
-        })
-        return templates.TemplateResponse(request, "people/hr/transfer_form.html", context)
+        context.update(
+            {
+                "employee": employee,
+                "designations": designations,
+                "departments": departments,
+                "form_data": {},
+                "errors": {},
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/hr/transfer_form.html", context
+        )
 
     @staticmethod
     async def create_transfer_response(
@@ -648,56 +720,76 @@ class LifecycleWebService:
         employee = svc.get_employee(employee_id)
 
         try:
-            transfer_date = date_type.fromisoformat(transfer_date_str) if transfer_date_str else date_type.today()
+            transfer_date = (
+                date_type.fromisoformat(transfer_date_str)
+                if transfer_date_str
+                else date_type.today()
+            )
         except ValueError:
             transfer_date = date_type.today()
 
         details = []
 
         if new_department_id:
-            current_department = employee.department.department_name if employee.department else "-"
+            current_department = (
+                employee.department.department_name if employee.department else "-"
+            )
             from app.models.people.hr import Department
+
             new_dept = db.get(Department, coerce_uuid(new_department_id))
             if new_dept:
-                details.append({
-                    "property_name": "Department",
-                    "current_value": current_department,
-                    "new_value": new_dept.department_name,
-                })
+                details.append(
+                    {
+                        "property_name": "Department",
+                        "current_value": current_department,
+                        "new_value": new_dept.department_name,
+                    }
+                )
                 employee.department_id = coerce_uuid(new_department_id)
 
         if new_designation_id:
-            current_designation = employee.designation.designation_name if employee.designation else "-"
+            current_designation = (
+                employee.designation.designation_name if employee.designation else "-"
+            )
             from app.models.people.hr import Designation
+
             new_desig = db.get(Designation, coerce_uuid(new_designation_id))
             if new_desig:
-                details.append({
-                    "property_name": "Designation",
-                    "current_value": current_designation,
-                    "new_value": new_desig.designation_name,
-                })
+                details.append(
+                    {
+                        "property_name": "Designation",
+                        "current_value": current_designation,
+                        "new_value": new_desig.designation_name,
+                    }
+                )
                 employee.designation_id = coerce_uuid(new_designation_id)
 
         if new_reports_to_id:
             current_manager = employee.manager.full_name if employee.manager else "-"
             new_manager = db.get(Employee, coerce_uuid(new_reports_to_id))
             if new_manager:
-                details.append({
-                    "property_name": "Reports To",
-                    "current_value": current_manager,
-                    "new_value": new_manager.full_name,
-                })
+                details.append(
+                    {
+                        "property_name": "Reports To",
+                        "current_value": current_manager,
+                        "new_value": new_manager.full_name,
+                    }
+                )
                 employee.reports_to_id = coerce_uuid(new_reports_to_id)
 
         if new_branch:
             current_branch = (
-                employee.assigned_location.location_name if employee.assigned_location else "-"
+                employee.assigned_location.location_name
+                if employee.assigned_location
+                else "-"
             )
-            details.append({
-                "property_name": "Branch",
-                "current_value": current_branch,
-                "new_value": new_branch,
-            })
+            details.append(
+                {
+                    "property_name": "Branch",
+                    "current_value": current_branch,
+                    "new_value": new_branch,
+                }
+            )
             from app.models.finance.core_org.location import Location
 
             new_location = db.scalar(
@@ -718,7 +810,10 @@ class LifecycleWebService:
         )
         db.commit()
 
-        return RedirectResponse(url=f"/people/hr/employees/{employee_id}?success=Transfer+recorded", status_code=303)
+        return RedirectResponse(
+            url=f"/people/hr/employees/{employee_id}?success=Transfer+recorded",
+            status_code=303,
+        )
 
     @staticmethod
     def transfer_detail_response(
@@ -740,13 +835,17 @@ class LifecycleWebService:
         employee = db.get(Employee, transfer.employee_id)
 
         context = base_context(request, auth, "Transfer Details", "employees", db=db)
-        context.update({
-            "transfer": transfer,
-            "employee": employee,
-            "success": success,
-            "error": error,
-        })
-        return templates.TemplateResponse(request, "people/hr/transfer_detail.html", context)
+        context.update(
+            {
+                "transfer": transfer,
+                "employee": employee,
+                "success": success,
+                "error": error,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/hr/transfer_detail.html", context
+        )
 
 
 lifecycle_web_service = LifecycleWebService()

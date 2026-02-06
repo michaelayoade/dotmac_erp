@@ -4,6 +4,7 @@ Revision ID: 20260124_payment_intent_fees
 Revises: 20260124_expense_reimb_journal
 Create Date: 2026-01-24
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID

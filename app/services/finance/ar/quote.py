@@ -3,21 +3,22 @@ Quote Service.
 
 Business logic for sales quotes with conversion to invoices/sales orders.
 """
-from datetime import date, datetime, timedelta
+
+import logging
+from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional, List
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models.finance.ar.quote import Quote, QuoteLine, QuoteStatus
 from app.models.finance.ar.customer import Customer
-from app.models.finance.ar.payment_terms import PaymentTerms
-from app.models.finance.ar.invoice import Invoice, InvoiceType, InvoiceStatus
+from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.models.finance.ar.invoice_line import InvoiceLine
+from app.models.finance.ar.payment_terms import PaymentTerms
+from app.models.finance.ar.quote import Quote, QuoteLine, QuoteStatus
 from app.models.finance.ar.sales_order import SalesOrder, SalesOrderLine, SOStatus
 from app.models.finance.core_config import SequenceType
 from app.models.finance.core_org.cost_center import CostCenter
@@ -26,6 +27,8 @@ from app.models.finance.gl.account import Account
 from app.models.finance.tax.tax_code import TaxCode
 from app.services.common import coerce_uuid
 from app.services.finance.common import SyncNumberingService, get_org_scoped_entity
+
+logger = logging.getLogger(__name__)
 
 
 class QuoteService:
@@ -106,7 +109,9 @@ class QuoteService:
             reference=reference,
             contact_name=contact_name,
             contact_email=contact_email,
-            payment_terms_id=coerce_uuid(payment_terms_id) if payment_terms_id else None,
+            payment_terms_id=coerce_uuid(payment_terms_id)
+            if payment_terms_id
+            else None,
             terms_and_conditions=terms_and_conditions,
             internal_notes=internal_notes,
             customer_notes=customer_notes,
@@ -195,7 +200,9 @@ class QuoteService:
                 tax_code_id=coerce_uuid(tax_code_id) if tax_code_id else None,
                 tax_amount=tax_amount,
                 line_total=line_total,
-                revenue_account_id=coerce_uuid(revenue_account_id) if revenue_account_id else None,
+                revenue_account_id=coerce_uuid(revenue_account_id)
+                if revenue_account_id
+                else None,
                 project_id=coerce_uuid(project_id) if project_id else None,
                 cost_center_id=coerce_uuid(cost_center_id) if cost_center_id else None,
             )
@@ -252,9 +259,17 @@ class QuoteService:
 
         # Update allowed fields
         allowed_fields = [
-            "customer_id", "quote_date", "valid_until", "currency_code",
-            "exchange_rate", "reference", "contact_name", "contact_email",
-            "payment_terms_id", "terms_and_conditions", "internal_notes",
+            "customer_id",
+            "quote_date",
+            "valid_until",
+            "currency_code",
+            "exchange_rate",
+            "reference",
+            "contact_name",
+            "contact_email",
+            "payment_terms_id",
+            "terms_and_conditions",
+            "internal_notes",
             "customer_notes",
         ]
 
@@ -352,10 +367,15 @@ class QuoteService:
         db.flush()
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=db, organization_id=quote.organization_id,
-                entity_type="QUOTE", entity_id=quote.quote_id,
+                db=db,
+                organization_id=quote.organization_id,
+                entity_type="QUOTE",
+                entity_id=quote.quote_id,
                 event="ON_REJECTION",
                 old_values={"status": old_status},
                 new_values={"status": "REJECTED"},
@@ -377,7 +397,9 @@ class QuoteService:
         quote = QuoteService._get_quote(db, organization_id, quote_id)
 
         if quote.status != QuoteStatus.ACCEPTED:
-            raise ValueError(f"Can only convert accepted quotes, current status: {quote.status.value}")
+            raise ValueError(
+                f"Can only convert accepted quotes, current status: {quote.status.value}"
+            )
 
         user_id = coerce_uuid(created_by)
 
@@ -395,7 +417,8 @@ class QuoteService:
             invoice_type=InvoiceType.STANDARD,
             customer_id=quote.customer_id,
             invoice_date=invoice_date or date.today(),
-            due_date=invoice_date or date.today(),  # Will be calculated based on payment terms
+            due_date=invoice_date
+            or date.today(),  # Will be calculated based on payment terms
             currency_code=quote.currency_code,
             exchange_rate=quote.exchange_rate,
             payment_terms_id=quote.payment_terms_id,
@@ -450,7 +473,9 @@ class QuoteService:
         quote = QuoteService._get_quote(db, organization_id, quote_id)
 
         if quote.status != QuoteStatus.ACCEPTED:
-            raise ValueError(f"Can only convert accepted quotes, current status: {quote.status.value}")
+            raise ValueError(
+                f"Can only convert accepted quotes, current status: {quote.status.value}"
+            )
 
         user_id = coerce_uuid(created_by)
 
@@ -541,7 +566,9 @@ class QuoteService:
         count = (
             db.query(Quote)
             .filter(
-                Quote.status.in_([QuoteStatus.DRAFT, QuoteStatus.SENT, QuoteStatus.VIEWED]),
+                Quote.status.in_(
+                    [QuoteStatus.DRAFT, QuoteStatus.SENT, QuoteStatus.VIEWED]
+                ),
                 Quote.valid_until < today,
             )
             .update({"status": QuoteStatus.EXPIRED}, synchronize_session=False)
@@ -577,12 +604,7 @@ class QuoteService:
         if end_date:
             query = query.filter(Quote.quote_date <= end_date)
 
-        return (
-            query.order_by(Quote.quote_date.desc())
-            .offset(offset)
-            .limit(limit)
-            .all()
-        )
+        return query.order_by(Quote.quote_date.desc()).offset(offset).limit(limit).all()
 
 
 quote_service = QuoteService()

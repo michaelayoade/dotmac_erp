@@ -15,12 +15,14 @@ class TestInventoryTransactionForms:
     """Test inventory transaction form pages."""
 
     @pytest.mark.e2e
-    def test_inventory_transactions_page_loads(
-        self, inventory_transactions_page: Page
-    ):
+    def test_inventory_transactions_page_loads(self, inventory_transactions_page: Page):
         """Test that inventory transactions page loads successfully."""
-        expect(inventory_transactions_page).to_have_url(re.compile(r".*/inv/transactions.*"))
-        expect(inventory_transactions_page.locator("h1")).to_contain_text("Transactions")
+        expect(inventory_transactions_page).to_have_url(
+            re.compile(r".*/inv/transactions.*")
+        )
+        expect(inventory_transactions_page.locator("h1")).to_contain_text(
+            "Transactions"
+        )
 
     @pytest.mark.e2e
     def test_receipt_form_accessible(self, authenticated_page: Page, base_url: str):
@@ -272,9 +274,7 @@ class TestNavigationBetweenModules:
             expect(dashboard_page).to_have_url(re.compile(r".*/inv.*"))
 
     @pytest.mark.e2e
-    def test_navigate_from_ap_to_inventory(
-        self, ap_invoices_page: Page, base_url: str
-    ):
+    def test_navigate_from_ap_to_inventory(self, ap_invoices_page: Page, base_url: str):
         """Test navigating from AP to inventory."""
         # Click on inventory link
         inv_link = ap_invoices_page.locator("a[href*='/inv']").first
@@ -284,9 +284,7 @@ class TestNavigationBetweenModules:
             expect(ap_invoices_page).to_have_url(re.compile(r".*/inv.*"))
 
     @pytest.mark.e2e
-    def test_navigate_from_fa_to_ap(
-        self, fixed_assets_page: Page, base_url: str
-    ):
+    def test_navigate_from_fa_to_ap(self, fixed_assets_page: Page, base_url: str):
         """Test navigating from fixed assets to AP."""
         # Click on AP link
         ap_link = fixed_assets_page.locator("a[href*='/ap']").first

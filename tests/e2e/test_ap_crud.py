@@ -30,7 +30,9 @@ class TestSupplierList:
         authenticated_page.goto(f"{base_url}/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
-        search = authenticated_page.locator("input[type='search'], input[name='search'], input[placeholder*='Search']")
+        search = authenticated_page.locator(
+            "input[type='search'], input[name='search'], input[placeholder*='Search']"
+        )
         if search.count() > 0:
             search.first.fill("test")
             authenticated_page.keyboard.press("Enter")
@@ -56,7 +58,9 @@ class TestSupplierList:
         authenticated_page.goto(f"{base_url}/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
-        pagination = authenticated_page.locator(".pagination, nav[aria-label*='pagination'], [class*='pagination']")
+        pagination = authenticated_page.locator(
+            ".pagination, nav[aria-label*='pagination'], [class*='pagination']"
+        )
         if pagination.count() > 0:
             expect(pagination.first).to_be_visible()
 
@@ -77,7 +81,9 @@ class TestSupplierCreate:
         authenticated_page.goto(f"{base_url}/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("#supplier_code, input[name='supplier_code']")
+        field = authenticated_page.locator(
+            "#supplier_code, input[name='supplier_code']"
+        )
         expect(field).to_be_visible()
 
     def test_supplier_create_has_name_field(self, authenticated_page, base_url):
@@ -85,7 +91,9 @@ class TestSupplierCreate:
         authenticated_page.goto(f"{base_url}/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("#supplier_name, input[name='supplier_name']")
+        field = authenticated_page.locator(
+            "#supplier_name, input[name='supplier_name']"
+        )
         expect(field).to_be_visible()
 
     def test_supplier_create_has_currency_field(self, authenticated_page, base_url):
@@ -122,8 +130,12 @@ class TestSupplierCreate:
         uid = unique_id()
 
         # Fill required fields
-        authenticated_page.locator("#supplier_code, input[name='supplier_code']").fill(f"SUP-{uid}")
-        authenticated_page.locator("#supplier_name, input[name='supplier_name']").fill(f"Test Supplier {uid}")
+        authenticated_page.locator("#supplier_code, input[name='supplier_code']").fill(
+            f"SUP-{uid}"
+        )
+        authenticated_page.locator("#supplier_name, input[name='supplier_name']").fill(
+            f"Test Supplier {uid}"
+        )
 
         # Select currency if dropdown
         currency = authenticated_page.locator("select[name*='currency']")
@@ -145,8 +157,12 @@ class TestSupplierCreate:
         uid = unique_id()
 
         # Fill all fields
-        authenticated_page.locator("#supplier_code, input[name='supplier_code']").fill(f"SUP-{uid}")
-        authenticated_page.locator("#supplier_name, input[name='supplier_name']").fill(f"Test Supplier {uid}")
+        authenticated_page.locator("#supplier_code, input[name='supplier_code']").fill(
+            f"SUP-{uid}"
+        )
+        authenticated_page.locator("#supplier_name, input[name='supplier_name']").fill(
+            f"Test Supplier {uid}"
+        )
 
         # Currency
         currency = authenticated_page.locator("select[name*='currency']")
@@ -180,7 +196,9 @@ class TestSupplierEdit:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Click first supplier link
-        supplier_link = authenticated_page.locator("table tbody tr a, .supplier-list a").first
+        supplier_link = authenticated_page.locator(
+            "table tbody tr a, .supplier-list a"
+        ).first
         if supplier_link.count() > 0:
             supplier_link.click()
             authenticated_page.wait_for_load_state("networkidle")
@@ -194,13 +212,17 @@ class TestSupplierEdit:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Navigate to first supplier
-        supplier_link = authenticated_page.locator("table tbody tr a, a[href*='/ap/suppliers/']").first
+        supplier_link = authenticated_page.locator(
+            "table tbody tr a, a[href*='/ap/suppliers/']"
+        ).first
         if supplier_link.count() > 0:
             supplier_link.click()
             authenticated_page.wait_for_load_state("networkidle")
 
             # Look for edit button
-            edit_btn = authenticated_page.locator("a[href*='/edit'], button:has-text('Edit'), a:has-text('Edit')")
+            edit_btn = authenticated_page.locator(
+                "a[href*='/edit'], button:has-text('Edit'), a:has-text('Edit')"
+            )
             if edit_btn.count() > 0:
                 expect(edit_btn.first).to_be_visible()
 
@@ -221,7 +243,9 @@ class TestAPInvoiceList:
         authenticated_page.goto(f"{base_url}/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
-        supplier_filter = authenticated_page.locator("select[name='supplier'], select[name='supplier_id']")
+        supplier_filter = authenticated_page.locator(
+            "select[name='supplier'], select[name='supplier_id']"
+        )
         if supplier_filter.count() > 0:
             expect(supplier_filter.first).to_be_visible()
 
@@ -260,7 +284,9 @@ class TestAPInvoiceCreate:
         authenticated_page.goto(f"{base_url}/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("select[name='supplier_id'], select[name='supplier'], #supplier_id")
+        field = authenticated_page.locator(
+            "select[name='supplier_id'], select[name='supplier'], #supplier_id"
+        )
         expect(field.first).to_be_visible()
 
     def test_invoice_create_has_date_fields(self, authenticated_page, base_url):
@@ -277,7 +303,9 @@ class TestAPInvoiceCreate:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for line items or add line button
-        lines = authenticated_page.locator("text=Line, text=Items, button:has-text('Add'), [class*='line']")
+        lines = authenticated_page.locator(
+            "text=Line, text=Items, button:has-text('Add'), [class*='line']"
+        )
         expect(lines.first).to_be_visible()
 
     def test_invoice_create_has_add_line_button(self, authenticated_page, base_url):
@@ -285,7 +313,9 @@ class TestAPInvoiceCreate:
         authenticated_page.goto(f"{base_url}/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        add_btn = authenticated_page.locator("button:has-text('Add'), a:has-text('Add Line'), button[class*='add']")
+        add_btn = authenticated_page.locator(
+            "button:has-text('Add'), a:has-text('Add Line'), button[class*='add']"
+        )
         if add_btn.count() > 0:
             expect(add_btn.first).to_be_visible()
 
@@ -294,7 +324,9 @@ class TestAPInvoiceCreate:
         authenticated_page.goto(f"{base_url}/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        totals = authenticated_page.locator("text=Total, text=Subtotal, [class*='total']")
+        totals = authenticated_page.locator(
+            "text=Total, text=Subtotal, [class*='total']"
+        )
         if totals.count() > 0:
             expect(totals.first).to_be_visible()
 
@@ -315,7 +347,9 @@ class TestAPPaymentList:
         authenticated_page.goto(f"{base_url}/ap/payments")
         authenticated_page.wait_for_load_state("networkidle")
 
-        new_btn = authenticated_page.locator("a[href*='/ap/payments/new'], button:has-text('New')")
+        new_btn = authenticated_page.locator(
+            "a[href*='/ap/payments/new'], button:has-text('New')"
+        )
         expect(new_btn.first).to_be_visible()
 
 
@@ -335,7 +369,9 @@ class TestAPPaymentCreate:
         authenticated_page.goto(f"{base_url}/ap/payments/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("select[name='supplier_id'], select[name='supplier']")
+        field = authenticated_page.locator(
+            "select[name='supplier_id'], select[name='supplier']"
+        )
         expect(field.first).to_be_visible()
 
     def test_payment_create_has_amount_field(self, authenticated_page, base_url):
@@ -343,7 +379,9 @@ class TestAPPaymentCreate:
         authenticated_page.goto(f"{base_url}/ap/payments/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("input[name='amount'], input[name*='amount']")
+        field = authenticated_page.locator(
+            "input[name='amount'], input[name*='amount']"
+        )
         expect(field.first).to_be_visible()
 
     def test_payment_create_has_date_field(self, authenticated_page, base_url):
@@ -371,7 +409,9 @@ class TestPurchaseOrderList:
         authenticated_page.goto(f"{base_url}/ap/purchase-orders")
         authenticated_page.wait_for_load_state("networkidle")
 
-        new_btn = authenticated_page.locator("a[href*='/purchase-orders/new'], button:has-text('New')")
+        new_btn = authenticated_page.locator(
+            "a[href*='/purchase-orders/new'], button:has-text('New')"
+        )
         expect(new_btn.first).to_be_visible()
 
 
@@ -391,7 +431,9 @@ class TestPurchaseOrderCreate:
         authenticated_page.goto(f"{base_url}/ap/purchase-orders/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("select[name='supplier_id'], select[name='supplier']")
+        field = authenticated_page.locator(
+            "select[name='supplier_id'], select[name='supplier']"
+        )
         expect(field.first).to_be_visible()
 
     def test_po_create_has_line_items(self, authenticated_page, base_url):
@@ -399,7 +441,9 @@ class TestPurchaseOrderCreate:
         authenticated_page.goto(f"{base_url}/ap/purchase-orders/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        lines = authenticated_page.locator("text=Line, text=Items, button:has-text('Add')")
+        lines = authenticated_page.locator(
+            "text=Line, text=Items, button:has-text('Add')"
+        )
         expect(lines.first).to_be_visible()
 
 
@@ -419,7 +463,9 @@ class TestGoodsReceiptList:
         authenticated_page.goto(f"{base_url}/ap/goods-receipts")
         authenticated_page.wait_for_load_state("networkidle")
 
-        new_btn = authenticated_page.locator("a[href*='/goods-receipts/new'], button:has-text('New')")
+        new_btn = authenticated_page.locator(
+            "a[href*='/goods-receipts/new'], button:has-text('New')"
+        )
         expect(new_btn.first).to_be_visible()
 
 
@@ -439,7 +485,9 @@ class TestGoodsReceiptCreate:
         authenticated_page.goto(f"{base_url}/ap/goods-receipts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("select[name='purchase_order_id'], select[name='po_id']")
+        field = authenticated_page.locator(
+            "select[name='purchase_order_id'], select[name='po_id']"
+        )
         if field.count() > 0:
             expect(field.first).to_be_visible()
 
@@ -460,7 +508,9 @@ class TestAPAgingReport:
         authenticated_page.goto(f"{base_url}/ap/aging")
         authenticated_page.wait_for_load_state("networkidle")
 
-        date_filter = authenticated_page.locator("input[type='date'], input[name='as_of_date']")
+        date_filter = authenticated_page.locator(
+            "input[type='date'], input[name='as_of_date']"
+        )
         if date_filter.count() > 0:
             expect(date_filter.first).to_be_visible()
 
@@ -470,6 +520,8 @@ class TestAPAgingReport:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for aging bucket columns
-        buckets = authenticated_page.locator("text=Current, text=30, text=60, text=90, th:has-text('Days')")
+        buckets = authenticated_page.locator(
+            "text=Current, text=30, text=60, text=90, th:has-text('Days')"
+        )
         if buckets.count() > 0:
             expect(buckets.first).to_be_visible()

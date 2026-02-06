@@ -5,6 +5,7 @@ Handles file storage, retrieval, and metadata management for document attachment
 """
 
 import hashlib
+import logging
 import os
 import re
 import shutil
@@ -19,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.models.finance.common.attachment import Attachment, AttachmentCategory
 
+logger = logging.getLogger(__name__)
 
 # Configuration
 UPLOAD_BASE_DIR = os.getenv("ATTACHMENT_UPLOAD_DIR", "uploads/attachments")
@@ -44,6 +46,7 @@ SAFE_ENTITY_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 @dataclass
 class AttachmentInput:
     """Input for creating an attachment."""
+
     entity_type: str
     entity_id: str
     file_name: str
@@ -55,6 +58,7 @@ class AttachmentInput:
 @dataclass
 class AttachmentView:
     """View model for attachment display."""
+
     attachment_id: str
     file_name: str
     file_size: int
@@ -167,7 +171,9 @@ class AttachmentService:
         file_size = file_path.stat().st_size
         if file_size > MAX_FILE_SIZE:
             file_path.unlink()  # Delete the file
-            raise ValueError(f"File size exceeds maximum allowed ({_format_file_size(MAX_FILE_SIZE)})")
+            raise ValueError(
+                f"File size exceeds maximum allowed ({_format_file_size(MAX_FILE_SIZE)})"
+            )
 
         # Compute checksum
         checksum = _compute_checksum(str(file_path))
@@ -291,7 +297,8 @@ class AttachmentService:
                 Attachment.entity_type == entity_type,
                 Attachment.entity_id == ent_id,
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
 
     @staticmethod

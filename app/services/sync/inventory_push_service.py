@@ -15,7 +15,7 @@ from typing import Optional
 from uuid import UUID
 
 import httpx
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -159,7 +159,9 @@ class InventoryPushService:
         if not item_ids:
             return PushResult(success=True, items_pushed=0, errors=[])
 
-        logger.info("Pushing %d items to CRM for org %s", len(item_ids), organization_id)
+        logger.info(
+            "Pushing %d items to CRM for org %s", len(item_ids), organization_id
+        )
 
         items = self._get_inventory_items(
             organization_id,
@@ -205,17 +207,21 @@ class InventoryPushService:
 
         items = []
         for item in low_stock_items:
-            items.append({
-                "item_id": str(item.item_id),
-                "item_code": item.item_code,
-                "item_name": item.item_name,
-                "quantity_on_hand": str(item.quantity_on_hand),
-                "quantity_available": str(item.quantity_available),
-                "reorder_point": str(item.reorder_point),
-                "reorder_quantity": str(item.reorder_quantity) if item.reorder_quantity else None,
-                "suggested_order_qty": str(item.suggested_order_qty),
-                "is_below_reorder": True,
-            })
+            items.append(
+                {
+                    "item_id": str(item.item_id),
+                    "item_code": item.item_code,
+                    "item_name": item.item_name,
+                    "quantity_on_hand": str(item.quantity_on_hand),
+                    "quantity_available": str(item.quantity_available),
+                    "reorder_point": str(item.reorder_point),
+                    "reorder_quantity": str(item.reorder_quantity)
+                    if item.reorder_quantity
+                    else None,
+                    "suggested_order_qty": str(item.suggested_order_qty),
+                    "is_below_reorder": True,
+                }
+            )
 
         payload = {
             "sync_type": "low_stock_alert",
@@ -275,23 +281,27 @@ class InventoryPushService:
             reorder_point = item.reorder_point or Decimal("0")
             is_below_reorder = available <= reorder_point if reorder_point else False
 
-            items.append({
-                "item_id": str(item.item_id),
-                "item_code": item.item_code,
-                "item_name": item.item_name,
-                "description": item.description,
-                "category_code": category.category_code if category else None,
-                "category_name": category.category_name if category else None,
-                "base_uom": item.base_uom,
-                "quantity_on_hand": str(on_hand),
-                "quantity_reserved": str(reserved),
-                "quantity_available": str(available),
-                "reorder_point": str(item.reorder_point) if item.reorder_point else None,
-                "list_price": str(item.list_price) if item.list_price else None,
-                "currency_code": item.currency_code,
-                "barcode": item.barcode,
-                "is_below_reorder": is_below_reorder,
-            })
+            items.append(
+                {
+                    "item_id": str(item.item_id),
+                    "item_code": item.item_code,
+                    "item_name": item.item_name,
+                    "description": item.description,
+                    "category_code": category.category_code if category else None,
+                    "category_name": category.category_name if category else None,
+                    "base_uom": item.base_uom,
+                    "quantity_on_hand": str(on_hand),
+                    "quantity_reserved": str(reserved),
+                    "quantity_available": str(available),
+                    "reorder_point": str(item.reorder_point)
+                    if item.reorder_point
+                    else None,
+                    "list_price": str(item.list_price) if item.list_price else None,
+                    "currency_code": item.currency_code,
+                    "barcode": item.barcode,
+                    "is_below_reorder": is_below_reorder,
+                }
+            )
 
         return items
 
@@ -339,6 +349,7 @@ class InventoryPushService:
                     retry_after = int(response.headers.get("Retry-After", 5))
                     logger.warning("Rate limited, waiting %d seconds", retry_after)
                     import time
+
                     time.sleep(retry_after)
                     continue
 
@@ -367,7 +378,8 @@ class InventoryPushService:
                 if e.response.status_code >= 500:
                     # Server error - retry
                     import time
-                    time.sleep(2 ** attempt)
+
+                    time.sleep(2**attempt)
                     continue
                 break
 
@@ -376,7 +388,8 @@ class InventoryPushService:
                 logger.error("CRM push failed: %s", error_msg)
                 errors.append(error_msg)
                 import time
-                time.sleep(2 ** attempt)
+
+                time.sleep(2**attempt)
 
         return PushResult(
             success=False,

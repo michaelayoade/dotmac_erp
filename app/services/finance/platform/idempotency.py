@@ -5,18 +5,21 @@ Ensures that duplicate API requests with the same idempotency key
 return cached responses rather than re-executing operations.
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import and_, delete
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.models.finance.platform.idempotency_record import IdempotencyRecord
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 class IdempotencyService(ListResponseMixin):

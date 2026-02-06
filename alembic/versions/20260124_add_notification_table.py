@@ -168,11 +168,19 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Drop indexes
-    op.drop_index("ix_notification_created_at", table_name="notification", schema="public")
+    op.drop_index(
+        "ix_notification_created_at", table_name="notification", schema="public"
+    )
     op.drop_index("ix_notification_entity", table_name="notification", schema="public")
-    op.drop_index("ix_notification_recipient_unread", table_name="notification", schema="public")
-    op.drop_index("ix_notification_recipient_id", table_name="notification", schema="public")
-    op.drop_index("ix_notification_organization_id", table_name="notification", schema="public")
+    op.drop_index(
+        "ix_notification_recipient_unread", table_name="notification", schema="public"
+    )
+    op.drop_index(
+        "ix_notification_recipient_id", table_name="notification", schema="public"
+    )
+    op.drop_index(
+        "ix_notification_organization_id", table_name="notification", schema="public"
+    )
 
     # Drop table
     op.drop_table("notification", schema="public")

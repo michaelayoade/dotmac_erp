@@ -4,8 +4,6 @@ E2E Tests for Pagination.
 Tests for pagination controls and behavior across list pages.
 """
 
-import re
-
 import pytest
 from playwright.sync_api import expect
 
@@ -19,7 +17,9 @@ from playwright.sync_api import expect
 class TestPaginationControls:
     """Tests for pagination control visibility and behavior."""
 
-    def test_pagination_controls_visible_on_suppliers(self, authenticated_page, base_url):
+    def test_pagination_controls_visible_on_suppliers(
+        self, authenticated_page, base_url
+    ):
         """Test pagination controls are visible on suppliers list."""
         authenticated_page.goto(f"{base_url}/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
@@ -40,9 +40,11 @@ class TestPaginationControls:
             # With many rows, pagination should be present
             controls_exist = pagination.count() > 0 or page_info.count() > 0
             # Just verify page loaded properly
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
-    def test_pagination_controls_visible_on_invoices(self, authenticated_page, base_url):
+    def test_pagination_controls_visible_on_invoices(
+        self, authenticated_page, base_url
+    ):
         """Test pagination controls are visible on invoices list."""
         authenticated_page.goto(f"{base_url}/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
@@ -52,9 +54,11 @@ class TestPaginationControls:
         )
 
         # Verify page loaded
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
-    def test_pagination_controls_visible_on_journals(self, authenticated_page, base_url):
+    def test_pagination_controls_visible_on_journals(
+        self, authenticated_page, base_url
+    ):
         """Test pagination controls are visible on journals list."""
         authenticated_page.goto(f"{base_url}/gl/journals")
         authenticated_page.wait_for_load_state("networkidle")
@@ -63,7 +67,7 @@ class TestPaginationControls:
             ".pagination, nav[aria-label*='pagination'], [class*='paginate']"
         )
 
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
 
 @pytest.mark.e2e
@@ -82,13 +86,15 @@ class TestPaginationNavigation:
 
         if first_btn.count() > 0:
             # If on first page, button might be disabled
-            is_disabled = first_btn.first.is_disabled() or "disabled" in (first_btn.first.get_attribute("class") or "")
+            is_disabled = first_btn.first.is_disabled() or "disabled" in (
+                first_btn.first.get_attribute("class") or ""
+            )
 
             if not is_disabled:
                 first_btn.first.click()
                 authenticated_page.wait_for_load_state("networkidle")
 
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_pagination_next_page(self, authenticated_page, base_url):
         """Test next page button works."""
@@ -101,7 +107,9 @@ class TestPaginationNavigation:
         )
 
         if next_btn.count() > 0:
-            is_disabled = next_btn.first.is_disabled() or "disabled" in (next_btn.first.get_attribute("class") or "")
+            is_disabled = next_btn.first.is_disabled() or "disabled" in (
+                next_btn.first.get_attribute("class") or ""
+            )
 
             if not is_disabled:
                 # Get current URL or page indicator
@@ -112,7 +120,7 @@ class TestPaginationNavigation:
 
                 # URL should change or page indicator should update
                 # Just verify navigation worked
-                expect(authenticated_page.locator("body")).to_be_visible()
+                expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_pagination_previous_page(self, authenticated_page, base_url):
         """Test previous page button works."""
@@ -126,13 +134,15 @@ class TestPaginationNavigation:
         )
 
         if prev_btn.count() > 0:
-            is_disabled = prev_btn.first.is_disabled() or "disabled" in (prev_btn.first.get_attribute("class") or "")
+            is_disabled = prev_btn.first.is_disabled() or "disabled" in (
+                prev_btn.first.get_attribute("class") or ""
+            )
 
             if not is_disabled:
                 prev_btn.first.click()
                 authenticated_page.wait_for_load_state("networkidle")
 
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_pagination_last_page(self, authenticated_page, base_url):
         """Test last page button works."""
@@ -145,13 +155,15 @@ class TestPaginationNavigation:
         )
 
         if last_btn.count() > 0:
-            is_disabled = last_btn.first.is_disabled() or "disabled" in (last_btn.first.get_attribute("class") or "")
+            is_disabled = last_btn.first.is_disabled() or "disabled" in (
+                last_btn.first.get_attribute("class") or ""
+            )
 
             if not is_disabled:
                 last_btn.first.click()
                 authenticated_page.wait_for_load_state("networkidle")
 
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_pagination_page_number_click(self, authenticated_page, base_url):
         """Test clicking specific page number works."""
@@ -172,7 +184,7 @@ class TestPaginationNavigation:
                 page_2.first.click()
                 authenticated_page.wait_for_load_state("networkidle")
 
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
 
 @pytest.mark.e2e
@@ -198,7 +210,7 @@ class TestPaginationPageSize:
             authenticated_page.wait_for_load_state("networkidle")
 
             # Verify page reloaded
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_pagination_with_filters(self, authenticated_page, base_url):
         """Test pagination preserves filters."""
@@ -206,9 +218,7 @@ class TestPaginationPageSize:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Apply a filter first
-        status_filter = authenticated_page.locator(
-            "select[name='status'], #status"
-        )
+        status_filter = authenticated_page.locator("select[name='status'], #status")
         if status_filter.count() > 0:
             status_filter.first.select_option(index=1)
             authenticated_page.wait_for_load_state("networkidle")
@@ -225,7 +235,7 @@ class TestPaginationPageSize:
             # Filter should still be applied (check URL or filter value)
             current_url = authenticated_page.url
             # Just verify page works with both filter and pagination
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
 
 @pytest.mark.e2e
@@ -248,7 +258,7 @@ class TestEmptyListPagination:
 
         if empty_state.count() > 0:
             # With empty results, pagination might be hidden or show "0 results"
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_single_page_pagination_state(self, authenticated_page, base_url):
         """Test pagination state when only one page exists."""
@@ -265,10 +275,12 @@ class TestEmptyListPagination:
                 "a:has-text('Next'), button:has-text('Next')"
             )
             if next_btn.count() > 0:
-                is_disabled = next_btn.first.is_disabled() or "disabled" in (next_btn.first.get_attribute("class") or "")
+                is_disabled = next_btn.first.is_disabled() or "disabled" in (
+                    next_btn.first.get_attribute("class") or ""
+                )
                 # Button should be disabled for single page
                 # Just verify page is functional
-                expect(authenticated_page.locator("body")).to_be_visible()
+                expect(authenticated_page.locator("main")).to_be_visible()
 
 
 @pytest.mark.e2e
@@ -294,7 +306,7 @@ class TestPaginationURLState:
             has_page_param = "page=" in current_url or "/page/" in current_url
 
             # Just verify navigation worked
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_direct_page_url_access(self, authenticated_page, base_url):
         """Test direct URL access to specific page."""
@@ -303,7 +315,7 @@ class TestPaginationURLState:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Should load successfully
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
         # Check if page indicator shows page 2
         page_indicator = authenticated_page.locator(
@@ -311,4 +323,4 @@ class TestPaginationURLState:
         )
         # Page 2 might be indicated somehow
         # Just verify page loaded
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()

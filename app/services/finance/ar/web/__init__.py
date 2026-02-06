@@ -24,47 +24,49 @@ from sqlalchemy.orm import Session
 
 from app.schemas.bulk_actions import BulkActionRequest, BulkExportRequest
 from app.services.common import coerce_uuid
-from app.services.finance.common.attachment import attachment_service
-from app.web.deps import WebAuthContext
-
 from app.services.finance.ar.web.base import (
-    # Parsing utilities
-    parse_date,
-    format_date,
-    format_currency,
-    format_file_size,
-    parse_customer_type,
-    parse_invoice_status,
-    parse_receipt_status,
+    # Data classes
+    InvoiceStats,
+    allocation_view,
+    calculate_customer_balance_trends,
+    customer_detail_view,
     # Display utilities
     customer_display_name,
-    invoice_status_label,
-    receipt_status_label,
-    # View transformers
-    customer_option_view,
     customer_form_view,
     customer_list_view,
-    customer_detail_view,
-    invoice_line_view,
-    invoice_detail_view,
-    receipt_detail_view,
-    allocation_view,
+    # View transformers
+    customer_option_view,
+    format_currency,
+    format_date,
+    format_file_size,
     # Reference data queries
     get_accounts,
     get_cost_centers,
     get_projects,
-    calculate_customer_balance_trends,
-    # Data classes
-    InvoiceStats,
+    invoice_detail_view,
+    invoice_line_view,
+    invoice_status_label,
+    parse_customer_type,
+    # Parsing utilities
+    parse_date,
+    parse_invoice_status,
+    parse_receipt_status,
+    receipt_detail_view,
+    receipt_status_label,
 )
+from app.services.finance.ar.web.credit_note_web import CreditNoteWebService
 
 # Import the modular service components
 from app.services.finance.ar.web.customer_web import CustomerWebService
 from app.services.finance.ar.web.invoice_web import InvoiceWebService
-from app.services.finance.ar.web.receipt_web import ReceiptWebService
-from app.services.finance.ar.web.credit_note_web import CreditNoteWebService
 from app.services.finance.ar.web.quote_web import QuoteWebService, quote_web_service
-from app.services.finance.ar.web.sales_order_web import SalesOrderWebService, sales_order_web_service
+from app.services.finance.ar.web.receipt_web import ReceiptWebService
+from app.services.finance.ar.web.sales_order_web import (
+    SalesOrderWebService,
+    sales_order_web_service,
+)
+from app.services.finance.common.attachment import attachment_service
+from app.web.deps import WebAuthContext
 
 
 class ARWebService(  # type: ignore[misc]
@@ -105,13 +107,19 @@ class ARWebService(  # type: ignore[misc]
             attachment_id,
         )
 
-        if not attachment or attachment.organization_id != coerce_uuid(auth.organization_id):
-            return RedirectResponse(url="/finance/ar/invoices?error=Attachment+not+found", status_code=303)
+        if not attachment or attachment.organization_id != coerce_uuid(
+            auth.organization_id
+        ):
+            return RedirectResponse(
+                url="/finance/ar/invoices?error=Attachment+not+found", status_code=303
+            )
 
         file_path = attachment_service.get_file_path(attachment)
 
         if not file_path.exists():
-            return RedirectResponse(url="/finance/ar/invoices?error=File+not+found", status_code=303)
+            return RedirectResponse(
+                url="/finance/ar/invoices?error=File+not+found", status_code=303
+            )
 
         return FileResponse(
             path=str(file_path),
@@ -133,7 +141,9 @@ class ARWebService(  # type: ignore[misc]
         )
 
         if not attachment or attachment.organization_id != auth.organization_id:
-            return RedirectResponse(url="/finance/ar/invoices?error=Attachment+not+found", status_code=303)
+            return RedirectResponse(
+                url="/finance/ar/invoices?error=Attachment+not+found", status_code=303
+            )
 
         entity_type = attachment.entity_type
         entity_id = attachment.entity_id

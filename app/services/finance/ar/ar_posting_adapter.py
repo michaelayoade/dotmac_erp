@@ -12,6 +12,7 @@ and posts them to the general ledger.
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from typing import Optional
 from uuid import UUID
@@ -24,6 +25,8 @@ from app.services.finance.ar.posting import (
     post_invoice,
     post_payment,
 )
+
+logger = logging.getLogger(__name__)
 
 # Re-export for backward compatibility
 __all__ = [

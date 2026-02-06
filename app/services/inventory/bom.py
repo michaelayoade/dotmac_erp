@@ -6,9 +6,10 @@ Manages BOMs and processes assembly/disassembly transactions.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import List, Optional, cast
 from uuid import UUID
 
@@ -17,10 +18,12 @@ from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from app.models.inventory.bom import BillOfMaterials, BOMComponent, BOMType
-from app.models.inventory.item import Item
 from app.models.inventory.inventory_transaction import TransactionType
+from app.models.inventory.item import Item
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -101,12 +104,16 @@ class BOMService(ListResponseMixin):
         itm_id = coerce_uuid(input.item_id)
 
         # Check for duplicate code
-        existing = db.query(BillOfMaterials).filter(
-            and_(
-                BillOfMaterials.organization_id == org_id,
-                BillOfMaterials.bom_code == input.bom_code,
+        existing = (
+            db.query(BillOfMaterials)
+            .filter(
+                and_(
+                    BillOfMaterials.organization_id == org_id,
+                    BillOfMaterials.bom_code == input.bom_code,
+                )
             )
-        ).first()
+            .first()
+        )
 
         if existing:
             raise HTTPException(
@@ -195,7 +202,9 @@ class BOMService(ListResponseMixin):
             uom=input.uom,
             scrap_percent=input.scrap_percent,
             line_number=input.line_number,
-            warehouse_id=coerce_uuid(input.warehouse_id) if input.warehouse_id else None,
+            warehouse_id=coerce_uuid(input.warehouse_id)
+            if input.warehouse_id
+            else None,
             is_active=True,
         )
 
@@ -226,8 +235,11 @@ class BOMService(ListResponseMixin):
         Returns:
             AssemblyResult with transaction details
         """
-        from app.services.inventory.transaction import inventory_transaction_service, TransactionInput
         from app.services.inventory.balance import inventory_balance_service
+        from app.services.inventory.transaction import (
+            TransactionInput,
+            inventory_transaction_service,
+        )
 
         org_id = coerce_uuid(organization_id)
         b_id = coerce_uuid(input.bom_id)
@@ -242,12 +254,16 @@ class BOMService(ListResponseMixin):
         if not bom.is_active:
             raise HTTPException(status_code=400, detail="BOM is not active")
 
-        components = db.query(BOMComponent).filter(
-            and_(
-                BOMComponent.bom_id == b_id,
-                BOMComponent.is_active == True,
+        components = (
+            db.query(BOMComponent)
+            .filter(
+                and_(
+                    BOMComponent.bom_id == b_id,
+                    BOMComponent.is_active == True,
+                )
             )
-        ).all()
+            .all()
+        )
 
         if not components:
             raise HTTPException(status_code=400, detail="BOM has no components")
@@ -271,7 +287,9 @@ class BOMService(ListResponseMixin):
             required_qty = comp.quantity * multiplier
             if comp.scrap_percent > 0:
                 required_qty = required_qty * (1 + comp.scrap_percent / 100)
-            required_qty = required_qty.quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+            required_qty = required_qty.quantize(
+                Decimal("0.000001"), rounding=ROUND_HALF_UP
+            )
 
             # Check availability
             available = inventory_balance_service.get_available(
@@ -288,16 +306,20 @@ class BOMService(ListResponseMixin):
                 )
 
             # Get component cost
-            unit_cost = comp_item.average_cost or comp_item.standard_cost or Decimal("0")
+            unit_cost = (
+                comp_item.average_cost or comp_item.standard_cost or Decimal("0")
+            )
             total_component_cost += required_qty * unit_cost
 
-            component_issues.append({
-                "item": comp_item,
-                "component": comp,
-                "quantity": required_qty,
-                "warehouse_id": comp.warehouse_id or wh_id,
-                "unit_cost": unit_cost,
-            })
+            component_issues.append(
+                {
+                    "item": comp_item,
+                    "component": comp,
+                    "quantity": required_qty,
+                    "warehouse_id": comp.warehouse_id or wh_id,
+                    "unit_cost": unit_cost,
+                }
+            )
 
         # Issue components
         component_txn_ids = []
@@ -393,8 +415,11 @@ class BOMService(ListResponseMixin):
         Returns:
             AssemblyResult with transaction details
         """
-        from app.services.inventory.transaction import inventory_transaction_service, TransactionInput
         from app.services.inventory.balance import inventory_balance_service
+        from app.services.inventory.transaction import (
+            TransactionInput,
+            inventory_transaction_service,
+        )
 
         org_id = coerce_uuid(organization_id)
         b_id = coerce_uuid(input.bom_id)
@@ -449,12 +474,16 @@ class BOMService(ListResponseMixin):
         )
 
         # Calculate component receipts
-        components = db.query(BOMComponent).filter(
-            and_(
-                BOMComponent.bom_id == b_id,
-                BOMComponent.is_active == True,
+        components = (
+            db.query(BOMComponent)
+            .filter(
+                and_(
+                    BOMComponent.bom_id == b_id,
+                    BOMComponent.is_active == True,
+                )
             )
-        ).all()
+            .all()
+        )
 
         multiplier = input.quantity / bom.output_quantity
         total_component_cost = Decimal("0")
@@ -474,9 +503,13 @@ class BOMService(ListResponseMixin):
             comp_cost = (finished_unit_cost * input.quantity * comp.quantity) / sum(
                 c.quantity for c in components
             )
-            unit_cost = (comp_cost / recovered_qty).quantize(
-                Decimal("0.000001"), rounding=ROUND_HALF_UP
-            ) if recovered_qty > 0 else Decimal("0")
+            unit_cost = (
+                (comp_cost / recovered_qty).quantize(
+                    Decimal("0.000001"), rounding=ROUND_HALF_UP
+                )
+                if recovered_qty > 0
+                else Decimal("0")
+            )
 
             total_component_cost += recovered_qty * unit_cost
 
@@ -534,14 +567,18 @@ class BOMService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         itm_id = coerce_uuid(item_id)
 
-        return db.query(BillOfMaterials).filter(
-            and_(
-                BillOfMaterials.organization_id == org_id,
-                BillOfMaterials.item_id == itm_id,
-                BillOfMaterials.is_default == True,
-                BillOfMaterials.is_active == True,
+        return (
+            db.query(BillOfMaterials)
+            .filter(
+                and_(
+                    BillOfMaterials.organization_id == org_id,
+                    BillOfMaterials.item_id == itm_id,
+                    BillOfMaterials.is_default == True,
+                    BillOfMaterials.is_active == True,
+                )
             )
-        ).first()
+            .first()
+        )
 
     @staticmethod
     def list(
@@ -557,7 +594,9 @@ class BOMService(ListResponseMixin):
         query = db.query(BillOfMaterials)
 
         if organization_id:
-            query = query.filter(BillOfMaterials.organization_id == coerce_uuid(organization_id))
+            query = query.filter(
+                BillOfMaterials.organization_id == coerce_uuid(organization_id)
+            )
 
         if item_id:
             query = query.filter(BillOfMaterials.item_id == coerce_uuid(item_id))

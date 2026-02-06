@@ -3,6 +3,7 @@ Shift Swap Request Service.
 
 Handles shift swap requests and approval workflow.
 """
+
 from __future__ import annotations
 
 import logging
@@ -13,14 +14,14 @@ from uuid import UUID
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.models.notification import EntityType, NotificationChannel, NotificationType
+from app.models.people.hr.department import Department
 from app.models.people.scheduling import (
+    ScheduleStatus,
     ShiftSchedule,
     ShiftSwapRequest,
-    ScheduleStatus,
     SwapRequestStatus,
 )
-from app.models.people.hr.department import Department
-from app.models.notification import EntityType, NotificationType, NotificationChannel
 from app.services.common import PaginatedResult, PaginationParams
 from app.services.notification import NotificationService
 
@@ -206,13 +207,9 @@ class SwapService:
 
         # Verify schedules are from the same organization and are PUBLISHED
         if requester_schedule.status != ScheduleStatus.PUBLISHED:
-            raise SwapServiceError(
-                "Can only swap published schedules"
-            )
+            raise SwapServiceError("Can only swap published schedules")
         if target_schedule.status != ScheduleStatus.PUBLISHED:
-            raise SwapServiceError(
-                "Target schedule must be published"
-            )
+            raise SwapServiceError("Target schedule must be published")
 
         # Verify they are swapping for the same date (or can be different - depends on business rules)
         # For now, allow swapping different dates
@@ -221,10 +218,12 @@ class SwapService:
         existing = self.db.scalar(
             select(ShiftSwapRequest).where(
                 ShiftSwapRequest.organization_id == org_id,
-                ShiftSwapRequest.status.in_([
-                    SwapRequestStatus.PENDING,
-                    SwapRequestStatus.TARGET_ACCEPTED,
-                ]),
+                ShiftSwapRequest.status.in_(
+                    [
+                        SwapRequestStatus.PENDING,
+                        SwapRequestStatus.TARGET_ACCEPTED,
+                    ]
+                ),
                 or_(
                     ShiftSwapRequest.requester_schedule_id == requester_schedule_id,
                     ShiftSwapRequest.target_schedule_id == requester_schedule_id,
@@ -348,7 +347,9 @@ class SwapService:
                     action_url="/people/self/swap-requests",
                 )
             except Exception as e:
-                logger.warning("Failed to send swap accepted notification to requester: %s", e)
+                logger.warning(
+                    "Failed to send swap accepted notification to requester: %s", e
+                )
 
         # Notify department manager for approval
         self._notify_manager_for_approval(org_id, request)
@@ -377,8 +378,14 @@ class SwapService:
             logger.debug("Department head employee not found or has no person_id")
             return
 
-        requester_name = request.requester.full_name if request.requester else "An employee"
-        target_name = request.target_employee.full_name if request.target_employee else "another employee"
+        requester_name = (
+            request.requester.full_name if request.requester else "An employee"
+        )
+        target_name = (
+            request.target_employee.full_name
+            if request.target_employee
+            else "another employee"
+        )
 
         try:
             _notification_service.create(
@@ -394,7 +401,9 @@ class SwapService:
                 action_url="/people/scheduling/swaps",
             )
         except Exception as e:
-            logger.warning("Failed to send swap approval notification to manager: %s", e)
+            logger.warning(
+                "Failed to send swap approval notification to manager: %s", e
+            )
 
     def approve_swap_request(
         self,
@@ -459,7 +468,9 @@ class SwapService:
         status_text = "approved" if approved else "rejected"
         title = f"Swap Request {status_text.title()}"
         message = f"Your shift swap request has been {status_text}."
-        notif_type = NotificationType.APPROVED if approved else NotificationType.REJECTED
+        notif_type = (
+            NotificationType.APPROVED if approved else NotificationType.REJECTED
+        )
 
         # Notify both employees
         for emp_id in [request.requester_id, request.target_employee_id]:
@@ -539,9 +550,7 @@ class SwapService:
         request = self.get_swap_request(org_id, request_id)
 
         if request.requester_id != requester_id:
-            raise SwapServiceError(
-                "Only the requester can cancel this swap request"
-            )
+            raise SwapServiceError("Only the requester can cancel this swap request")
 
         if request.status not in [
             SwapRequestStatus.PENDING,
@@ -584,7 +593,11 @@ class SwapService:
             raise InvalidSwapTransitionError(request.status, "decline")
 
         request.status = SwapRequestStatus.REJECTED
-        request.review_notes = f"Declined by target employee: {reason}" if reason else "Declined by target employee"
+        request.review_notes = (
+            f"Declined by target employee: {reason}"
+            if reason
+            else "Declined by target employee"
+        )
 
         self.db.flush()
 
@@ -607,7 +620,11 @@ class SwapService:
         if not requester or not requester.person_id:
             return
 
-        target_name = request.target_employee.full_name if request.target_employee else "The target employee"
+        target_name = (
+            request.target_employee.full_name
+            if request.target_employee
+            else "The target employee"
+        )
 
         try:
             _notification_service.create(

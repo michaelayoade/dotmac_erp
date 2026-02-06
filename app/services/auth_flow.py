@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -11,25 +12,30 @@ from cryptography.fernet import Fernet, InvalidToken
 from fastapi import HTTPException, Request, Response, status
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.config import settings as app_settings
 from app.models.auth import (
     AuthProvider,
     MFAMethod,
     MFAMethodType,
-    Session as AuthSession,
     SessionStatus,
     UserCredential,
 )
-from app.services.common import coerce_uuid
-from app.services.response import ListResponseMixin
-from app.models.rbac import Permission, PersonRole, Role, RolePermission
+from app.models.auth import (
+    Session as AuthSession,
+)
 from app.models.domain_settings import DomainSetting, SettingDomain
 from app.models.person import Person
-from app.services.secrets import resolve_secret
+from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.schemas.auth_flow import LoginResponse, LogoutResponse, TokenResponse
+from app.models.finance.audit.audit_log import AuditAction
+from app.services.common import coerce_uuid
+from app.services.response import ListResponseMixin
+from app.services.secrets import resolve_secret
+
+logger = logging.getLogger(__name__)
 
 PASSWORD_CONTEXT = CryptContext(
     schemes=["pbkdf2_sha256", "bcrypt"],
@@ -115,7 +121,9 @@ def _jwt_secret(db: Session | None) -> str:
 
 
 # Whitelist of allowed JWT algorithms - never allow "none" or weak algorithms
-_ALLOWED_JWT_ALGORITHMS = frozenset({"HS256", "HS384", "HS512", "RS256", "RS384", "RS512"})
+_ALLOWED_JWT_ALGORITHMS = frozenset(
+    {"HS256", "HS384", "HS512", "RS256", "RS384", "RS512"}
+)
 
 
 def _jwt_algorithm(db: Session | None) -> str:
@@ -125,7 +133,9 @@ def _jwt_algorithm(db: Session | None) -> str:
     weak/deprecated algorithms are explicitly rejected to prevent signature
     bypass attacks.
     """
-    algorithm = _env_value("JWT_ALGORITHM") or _setting_value(db, "jwt_algorithm") or "HS256"
+    algorithm = (
+        _env_value("JWT_ALGORITHM") or _setting_value(db, "jwt_algorithm") or "HS256"
+    )
 
     # Normalize and validate
     algorithm = algorithm.upper().strip()
@@ -177,7 +187,9 @@ def _refresh_ttl_days(db: Session | None) -> int:
 
 
 def _totp_issuer(db: Session | None) -> str:
-    return _env_value("TOTP_ISSUER") or _setting_value(db, "totp_issuer") or "dotmac_erp"
+    return (
+        _env_value("TOTP_ISSUER") or _setting_value(db, "totp_issuer") or "dotmac_erp"
+    )
 
 
 def _refresh_cookie_name(db: Session | None) -> str:
@@ -253,7 +265,9 @@ def _mfa_key(db: Session | None) -> bytes:
     key = _env_value("TOTP_ENCRYPTION_KEY") or _setting_value(db, "totp_encryption_key")
     key = resolve_secret(key, db)
     if not key:
-        raise HTTPException(status_code=500, detail="TOTP encryption key not configured")
+        raise HTTPException(
+            status_code=500, detail="TOTP encryption key not configured"
+        )
     return key.encode()
 
 
@@ -261,7 +275,9 @@ def _fernet(db: Session | None) -> Fernet:
     try:
         return Fernet(_mfa_key(db))
     except ValueError as exc:
-        raise HTTPException(status_code=500, detail="Invalid TOTP encryption key") from exc
+        raise HTTPException(
+            status_code=500, detail="Invalid TOTP encryption key"
+        ) from exc
 
 
 def _hash_token(token: str) -> str:
@@ -325,7 +341,9 @@ def _issue_password_reset_token(db: Session | None, person_id: str, email: str) 
         "email": email,
         "typ": "password_reset",
         "iat": int(now.timestamp()),
-        "exp": int((now + timedelta(minutes=_password_reset_ttl_minutes(db))).timestamp()),
+        "exp": int(
+            (now + timedelta(minutes=_password_reset_ttl_minutes(db))).timestamp()
+        ),
     }
     return cast(str, jwt.encode(payload, _jwt_secret(db), algorithm=_jwt_algorithm(db)))
 
@@ -386,7 +404,7 @@ def _person_or_404(db: Session, person_id: str) -> Person:
     return person
 
 
-def _load_rbac_claims(db: Session, person_id: str):
+def _load_rbac_claims(db: Session, person_id: str) -> tuple[list[str], list[str]]:
     """Load RBAC claims for JWT token.
 
     Only includes module-access scopes in the token to keep it small enough
@@ -406,15 +424,24 @@ def _load_rbac_claims(db: Session, person_id: str):
     # Only include module-level access scopes to keep token size under 4KB
     # Full permissions are checked via 'admin' role or DB lookup
     module_access_scopes = {
-        "finance:access", "finance:dashboard",
-        "hr:access", "hr:dashboard",
-        "inventory:access", "inventory:dashboard",
-        "fleet:access", "fleet:dashboard",
-        "support:access", "support:dashboard",
-        "procurement:access", "procurement:dashboard",
-        "projects:access", "projects:dashboard",
-        "settings:access", "settings:dashboard",
-        "expense:access", "expense:dashboard",
+        "finance:access",
+        "finance:dashboard",
+        "hr:access",
+        "hr:dashboard",
+        "inventory:access",
+        "inventory:dashboard",
+        "fleet:access",
+        "fleet:dashboard",
+        "support:access",
+        "support:dashboard",
+        "procurement:access",
+        "procurement:dashboard",
+        "projects:access",
+        "projects:dashboard",
+        "settings:access",
+        "settings:dashboard",
+        "expense:access",
+        "expense:dashboard",
         "self:access",
         "fleet:access",
         "inv:material_requests:read",
@@ -477,18 +504,20 @@ REQUIRE_SPECIAL = True
 SPECIAL_CHARS = r"""!@#$%^&*()_+-=[]{}|;':",.<>/?`~"""
 
 # Common weak passwords to reject (basic list - can be extended)
-COMMON_PASSWORDS = frozenset([
-    "password123456",
-    "123456789012",
-    "qwerty123456",
-    "admin1234567",
-    "letmein12345",
-    "welcome12345",
-    "monkey123456",
-    "dragon123456",
-    "master123456",
-    "login1234567",
-])
+COMMON_PASSWORDS = frozenset(
+    [
+        "password123456",
+        "123456789012",
+        "qwerty123456",
+        "admin1234567",
+        "letmein12345",
+        "welcome12345",
+        "monkey123456",
+        "dragon123456",
+        "master123456",
+        "login1234567",
+    ]
+)
 
 
 def validate_password_strength(password: str) -> tuple[bool, str | None]:
@@ -529,7 +558,10 @@ def validate_password_strength(password: str) -> tuple[bool, str | None]:
         return False, "Password must contain at least one digit"
 
     if REQUIRE_SPECIAL and not any(c in SPECIAL_CHARS for c in password):
-        return False, f"Password must contain at least one special character ({SPECIAL_CHARS[:10]}...)"
+        return (
+            False,
+            f"Password must contain at least one special character ({SPECIAL_CHARS[:10]}...)",
+        )
 
     # Check against common passwords
     if password.lower() in COMMON_PASSWORDS:
@@ -598,6 +630,36 @@ def revoke_sessions_for_person(
     return len(sessions)
 
 
+def _audit_auth_event(
+    db: Session,
+    credential: UserCredential,
+    table_name: str,
+    action: AuditAction,
+    *,
+    old_values: dict[str, Any] | None = None,
+    new_values: dict[str, Any] | None = None,
+    reason: str | None = None,
+) -> None:
+    """Fire an audit event for auth operations (fire-and-forget)."""
+    from app.services.audit_dispatcher import fire_audit_event
+
+    person = db.get(Person, credential.person_id)
+    org_id = person.organization_id if person else credential.person_id
+
+    fire_audit_event(
+        db=db,
+        organization_id=org_id,
+        table_schema="auth",
+        table_name=table_name,
+        record_id=str(credential.person_id),
+        action=action,
+        old_values=old_values,
+        new_values=new_values,
+        user_id=credential.person_id,
+        reason=reason,
+    )
+
+
 class AuthFlow(ListResponseMixin):
     @staticmethod
     def _response_with_refresh_cookie(
@@ -649,8 +711,12 @@ class AuthFlow(ListResponseMixin):
 
     @staticmethod
     def login_response(
-        db: Session, username: str, password: str, request: Request, provider: str | None
-    ):
+        db: Session,
+        username: str,
+        password: str,
+        request: Request,
+        provider: str | None,
+    ) -> Response | dict[str, Any]:
         result = AuthFlow.login(db, username, password, request, provider)
         if result.get("refresh_token"):
             return AuthFlow._response_with_refresh_cookie(
@@ -660,8 +726,12 @@ class AuthFlow(ListResponseMixin):
 
     @staticmethod
     def login(
-        db: Session, username: str, password: str, request: Request, provider: str | None
-    ):
+        db: Session,
+        username: str,
+        password: str,
+        request: Request,
+        provider: str | None,
+    ) -> dict[str, Any]:
         if isinstance(provider, AuthProvider):
             provider_value = provider.value
         else:
@@ -669,7 +739,9 @@ class AuthFlow(ListResponseMixin):
         try:
             resolved_provider = AuthProvider(provider_value)
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail="Invalid auth provider") from exc
+            raise HTTPException(
+                status_code=400, detail="Invalid auth provider"
+            ) from exc
         credential = (
             db.query(UserCredential)
             .filter(UserCredential.username == username)
@@ -689,6 +761,14 @@ class AuthFlow(ListResponseMixin):
             if credential.failed_login_attempts >= 5:
                 credential.locked_until = now + timedelta(minutes=15)
             db.commit()
+            # Audit: failed login
+            _audit_auth_event(
+                db,
+                credential,
+                "failed_login",
+                AuditAction.INSERT,
+                new_values={"username": username, "reason": "invalid_password"},
+            )
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         if credential.must_change_password:
@@ -704,6 +784,14 @@ class AuthFlow(ListResponseMixin):
         credential.locked_until = None
         credential.last_login_at = now
         db.commit()
+        # Audit: successful login
+        _audit_auth_event(
+            db,
+            credential,
+            "session",
+            AuditAction.INSERT,
+            new_values={"username": username, "login_method": "password"},
+        )
 
         if _primary_totp_method(db, str(credential.person_id)):
             return {
@@ -714,7 +802,7 @@ class AuthFlow(ListResponseMixin):
         return AuthFlow._issue_tokens(db, str(credential.person_id), request)
 
     @staticmethod
-    def mfa_setup(db: Session, person_id: str, label: str | None):
+    def mfa_setup(db: Session, person_id: str, label: str | None) -> dict[str, Any]:
         person = _person_or_404(db, person_id)
         username = person.email
         credential = (
@@ -741,9 +829,7 @@ class AuthFlow(ListResponseMixin):
         db.refresh(method)
 
         totp = pyotp.TOTP(secret)
-        otpauth_uri = totp.provisioning_uri(
-            name=username, issuer_name=_totp_issuer(db)
-        )
+        otpauth_uri = totp.provisioning_uri(name=username, issuer_name=_totp_issuer(db))
         return {"method_id": method.id, "secret": secret, "otpauth_uri": otpauth_uri}
 
     @staticmethod
@@ -752,7 +838,7 @@ class AuthFlow(ListResponseMixin):
         method_id: str,
         code: str,
         expected_person_id: str | None = None,
-    ):
+    ) -> MFAMethod:
         method = db.get(MFAMethod, coerce_uuid(method_id))
         if not method:
             raise HTTPException(status_code=404, detail="MFA method not found")
@@ -787,10 +873,28 @@ class AuthFlow(ListResponseMixin):
                 detail="Primary MFA method already exists for this user",
             ) from exc
         db.refresh(method)
+        # Audit: MFA enabled
+        from app.services.audit_dispatcher import fire_audit_event
+
+        person = db.get(Person, method.person_id)
+        if person:
+            fire_audit_event(
+                db=db,
+                organization_id=person.organization_id,
+                table_schema="auth",
+                table_name="mfa_config",
+                record_id=str(method.id),
+                action=AuditAction.UPDATE,
+                old_values={"enabled": False},
+                new_values={"enabled": True, "method_type": "totp"},
+                user_id=method.person_id,
+            )
         return method
 
     @staticmethod
-    def mfa_verify(db: Session, mfa_token: str, code: str, request: Request):
+    def mfa_verify(
+        db: Session, mfa_token: str, code: str, request: Request
+    ) -> dict[str, Any]:
         payload = _decode_jwt(db, mfa_token, "mfa")
         person_id = payload.get("sub")
         if not person_id:
@@ -810,14 +914,16 @@ class AuthFlow(ListResponseMixin):
         return AuthFlow._issue_tokens(db, person_id, request)
 
     @staticmethod
-    def mfa_verify_response(db: Session, mfa_token: str, code: str, request: Request):
+    def mfa_verify_response(
+        db: Session, mfa_token: str, code: str, request: Request
+    ) -> Response:
         result = AuthFlow.mfa_verify(db, mfa_token, code, request)
         return AuthFlow._response_with_refresh_cookie(
             db, result, TokenResponse, status.HTTP_200_OK
         )
 
     @staticmethod
-    def refresh(db: Session, refresh_token: str, request: Request):
+    def refresh(db: Session, refresh_token: str, request: Request) -> dict[str, str]:
         token_hash = _hash_token(refresh_token)
         session = (
             db.query(AuthSession)
@@ -866,7 +972,9 @@ class AuthFlow(ListResponseMixin):
         return {"access_token": access_token, "refresh_token": new_refresh}
 
     @staticmethod
-    def refresh_response(db: Session, refresh_token: str | None, request: Request):
+    def refresh_response(
+        db: Session, refresh_token: str | None, request: Request
+    ) -> Response:
         resolved = AuthFlow.resolve_refresh_token(request, refresh_token, db)
         if not resolved:
             raise HTTPException(status_code=401, detail="Missing refresh token")
@@ -876,7 +984,7 @@ class AuthFlow(ListResponseMixin):
         )
 
     @staticmethod
-    def logout(db: Session, refresh_token: str):
+    def logout(db: Session, refresh_token: str) -> dict[str, Any]:
         from app.services.auth_dependencies import invalidate_session_cache
 
         token_hash = _hash_token(refresh_token)
@@ -893,10 +1001,28 @@ class AuthFlow(ListResponseMixin):
         db.commit()
         # Invalidate session cache
         invalidate_session_cache(session.id)
+        # Audit: logout
+        from app.services.audit_dispatcher import fire_audit_event
+
+        person = db.get(Person, session.person_id)
+        if person:
+            fire_audit_event(
+                db=db,
+                organization_id=person.organization_id,
+                table_schema="auth",
+                table_name="session",
+                record_id=str(session.id),
+                action=AuditAction.DELETE,
+                old_values={"status": "active"},
+                new_values={"status": "revoked"},
+                user_id=session.person_id,
+            )
         return {"revoked_at": session.revoked_at}
 
     @staticmethod
-    def logout_response(db: Session, refresh_token: str | None, request: Request):
+    def logout_response(
+        db: Session, refresh_token: str | None, request: Request
+    ) -> Response:
         resolved = AuthFlow.resolve_refresh_token(request, refresh_token, db)
         if not resolved:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -906,12 +1032,14 @@ class AuthFlow(ListResponseMixin):
         )
 
     @staticmethod
-    def resolve_refresh_token(request: Request, refresh_token: str | None, db: Session | None = None):
+    def resolve_refresh_token(
+        request: Request, refresh_token: str | None, db: Session | None = None
+    ) -> str | None:
         settings = AuthFlow.refresh_cookie_settings(db)
         return refresh_token or request.cookies.get(settings["key"])
 
     @staticmethod
-    def refresh_cookie_settings(db: Session | None = None):
+    def refresh_cookie_settings(db: Session | None = None) -> dict[str, Any]:
         return {
             "key": _refresh_cookie_name(db),
             "httponly": True,
@@ -923,7 +1051,7 @@ class AuthFlow(ListResponseMixin):
         }
 
     @staticmethod
-    def access_cookie_settings(db: Session | None = None):
+    def access_cookie_settings(db: Session | None = None) -> dict[str, Any]:
         """Get access token cookie settings.
 
         Used for setting access_token cookie with SSO-aware domain.
@@ -939,7 +1067,7 @@ class AuthFlow(ListResponseMixin):
         }
 
     @staticmethod
-    def _issue_tokens(db: Session, person_id: str, request: Request):
+    def _issue_tokens(db: Session, person_id: str, request: Request) -> dict[str, str]:
         person_uuid = coerce_uuid(person_id)
         refresh_token = secrets.token_urlsafe(48)
         now = _now()
@@ -958,7 +1086,9 @@ class AuthFlow(ListResponseMixin):
         db.commit()
         db.refresh(session)
         roles, permissions = _load_rbac_claims(db, str(person_uuid))
-        access_token = _issue_access_token(db, str(person_uuid), str(session.id), roles, permissions)
+        access_token = _issue_access_token(
+            db, str(person_uuid), str(session.id), roles, permissions
+        )
         return {"access_token": access_token, "refresh_token": refresh_token}
 
 
@@ -1030,5 +1160,15 @@ def reset_password(db: Session, token: str, new_password: str) -> datetime:
     credential.locked_until = None
     revoke_sessions_for_person(db, str(person.id))
     db.commit()
+
+    # Audit: password change
+    _audit_auth_event(
+        db,
+        credential,
+        "credential",
+        AuditAction.UPDATE,
+        new_values={"changed_fields": ["password_hash"]},
+        reason="password_reset",
+    )
 
     return now

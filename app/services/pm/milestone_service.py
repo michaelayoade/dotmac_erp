@@ -3,8 +3,10 @@ Milestone Service - PM Module.
 
 Business logic for milestone management.
 """
+
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date, timedelta
 from typing import TYPE_CHECKING, Dict, List, Optional
@@ -18,9 +20,10 @@ from app.services.common import (
     NotFoundError,
     PaginatedResult,
     PaginationParams,
-    ValidationError,
     paginate,
 )
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.auth import Principal

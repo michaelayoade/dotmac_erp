@@ -3,6 +3,7 @@ Support/Ticket Sync Service - ERPNext to DotMac ERP.
 
 Syncs ERPNext Issue (or HD Ticket) DocType to DotMac support.ticket.
 """
+
 import logging
 import uuid
 from datetime import datetime
@@ -11,9 +12,9 @@ from typing import Any, Optional
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.models.support.ticket import Ticket, TicketStatus, TicketPriority
-from app.services.erpnext.mappings.support import TicketMapping
+from app.models.support.ticket import Ticket, TicketPriority, TicketStatus
 from app.services.erpnext.client import ERPNextError
+from app.services.erpnext.mappings.support import TicketMapping
 
 from .base import BaseSyncService
 
@@ -92,9 +93,7 @@ class TicketSyncService(BaseSyncService[Ticket]):
         except ERPNextError as e:
             # If HD Ticket not found, fall back to Issue
             if e.status_code == 404 and self.source_doctype == "HD Ticket":
-                logger.warning(
-                    "HD Ticket DocType not found, falling back to Issue"
-                )
+                logger.warning("HD Ticket DocType not found, falling back to Issue")
                 self._switch_to_issue_doctype()
                 # Retry with Issue DocType
                 if since:

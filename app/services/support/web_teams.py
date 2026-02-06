@@ -12,8 +12,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.person import Person
 from app.models.people.hr import Employee, EmployeeStatus
+from app.models.person import Person
 from app.services.common import coerce_uuid
 from app.services.support.team import team_service
 from app.templates import templates
@@ -30,6 +30,7 @@ class TeamMemberSummary(TypedDict):
     assignment_weight: int
     workload_percent: int
     weight_percent: int
+
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
@@ -57,26 +58,26 @@ class TeamWebService:
         formatted_teams = []
         for team in teams:
             stats = team_service.get_team_stats(db, team.team_id)
-            formatted_teams.append({
-                "team_id": str(team.team_id),
-                "team_code": team.team_code,
-                "team_name": team.team_name,
-                "description": team.description,
-                "is_active": team.is_active,
-                "auto_assign": team.auto_assign,
-                "member_count": stats.get("member_count", 0),
-                "available_members": stats.get("available_members", 0),
-                "open_tickets": stats.get("open_tickets", 0),
-            })
+            formatted_teams.append(
+                {
+                    "team_id": str(team.team_id),
+                    "team_code": team.team_code,
+                    "team_name": team.team_name,
+                    "description": team.description,
+                    "is_active": team.is_active,
+                    "auto_assign": team.auto_assign,
+                    "member_count": stats.get("member_count", 0),
+                    "available_members": stats.get("available_members", 0),
+                    "open_tickets": stats.get("open_tickets", 0),
+                }
+            )
 
         context = {
             **base_context(request, auth, "Support Teams", "support", db=db),
             "teams": formatted_teams,
         }
 
-        return templates.TemplateResponse(
-            request, "support/teams.html", context
-        )
+        return templates.TemplateResponse(request, "support/teams.html", context)
 
     def team_form_response(
         self,
@@ -110,9 +111,7 @@ class TeamWebService:
             "error": error,
         }
 
-        return templates.TemplateResponse(
-            request, "support/team_form.html", context
-        )
+        return templates.TemplateResponse(request, "support/team_form.html", context)
 
     def create_team_response(
         self,
@@ -131,7 +130,8 @@ class TeamWebService:
 
         try:
             team, error = team_service.create_team(
-                db, org_id,
+                db,
+                org_id,
                 team_code=team_code,
                 team_name=team_name,
                 description=description,
@@ -140,9 +140,7 @@ class TeamWebService:
             )
 
             if error:
-                return self.team_form_response(
-                    request, auth, db, error=error
-                )
+                return self.team_form_response(request, auth, db, error=error)
 
             db.commit()
 
@@ -159,9 +157,7 @@ class TeamWebService:
         except Exception as e:
             db.rollback()
             logger.exception("Failed to create team")
-            return self.team_form_response(
-                request, auth, db, error=str(e)
-            )
+            return self.team_form_response(request, auth, db, error=str(e))
 
     def update_team_response(
         self,
@@ -181,7 +177,8 @@ class TeamWebService:
 
         try:
             team = team_service.update_team(
-                db, tid,
+                db,
+                tid,
                 team_name=team_name,
                 description=description,
                 lead_id=coerce_uuid(lead_id) if lead_id else None,
@@ -250,30 +247,38 @@ class TeamWebService:
                 total_weight += member.assignment_weight
                 if member.assigned_count > max_assigned:
                     max_assigned = member.assigned_count
-                members.append({
-                    "member_id": str(member.member_id),
-                    "employee_id": str(member.employee_id),
-                    "employee_code": emp.employee_code,
-                    "full_name": emp.full_name,
-                    "role": member.role or "Member",
-                    "is_available": member.is_available,
-                    "assigned_count": member.assigned_count,
-                    "assignment_weight": member.assignment_weight,
-                    "workload_percent": 0,
-                    "weight_percent": 0,
-                })
+                members.append(
+                    {
+                        "member_id": str(member.member_id),
+                        "employee_id": str(member.employee_id),
+                        "employee_code": emp.employee_code,
+                        "full_name": emp.full_name,
+                        "role": member.role or "Member",
+                        "is_available": member.is_available,
+                        "assigned_count": member.assigned_count,
+                        "assignment_weight": member.assignment_weight,
+                        "workload_percent": 0,
+                        "weight_percent": 0,
+                    }
+                )
 
         # Calculate workload percentages for visualization
         for member_summary in members:
             if max_assigned > 0:
-                member_summary["workload_percent"] = int((member_summary["assigned_count"] / max_assigned) * 100)
+                member_summary["workload_percent"] = int(
+                    (member_summary["assigned_count"] / max_assigned) * 100
+                )
             else:
                 member_summary["workload_percent"] = 0
 
             if total_weight > 0:
-                member_summary["weight_percent"] = int((member_summary["assignment_weight"] / total_weight) * 100)
+                member_summary["weight_percent"] = int(
+                    (member_summary["assignment_weight"] / total_weight) * 100
+                )
             else:
-                member_summary["weight_percent"] = int(100 / len(members)) if members else 0
+                member_summary["weight_percent"] = (
+                    int(100 / len(members)) if members else 0
+                )
 
         # Get employees not in team for adding
         available_employees = self._get_employees_not_in_team(db, org_id, tid)
@@ -302,9 +307,7 @@ class TeamWebService:
             "available_employees": available_employees,
         }
 
-        return templates.TemplateResponse(
-            request, "support/team_detail.html", context
-        )
+        return templates.TemplateResponse(request, "support/team_detail.html", context)
 
     def add_team_member_response(
         self,
@@ -320,16 +323,14 @@ class TeamWebService:
         eid = coerce_uuid(employee_id)
 
         try:
-            member, error = team_service.add_member(
-                db, tid, eid, role=role
-            )
+            member, error = team_service.add_member(db, tid, eid, role=role)
 
             if error:
                 logger.warning(f"Failed to add member: {error}")
 
             db.commit()
 
-        except Exception as e:
+        except Exception:
             db.rollback()
             logger.exception("Failed to add team member")
 
@@ -352,13 +353,14 @@ class TeamWebService:
 
         # Get member to find employee_id
         from app.models.support.team import SupportTeamMember
+
         member = db.get(SupportTeamMember, mid)
 
         if member:
             try:
                 team_service.remove_member(db, tid, member.employee_id)
                 db.commit()
-            except Exception as e:
+            except Exception:
                 db.rollback()
                 logger.exception("Failed to remove team member")
 
@@ -388,7 +390,7 @@ class TeamWebService:
                 logger.info(
                     f"Toggled availability for member {member_id}: {member.is_available}"
                 )
-            except Exception as e:
+            except Exception:
                 db.rollback()
                 logger.exception("Failed to toggle member availability")
 
@@ -418,10 +420,8 @@ class TeamWebService:
                 weight = max(1, min(10, weight))
                 member.assignment_weight = weight
                 db.commit()
-                logger.info(
-                    f"Updated weight for member {member_id}: {weight}"
-                )
-            except Exception as e:
+                logger.info(f"Updated weight for member {member_id}: {weight}")
+            except Exception:
                 db.rollback()
                 logger.exception("Failed to update member weight")
 
@@ -467,9 +467,12 @@ class TeamWebService:
         # Get current member employee IDs
         member_ids = set(
             db.execute(
-                select(SupportTeamMember.employee_id)
-                .where(SupportTeamMember.team_id == team_id)
-            ).scalars().all()
+                select(SupportTeamMember.employee_id).where(
+                    SupportTeamMember.team_id == team_id
+                )
+            )
+            .scalars()
+            .all()
         )
 
         results = db.execute(

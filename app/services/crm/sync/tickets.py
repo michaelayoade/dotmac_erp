@@ -104,8 +104,10 @@ class TicketSyncService(BaseCRMSyncService[Ticket]):
         resolution_date = self._parse_date(record.get("resolved_at"))
 
         # Get ticket number - prefer CRM's number, fallback to ID
-        ticket_number = record.get("ticket_number") or record.get("number") or str(
-            record.get("id", "")
+        ticket_number = (
+            record.get("ticket_number")
+            or record.get("number")
+            or str(record.get("id", ""))
         )
 
         return {

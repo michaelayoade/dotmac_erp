@@ -6,20 +6,19 @@ Usage:
 """
 
 from .base import (
-    parse_uuid,
-    parse_date,
-    parse_int,
-    parse_decimal,
-    parse_appraisal_status,
-    parse_kpi_status,
-    parse_cycle_status,
-    parse_bool,
     FEEDBACK_TYPES,
     KPI_MEASUREMENT_TYPES,
+    parse_appraisal_status,
+    parse_bool,
+    parse_cycle_status,
+    parse_date,
+    parse_decimal,
+    parse_int,
+    parse_kpi_status,
+    parse_uuid,
 )
-
-from .perf_web import PerfWebService
 from .cycle_web import CycleWebService
+from .perf_web import PerfWebService
 
 
 class PerformanceWebService(

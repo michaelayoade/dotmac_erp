@@ -6,15 +6,16 @@ Manages creation, approval workflow, posting, and payment tracking.
 
 from __future__ import annotations
 
+import logging
+import uuid as uuid_lib
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
-import uuid as uuid_lib
 
 from fastapi import HTTPException
-from sqlalchemy import and_, func
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.goods_receipt import GoodsReceipt
@@ -34,12 +35,19 @@ from app.models.finance.core_org.cost_center import CostCenter
 from app.models.finance.core_org.project import Project
 from app.models.finance.core_org.reporting_segment import ReportingSegment
 from app.models.finance.gl.account import Account
-from app.models.inventory.item import Item, CostingMethod
 from app.models.finance.tax.tax_code import TaxCode
+from app.models.inventory.item import CostingMethod, Item
+from app.models.finance.audit.audit_log import AuditAction
+from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import coerce_uuid
 from app.services.finance.platform.sequence import SequenceService
-from app.services.finance.tax.tax_calculation import TaxCalculationService, LineCalculationResult
+from app.services.finance.tax.tax_calculation import (
+    LineCalculationResult,
+    TaxCalculationService,
+)
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -197,7 +205,9 @@ class SupplierInvoiceService(ListResponseMixin):
                 db, org_id, ReportingSegment, line.segment_id, "Reporting segment"
             )
             SupplierInvoiceService._require_po_line_org(db, org_id, line.po_line_id)
-            SupplierInvoiceService._require_gr_line_org(db, org_id, line.goods_receipt_line_id)
+            SupplierInvoiceService._require_gr_line_org(
+                db, org_id, line.goods_receipt_line_id
+            )
             for tax_code_id in line.tax_code_ids:
                 SupplierInvoiceService._require_org_match(
                     db, org_id, TaxCode, tax_code_id, "Tax code"
@@ -295,10 +305,17 @@ class SupplierInvoiceService(ListResponseMixin):
                 line_tax_total = -abs(line_tax_total)
 
             # Get primary tax code ID for legacy compatibility (first tax code)
-            effective_tax_codes = list(line_input.tax_code_ids) if line_input.tax_code_ids else []
-            if line_input.tax_code_id and line_input.tax_code_id not in effective_tax_codes:
+            effective_tax_codes = (
+                list(line_input.tax_code_ids) if line_input.tax_code_ids else []
+            )
+            if (
+                line_input.tax_code_id
+                and line_input.tax_code_id not in effective_tax_codes
+            ):
                 effective_tax_codes.append(line_input.tax_code_id)
-            primary_tax_code_id = effective_tax_codes[0] if effective_tax_codes else None
+            primary_tax_code_id = (
+                effective_tax_codes[0] if effective_tax_codes else None
+            )
 
             invoice_line = SupplierInvoiceLine(
                 invoice_id=invoice.invoice_id,
@@ -349,6 +366,22 @@ class SupplierInvoiceService(ListResponseMixin):
 
         db.commit()
         db.refresh(invoice)
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="ap",
+            table_name="supplier_invoice",
+            record_id=str(invoice.invoice_id),
+            action=AuditAction.INSERT,
+            new_values={
+                "invoice_number": invoice.invoice_number,
+                "supplier_id": str(supplier_id),
+                "total_amount": str(invoice.total_amount),
+                "currency_code": invoice.currency_code,
+            },
+            user_id=user_id,
+        )
 
         return invoice
 
@@ -484,7 +517,9 @@ class SupplierInvoiceService(ListResponseMixin):
                 db, org_id, ReportingSegment, line.segment_id, "Reporting segment"
             )
             SupplierInvoiceService._require_po_line_org(db, org_id, line.po_line_id)
-            SupplierInvoiceService._require_gr_line_org(db, org_id, line.goods_receipt_line_id)
+            SupplierInvoiceService._require_gr_line_org(
+                db, org_id, line.goods_receipt_line_id
+            )
             for tax_code_id in line.tax_code_ids:
                 SupplierInvoiceService._require_org_match(
                     db, org_id, TaxCode, tax_code_id, "Tax code"
@@ -504,10 +539,17 @@ class SupplierInvoiceService(ListResponseMixin):
             if input.invoice_type == SupplierInvoiceType.CREDIT_NOTE and tax_result:
                 line_tax_total = -abs(line_tax_total)
 
-            effective_tax_codes = list(line_input.tax_code_ids) if line_input.tax_code_ids else []
-            if line_input.tax_code_id and line_input.tax_code_id not in effective_tax_codes:
+            effective_tax_codes = (
+                list(line_input.tax_code_ids) if line_input.tax_code_ids else []
+            )
+            if (
+                line_input.tax_code_id
+                and line_input.tax_code_id not in effective_tax_codes
+            ):
                 effective_tax_codes.append(line_input.tax_code_id)
-            primary_tax_code_id = effective_tax_codes[0] if effective_tax_codes else None
+            primary_tax_code_id = (
+                effective_tax_codes[0] if effective_tax_codes else None
+            )
 
             invoice_line = SupplierInvoiceLine(
                 invoice_id=inv_id,
@@ -602,15 +644,34 @@ class SupplierInvoiceService(ListResponseMixin):
         invoice.submitted_at = datetime.now(timezone.utc)
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=db, organization_id=org_id, entity_type="BILL",
-                entity_id=inv_id, event="ON_STATUS_CHANGE",
+                db=db,
+                organization_id=org_id,
+                entity_type="BILL",
+                entity_id=inv_id,
+                event="ON_STATUS_CHANGE",
                 old_values={"status": "DRAFT"},
-                new_values={"status": "SUBMITTED"}, user_id=user_id,
+                new_values={"status": "SUBMITTED"},
+                user_id=user_id,
             )
         except Exception:
             pass
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="ap",
+            table_name="supplier_invoice",
+            record_id=str(inv_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": "DRAFT"},
+            new_values={"status": "SUBMITTED"},
+            user_id=user_id,
+        )
 
         db.commit()
         db.refresh(invoice)
@@ -669,15 +730,34 @@ class SupplierInvoiceService(ListResponseMixin):
         invoice.approved_at = datetime.now(timezone.utc)
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=db, organization_id=org_id, entity_type="BILL",
-                entity_id=inv_id, event="ON_APPROVAL",
+                db=db,
+                organization_id=org_id,
+                entity_type="BILL",
+                entity_id=inv_id,
+                event="ON_APPROVAL",
                 old_values={"status": "SUBMITTED"},
-                new_values={"status": "APPROVED"}, user_id=user_id,
+                new_values={"status": "APPROVED"},
+                user_id=user_id,
             )
         except Exception:
             pass
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="ap",
+            table_name="supplier_invoice",
+            record_id=str(inv_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": "SUBMITTED"},
+            new_values={"status": "APPROVED"},
+            user_id=user_id,
+        )
 
         db.commit()
         db.refresh(invoice)
@@ -749,15 +829,34 @@ class SupplierInvoiceService(ListResponseMixin):
         SupplierInvoiceService._update_item_costs_from_invoice(db, org_id, invoice)
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=db, organization_id=org_id, entity_type="BILL",
-                entity_id=inv_id, event="ON_STATUS_CHANGE",
+                db=db,
+                organization_id=org_id,
+                entity_type="BILL",
+                entity_id=inv_id,
+                event="ON_STATUS_CHANGE",
                 old_values={"status": "APPROVED"},
-                new_values={"status": "POSTED"}, user_id=user_id,
+                new_values={"status": "POSTED"},
+                user_id=user_id,
             )
         except Exception:
             pass
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="ap",
+            table_name="supplier_invoice",
+            record_id=str(inv_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": "APPROVED"},
+            new_values={"status": "POSTED"},
+            user_id=user_id,
+        )
 
         db.commit()
         db.refresh(invoice)
@@ -810,7 +909,21 @@ class SupplierInvoiceService(ListResponseMixin):
                 detail=f"Cannot void invoice with status '{invoice.status.value}'",
             )
 
+        old_status = invoice.status.value
         invoice.status = SupplierInvoiceStatus.VOID
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="ap",
+            table_name="supplier_invoice",
+            record_id=str(inv_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": old_status},
+            new_values={"status": "VOID"},
+            user_id=coerce_uuid(voided_by_user_id),
+            reason=reason,
+        )
 
         db.commit()
         db.refresh(invoice)
@@ -884,9 +997,7 @@ class SupplierInvoiceService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Invoice not found")
 
         if invoice.status != SupplierInvoiceStatus.ON_HOLD:
-            raise HTTPException(
-                status_code=400, detail="Invoice is not on hold"
-            )
+            raise HTTPException(status_code=400, detail="Invoice is not on hold")
 
         # Return to APPROVED if it was posted-eligible, else SUBMITTED
         if invoice.approved_by_user_id:
@@ -1059,10 +1170,12 @@ class SupplierInvoiceService(ListResponseMixin):
             query = query.filter(
                 and_(
                     SupplierInvoice.due_date < date.today(),
-                    SupplierInvoice.status.in_([
-                        SupplierInvoiceStatus.POSTED,
-                        SupplierInvoiceStatus.PARTIALLY_PAID,
-                    ]),
+                    SupplierInvoice.status.in_(
+                        [
+                            SupplierInvoiceStatus.POSTED,
+                            SupplierInvoiceStatus.PARTIALLY_PAID,
+                        ]
+                    ),
                 )
             )
 
@@ -1123,15 +1236,22 @@ class SupplierInvoiceService(ListResponseMixin):
             # For weighted average items, recalculate average cost
             if item.costing_method == CostingMethod.WEIGHTED_AVERAGE:
                 # Get current inventory quantity
-                from app.services.inventory.transaction import InventoryTransactionService
+                from app.services.inventory.transaction import (
+                    InventoryTransactionService,
+                )
 
                 # Sum quantity across all warehouses
                 total_qty = Decimal("0")
                 from app.models.inventory.warehouse import Warehouse
-                warehouses = db.query(Warehouse).filter(
-                    Warehouse.organization_id == organization_id,
-                    Warehouse.is_active == True,
-                ).all()
+
+                warehouses = (
+                    db.query(Warehouse)
+                    .filter(
+                        Warehouse.organization_id == organization_id,
+                        Warehouse.is_active == True,
+                    )
+                    .all()
+                )
 
                 for warehouse in warehouses:
                     qty = InventoryTransactionService.get_current_balance(

@@ -19,11 +19,18 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
 from app.models.finance.ap.payment_batch import APBatchStatus
 from app.models.finance.ap.supplier import Supplier
-from app.models.finance.ap.supplier_invoice import SupplierInvoice, SupplierInvoiceStatus
-from app.models.finance.ap.supplier_payment import SupplierPayment, APPaymentMethod, APPaymentStatus
-from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
+from app.models.finance.ap.supplier_invoice import (
+    SupplierInvoice,
+    SupplierInvoiceStatus,
+)
+from app.models.finance.ap.supplier_payment import (
+    APPaymentMethod,
+    APPaymentStatus,
+    SupplierPayment,
+)
 from app.models.finance.banking.bank_account import BankAccountStatus
 from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
@@ -32,30 +39,32 @@ from app.services.finance.ap.ap_aging import ap_aging_service
 from app.services.finance.ap.payment_batch import payment_batch_service
 from app.services.finance.ap.supplier import supplier_service
 from app.services.finance.ap.supplier_payment import (
-    supplier_payment_service,
-    SupplierPaymentInput,
     PaymentAllocationInput,
+    SupplierPaymentInput,
+    supplier_payment_service,
 )
-from app.services.finance.banking.bank_account import bank_account_service
-from app.services.finance.common.attachment import attachment_service, AttachmentInput
-from app.services.finance.platform.currency_context import get_currency_context
-from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
 from app.services.finance.ap.web.base import (
+    allocation_view,
+    format_currency,
+    format_date,
+    format_file_size,
+    get_accounts,
     logger,
     parse_date,
     parse_payment_status,
-    format_date,
-    format_currency,
-    format_file_size,
-    supplier_display_name,
-    supplier_option_view,
-    supplier_form_view,
-    payment_status_label,
     payment_detail_view,
-    allocation_view,
-    get_accounts,
+    payment_status_label,
+    supplier_display_name,
+    supplier_form_view,
+    supplier_option_view,
 )
+from app.services.finance.banking.bank_account import bank_account_service
+from app.services.finance.common.attachment import AttachmentInput, attachment_service
+from app.services.finance.platform.currency_context import get_currency_context
+from app.templates import templates
+from app.web.deps import WebAuthContext, base_context
+
+logger = logging.getLogger(__name__)
 
 
 class PaymentWebService:
@@ -144,7 +153,11 @@ class PaymentWebService:
         """Get context for payment listing page."""
         logger.debug(
             "list_payments_context: org=%s search=%r supplier_id=%s status=%s page=%d",
-            organization_id, search, supplier_id, status, page
+            organization_id,
+            search,
+            supplier_id,
+            status,
+            page,
         )
         org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
@@ -160,7 +173,9 @@ class PaymentWebService:
         )
 
         if supplier_id:
-            query = query.filter(SupplierPayment.supplier_id == coerce_uuid(supplier_id))
+            query = query.filter(
+                SupplierPayment.supplier_id == coerce_uuid(supplier_id)
+            )
         if status_value:
             query = query.filter(SupplierPayment.status == status_value)
         if from_date:
@@ -176,7 +191,9 @@ class PaymentWebService:
                 )
             )
 
-        total_count = query.with_entities(func.count(SupplierPayment.payment_id)).scalar() or 0
+        total_count = (
+            query.with_entities(func.count(SupplierPayment.payment_id)).scalar() or 0
+        )
         payments = (
             query.order_by(SupplierPayment.payment_date.desc())
             .limit(limit)
@@ -236,8 +253,7 @@ class PaymentWebService:
     ) -> dict:
         """Get context for payment create/edit form."""
         logger.debug(
-            "payment_form_context: org=%s invoice_id=%s",
-            organization_id, invoice_id
+            "payment_form_context: org=%s invoice_id=%s", organization_id, invoice_id
         )
         from app.models.finance.tax.tax_code import TaxCode, TaxType
 
@@ -311,7 +327,8 @@ class PaymentWebService:
                 "id": str(code.tax_code_id),
                 "code": code.tax_code,
                 "name": code.tax_name,
-                "rate": float(code.tax_rate) * 100,  # Convert decimal to percentage for display
+                "rate": float(code.tax_rate)
+                * 100,  # Convert decimal to percentage for display
             }
             for code in wht_codes
         ]
@@ -346,8 +363,7 @@ class PaymentWebService:
     ) -> dict:
         """Get context for payment detail page."""
         logger.debug(
-            "payment_detail_context: org=%s payment_id=%s",
-            organization_id, payment_id
+            "payment_detail_context: org=%s payment_id=%s", organization_id, payment_id
         )
         org_id = coerce_uuid(organization_id)
         payment = None
@@ -412,7 +428,9 @@ class PaymentWebService:
             for att in attachments
         ]
 
-        logger.debug("payment_detail_context: found %d allocations", len(allocations_view))
+        logger.debug(
+            "payment_detail_context: found %d allocations", len(allocations_view)
+        )
 
         return {
             "payment": payment_detail_view(payment, supplier),
@@ -429,8 +447,7 @@ class PaymentWebService:
     ) -> Optional[str]:
         """Delete a payment. Returns error message or None on success."""
         logger.debug(
-            "delete_payment: org=%s payment_id=%s",
-            organization_id, payment_id
+            "delete_payment: org=%s payment_id=%s", organization_id, payment_id
         )
         org_id = coerce_uuid(organization_id)
         pay_id = coerce_uuid(payment_id)
@@ -467,7 +484,9 @@ class PaymentWebService:
         """Get context for AP aging report."""
         logger.debug(
             "aging_context: org=%s as_of_date=%s supplier_id=%s",
-            organization_id, as_of_date, supplier_id
+            organization_id,
+            as_of_date,
+            supplier_id,
         )
         org_id = coerce_uuid(organization_id)
         ref_date = parse_date(as_of_date)
@@ -478,9 +497,7 @@ class PaymentWebService:
             )
             aging_data = [summary]
         else:
-            aging_data = ap_aging_service.get_aging_by_supplier(
-                db, org_id, ref_date
-            )
+            aging_data = ap_aging_service.get_aging_by_supplier(db, org_id, ref_date)
 
         suppliers_list = [
             supplier_option_view(supplier)
@@ -549,7 +566,9 @@ class PaymentWebService:
                 invoice_id=invoice_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ap/payment_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/payment_form.html", context
+        )
 
     def payment_detail_response(
         self,
@@ -567,7 +586,9 @@ class PaymentWebService:
                 payment_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ap/payment_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/payment_detail.html", context
+        )
 
     async def create_payment_response(
         self,
@@ -618,7 +639,9 @@ class PaymentWebService:
             context.update(self.payment_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
             context["form_data"] = data
-            return templates.TemplateResponse(request, "finance/ap/payment_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/payment_form.html", context
+            )
 
     def delete_payment_response(
         self,
@@ -640,7 +663,9 @@ class PaymentWebService:
                 )
             )
             context["error"] = error
-            return templates.TemplateResponse(request, "finance/ap/payment_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/payment_detail.html", context
+            )
 
         return RedirectResponse(url="/finance/ap/payments", status_code=303)
 
@@ -691,12 +716,16 @@ class PaymentWebService:
         )
 
         context = base_context(request, auth, "Payment Batches", "ap")
-        context.update({
-            "batches": batches,
-            "status": status or "",
-            "page": page,
-        })
-        return templates.TemplateResponse(request, "finance/ap/payment_batches.html", context)
+        context.update(
+            {
+                "batches": batches,
+                "status": status or "",
+                "page": page,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "finance/ap/payment_batches.html", context
+        )
 
     def payment_batch_new_form_response(
         self,
@@ -734,13 +763,17 @@ class PaymentWebService:
         ]
 
         context = base_context(request, auth, "New Payment Batch", "ap")
-        context.update({
-            "bank_accounts": bank_accounts,
-            "invoices": invoices_view,
-            "payment_methods": [method.value for method in APPaymentMethod],
-        })
+        context.update(
+            {
+                "bank_accounts": bank_accounts,
+                "invoices": invoices_view,
+                "payment_methods": [method.value for method in APPaymentMethod],
+            }
+        )
         context.update(get_currency_context(db, str(auth.organization_id)))
-        return templates.TemplateResponse(request, "finance/ap/payment_batch_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/payment_batch_form.html", context
+        )
 
     async def upload_payment_attachment_response(
         self,

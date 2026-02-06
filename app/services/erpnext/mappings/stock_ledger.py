@@ -4,6 +4,8 @@ Stock Ledger Entry mapping from ERPNext to DotMac ERP.
 Maps ERPNext Stock Ledger Entry → inv.inventory_transaction.
 Each SLE represents a single stock movement (receipt, issue, transfer leg, etc.).
 """
+
+import logging
 from typing import Any
 
 from .base import (
@@ -14,6 +16,7 @@ from .base import (
     parse_decimal,
 )
 
+logger = logging.getLogger(__name__)
 
 # ERPNext voucher_type → DotMac TransactionType
 # Key: (voucher_type, is_inflow) where is_inflow = actual_qty > 0

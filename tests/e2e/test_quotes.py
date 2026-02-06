@@ -45,16 +45,14 @@ class TestQuotesList:
             authenticated_page.keyboard.press("Enter")
             authenticated_page.wait_for_load_state("networkidle")
 
-            expect(authenticated_page.locator("body")).to_be_visible()
+            expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_quotes_list_by_status(self, authenticated_page, base_url):
         """Test quotes list status filter."""
         authenticated_page.goto(f"{base_url}/quotes")
         authenticated_page.wait_for_load_state("networkidle")
 
-        status_filter = authenticated_page.locator(
-            "select[name='status'], #status"
-        )
+        status_filter = authenticated_page.locator("select[name='status'], #status")
         if status_filter.count() > 0:
             expect(status_filter.first).to_be_visible()
 
@@ -171,9 +169,7 @@ class TestQuoteDetail:
             quote_link.click()
             authenticated_page.wait_for_load_state("networkidle")
 
-            lines = authenticated_page.locator(
-                "table, .line-items, [class*='lines']"
-            )
+            lines = authenticated_page.locator("table, .line-items, [class*='lines']")
             if lines.count() > 0:
                 expect(lines.first).to_be_visible()
 
@@ -189,9 +185,7 @@ class TestQuoteDetail:
             quote_link.click()
             authenticated_page.wait_for_load_state("networkidle")
 
-            totals = authenticated_page.locator(
-                "text=Total, text=Subtotal, .totals"
-            )
+            totals = authenticated_page.locator("text=Total, text=Subtotal, .totals")
             if totals.count() > 0:
                 expect(totals.first).to_be_visible()
 

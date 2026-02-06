@@ -21,12 +21,15 @@ from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.models.finance.ar.invoice_line import InvoiceLine
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.services.common import coerce_uuid
-from app.services.finance.gl.journal import JournalInput, JournalLineInput, JournalService
+from app.services.finance.gl.journal import (
+    JournalInput,
+    JournalLineInput,
+    JournalService,
+)
 from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
 from app.services.finance.platform.saga_factory import register_saga
 from app.services.finance.platform.saga_orchestrator import (
     SagaOrchestrator,
-    SagaResult,
     SagaStepDefinition,
     StepResult,
 )
@@ -38,6 +41,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ARPostingSagaResult:
     """Result from AR invoice posting saga."""
+
     success: bool
     journal_entry_id: Optional[UUID] = None
     posting_batch_id: Optional[UUID] = None
@@ -304,18 +308,19 @@ class ARInvoicePostingSaga(SagaOrchestrator):
         )
 
         try:
-            journal = JournalService.create_journal(
-                db, org_id, journal_input, user_id
-            )
+            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
 
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
 
             db.commit()
 
             logger.info(
                 "Created journal %s for AR invoice %s",
-                journal.journal_number, invoice.invoice_number
+                journal.journal_number,
+                invoice.invoice_number,
             )
 
             return StepResult(
@@ -363,7 +368,7 @@ class ARInvoicePostingSaga(SagaOrchestrator):
             db.commit()
             logger.info("Voided AR journal %s during saga compensation", journal_id)
             return True
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to void AR journal %s", journal_id)
             return False
 
@@ -383,7 +388,9 @@ class ARInvoicePostingSaga(SagaOrchestrator):
         invoice = db.get(Invoice, invoice_id)
         if not invoice:
             return StepResult(success=False, error="Invoice not found")
-        idempotency_key = payload.get("idempotency_key") or f"{org_id}:AR:{invoice_id}:post:v1"
+        idempotency_key = (
+            payload.get("idempotency_key") or f"{org_id}:AR:{invoice_id}:post:v1"
+        )
 
         posting_request = PostingRequest(
             organization_id=org_id,
@@ -406,7 +413,8 @@ class ARInvoicePostingSaga(SagaOrchestrator):
 
             logger.info(
                 "Posted AR journal %s to ledger, batch %s",
-                context["journal_number"], result.batch_id
+                context["journal_number"],
+                result.batch_id,
             )
 
             return StepResult(
@@ -461,17 +469,18 @@ class ARInvoicePostingSaga(SagaOrchestrator):
             if result.success:
                 logger.info(
                     "Created AR reversal journal %s for saga compensation",
-                    result.reversal_journal_id
+                    result.reversal_journal_id,
                 )
                 return True
             else:
                 logger.error(
                     "Failed to create AR reversal for journal %s: %s",
-                    journal_id, result.message
+                    journal_id,
+                    result.message,
                 )
                 return False
 
-        except Exception as e:
+        except Exception:
             logger.exception("AR reversal failed for journal %s", journal_id)
             return False
 
@@ -494,11 +503,7 @@ class ARInvoicePostingSaga(SagaOrchestrator):
         customer = db.get(Customer, invoice.customer_id)
         if not customer:
             return StepResult(success=False, error="Customer not found")
-        lines = (
-            db.query(InvoiceLine)
-            .filter(InvoiceLine.invoice_id == invoice_id)
-            .all()
-        )
+        lines = db.query(InvoiceLine).filter(InvoiceLine.invoice_id == invoice_id).all()
 
         exchange_rate = invoice.exchange_rate or Decimal("1.0")
         is_credit_note = invoice.invoice_type == InvoiceType.CREDIT_NOTE
@@ -549,7 +554,8 @@ class ARInvoicePostingSaga(SagaOrchestrator):
             except Exception as e:
                 logger.warning(
                     "Failed to create AR tax transaction for line %s: %s",
-                    line.line_id, e
+                    line.line_id,
+                    e,
                 )
 
         db.commit()
@@ -580,10 +586,12 @@ class ARInvoicePostingSaga(SagaOrchestrator):
                     db.delete(tax_txn)
 
             db.commit()
-            logger.info("Voided %d AR tax transactions during saga compensation", len(tax_ids))
+            logger.info(
+                "Voided %d AR tax transactions during saga compensation", len(tax_ids)
+            )
             return True
 
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to void AR tax transactions")
             return False
 
@@ -614,10 +622,7 @@ class ARInvoicePostingSaga(SagaOrchestrator):
 
         db.commit()
 
-        logger.info(
-            "Updated AR invoice %s status to POSTED",
-            invoice.invoice_number
-        )
+        logger.info("Updated AR invoice %s status to POSTED", invoice.invoice_number)
 
         return StepResult(
             success=True,
@@ -648,12 +653,13 @@ class ARInvoicePostingSaga(SagaOrchestrator):
                 db.commit()
                 logger.info(
                     "Reverted AR invoice %s status to %s",
-                    invoice.invoice_number, original_status
+                    invoice.invoice_number,
+                    original_status,
                 )
 
             return True
 
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to revert AR invoice status")
             return False
 
@@ -716,8 +722,12 @@ def post_invoice_with_saga(
     if result.success:
         return ARPostingSagaResult(
             success=True,
-            journal_entry_id=UUID(result.result.get("journal_entry_id")) if result.result.get("journal_entry_id") else None,
-            posting_batch_id=UUID(result.result.get("posting_batch_id")) if result.result.get("posting_batch_id") else None,
+            journal_entry_id=UUID(result.result.get("journal_entry_id"))
+            if result.result.get("journal_entry_id")
+            else None,
+            posting_batch_id=UUID(result.result.get("posting_batch_id"))
+            if result.result.get("posting_batch_id")
+            else None,
             message="Invoice posted successfully",
             saga_id=result.saga_id,
         )

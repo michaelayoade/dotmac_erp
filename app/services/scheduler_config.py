@@ -6,7 +6,8 @@ from celery.schedules import crontab
 
 from app.db import SessionLocal
 from app.models.domain_settings import DomainSetting, SettingDomain
-from app.models.scheduler import ScheduleType, ScheduledTask
+from app.models.scheduler import ScheduledTask, ScheduleType
+
 logger = logging.getLogger(__name__)
 
 
@@ -111,16 +112,8 @@ def get_celery_config() -> dict:
     finally:
         session.close()
 
-    broker = (
-        broker
-        or _env_value("REDIS_URL")
-        or "redis://localhost:6379/0"
-    )
-    backend = (
-        backend
-        or _env_value("REDIS_URL")
-        or "redis://localhost:6379/1"
-    )
+    broker = broker or _env_value("REDIS_URL") or "redis://localhost:6379/0"
+    backend = backend or _env_value("REDIS_URL") or "redis://localhost:6379/1"
     timezone = timezone or "UTC"
     config: dict[str, str | int] = {
         "broker_url": broker,
@@ -137,9 +130,7 @@ def build_beat_schedule() -> dict:
     session = SessionLocal()
     try:
         tasks = (
-            session.query(ScheduledTask)
-            .filter(ScheduledTask.enabled.is_(True))
-            .all()
+            session.query(ScheduledTask).filter(ScheduledTask.enabled.is_(True)).all()
         )
         for task in tasks:
             task_schedule = None

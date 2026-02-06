@@ -25,7 +25,9 @@ class TestSettingsIndex:
 
         authenticated_page.wait_for_load_state("networkidle")
         # Page has data-testid="page-title" from base template
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("Settings")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "Settings"
+        )
 
     def test_settings_has_organization_section(self, authenticated_page, base_url):
         """Test that settings page has organization profile section."""
@@ -83,7 +85,9 @@ class TestSettingsIndex:
         authenticated_page.locator("a[href*='/settings/organization']").click()
         authenticated_page.wait_for_load_state("networkidle")
 
-        expect(authenticated_page).to_have_url(re.compile(r".*/settings/organization.*"))
+        expect(authenticated_page).to_have_url(
+            re.compile(r".*/settings/organization.*")
+        )
 
 
 @pytest.mark.e2e
@@ -92,7 +96,9 @@ class TestOrganizationSettings:
 
     def test_organization_page_loads(self, authenticated_page, base_url):
         """Test that organization settings page loads."""
-        response = goto_settings_page(authenticated_page, f"{base_url}/settings/organization")
+        response = goto_settings_page(
+            authenticated_page, f"{base_url}/settings/organization"
+        )
         assert response.ok, f"Organization settings failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
@@ -118,8 +124,12 @@ class TestOrganizationSettings:
         goto_settings_page(authenticated_page, f"{base_url}/settings/organization")
         authenticated_page.wait_for_load_state("networkidle")
 
-        functional = authenticated_page.locator("#functional_currency_code, input[name='functional_currency_code']")
-        presentation = authenticated_page.locator("#presentation_currency_code, input[name='presentation_currency_code']")
+        functional = authenticated_page.locator(
+            "#functional_currency_code, input[name='functional_currency_code']"
+        )
+        presentation = authenticated_page.locator(
+            "#presentation_currency_code, input[name='presentation_currency_code']"
+        )
 
         expect(functional).to_be_visible()
         expect(presentation).to_be_visible()
@@ -137,7 +147,9 @@ class TestOrganizationSettings:
         goto_settings_page(authenticated_page, f"{base_url}/settings/organization")
         authenticated_page.wait_for_load_state("networkidle")
 
-        date_format = authenticated_page.locator("#date_format, select[name='date_format']")
+        date_format = authenticated_page.locator(
+            "#date_format, select[name='date_format']"
+        )
         expect(date_format).to_be_visible()
 
     def test_organization_has_contact_fields(self, authenticated_page, base_url):
@@ -145,8 +157,12 @@ class TestOrganizationSettings:
         goto_settings_page(authenticated_page, f"{base_url}/settings/organization")
         authenticated_page.wait_for_load_state("networkidle")
 
-        email = authenticated_page.locator("#contact_email, input[name='contact_email']")
-        phone = authenticated_page.locator("#contact_phone, input[name='contact_phone']")
+        email = authenticated_page.locator(
+            "#contact_email, input[name='contact_email']"
+        )
+        phone = authenticated_page.locator(
+            "#contact_phone, input[name='contact_phone']"
+        )
 
         expect(email).to_be_visible()
         expect(phone).to_be_visible()
@@ -156,7 +172,9 @@ class TestOrganizationSettings:
         goto_settings_page(authenticated_page, f"{base_url}/settings/organization")
         authenticated_page.wait_for_load_state("networkidle")
 
-        address1 = authenticated_page.locator("#address_line1, input[name='address_line1']")
+        address1 = authenticated_page.locator(
+            "#address_line1, input[name='address_line1']"
+        )
         city = authenticated_page.locator("#city, input[name='city']")
         country = authenticated_page.locator("#country, input[name='country']")
 
@@ -213,7 +231,9 @@ class TestEmailSettings:
         goto_settings_page(authenticated_page, f"{base_url}/settings/email")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("#smtp_username, input[name='smtp_username']")
+        field = authenticated_page.locator(
+            "#smtp_username, input[name='smtp_username']"
+        )
         expect(field).to_be_visible()
 
     def test_email_has_smtp_password_field(self, authenticated_page, base_url):
@@ -221,7 +241,9 @@ class TestEmailSettings:
         goto_settings_page(authenticated_page, f"{base_url}/settings/email")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("#smtp_password, input[name='smtp_password']")
+        field = authenticated_page.locator(
+            "#smtp_password, input[name='smtp_password']"
+        )
         expect(field).to_be_visible()
 
     def test_email_has_tls_checkbox(self, authenticated_page, base_url):
@@ -245,8 +267,12 @@ class TestEmailSettings:
         goto_settings_page(authenticated_page, f"{base_url}/settings/email")
         authenticated_page.wait_for_load_state("networkidle")
 
-        from_email = authenticated_page.locator("#smtp_from_email, input[name='smtp_from_email']")
-        from_name = authenticated_page.locator("#smtp_from_name, input[name='smtp_from_name']")
+        from_email = authenticated_page.locator(
+            "#smtp_from_email, input[name='smtp_from_email']"
+        )
+        from_name = authenticated_page.locator(
+            "#smtp_from_name, input[name='smtp_from_name']"
+        )
 
         expect(from_email).to_be_visible()
         expect(from_name).to_be_visible()
@@ -266,62 +292,94 @@ class TestAutomationSettings:
 
     def test_automation_page_loads(self, authenticated_page, base_url):
         """Test that automation settings page loads."""
-        response = goto_settings_page(authenticated_page, f"{base_url}/settings/automation-settings")
+        response = goto_settings_page(
+            authenticated_page, f"{base_url}/settings/automation-settings"
+        )
         assert response.ok, f"Automation settings failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
-    def test_automation_has_recurring_frequency_field(self, authenticated_page, base_url):
+    def test_automation_has_recurring_frequency_field(
+        self, authenticated_page, base_url
+    ):
         """Test that automation page has recurring frequency field."""
-        goto_settings_page(authenticated_page, f"{base_url}/settings/automation-settings")
+        goto_settings_page(
+            authenticated_page, f"{base_url}/settings/automation-settings"
+        )
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("#recurring_default_frequency, select[name='recurring_default_frequency']")
+        field = authenticated_page.locator(
+            "#recurring_default_frequency, select[name='recurring_default_frequency']"
+        )
         expect(field).to_be_visible()
 
     def test_automation_has_max_occurrences_field(self, authenticated_page, base_url):
         """Test that automation page has max occurrences field."""
-        goto_settings_page(authenticated_page, f"{base_url}/settings/automation-settings")
+        goto_settings_page(
+            authenticated_page, f"{base_url}/settings/automation-settings"
+        )
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("#recurring_max_occurrences, input[name='recurring_max_occurrences']")
+        field = authenticated_page.locator(
+            "#recurring_max_occurrences, input[name='recurring_max_occurrences']"
+        )
         expect(field).to_be_visible()
 
     def test_automation_has_lookback_days_field(self, authenticated_page, base_url):
         """Test that automation page has lookback days field."""
-        goto_settings_page(authenticated_page, f"{base_url}/settings/automation-settings")
+        goto_settings_page(
+            authenticated_page, f"{base_url}/settings/automation-settings"
+        )
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("#recurring_lookback_days, input[name='recurring_lookback_days']")
+        field = authenticated_page.locator(
+            "#recurring_lookback_days, input[name='recurring_lookback_days']"
+        )
         expect(field).to_be_visible()
 
-    def test_automation_has_workflow_max_actions_field(self, authenticated_page, base_url):
+    def test_automation_has_workflow_max_actions_field(
+        self, authenticated_page, base_url
+    ):
         """Test that automation page has workflow max actions field."""
-        goto_settings_page(authenticated_page, f"{base_url}/settings/automation-settings")
+        goto_settings_page(
+            authenticated_page, f"{base_url}/settings/automation-settings"
+        )
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("#workflow_max_actions_per_event, input[name='workflow_max_actions_per_event']")
+        field = authenticated_page.locator(
+            "#workflow_max_actions_per_event, input[name='workflow_max_actions_per_event']"
+        )
         expect(field).to_be_visible()
 
     def test_automation_has_async_timeout_field(self, authenticated_page, base_url):
         """Test that automation page has async timeout field."""
-        goto_settings_page(authenticated_page, f"{base_url}/settings/automation-settings")
+        goto_settings_page(
+            authenticated_page, f"{base_url}/settings/automation-settings"
+        )
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("#workflow_async_timeout_seconds, input[name='workflow_async_timeout_seconds']")
+        field = authenticated_page.locator(
+            "#workflow_async_timeout_seconds, input[name='workflow_async_timeout_seconds']"
+        )
         expect(field).to_be_visible()
 
     def test_automation_has_custom_fields_limit(self, authenticated_page, base_url):
         """Test that automation page has custom fields limit field."""
-        goto_settings_page(authenticated_page, f"{base_url}/settings/automation-settings")
+        goto_settings_page(
+            authenticated_page, f"{base_url}/settings/automation-settings"
+        )
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("#custom_fields_max_per_entity, input[name='custom_fields_max_per_entity']")
+        field = authenticated_page.locator(
+            "#custom_fields_max_per_entity, input[name='custom_fields_max_per_entity']"
+        )
         expect(field).to_be_visible()
 
     def test_automation_has_submit_button(self, authenticated_page, base_url):
         """Test that automation page has submit button."""
-        goto_settings_page(authenticated_page, f"{base_url}/settings/automation-settings")
+        goto_settings_page(
+            authenticated_page, f"{base_url}/settings/automation-settings"
+        )
         authenticated_page.wait_for_load_state("networkidle")
 
         submit = authenticated_page.locator("button[type='submit']")
@@ -334,7 +392,9 @@ class TestReportSettings:
 
     def test_reports_page_loads(self, authenticated_page, base_url):
         """Test that reports settings page loads."""
-        response = goto_settings_page(authenticated_page, f"{base_url}/settings/reports")
+        response = goto_settings_page(
+            authenticated_page, f"{base_url}/settings/reports"
+        )
         assert response.ok, f"Reports settings failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
@@ -344,7 +404,9 @@ class TestReportSettings:
         goto_settings_page(authenticated_page, f"{base_url}/settings/reports")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("#default_export_format, select[name='default_export_format']")
+        field = authenticated_page.locator(
+            "#default_export_format, select[name='default_export_format']"
+        )
         expect(field).to_be_visible()
 
     def test_reports_has_page_size_field(self, authenticated_page, base_url):
@@ -352,7 +414,9 @@ class TestReportSettings:
         goto_settings_page(authenticated_page, f"{base_url}/settings/reports")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("#report_page_size, select[name='report_page_size']")
+        field = authenticated_page.locator(
+            "#report_page_size, select[name='report_page_size']"
+        )
         expect(field).to_be_visible()
 
     def test_reports_has_orientation_field(self, authenticated_page, base_url):
@@ -360,7 +424,9 @@ class TestReportSettings:
         goto_settings_page(authenticated_page, f"{base_url}/settings/reports")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("#report_orientation, select[name='report_orientation']")
+        field = authenticated_page.locator(
+            "#report_orientation, select[name='report_orientation']"
+        )
         expect(field).to_be_visible()
 
     def test_reports_has_logo_checkbox(self, authenticated_page, base_url):
@@ -376,7 +442,9 @@ class TestReportSettings:
         goto_settings_page(authenticated_page, f"{base_url}/settings/reports")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("#report_watermark_text, input[name='report_watermark_text']")
+        field = authenticated_page.locator(
+            "#report_watermark_text, input[name='report_watermark_text']"
+        )
         expect(field).to_be_visible()
 
     def test_reports_has_submit_button(self, authenticated_page, base_url):
@@ -394,7 +462,9 @@ class TestFeatureFlags:
 
     def test_features_page_loads(self, authenticated_page, base_url):
         """Test that features page loads."""
-        response = goto_settings_page(authenticated_page, f"{base_url}/settings/features")
+        response = goto_settings_page(
+            authenticated_page, f"{base_url}/settings/features"
+        )
         assert response.ok, f"Features settings failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
@@ -405,7 +475,9 @@ class TestFeatureFlags:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for multi-currency feature toggle or text
-        multi_currency = authenticated_page.locator("text=Multi Currency, text=multi_currency, text=Multi-Currency")
+        multi_currency = authenticated_page.locator(
+            "text=Multi Currency, text=multi_currency, text=Multi-Currency"
+        )
         expect(multi_currency.first).to_be_visible()
 
     def test_features_has_budgeting_toggle(self, authenticated_page, base_url):
@@ -446,7 +518,9 @@ class TestFeatureFlags:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Should have toggle buttons (role=switch or button with toggle styling)
-        toggles = authenticated_page.locator("button[role='switch'], button[class*='toggle'], form button[type='submit']")
+        toggles = authenticated_page.locator(
+            "button[role='switch'], button[class*='toggle'], form button[type='submit']"
+        )
         expect(toggles.first).to_be_visible()
 
 
@@ -456,7 +530,9 @@ class TestNumberingSequences:
 
     def test_numbering_page_loads(self, authenticated_page, base_url):
         """Test that numbering page loads."""
-        response = goto_settings_page(authenticated_page, f"{base_url}/settings/numbering")
+        response = goto_settings_page(
+            authenticated_page, f"{base_url}/settings/numbering"
+        )
         assert response.ok, f"Numbering settings failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
@@ -467,7 +543,9 @@ class TestNumberingSequences:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Should have sequence type labels
-        sequences = authenticated_page.locator("text=Invoice, text=Credit Note, text=Payment, text=Journal")
+        sequences = authenticated_page.locator(
+            "text=Invoice, text=Credit Note, text=Payment, text=Journal"
+        )
         expect(sequences.first).to_be_visible()
 
     def test_numbering_sequences_are_clickable(self, authenticated_page, base_url):
@@ -497,7 +575,9 @@ class TestNumberingSequenceEdit:
             authenticated_page.wait_for_load_state("networkidle")
 
             # Should be on edit page
-            expect(authenticated_page).to_have_url(re.compile(r".*/settings/numbering/.*"))
+            expect(authenticated_page).to_have_url(
+                re.compile(r".*/settings/numbering/.*")
+            )
 
     def test_numbering_edit_has_prefix_field(self, authenticated_page, base_url):
         """Test that numbering edit has prefix field."""
@@ -522,10 +602,14 @@ class TestNumberingSequenceEdit:
             edit_links.first.click()
             authenticated_page.wait_for_load_state("networkidle")
 
-            min_digits = authenticated_page.locator("#min_digits, select[name='min_digits']")
+            min_digits = authenticated_page.locator(
+                "#min_digits, select[name='min_digits']"
+            )
             expect(min_digits).to_be_visible()
 
-    def test_numbering_edit_has_reset_frequency_field(self, authenticated_page, base_url):
+    def test_numbering_edit_has_reset_frequency_field(
+        self, authenticated_page, base_url
+    ):
         """Test that numbering edit has reset frequency field."""
         goto_settings_page(authenticated_page, f"{base_url}/settings/numbering")
         authenticated_page.wait_for_load_state("networkidle")
@@ -535,7 +619,9 @@ class TestNumberingSequenceEdit:
             edit_links.first.click()
             authenticated_page.wait_for_load_state("networkidle")
 
-            reset_freq = authenticated_page.locator("#reset_frequency, select[name='reset_frequency']")
+            reset_freq = authenticated_page.locator(
+                "#reset_frequency, select[name='reset_frequency']"
+            )
             expect(reset_freq).to_be_visible()
 
     def test_numbering_edit_has_preview(self, authenticated_page, base_url):
@@ -597,6 +683,8 @@ class TestSettingsResponsive:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Feature toggles should still be visible
-        toggles = authenticated_page.locator("button[role='switch'], form button[type='submit']")
+        toggles = authenticated_page.locator(
+            "button[role='switch'], form button[type='submit']"
+        )
         if toggles.count() > 0:
             expect(toggles.first).to_be_visible()

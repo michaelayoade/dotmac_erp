@@ -18,6 +18,7 @@ Schemas:
 - perf: Performance management (KPIs, appraisals, scorecards)
 - migration: Temporary schema for data migration mapping tables
 """
+
 from alembic import op
 
 # revision identifiers, used by Alembic.

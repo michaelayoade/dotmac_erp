@@ -7,8 +7,8 @@ Provides single source of truth for inventory quantities.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from datetime import date
 from decimal import Decimal
 from typing import Optional, cast
 from uuid import UUID
@@ -16,11 +16,16 @@ from uuid import UUID
 from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import Session
 
-from app.models.inventory.item import Item, CostingMethod
-from app.models.inventory.inventory_transaction import InventoryTransaction, TransactionType
 from app.models.inventory.inventory_lot import InventoryLot
+from app.models.inventory.inventory_transaction import (
+    InventoryTransaction,
+    TransactionType,
+)
+from app.models.inventory.item import CostingMethod, Item
 from app.models.inventory.warehouse import Warehouse
 from app.services.common import coerce_uuid
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -108,20 +113,24 @@ class InventoryBalanceService:
             func.sum(
                 case(
                     (
-                        InventoryTransaction.transaction_type.in_([
-                            TransactionType.RECEIPT,
-                            TransactionType.RETURN,
-                            TransactionType.ASSEMBLY,
-                        ]),
+                        InventoryTransaction.transaction_type.in_(
+                            [
+                                TransactionType.RECEIPT,
+                                TransactionType.RETURN,
+                                TransactionType.ASSEMBLY,
+                            ]
+                        ),
                         InventoryTransaction.quantity,
                     ),
                     (
-                        InventoryTransaction.transaction_type.in_([
-                            TransactionType.ISSUE,
-                            TransactionType.SALE,
-                            TransactionType.SCRAP,
-                            TransactionType.DISASSEMBLY,
-                        ]),
+                        InventoryTransaction.transaction_type.in_(
+                            [
+                                TransactionType.ISSUE,
+                                TransactionType.SALE,
+                                TransactionType.SCRAP,
+                                TransactionType.DISASSEMBLY,
+                            ]
+                        ),
                         -InventoryTransaction.quantity,
                     ),
                     else_=InventoryTransaction.quantity,
@@ -165,9 +174,7 @@ class InventoryBalanceService:
         itm_id = coerce_uuid(item_id)
 
         # Sum allocated quantities from lots
-        query = db.query(
-            func.sum(InventoryLot.quantity_allocated)
-        ).filter(
+        query = db.query(func.sum(InventoryLot.quantity_allocated)).filter(
             and_(
                 InventoryLot.organization_id == org_id,
                 InventoryLot.item_id == itm_id,
@@ -247,7 +254,9 @@ class InventoryBalanceService:
             warehouse = db.get(Warehouse, wh_id)
 
         on_hand = InventoryBalanceService.get_on_hand(db, org_id, itm_id, warehouse_id)
-        reserved = InventoryBalanceService.get_reserved(db, org_id, itm_id, warehouse_id)
+        reserved = InventoryBalanceService.get_reserved(
+            db, org_id, itm_id, warehouse_id
+        )
         available = on_hand - reserved
 
         avg_cost = item.average_cost or Decimal("0")
@@ -291,14 +300,16 @@ class InventoryBalanceService:
             return None
 
         # Get all warehouses with inventory for this item
-        warehouse_ids = db.query(
-            InventoryTransaction.warehouse_id.distinct()
-        ).filter(
-            and_(
-                InventoryTransaction.organization_id == org_id,
-                InventoryTransaction.item_id == itm_id,
+        warehouse_ids = (
+            db.query(InventoryTransaction.warehouse_id.distinct())
+            .filter(
+                and_(
+                    InventoryTransaction.organization_id == org_id,
+                    InventoryTransaction.item_id == itm_id,
+                )
             )
-        ).all()
+            .all()
+        )
 
         warehouse_balances = []
         total_on_hand = Decimal("0")
@@ -356,15 +367,19 @@ class InventoryBalanceService:
         org_id = coerce_uuid(organization_id)
 
         # Get items with reorder point set
-        items = db.query(Item).filter(
-            and_(
-                Item.organization_id == org_id,
-                Item.is_active == True,
-                Item.track_inventory == True,
-                Item.reorder_point.isnot(None),
-                Item.reorder_point > 0,
+        items = (
+            db.query(Item)
+            .filter(
+                and_(
+                    Item.organization_id == org_id,
+                    Item.is_active == True,
+                    Item.track_inventory == True,
+                    Item.reorder_point.isnot(None),
+                    Item.reorder_point > 0,
+                )
             )
-        ).all()
+            .all()
+        )
 
         low_stock = []
         for item in items:
@@ -383,18 +398,24 @@ class InventoryBalanceService:
                 max_stock = item.maximum_stock or (reorder_point * 2)
                 suggested_qty = max(reorder_qty, max_stock - on_hand)
 
-                low_stock.append(LowStockItem(
-                    item_id=item.item_id,
-                    item_code=item.item_code,
-                    item_name=item.item_name,
-                    quantity_on_hand=on_hand,
-                    quantity_available=available,
-                    reorder_point=reorder_point,
-                    reorder_quantity=item.reorder_quantity,
-                    suggested_order_qty=suggested_qty if suggested_qty > 0 else reorder_qty,
-                    default_supplier_id=item.default_supplier_id,
-                    lead_time_days=int(item.lead_time_days) if item.lead_time_days else None,
-                ))
+                low_stock.append(
+                    LowStockItem(
+                        item_id=item.item_id,
+                        item_code=item.item_code,
+                        item_name=item.item_name,
+                        quantity_on_hand=on_hand,
+                        quantity_available=available,
+                        reorder_point=reorder_point,
+                        reorder_quantity=item.reorder_quantity,
+                        suggested_order_qty=suggested_qty
+                        if suggested_qty > 0
+                        else reorder_qty,
+                        default_supplier_id=item.default_supplier_id,
+                        lead_time_days=int(item.lead_time_days)
+                        if item.lead_time_days
+                        else None,
+                    )
+                )
 
         return low_stock
 
@@ -419,14 +440,16 @@ class InventoryBalanceService:
         wh_id = coerce_uuid(warehouse_id)
 
         # Get all items with transactions at this warehouse
-        item_ids = db.query(
-            InventoryTransaction.item_id.distinct()
-        ).filter(
-            and_(
-                InventoryTransaction.organization_id == org_id,
-                InventoryTransaction.warehouse_id == wh_id,
+        item_ids = (
+            db.query(InventoryTransaction.item_id.distinct())
+            .filter(
+                and_(
+                    InventoryTransaction.organization_id == org_id,
+                    InventoryTransaction.warehouse_id == wh_id,
+                )
             )
-        ).all()
+            .all()
+        )
 
         balances = []
         for (item_id,) in item_ids:
@@ -484,7 +507,9 @@ class InventoryBalanceService:
             return False
 
         # For lot-tracked items, allocate from lot
-        if (item.track_lots or item.costing_method == CostingMethod.FIFO) and not lot_id:
+        if (
+            item.track_lots or item.costing_method == CostingMethod.FIFO
+        ) and not lot_id:
             return False
 
         if (item.track_lots or item.costing_method == CostingMethod.FIFO) and lot_id:
@@ -497,7 +522,9 @@ class InventoryBalanceService:
 
             lot.quantity_allocated = (lot.quantity_allocated or Decimal("0")) + quantity
             lot.allocation_reference = f"{reference_type}:{reference_id}"
-            lot.quantity_available = lot.quantity_on_hand - (lot.quantity_allocated or Decimal("0"))
+            lot.quantity_available = lot.quantity_on_hand - (
+                lot.quantity_allocated or Decimal("0")
+            )
             db.commit()
 
         # For non-lot items, we track in lots table as a general allocation
@@ -508,16 +535,21 @@ class InventoryBalanceService:
             if warehouse_id:
                 lot_number = f"__GENERAL__:{warehouse_id}"
 
-            general_lot = db.query(InventoryLot).filter(
-                and_(
-                    InventoryLot.organization_id == org_id,
-                    InventoryLot.item_id == itm_id,
-                    InventoryLot.lot_number == lot_number,
+            general_lot = (
+                db.query(InventoryLot)
+                .filter(
+                    and_(
+                        InventoryLot.organization_id == org_id,
+                        InventoryLot.item_id == itm_id,
+                        InventoryLot.lot_number == lot_number,
+                    )
                 )
-            ).first()
+                .first()
+            )
 
             if not general_lot:
                 from datetime import date as date_type
+
                 general_lot = InventoryLot(
                     organization_id=org_id,
                     item_id=itm_id,
@@ -525,7 +557,9 @@ class InventoryBalanceService:
                     warehouse_id=coerce_uuid(warehouse_id) if warehouse_id else None,
                     received_date=date_type.today(),
                     unit_cost=item.average_cost or Decimal("0"),
-                    initial_quantity=Decimal("0"),  # Not actual inventory, just allocation tracking
+                    initial_quantity=Decimal(
+                        "0"
+                    ),  # Not actual inventory, just allocation tracking
                     quantity_on_hand=Decimal("0"),
                     quantity_allocated=Decimal("0"),
                     quantity_available=Decimal("0"),
@@ -533,8 +567,12 @@ class InventoryBalanceService:
                 )
                 db.add(general_lot)
 
-            general_lot.quantity_allocated = (general_lot.quantity_allocated or Decimal("0")) + quantity
-            general_lot.quantity_available = general_lot.quantity_on_hand - (general_lot.quantity_allocated or Decimal("0"))
+            general_lot.quantity_allocated = (
+                general_lot.quantity_allocated or Decimal("0")
+            ) + quantity
+            general_lot.quantity_available = general_lot.quantity_on_hand - (
+                general_lot.quantity_allocated or Decimal("0")
+            )
             db.commit()
 
         return True
@@ -578,18 +616,26 @@ class InventoryBalanceService:
             lot_number = "__GENERAL__"
             if warehouse_id:
                 lot_number = f"__GENERAL__:{warehouse_id}"
-            general_lot = db.query(InventoryLot).filter(
-                and_(
-                    InventoryLot.organization_id == org_id,
-                    InventoryLot.item_id == itm_id,
-                    InventoryLot.lot_number == lot_number,
+            general_lot = (
+                db.query(InventoryLot)
+                .filter(
+                    and_(
+                        InventoryLot.organization_id == org_id,
+                        InventoryLot.item_id == itm_id,
+                        InventoryLot.lot_number == lot_number,
+                    )
                 )
-            ).first()
+                .first()
+            )
 
             if general_lot:
                 current_allocated = general_lot.quantity_allocated or Decimal("0")
-                general_lot.quantity_allocated = max(Decimal("0"), current_allocated - quantity)
-                general_lot.quantity_available = general_lot.quantity_on_hand - general_lot.quantity_allocated
+                general_lot.quantity_allocated = max(
+                    Decimal("0"), current_allocated - quantity
+                )
+                general_lot.quantity_available = (
+                    general_lot.quantity_on_hand - general_lot.quantity_allocated
+                )
                 db.commit()
 
         return True

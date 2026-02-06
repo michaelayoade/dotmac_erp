@@ -4,10 +4,11 @@ Bank Statement Service.
 Provides statement import and management functionality.
 """
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Dict, List, Optional, cast
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -21,6 +22,8 @@ from app.models.finance.banking.bank_statement import (
     BankStatementStatus,
     StatementLineType,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -47,6 +50,7 @@ class StatementLineInput:
 @dataclass
 class DuplicateLineInfo:
     """Information about a duplicate line."""
+
     line_number: int
     transaction_date: date
     amount: Decimal
@@ -140,10 +144,15 @@ class BankStatementService:
         # Validate bank account
         bank_account = db.get(BankAccount, bank_account_id)
         if not bank_account:
-            raise HTTPException(status_code=404, detail=f"Bank account {bank_account_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Bank account {bank_account_id} not found"
+            )
 
         if bank_account.organization_id != organization_id:
-            raise HTTPException(status_code=403, detail="Bank account does not belong to this organization")
+            raise HTTPException(
+                status_code=403,
+                detail="Bank account does not belong to this organization",
+            )
 
         # Check for duplicate statement
         existing = db.execute(
@@ -204,7 +213,9 @@ class BankStatementService:
             try:
                 # Check for duplicates
                 if check_duplicates:
-                    duplicate = self._check_duplicate_line(db, bank_account_id, line_input)
+                    duplicate = self._check_duplicate_line(
+                        db, bank_account_id, line_input
+                    )
                     if duplicate:
                         result.duplicates_found += 1
                         result.duplicate_lines.append(
@@ -354,12 +365,16 @@ class BankStatementService:
         statement_id: UUID,
     ) -> List[BankStatementLine]:
         """Get all unmatched lines for a statement."""
-        query = select(BankStatementLine).where(
-            and_(
-                BankStatementLine.statement_id == statement_id,
-                BankStatementLine.is_matched == False,
+        query = (
+            select(BankStatementLine)
+            .where(
+                and_(
+                    BankStatementLine.statement_id == statement_id,
+                    BankStatementLine.is_matched == False,
+                )
             )
-        ).order_by(BankStatementLine.transaction_date, BankStatementLine.line_number)
+            .order_by(BankStatementLine.transaction_date, BankStatementLine.line_number)
+        )
 
         return list(db.execute(query).scalars().all())
 
@@ -373,7 +388,9 @@ class BankStatementService:
         """Mark a statement line as matched to a GL entry."""
         line = db.get(BankStatementLine, line_id)
         if not line:
-            raise HTTPException(status_code=404, detail=f"Statement line {line_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Statement line {line_id} not found"
+            )
 
         line.is_matched = True
         line.matched_at = datetime.utcnow()
@@ -400,7 +417,9 @@ class BankStatementService:
         """Unmatch a statement line."""
         line = db.get(BankStatementLine, line_id)
         if not line:
-            raise HTTPException(status_code=404, detail=f"Statement line {line_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Statement line {line_id} not found"
+            )
 
         if not line.is_matched:
             return line
@@ -430,7 +449,9 @@ class BankStatementService:
         """Update statement status."""
         statement = db.get(BankStatement, statement_id)
         if not statement:
-            raise HTTPException(status_code=404, detail=f"Statement {statement_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Statement {statement_id} not found"
+            )
 
         statement.status = status
         db.flush()
@@ -446,7 +467,9 @@ class BankStatementService:
             BankStatementStatus.reconciled,
             BankStatementStatus.closed,
         ]:
-            raise HTTPException(status_code=400, detail="Cannot delete a reconciled or closed statement")
+            raise HTTPException(
+                status_code=400, detail="Cannot delete a reconciled or closed statement"
+            )
 
         db.delete(statement)
         db.flush()

@@ -7,6 +7,7 @@ and posts them to the general ledger.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -16,17 +17,26 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.models.finance.gl.journal_entry import JournalType
 from app.models.fixed_assets.asset import Asset
 from app.models.fixed_assets.asset_category import AssetCategory
-from app.models.fixed_assets.depreciation_run import DepreciationRun, DepreciationRunStatus
-from app.models.fixed_assets.depreciation_schedule import DepreciationSchedule
 from app.models.fixed_assets.asset_disposal import AssetDisposal
 from app.models.fixed_assets.asset_revaluation import AssetRevaluation
+from app.models.fixed_assets.depreciation_run import (
+    DepreciationRun,
+    DepreciationRunStatus,
+)
+from app.models.fixed_assets.depreciation_schedule import DepreciationSchedule
 from app.services.common import coerce_uuid
-from app.services.finance.gl.journal import JournalService, JournalInput, JournalLineInput
+from app.services.finance.gl.journal import (
+    JournalInput,
+    JournalLineInput,
+    JournalService,
+)
 from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
 from app.services.finance.platform.org_context import org_context_service
-from app.models.finance.gl.journal_entry import JournalType
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -130,9 +140,13 @@ class FAPostingAdapter:
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
         except HTTPException as e:
-            return FAPostingResult(success=False, message=f"Journal creation failed: {e.detail}")
+            return FAPostingResult(
+                success=False, message=f"Journal creation failed: {e.detail}"
+            )
 
         if not idempotency_key:
             idempotency_key = f"{org_id}:FA:ACQ:{ast_id}:post:v1"
@@ -147,7 +161,9 @@ class FAPostingAdapter:
         )
 
         try:
-            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+            posting_result = LedgerPostingService.post_journal_entry(
+                db, posting_request
+            )
             if not posting_result.success:
                 return FAPostingResult(
                     success=False,
@@ -218,7 +234,9 @@ class FAPostingAdapter:
         )
 
         if not schedules:
-            return FAPostingResult(success=False, message="No depreciation schedules found")
+            return FAPostingResult(
+                success=False, message="No depreciation schedules found"
+            )
 
         # Build journal lines - aggregate by account
         expense_by_account: dict[UUID, Decimal] = {}
@@ -233,7 +251,9 @@ class FAPostingAdapter:
                 )
                 # Credit accumulated depreciation
                 accum_by_account[schedule.accumulated_depreciation_account_id] = (
-                    accum_by_account.get(schedule.accumulated_depreciation_account_id, Decimal("0"))
+                    accum_by_account.get(
+                        schedule.accumulated_depreciation_account_id, Decimal("0")
+                    )
                     + schedule.depreciation_amount
                 )
 
@@ -286,7 +306,9 @@ class FAPostingAdapter:
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
 
         except HTTPException as e:
             return FAPostingResult(
@@ -307,7 +329,9 @@ class FAPostingAdapter:
         )
 
         try:
-            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+            posting_result = LedgerPostingService.post_journal_entry(
+                db, posting_request
+            )
 
             if not posting_result.success:
                 return FAPostingResult(
@@ -463,7 +487,9 @@ class FAPostingAdapter:
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
 
         except HTTPException as e:
             return FAPostingResult(
@@ -484,7 +510,9 @@ class FAPostingAdapter:
         )
 
         try:
-            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+            posting_result = LedgerPostingService.post_journal_entry(
+                db, posting_request
+            )
 
             if not posting_result.success:
                 return FAPostingResult(
@@ -569,7 +597,9 @@ class FAPostingAdapter:
                     account_id=category.asset_account_id,
                     debit_amount=abs(revaluation.revaluation_surplus_or_deficit),
                     credit_amount=Decimal("0"),
-                    debit_amount_functional=abs(revaluation.revaluation_surplus_or_deficit),
+                    debit_amount_functional=abs(
+                        revaluation.revaluation_surplus_or_deficit
+                    ),
                     credit_amount_functional=Decimal("0"),
                     description=f"Revaluation increase: {asset.asset_name}",
                 )
@@ -592,7 +622,8 @@ class FAPostingAdapter:
             if revaluation.prior_deficit_reversed > 0:
                 journal_lines.append(
                     JournalLineInput(
-                        account_id=category.impairment_loss_account_id or category.gain_loss_disposal_account_id,
+                        account_id=category.impairment_loss_account_id
+                        or category.gain_loss_disposal_account_id,
                         debit_amount=Decimal("0"),
                         credit_amount=revaluation.prior_deficit_reversed,
                         debit_amount_functional=Decimal("0"),
@@ -610,7 +641,9 @@ class FAPostingAdapter:
                     debit_amount=Decimal("0"),
                     credit_amount=abs(revaluation.revaluation_surplus_or_deficit),
                     debit_amount_functional=Decimal("0"),
-                    credit_amount_functional=abs(revaluation.revaluation_surplus_or_deficit),
+                    credit_amount_functional=abs(
+                        revaluation.revaluation_surplus_or_deficit
+                    ),
                     description=f"Revaluation decrease: {asset.asset_name}",
                 )
             )
@@ -632,7 +665,8 @@ class FAPostingAdapter:
             if revaluation.deficit_to_pl > 0:
                 journal_lines.append(
                     JournalLineInput(
-                        account_id=category.impairment_loss_account_id or category.gain_loss_disposal_account_id,
+                        account_id=category.impairment_loss_account_id
+                        or category.gain_loss_disposal_account_id,
                         debit_amount=revaluation.deficit_to_pl,
                         credit_amount=Decimal("0"),
                         debit_amount_functional=revaluation.deficit_to_pl,
@@ -665,7 +699,9 @@ class FAPostingAdapter:
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
 
         except HTTPException as e:
             return FAPostingResult(
@@ -686,7 +722,9 @@ class FAPostingAdapter:
         )
 
         try:
-            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+            posting_result = LedgerPostingService.post_journal_entry(
+                db, posting_request
+            )
 
             if not posting_result.success:
                 return FAPostingResult(

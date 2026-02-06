@@ -4,12 +4,13 @@ Payroll Web Service - Salary Slip operations.
 
 from __future__ import annotations
 
+import csv
+import io
+import logging
 from datetime import date
 from decimal import Decimal
 from typing import Any, Optional
 from urllib.parse import quote
-import csv
-import io
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -21,19 +22,25 @@ from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
 from app.models.people.payroll.salary_structure import SalaryStructure
 from app.services.common import coerce_uuid
-from app.services.people.payroll import salary_slip_service, SalarySlipInput, payroll_gl_adapter
+from app.services.people.payroll import (
+    SalarySlipInput,
+    payroll_gl_adapter,
+    salary_slip_service,
+)
 from app.services.people.payroll.paye_calculator import PAYECalculator
 from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
+from app.web.deps import WebAuthContext, base_context
 
 from .base import (
     DEFAULT_PAGE_SIZE,
-    parse_uuid,
+    SLIP_STATUSES,
     parse_date,
     parse_decimal,
     parse_slip_status,
-    SLIP_STATUSES,
+    parse_uuid,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class SlipWebService:
@@ -74,7 +81,12 @@ class SlipWebService:
             query = query.filter(SalarySlip.status == status_enum)
 
         total = query.count()
-        slips = query.order_by(SalarySlip.created_at.desc()).offset(offset).limit(per_page).all()
+        slips = (
+            query.order_by(SalarySlip.created_at.desc())
+            .offset(offset)
+            .limit(per_page)
+            .all()
+        )
         total_pages = (total + per_page - 1) // per_page
 
         # Get counts by status
@@ -89,18 +101,20 @@ class SlipWebService:
 
         context = base_context(request, auth, "Salary Slips", "payroll", db=db)
         context["request"] = request
-        context.update({
-            "slips": slips,
-            "search": search,
-            "status": status,
-            "page": page,
-            "total_pages": total_pages,
-            "total": total,
-            "has_prev": page > 1,
-            "has_next": page < total_pages,
-            "status_counts": status_counts,
-            "statuses": SLIP_STATUSES,
-        })
+        context.update(
+            {
+                "slips": slips,
+                "search": search,
+                "status": status,
+                "page": page,
+                "total_pages": total_pages,
+                "total": total,
+                "has_prev": page > 1,
+                "has_next": page < total_pages,
+                "status_counts": status_counts,
+                "statuses": SLIP_STATUSES,
+            }
+        )
         return templates.TemplateResponse(request, "people/payroll/slips.html", context)
 
     def export_slips_response(
@@ -144,18 +158,20 @@ class SlipWebService:
         rows: list[list[str]] = [headers]
         for slip in slips:
             period = f"{slip.start_date.strftime('%b %d')} - {slip.end_date.strftime('%b %d, %Y')}"
-            rows.append([
-                slip.slip_number,
-                slip.employee_name or "",
-                period,
-                f"{slip.gross_pay:,.2f}",
-                f"({slip.total_deduction:,.2f})",
-                f"{slip.net_pay:,.2f}",
-                slip.status.value.title(),
-                slip.bank_name or "",
-                slip.bank_account_number or "",
-                slip.bank_branch_code or "",
-            ])
+            rows.append(
+                [
+                    slip.slip_number,
+                    slip.employee_name or "",
+                    period,
+                    f"{slip.gross_pay:,.2f}",
+                    f"({slip.total_deduction:,.2f})",
+                    f"{slip.net_pay:,.2f}",
+                    slip.status.value.title(),
+                    slip.bank_name or "",
+                    slip.bank_account_number or "",
+                    slip.bank_branch_code or "",
+                ]
+            )
 
         buffer = io.StringIO()
         writer = csv.writer(buffer)
@@ -188,13 +204,17 @@ class SlipWebService:
 
         context = base_context(request, auth, "New Salary Slip", "payroll", db=db)
         context["request"] = request
-        context.update({
-            "slip": None,
-            "employees": employees,
-            "form_data": {},
-            "errors": {},
-        })
-        return templates.TemplateResponse(request, "people/payroll/slip_form.html", context)
+        context.update(
+            {
+                "slip": None,
+                "employees": employees,
+                "form_data": {},
+                "errors": {},
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/slip_form.html", context
+        )
 
     def slip_edit_form_response(
         self,
@@ -215,7 +235,9 @@ class SlipWebService:
             return RedirectResponse(url="/people/payroll/slips", status_code=303)
 
         if slip.status != SalarySlipStatus.DRAFT:
-            return RedirectResponse(url=f"/people/payroll/slips/{slip_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/payroll/slips/{slip_id}", status_code=303
+            )
 
         employees = (
             db.query(Employee)
@@ -229,21 +251,27 @@ class SlipWebService:
 
         context = base_context(request, auth, "Edit Salary Slip", "payroll", db=db)
         context["request"] = request
-        context.update({
-            "slip": slip,
-            "employees": employees,
-            "form_data": {
-                "employee_id": str(slip.employee_id),
-                "start_date": slip.start_date.isoformat(),
-                "end_date": slip.end_date.isoformat(),
-                "posting_date": slip.posting_date.isoformat() if slip.posting_date else "",
-                "total_working_days": str(slip.total_working_days or ""),
-                "absent_days": str(slip.absent_days or "0"),
-                "leave_without_pay": str(slip.leave_without_pay or "0"),
-            },
-            "errors": {},
-        })
-        return templates.TemplateResponse(request, "people/payroll/slip_form.html", context)
+        context.update(
+            {
+                "slip": slip,
+                "employees": employees,
+                "form_data": {
+                    "employee_id": str(slip.employee_id),
+                    "start_date": slip.start_date.isoformat(),
+                    "end_date": slip.end_date.isoformat(),
+                    "posting_date": slip.posting_date.isoformat()
+                    if slip.posting_date
+                    else "",
+                    "total_working_days": str(slip.total_working_days or ""),
+                    "absent_days": str(slip.absent_days or "0"),
+                    "leave_without_pay": str(slip.leave_without_pay or "0"),
+                },
+                "errors": {},
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/slip_form.html", context
+        )
 
     async def create_slip_response(
         self,
@@ -272,25 +300,31 @@ class SlipWebService:
                 db.query(Employee)
                 .filter(
                     Employee.organization_id == org_id,
-                    Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]),
+                    Employee.status.in_(
+                        [EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]
+                    ),
                 )
                 .order_by(Employee.employee_code)
                 .all()
             )
             context = base_context(request, auth, "New Salary Slip", "payroll", db=db)
             context["request"] = request
-            context.update({
-                "slip": None,
-                "employees": employees,
-                "error": "Employee, period start, and period end are required.",
-                "form_data": {
-                    "employee_id": employee_id,
-                    "start_date": start_date,
-                    "end_date": end_date,
-                },
-                "errors": {},
-            })
-            return templates.TemplateResponse(request, "people/payroll/slip_form.html", context)
+            context.update(
+                {
+                    "slip": None,
+                    "employees": employees,
+                    "error": "Employee, period start, and period end are required.",
+                    "form_data": {
+                        "employee_id": employee_id,
+                        "start_date": start_date,
+                        "end_date": end_date,
+                    },
+                    "errors": {},
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/payroll/slip_form.html", context
+            )
 
         try:
             start = parse_date(start_date)
@@ -316,7 +350,9 @@ class SlipWebService:
                 created_by_user_id=user_id,
             )
             db.commit()
-            return RedirectResponse(url=f"/people/payroll/slips/{slip.slip_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/payroll/slips/{slip.slip_id}", status_code=303
+            )
 
         except Exception as e:
             db.rollback()
@@ -324,7 +360,9 @@ class SlipWebService:
                 db.query(Employee)
                 .filter(
                     Employee.organization_id == org_id,
-                    Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]),
+                    Employee.status.in_(
+                        [EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]
+                    ),
                 )
                 .order_by(Employee.employee_code)
                 .all()
@@ -332,22 +370,26 @@ class SlipWebService:
 
             context = base_context(request, auth, "New Salary Slip", "payroll", db=db)
             context["request"] = request
-            context.update({
-                "slip": None,
-                "employees": employees,
-                "error": str(e),
-                "form_data": {
-                    "employee_id": employee_id,
-                    "start_date": start_date,
-                    "end_date": end_date,
-                    "posting_date": posting_date,
-                    "total_working_days": total_working_days,
-                    "absent_days": absent_days,
-                    "leave_without_pay": leave_without_pay,
-                },
-                "errors": {},
-            })
-            return templates.TemplateResponse(request, "people/payroll/slip_form.html", context)
+            context.update(
+                {
+                    "slip": None,
+                    "employees": employees,
+                    "error": str(e),
+                    "form_data": {
+                        "employee_id": employee_id,
+                        "start_date": start_date,
+                        "end_date": end_date,
+                        "posting_date": posting_date,
+                        "total_working_days": total_working_days,
+                        "absent_days": absent_days,
+                        "leave_without_pay": leave_without_pay,
+                    },
+                    "errors": {},
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/payroll/slip_form.html", context
+            )
 
     async def update_slip_response(
         self,
@@ -377,29 +419,37 @@ class SlipWebService:
                 db.query(Employee)
                 .filter(
                     Employee.organization_id == org_id,
-                    Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]),
+                    Employee.status.in_(
+                        [EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]
+                    ),
                 )
                 .order_by(Employee.employee_code)
                 .all()
             )
             context = base_context(request, auth, "Edit Salary Slip", "payroll", db=db)
             context["request"] = request
-            context.update({
-                "slip": db.get(SalarySlip, parse_uuid(slip_id)) if parse_uuid(slip_id) else None,
-                "employees": employees,
-                "error": "Employee, period start, and period end are required.",
-                "form_data": {
-                    "employee_id": employee_id,
-                    "start_date": start_date,
-                    "end_date": end_date,
-                    "posting_date": posting_date,
-                    "total_working_days": total_working_days,
-                    "absent_days": absent_days,
-                    "leave_without_pay": leave_without_pay,
-                },
-                "errors": {},
-            })
-            return templates.TemplateResponse(request, "people/payroll/slip_form.html", context)
+            context.update(
+                {
+                    "slip": db.get(SalarySlip, parse_uuid(slip_id))
+                    if parse_uuid(slip_id)
+                    else None,
+                    "employees": employees,
+                    "error": "Employee, period start, and period end are required.",
+                    "form_data": {
+                        "employee_id": employee_id,
+                        "start_date": start_date,
+                        "end_date": end_date,
+                        "posting_date": posting_date,
+                        "total_working_days": total_working_days,
+                        "absent_days": absent_days,
+                        "leave_without_pay": leave_without_pay,
+                    },
+                    "errors": {},
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/payroll/slip_form.html", context
+            )
 
         try:
             start = parse_date(start_date)
@@ -426,7 +476,9 @@ class SlipWebService:
                 updated_by_user_id=user_id,
             )
             db.commit()
-            return RedirectResponse(url=f"/people/payroll/slips/{slip.slip_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/payroll/slips/{slip.slip_id}", status_code=303
+            )
 
         except Exception as e:
             db.rollback()
@@ -434,7 +486,9 @@ class SlipWebService:
                 db.query(Employee)
                 .filter(
                     Employee.organization_id == org_id,
-                    Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]),
+                    Employee.status.in_(
+                        [EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]
+                    ),
                 )
                 .order_by(Employee.employee_code)
                 .all()
@@ -442,22 +496,28 @@ class SlipWebService:
 
             context = base_context(request, auth, "Edit Salary Slip", "payroll", db=db)
             context["request"] = request
-            context.update({
-                "slip": db.get(SalarySlip, parse_uuid(slip_id)) if parse_uuid(slip_id) else None,
-                "employees": employees,
-                "error": str(e),
-                "form_data": {
-                    "employee_id": employee_id,
-                    "start_date": start_date,
-                    "end_date": end_date,
-                    "posting_date": posting_date,
-                    "total_working_days": total_working_days,
-                    "absent_days": absent_days,
-                    "leave_without_pay": leave_without_pay,
-                },
-                "errors": {},
-            })
-            return templates.TemplateResponse(request, "people/payroll/slip_form.html", context)
+            context.update(
+                {
+                    "slip": db.get(SalarySlip, parse_uuid(slip_id))
+                    if parse_uuid(slip_id)
+                    else None,
+                    "employees": employees,
+                    "error": str(e),
+                    "form_data": {
+                        "employee_id": employee_id,
+                        "start_date": start_date,
+                        "end_date": end_date,
+                        "posting_date": posting_date,
+                        "total_working_days": total_working_days,
+                        "absent_days": absent_days,
+                        "leave_without_pay": leave_without_pay,
+                    },
+                    "errors": {},
+                }
+            )
+            return templates.TemplateResponse(
+                request, "people/payroll/slip_form.html", context
+            )
 
     def slip_detail_response(
         self,
@@ -483,16 +543,28 @@ class SlipWebService:
         skip_deductions = False
 
         employee = db.get(Employee, slip.employee_id) if slip.employee_id else None
-        structure = db.get(SalaryStructure, slip.structure_id) if slip.structure_id else None
+        structure = (
+            db.get(SalaryStructure, slip.structure_id) if slip.structure_id else None
+        )
         if employee and structure:
             employment_type = employee.employment_type
             if employment_type is None and employee.employment_type_id:
                 employment_type = db.get(EmploymentType, employee.employment_type_id)
 
-            type_code = (employment_type.type_code or "").strip().lower() if employment_type else ""
-            type_name = (employment_type.type_name or "").strip().lower() if employment_type else ""
+            type_code = (
+                (employment_type.type_code or "").strip().lower()
+                if employment_type
+                else ""
+            )
+            type_name = (
+                (employment_type.type_name or "").strip().lower()
+                if employment_type
+                else ""
+            )
             is_contract = type_code == "contract" or type_name == "contract"
-            is_contract_structure = (structure.structure_name or "").strip().lower() == "contract staff"
+            is_contract_structure = (
+                structure.structure_name or ""
+            ).strip().lower() == "contract staff"
             skip_deductions = is_contract or is_contract_structure
 
         if slip.employee_id:
@@ -515,9 +587,15 @@ class SlipWebService:
                     organization_id=org_id,
                     gross_monthly=slip.gross_pay,
                     basic_monthly=basic_estimate,
-                    annual_rent=tax_profile.annual_rent if tax_profile else Decimal("0"),
-                    rent_verified=tax_profile.rent_receipt_verified if tax_profile else False,
-                    pension_rate=tax_profile.pension_rate if tax_profile else Decimal("0.08"),
+                    annual_rent=tax_profile.annual_rent
+                    if tax_profile
+                    else Decimal("0"),
+                    rent_verified=tax_profile.rent_receipt_verified
+                    if tax_profile
+                    else False,
+                    pension_rate=tax_profile.pension_rate
+                    if tax_profile
+                    else Decimal("0.08"),
                     nhf_rate=tax_profile.nhf_rate if tax_profile else Decimal("0.025"),
                     nhis_rate=tax_profile.nhis_rate if tax_profile else Decimal("0"),
                 )
@@ -526,14 +604,18 @@ class SlipWebService:
         context["request"] = request
         error = request.query_params.get("error")
         success = request.query_params.get("success")
-        context.update({
-            "slip": slip,
-            "paye_breakdown": paye_breakdown,
-            "tax_profile": tax_profile,
-            "error": error,
-            "success": success,
-        })
-        return templates.TemplateResponse(request, "people/payroll/slip_detail.html", context)
+        context.update(
+            {
+                "slip": slip,
+                "paye_breakdown": paye_breakdown,
+                "tax_profile": tax_profile,
+                "error": error,
+                "success": success,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/slip_detail.html", context
+        )
 
     def submit_slip_response(
         self,
@@ -641,7 +723,9 @@ class SlipWebService:
             return RedirectResponse(url="/people/payroll/slips", status_code=303)
 
         if slip.status != SalarySlipStatus.DRAFT:
-            return RedirectResponse(url=f"/people/payroll/slips/{slip_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/payroll/slips/{slip_id}", status_code=303
+            )
 
         try:
             db.delete(slip)

@@ -3,6 +3,7 @@ Payslip Email Rendering Service.
 
 Builds the email subject/body and applies org branding + email header/footer settings.
 """
+
 from __future__ import annotations
 
 from typing import Optional
@@ -46,7 +47,9 @@ def render_payslip_email(db: Session, slip: SalarySlip) -> tuple[str, str, str]:
     Render subject, HTML body, and text body for a payslip email.
     """
     employee = slip.employee
-    employee_name = slip.employee_name or (employee.full_name if employee else "Employee")
+    employee_name = slip.employee_name or (
+        employee.full_name if employee else "Employee"
+    )
     first_name = (employee.first_name if employee else None) or employee_name.split()[0]
     period_str = slip.start_date.strftime("%B %Y")
 

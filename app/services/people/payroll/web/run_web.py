@@ -4,44 +4,48 @@ Payroll Web Service - Payroll Run/Entry operations.
 
 from __future__ import annotations
 
+import logging
 from calendar import monthrange
 from datetime import date, timedelta
-from decimal import Decimal
 from typing import Optional
 from urllib.parse import quote
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
-from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus
+from app.models.finance.banking.bank_account import BankAccount
 from app.models.finance.core_org import Organization
 from app.models.finance.gl.account import Account
-from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.hr.department import Department
 from app.models.people.hr.designation import Designation
-from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
-from app.models.people.payroll.salary_structure import PayrollFrequency, SalaryStructure
+from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.payroll.payroll_entry import PayrollEntry, PayrollEntryStatus
+from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
 from app.models.people.payroll.salary_slip import SalarySlip
+from app.models.people.payroll.salary_structure import PayrollFrequency, SalaryStructure
 from app.services.common import coerce_uuid
-from app.services.people.payroll.payroll_service import PayrollService, PayrollServiceError
+from app.services.people.payroll.payroll_service import (
+    PayrollService,
+)
 from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
+from app.web.deps import WebAuthContext, base_context
 
 from .base import (
     DEFAULT_PAGE_SIZE,
-    parse_uuid,
-    parse_date,
-    parse_int,
-    parse_entry_status,
-    parse_payroll_frequency,
-    parse_slip_status,
     ENTRY_STATUSES,
     PAYROLL_FREQUENCIES,
     SLIP_STATUSES,
+    parse_date,
+    parse_entry_status,
+    parse_int,
+    parse_payroll_frequency,
+    parse_slip_status,
+    parse_uuid,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class RunWebService:
@@ -94,7 +98,9 @@ class RunWebService:
     ) -> int:
         return (
             db.query(SalaryStructureAssignment)
-            .join(Employee, SalaryStructureAssignment.employee_id == Employee.employee_id)
+            .join(
+                Employee, SalaryStructureAssignment.employee_id == Employee.employee_id
+            )
             .filter(SalaryStructureAssignment.organization_id == org_id)
             .filter(SalaryStructureAssignment.from_date <= effective_date)
             .filter(
@@ -103,7 +109,9 @@ class RunWebService:
                     SalaryStructureAssignment.to_date >= effective_date,
                 )
             )
-            .filter(Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]))
+            .filter(
+                Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE])
+            )
             .count()
         )
 
@@ -135,7 +143,12 @@ class RunWebService:
             query = query.filter(PayrollEntry.payroll_month == month)
 
         total = query.count()
-        entries = query.order_by(PayrollEntry.created_at.desc()).offset(offset).limit(per_page).all()
+        entries = (
+            query.order_by(PayrollEntry.created_at.desc())
+            .offset(offset)
+            .limit(per_page)
+            .all()
+        )
         total_pages = (total + per_page - 1) // per_page
 
         # Get statistics
@@ -173,21 +186,23 @@ class RunWebService:
 
         context = base_context(request, auth, "Payroll Runs", "payroll", db=db)
         context["request"] = request
-        context.update({
-            "runs": entries,
-            "status": status,
-            "year": year,
-            "month": month,
-            "page": page,
-            "total_pages": total_pages,
-            "total": total,
-            "has_prev": page > 1,
-            "has_next": page < total_pages,
-            "statuses": ENTRY_STATUSES,
-            "draft_count": draft_count,
-            "pending_count": pending_count,
-            "status_counts": status_counts,
-        })
+        context.update(
+            {
+                "runs": entries,
+                "status": status,
+                "year": year,
+                "month": month,
+                "page": page,
+                "total_pages": total_pages,
+                "total": total,
+                "has_prev": page > 1,
+                "has_next": page < total_pages,
+                "statuses": ENTRY_STATUSES,
+                "draft_count": draft_count,
+                "pending_count": pending_count,
+                "status_counts": status_counts,
+            }
+        )
         return templates.TemplateResponse(request, "people/payroll/runs.html", context)
 
     def run_new_form_response(
@@ -219,7 +234,10 @@ class RunWebService:
 
         structures = (
             db.query(SalaryStructure)
-            .filter(SalaryStructure.organization_id == org_id, SalaryStructure.is_active == True)
+            .filter(
+                SalaryStructure.organization_id == org_id,
+                SalaryStructure.is_active == True,
+            )
             .order_by(SalaryStructure.structure_name)
             .all()
         )
@@ -249,28 +267,32 @@ class RunWebService:
 
         context = base_context(request, auth, "New Payroll Run", "payroll", db=db)
         context["request"] = request
-        context.update({
-            "entry": None,
-            "run": None,
-            "departments": departments,
-            "designations": designations,
-            "structures": structures,
-            "bank_accounts": bank_accounts,
-            "expense_accounts": expense_accounts,
-            "current_year": today.year,
-            "current_month": today.month,
-            "frequencies": PAYROLL_FREQUENCIES,
-            "assigned_count": assigned_count,
-            "default_start": default_start.isoformat(),
-            "default_end": default_end.isoformat(),
-            "default_posting": today.isoformat(),
-            "form_data": {
-                "payroll_year": today.year,
-                "payroll_month": today.month,
-            },
-            "errors": {},
-        })
-        return templates.TemplateResponse(request, "people/payroll/run_form.html", context)
+        context.update(
+            {
+                "entry": None,
+                "run": None,
+                "departments": departments,
+                "designations": designations,
+                "structures": structures,
+                "bank_accounts": bank_accounts,
+                "expense_accounts": expense_accounts,
+                "current_year": today.year,
+                "current_month": today.month,
+                "frequencies": PAYROLL_FREQUENCIES,
+                "assigned_count": assigned_count,
+                "default_start": default_start.isoformat(),
+                "default_end": default_end.isoformat(),
+                "default_posting": today.isoformat(),
+                "form_data": {
+                    "payroll_year": today.year,
+                    "payroll_month": today.month,
+                },
+                "errors": {},
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/run_form.html", context
+        )
 
     async def create_run_response(
         self,
@@ -315,8 +337,12 @@ class RunWebService:
                 posting_date=posting_date,
                 start_date=start_date,
                 end_date=end_date,
-                source_bank_account_id=parse_uuid(bank_account_id) if bank_account_id else None,
-                expense_account_id=parse_uuid(expense_account_id) if expense_account_id else None,
+                source_bank_account_id=parse_uuid(bank_account_id)
+                if bank_account_id
+                else None,
+                expense_account_id=parse_uuid(expense_account_id)
+                if expense_account_id
+                else None,
                 department_id=parse_uuid(department_id) if department_id else None,
                 designation_id=parse_uuid(designation_id) if designation_id else None,
                 payroll_frequency=parsed_frequency or PayrollFrequency.MONTHLY,
@@ -324,12 +350,18 @@ class RunWebService:
                 notes=notes or entry_name or None,
             )
             db.commit()
-            return RedirectResponse(url=f"/people/payroll/runs/{entry.entry_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/payroll/runs/{entry.entry_id}", status_code=303
+            )
 
         except Exception as e:
             db.rollback()
             return self._render_run_form_with_error(
-                request, auth, db, str(e), {
+                request,
+                auth,
+                db,
+                str(e),
+                {
                     "entry_name": entry_name,
                     "payroll_year": payroll_year,
                     "payroll_month": payroll_month,
@@ -344,7 +376,7 @@ class RunWebService:
                     "end_date": end_date_str,
                     "posting_date": posting_date_str,
                     "notes": notes or entry_name,
-                }
+                },
             )
 
     def run_detail_response(
@@ -372,10 +404,7 @@ class RunWebService:
         status_value = self._form_text(request.query_params.get("status"))
         status_filter = parse_slip_status(status_value)
 
-        slips_query = (
-            db.query(SalarySlip)
-            .filter(SalarySlip.payroll_entry_id == e_id)
-        )
+        slips_query = db.query(SalarySlip).filter(SalarySlip.payroll_entry_id == e_id)
         if search:
             like = f"%{search}%"
             slips_query = slips_query.filter(
@@ -408,22 +437,28 @@ class RunWebService:
             .all()
         )
 
-        context = base_context(request, auth, entry.entry_name or "Payroll Run", "payroll", db=db)
+        context = base_context(
+            request, auth, entry.entry_name or "Payroll Run", "payroll", db=db
+        )
         context["request"] = request
-        context.update({
-            "entry": entry,
-            "slips": slips,
-            "bank_accounts": bank_accounts,
-            "success": success,
-            "error": error,
-            "slip_search": search,
-            "slip_status": status_value if status_filter else "",
-            "slip_statuses": SLIP_STATUSES,
-            "slip_status_counts": slip_status_counts,
-            "filtered_slip_count": len(slips),
-            "total_slip_count": total_slips,
-        })
-        return templates.TemplateResponse(request, "people/payroll/run_detail.html", context)
+        context.update(
+            {
+                "entry": entry,
+                "slips": slips,
+                "bank_accounts": bank_accounts,
+                "success": success,
+                "error": error,
+                "slip_search": search,
+                "slip_status": status_value if status_filter else "",
+                "slip_statuses": SLIP_STATUSES,
+                "slip_status_counts": slip_status_counts,
+                "filtered_slip_count": len(slips),
+                "total_slip_count": total_slips,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/run_detail.html", context
+        )
 
     def generate_run_response(
         self,
@@ -576,9 +611,15 @@ class RunWebService:
 
         if e_id:
             entry = db.get(PayrollEntry, e_id)
-            if entry and entry.organization_id == org_id and entry.status == PayrollEntryStatus.DRAFT:
+            if (
+                entry
+                and entry.organization_id == org_id
+                and entry.status == PayrollEntryStatus.DRAFT
+            ):
                 # Delete associated slips first
-                db.query(SalarySlip).filter(SalarySlip.payroll_entry_id == e_id).delete()
+                db.query(SalarySlip).filter(
+                    SalarySlip.payroll_entry_id == e_id
+                ).delete()
                 db.delete(entry)
                 db.commit()
                 return RedirectResponse(url="/people/payroll/runs", status_code=303)
@@ -616,7 +657,10 @@ class RunWebService:
 
         structures = (
             db.query(SalaryStructure)
-            .filter(SalaryStructure.organization_id == org_id, SalaryStructure.is_active == True)
+            .filter(
+                SalaryStructure.organization_id == org_id,
+                SalaryStructure.is_active == True,
+            )
             .order_by(SalaryStructure.structure_name)
             .all()
         )
@@ -650,26 +694,30 @@ class RunWebService:
 
         context = base_context(request, auth, "New Payroll Run", "payroll", db=db)
         context["request"] = request
-        context.update({
-            "entry": None,
-            "run": None,
-            "departments": departments,
-            "designations": designations,
-            "structures": structures,
-            "bank_accounts": bank_accounts,
-            "expense_accounts": expense_accounts,
-            "current_year": today.year,
-            "current_month": today.month,
-            "frequencies": PAYROLL_FREQUENCIES,
-            "assigned_count": assigned_count,
-            "default_start": (start_date or default_start).isoformat(),
-            "default_end": (end_date or default_end).isoformat(),
-            "default_posting": (posting_date or today).isoformat(),
-            "form_data": form_data,
-            "error": error,
-            "errors": {},
-        })
-        return templates.TemplateResponse(request, "people/payroll/run_form.html", context)
+        context.update(
+            {
+                "entry": None,
+                "run": None,
+                "departments": departments,
+                "designations": designations,
+                "structures": structures,
+                "bank_accounts": bank_accounts,
+                "expense_accounts": expense_accounts,
+                "current_year": today.year,
+                "current_month": today.month,
+                "frequencies": PAYROLL_FREQUENCIES,
+                "assigned_count": assigned_count,
+                "default_start": (start_date or default_start).isoformat(),
+                "default_end": (end_date or default_end).isoformat(),
+                "default_posting": (posting_date or today).isoformat(),
+                "form_data": form_data,
+                "error": error,
+                "errors": {},
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/payroll/run_form.html", context
+        )
 
     def bank_upload_response(
         self,
@@ -690,8 +738,9 @@ class RunWebService:
         Returns:
             StreamingResponse with CSV file
         """
-        from fastapi.responses import StreamingResponse
         import io
+
+        from fastapi.responses import StreamingResponse
 
         from app.services.finance.banking.bank_upload import (
             BankUploadService,
@@ -709,7 +758,9 @@ class RunWebService:
             return RedirectResponse(url="/people/payroll/runs", status_code=303)
 
         # Resolve source bank account (prefer run selection, fallback to query param)
-        resolved_source_id = source_account_id or (str(entry.source_bank_account_id) if entry.source_bank_account_id else None)
+        resolved_source_id = source_account_id or (
+            str(entry.source_bank_account_id) if entry.source_bank_account_id else None
+        )
         source_account_number = ""
         if resolved_source_id:
             sa_id = parse_uuid(resolved_source_id)
@@ -746,18 +797,28 @@ class RunWebService:
                 continue
 
             base_ref = slip.slip_number or f"SAL-{slip.slip_id.hex[:8].upper()}"
-            suffix = slip.employee.employee_code if slip.employee and slip.employee.employee_code else slip.slip_id.hex[:6].upper()
+            suffix = (
+                slip.employee.employee_code
+                if slip.employee and slip.employee.employee_code
+                else slip.slip_id.hex[:6].upper()
+            )
 
             payment_items.append(
                 PaymentItem(
                     reference=f"{base_ref}-{suffix}",
-                    beneficiary_name=slip.bank_account_name or slip.employee_name or "Unknown",
+                    beneficiary_name=slip.bank_account_name
+                    or slip.employee_name
+                    or "Unknown",
                     amount=slip.net_pay,
                     account_number=slip.bank_account_number,
                     bank_name=slip.bank_name or "",
                     bank_code=slip.bank_branch_code,
-                    beneficiary_code=slip.employee.employee_code if slip.employee else None,
-                    narration=f"Salary {entry.payroll_month}/{entry.payroll_year}" if entry.payroll_month else "Salary Payment",
+                    beneficiary_code=slip.employee.employee_code
+                    if slip.employee
+                    else None,
+                    narration=f"Salary {entry.payroll_month}/{entry.payroll_year}"
+                    if entry.payroll_month
+                    else "Salary Payment",
                 )
             )
 
@@ -780,8 +841,14 @@ class RunWebService:
         )
 
         # Generate filename with entry info
-        entry_suffix = entry.entry_name.lower().replace(" ", "_") if entry.entry_name else entry.entry_number
-        filename = f"bank_upload_zenith_{entry_suffix}_{payment_date.strftime('%Y%m%d')}.csv"
+        entry_suffix = (
+            entry.entry_name.lower().replace(" ", "_")
+            if entry.entry_name
+            else entry.entry_number
+        )
+        filename = (
+            f"bank_upload_zenith_{entry_suffix}_{payment_date.strftime('%Y%m%d')}.csv"
+        )
 
         # Return as downloadable file
         return StreamingResponse(

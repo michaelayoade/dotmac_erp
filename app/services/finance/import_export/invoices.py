@@ -4,6 +4,7 @@ Invoices Importer.
 Imports customer invoices from CSV data into the AR system.
 """
 
+import logging
 from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
@@ -12,11 +13,13 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.finance.ar.invoice import Invoice, InvoiceType, InvoiceStatus
-from app.models.finance.ar.invoice_line import InvoiceLine
 from app.models.finance.ar.customer import Customer
+from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
+from app.models.finance.ar.invoice_line import InvoiceLine
 
 from .base import BaseImporter, FieldMapping, ImportConfig
+
+logger = logging.getLogger(__name__)
 
 
 class InvoiceImporter(BaseImporter[Invoice]):
@@ -69,12 +72,18 @@ class InvoiceImporter(BaseImporter[Invoice]):
             FieldMapping("Invoice Number", "invoice_number", required=False),
             FieldMapping("Invoice No", "invoice_no_alt", required=False),
             FieldMapping("Number", "number_alt", required=False),
-            FieldMapping("Invoice Date", "invoice_date", required=False,
-                         transformer=self.parse_date),
-            FieldMapping("Date", "date_alt", required=False,
-                         transformer=self.parse_date),
-            FieldMapping("Due Date", "due_date", required=False,
-                         transformer=self.parse_date),
+            FieldMapping(
+                "Invoice Date",
+                "invoice_date",
+                required=False,
+                transformer=self.parse_date,
+            ),
+            FieldMapping(
+                "Date", "date_alt", required=False, transformer=self.parse_date
+            ),
+            FieldMapping(
+                "Due Date", "due_date", required=False, transformer=self.parse_date
+            ),
             # Customer
             FieldMapping("Customer Name", "customer_name", required=False),
             FieldMapping("Customer", "customer_alt", required=False),
@@ -83,31 +92,65 @@ class InvoiceImporter(BaseImporter[Invoice]):
             FieldMapping("Invoice Type", "invoice_type_str", required=False),
             FieldMapping("Type", "type_alt", required=False),
             # Currency
-            FieldMapping("Currency Code", "currency_code", required=False, default="NGN"),
+            FieldMapping(
+                "Currency Code", "currency_code", required=False, default="NGN"
+            ),
             FieldMapping("Currency", "currency_alt", required=False),
-            FieldMapping("Exchange Rate", "exchange_rate", required=False,
-                         transformer=self.parse_decimal, default=Decimal("1")),
+            FieldMapping(
+                "Exchange Rate",
+                "exchange_rate",
+                required=False,
+                transformer=self.parse_decimal,
+                default=Decimal("1"),
+            ),
             # Amounts
-            FieldMapping("Subtotal", "subtotal", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Net Amount", "net_amount_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Tax Amount", "tax_amount", required=False,
-                         transformer=self.parse_decimal, default=Decimal("0")),
-            FieldMapping("VAT", "vat_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Tax", "tax_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Total Amount", "total_amount", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Total", "total_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Gross Amount", "gross_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Amount Paid", "amount_paid", required=False,
-                         transformer=self.parse_decimal, default=Decimal("0")),
-            FieldMapping("Paid", "paid_alt", required=False,
-                         transformer=self.parse_decimal),
+            FieldMapping(
+                "Subtotal", "subtotal", required=False, transformer=self.parse_decimal
+            ),
+            FieldMapping(
+                "Net Amount",
+                "net_amount_alt",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Tax Amount",
+                "tax_amount",
+                required=False,
+                transformer=self.parse_decimal,
+                default=Decimal("0"),
+            ),
+            FieldMapping(
+                "VAT", "vat_alt", required=False, transformer=self.parse_decimal
+            ),
+            FieldMapping(
+                "Tax", "tax_alt", required=False, transformer=self.parse_decimal
+            ),
+            FieldMapping(
+                "Total Amount",
+                "total_amount",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Total", "total_alt", required=False, transformer=self.parse_decimal
+            ),
+            FieldMapping(
+                "Gross Amount",
+                "gross_alt",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Amount Paid",
+                "amount_paid",
+                required=False,
+                transformer=self.parse_decimal,
+                default=Decimal("0"),
+            ),
+            FieldMapping(
+                "Paid", "paid_alt", required=False, transformer=self.parse_decimal
+            ),
             # Status
             FieldMapping("Invoice Status", "status_str", required=False),
             FieldMapping("Status", "status_alt", required=False),
@@ -118,40 +161,94 @@ class InvoiceImporter(BaseImporter[Invoice]):
             FieldMapping("Item Name", "line_item_name", required=False),
             FieldMapping("Item Desc", "line_item_desc", required=False),
             FieldMapping("Product", "line_product_alt", required=False),
-            FieldMapping("Quantity", "line_quantity", required=False,
-                         transformer=self.parse_decimal, default=Decimal("1")),
-            FieldMapping("Qty", "line_qty_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Unit Price", "line_unit_price", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Price", "line_price_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Rate", "line_rate_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Line Amount", "line_amount", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Amount", "line_amount_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Item Total", "line_item_total", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Item Price", "line_item_price", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Discount", "line_discount", required=False,
-                         transformer=self.parse_decimal, default=Decimal("0")),
-            FieldMapping("Discount Amount", "line_discount_amount_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Item Tax Amount", "line_tax_amount", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Tax Amount", "line_tax_amount_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Balance", "balance_alt", required=False,
-                         transformer=self.parse_decimal),
+            FieldMapping(
+                "Quantity",
+                "line_quantity",
+                required=False,
+                transformer=self.parse_decimal,
+                default=Decimal("1"),
+            ),
+            FieldMapping(
+                "Qty", "line_qty_alt", required=False, transformer=self.parse_decimal
+            ),
+            FieldMapping(
+                "Unit Price",
+                "line_unit_price",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Price",
+                "line_price_alt",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Rate", "line_rate_alt", required=False, transformer=self.parse_decimal
+            ),
+            FieldMapping(
+                "Line Amount",
+                "line_amount",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Amount",
+                "line_amount_alt",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Item Total",
+                "line_item_total",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Item Price",
+                "line_item_price",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Discount",
+                "line_discount",
+                required=False,
+                transformer=self.parse_decimal,
+                default=Decimal("0"),
+            ),
+            FieldMapping(
+                "Discount Amount",
+                "line_discount_amount_alt",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Item Tax Amount",
+                "line_tax_amount",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Tax Amount",
+                "line_tax_amount_alt",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Balance", "balance_alt", required=False, transformer=self.parse_decimal
+            ),
         ]
 
     def get_unique_key(self, row: Dict[str, Any]) -> str:
         """Unique key is invoice number."""
-        return (row.get("Invoice Number") or row.get("Invoice No") or
-                row.get("Number") or row.get("Invoice ID") or "").strip()
+        return (
+            row.get("Invoice Number")
+            or row.get("Invoice No")
+            or row.get("Number")
+            or row.get("Invoice ID")
+            or ""
+        ).strip()
 
     def _import_rows(self, rows: List[Dict[str, Any]]) -> None:
         """Import rows grouped by invoice number to preserve multi-line invoices."""
@@ -183,8 +280,7 @@ class InvoiceImporter(BaseImporter[Invoice]):
                     self.result.duplicate_count += 1
                     self.result.skipped_count += 1
                     self.result.add_warning(
-                        idx,
-                        f"Duplicate invoice skipped (key: {invoice_key})"
+                        idx, f"Duplicate invoice skipped (key: {invoice_key})"
                     )
                     continue
 
@@ -211,23 +307,37 @@ class InvoiceImporter(BaseImporter[Invoice]):
         line_rows: List[Dict[str, Any]],
     ) -> Invoice:
         """Create a single invoice with multiple lines from grouped rows."""
-        invoice_number = (header.get("invoice_number") or header.get("invoice_no_alt") or
-                          header.get("number_alt") or "").strip()
+        invoice_number = (
+            header.get("invoice_number")
+            or header.get("invoice_no_alt")
+            or header.get("number_alt")
+            or ""
+        ).strip()
         if not invoice_number:
             self._invoice_number_counter += 1
             invoice_number = f"INV{self._invoice_number_counter:06d}"
 
-        invoice_date = header.get("invoice_date") or header.get("date_alt") or date.today()
+        invoice_date = (
+            header.get("invoice_date") or header.get("date_alt") or date.today()
+        )
         due_date = header.get("due_date") or invoice_date
 
-        customer_name = (header.get("customer_name") or header.get("customer_alt") or
-                         header.get("client_alt") or "Unknown Customer").strip()
+        customer_name = (
+            header.get("customer_name")
+            or header.get("customer_alt")
+            or header.get("client_alt")
+            or "Unknown Customer"
+        ).strip()
         customer_id = self._get_customer_id(customer_name)
 
-        type_str = (header.get("invoice_type_str") or header.get("type_alt") or "STANDARD")
+        type_str = (
+            header.get("invoice_type_str") or header.get("type_alt") or "STANDARD"
+        )
         invoice_type = self._parse_invoice_type(type_str)
 
-        currency_code = (header.get("currency_code") or header.get("currency_alt") or "NGN")[:3]
+        currency_code = (
+            header.get("currency_code") or header.get("currency_alt") or "NGN"
+        )[:3]
         exchange_rate = header.get("exchange_rate") or Decimal("1")
 
         lines: list[InvoiceLine] = []
@@ -245,9 +355,15 @@ class InvoiceImporter(BaseImporter[Invoice]):
 
         total_amount = subtotal + tax_amount
 
-        header_total = header.get("total_amount") or header.get("total_alt") or header.get("gross_alt")
+        header_total = (
+            header.get("total_amount")
+            or header.get("total_alt")
+            or header.get("gross_alt")
+        )
         header_subtotal = header.get("subtotal") or header.get("net_amount_alt")
-        header_tax = header.get("tax_amount") or header.get("vat_alt") or header.get("tax_alt")
+        header_tax = (
+            header.get("tax_amount") or header.get("vat_alt") or header.get("tax_alt")
+        )
 
         if header_subtotal is not None and subtotal == 0:
             subtotal = header_subtotal
@@ -257,7 +373,9 @@ class InvoiceImporter(BaseImporter[Invoice]):
             total_amount = header_total
 
         balance = header.get("balance_alt")
-        amount_paid = header.get("amount_paid") or header.get("paid_alt") or Decimal("0")
+        amount_paid = (
+            header.get("amount_paid") or header.get("paid_alt") or Decimal("0")
+        )
         if balance is not None and total_amount is not None:
             amount_paid = total_amount - balance
             if amount_paid < 0:
@@ -314,19 +432,37 @@ class InvoiceImporter(BaseImporter[Invoice]):
         is_valid = super().validate_row(row, row_num)
 
         # Customer is required
-        customer_name = (row.get("Customer Name") or row.get("Customer") or
-                         row.get("Client") or "").strip()
+        customer_name = (
+            row.get("Customer Name") or row.get("Customer") or row.get("Client") or ""
+        ).strip()
         if not customer_name:
             self.result.add_error(row_num, "Customer name is required", "Customer Name")
             is_valid = False
 
         # Amount is required
-        total = (row.get("Total Amount") or row.get("Total") or
-                 row.get("Gross Amount") or row.get("Subtotal") or
-                 row.get("Net Amount") or "").strip() if isinstance(
-            row.get("Total Amount") or row.get("Total") or
-            row.get("Gross Amount") or row.get("Subtotal") or
-            row.get("Net Amount"), str) else row.get("Total Amount") or row.get("Total") or row.get("Gross Amount") or row.get("Subtotal") or row.get("Net Amount")
+        total = (
+            (
+                row.get("Total Amount")
+                or row.get("Total")
+                or row.get("Gross Amount")
+                or row.get("Subtotal")
+                or row.get("Net Amount")
+                or ""
+            ).strip()
+            if isinstance(
+                row.get("Total Amount")
+                or row.get("Total")
+                or row.get("Gross Amount")
+                or row.get("Subtotal")
+                or row.get("Net Amount"),
+                str,
+            )
+            else row.get("Total Amount")
+            or row.get("Total")
+            or row.get("Gross Amount")
+            or row.get("Subtotal")
+            or row.get("Net Amount")
+        )
         if not total:
             self.result.add_error(row_num, "Total amount is required", "Total Amount")
             is_valid = False
@@ -336,8 +472,12 @@ class InvoiceImporter(BaseImporter[Invoice]):
     def create_entity(self, row: Dict[str, Any]) -> Invoice:
         """Create a new invoice from transformed row data."""
         # Get invoice number
-        invoice_number = (row.get("invoice_number") or row.get("invoice_no_alt") or
-                          row.get("number_alt") or "").strip()
+        invoice_number = (
+            row.get("invoice_number")
+            or row.get("invoice_no_alt")
+            or row.get("number_alt")
+            or ""
+        ).strip()
         if not invoice_number:
             self._invoice_number_counter += 1
             invoice_number = f"INV{self._invoice_number_counter:06d}"
@@ -347,24 +487,35 @@ class InvoiceImporter(BaseImporter[Invoice]):
         due_date = row.get("due_date") or invoice_date
 
         # Get customer
-        customer_name = (row.get("customer_name") or row.get("customer_alt") or
-                         row.get("client_alt") or "Unknown Customer").strip()
+        customer_name = (
+            row.get("customer_name")
+            or row.get("customer_alt")
+            or row.get("client_alt")
+            or "Unknown Customer"
+        ).strip()
         customer_id = self._get_customer_id(customer_name)
 
         # Parse invoice type
-        type_str = (row.get("invoice_type_str") or row.get("type_alt") or "STANDARD")
+        type_str = row.get("invoice_type_str") or row.get("type_alt") or "STANDARD"
         invoice_type = self._parse_invoice_type(type_str)
 
         # Get currency
-        currency_code = (row.get("currency_code") or row.get("currency_alt") or "NGN")[:3]
+        currency_code = (row.get("currency_code") or row.get("currency_alt") or "NGN")[
+            :3
+        ]
         exchange_rate = row.get("exchange_rate") or Decimal("1")
 
         # Get amounts
-        subtotal = (row.get("subtotal") or row.get("net_amount_alt") or Decimal("0"))
-        tax_amount = (row.get("tax_amount") or row.get("vat_alt") or
-                      row.get("tax_alt") or Decimal("0"))
-        total_amount = (row.get("total_amount") or row.get("total_alt") or
-                        row.get("gross_alt"))
+        subtotal = row.get("subtotal") or row.get("net_amount_alt") or Decimal("0")
+        tax_amount = (
+            row.get("tax_amount")
+            or row.get("vat_alt")
+            or row.get("tax_alt")
+            or Decimal("0")
+        )
+        total_amount = (
+            row.get("total_amount") or row.get("total_alt") or row.get("gross_alt")
+        )
 
         # Calculate if needed
         if total_amount is None:
@@ -430,12 +581,16 @@ class InvoiceImporter(BaseImporter[Invoice]):
             or "Invoice Item"
         )
 
-        quantity = (row.get("line_quantity") or row.get("line_qty_alt") or Decimal("1"))
+        quantity = row.get("line_quantity") or row.get("line_qty_alt") or Decimal("1")
         if quantity == 0:
             quantity = Decimal("1")
 
-        unit_price = (row.get("line_unit_price") or row.get("line_price_alt") or
-                      row.get("line_rate_alt") or row.get("line_item_price"))
+        unit_price = (
+            row.get("line_unit_price")
+            or row.get("line_price_alt")
+            or row.get("line_rate_alt")
+            or row.get("line_item_price")
+        )
 
         line_amount = (
             row.get("line_item_total")
@@ -453,10 +608,14 @@ class InvoiceImporter(BaseImporter[Invoice]):
         if unit_price is None:
             unit_price = line_amount / quantity if quantity else line_amount
 
-        discount = (row.get("line_discount") or row.get("line_discount_amount_alt") or
-                    Decimal("0"))
-        tax_amount = (row.get("line_tax_amount") or row.get("line_tax_amount_alt") or
-                      Decimal("0"))
+        discount = (
+            row.get("line_discount")
+            or row.get("line_discount_amount_alt")
+            or Decimal("0")
+        )
+        tax_amount = (
+            row.get("line_tax_amount") or row.get("line_tax_amount_alt") or Decimal("0")
+        )
 
         return InvoiceLine(
             line_id=uuid4(),
@@ -519,7 +678,9 @@ class InvoiceImporter(BaseImporter[Invoice]):
         }
         return type_map.get(type_str.upper().replace("-", "_"), InvoiceType.STANDARD)
 
-    def _parse_status(self, status_str: str, total: Decimal, paid: Decimal) -> InvoiceStatus:
+    def _parse_status(
+        self, status_str: str, total: Decimal, paid: Decimal
+    ) -> InvoiceStatus:
         """Parse invoice status string, considering amounts."""
         status_map = {
             "DRAFT": InvoiceStatus.DRAFT,
@@ -535,7 +696,9 @@ class InvoiceImporter(BaseImporter[Invoice]):
             "DISPUTED": InvoiceStatus.DISPUTED,
         }
 
-        status = status_map.get(status_str.upper().replace(" ", "_"), InvoiceStatus.DRAFT)
+        status = status_map.get(
+            status_str.upper().replace(" ", "_"), InvoiceStatus.DRAFT
+        )
 
         # Auto-determine based on payment
         if paid and total and paid > 0:

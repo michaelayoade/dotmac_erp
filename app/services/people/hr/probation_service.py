@@ -13,10 +13,10 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Optional, Sequence
+from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import and_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.people.hr.employee import Employee, EmployeeStatus
@@ -84,7 +84,9 @@ class ProbationCheckResult:
     """Result of checking employees with ending probation."""
 
     employees_ending_soon: list[ProbationStatus]  # Ending within threshold
-    employees_due_for_confirmation: list[ProbationStatus]  # Probation ended, not confirmed
+    employees_due_for_confirmation: list[
+        ProbationStatus
+    ]  # Probation ended, not confirmed
 
 
 # Operations restricted during probation
@@ -128,7 +130,9 @@ class ProbationService:
         """Get employee by ID."""
         return self.db.get(Employee, employee_id)
 
-    def is_on_probation(self, employee_id: UUID, as_of_date: Optional[date] = None) -> bool:
+    def is_on_probation(
+        self, employee_id: UUID, as_of_date: Optional[date] = None
+    ) -> bool:
         """
         Check if employee is currently on probation.
 
@@ -236,7 +240,9 @@ class ProbationService:
         status = self.get_probation_status(employee_id)
         if status and status.is_on_probation:
             raise EmployeeInProbationError(
-                employee_id, operation, status.probation_end_date  # type: ignore
+                employee_id,
+                operation,
+                status.probation_end_date,  # type: ignore
             )
 
     def confirm_employee(
@@ -273,7 +279,9 @@ class ProbationService:
             raise ProbationServiceError(f"Employee {employee_id} not found")
 
         if employee.organization_id != organization_id:
-            raise ProbationServiceError(f"Employee {employee_id} not found in organization")
+            raise ProbationServiceError(
+                f"Employee {employee_id} not found in organization"
+            )
 
         if employee.confirmation_date is not None:
             raise EmployeeAlreadyConfirmedError(employee_id, employee.confirmation_date)
@@ -331,7 +339,9 @@ class ProbationService:
             raise ProbationServiceError(f"Employee {employee_id} not found")
 
         if employee.organization_id != organization_id:
-            raise ProbationServiceError(f"Employee {employee_id} not found in organization")
+            raise ProbationServiceError(
+                f"Employee {employee_id} not found in organization"
+            )
 
         if employee.confirmation_date is not None:
             raise EmployeeAlreadyConfirmedError(employee_id, employee.confirmation_date)
@@ -519,7 +529,9 @@ class ProbationService:
             raise ProbationServiceError(f"Employee {employee_id} not found")
 
         if employee.organization_id != organization_id:
-            raise ProbationServiceError(f"Employee {employee_id} not found in organization")
+            raise ProbationServiceError(
+                f"Employee {employee_id} not found in organization"
+            )
 
         if employee.confirmation_date is not None:
             raise EmployeeAlreadyConfirmedError(employee_id, employee.confirmation_date)

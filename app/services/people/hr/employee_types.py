@@ -3,20 +3,23 @@
 These dataclasses define the contract for employee operations.
 They are framework-agnostic (no Pydantic, no FastAPI).
 """
+
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, InvalidOperation
-from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Union
 
 from app.models.people.hr import EmployeeStatus as EmploymentStatus
 from app.models.people.hr.employee import SalaryMode
-from app.models.person import Gender
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from starlette.datastructures import FormData, UploadFile
+    pass
 
 
 # =============================================================================
@@ -85,7 +88,9 @@ class FormParser:
         except ValueError:
             return None
 
-    def enum(self, key: str, enum_class: type, default: Optional[Any] = None) -> Optional[Any]:
+    def enum(
+        self, key: str, enum_class: type, default: Optional[Any] = None
+    ) -> Optional[Any]:
         """Extract enum value or default if invalid."""
         value = self.get_str(key, "")
         if not value:
@@ -117,6 +122,7 @@ class ValidationResult:
     def failure(cls, errors: Dict[str, str]) -> "ValidationResult":
         """Create a failed validation result."""
         return cls(is_valid=False, errors=errors)
+
 
 __all__ = [
     "FormParser",
@@ -193,6 +199,7 @@ class EmployeeCreateData:
     bank_account_name: Optional[str] = None
     # Notes
     notes: Optional[str] = None
+
 
 @dataclass
 class EmployeeUpdateData:

@@ -1,10 +1,14 @@
+import logging
+
 from fastapi import HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
-from app.models.audit import AuditEvent, AuditActorType
+from app.models.audit import AuditActorType, AuditEvent
 from app.schemas.audit import AuditEventCreate
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 def _apply_ordering(query, order_by, order_dir, allowed_columns):

@@ -4,40 +4,42 @@ Self-service web view service for employees and managers.
 
 from __future__ import annotations
 
+import logging
+import shutil
+import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-import shutil
-import uuid
 from typing import Optional
-from uuid import UUID
 from urllib.parse import urlencode
+from uuid import UUID
 
 from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.people.exp import ExpenseClaim, ExpenseClaimStatus, ExpenseClaimItem
+from app.models.finance.core_org.pfa_directory import PFADirectory
+from app.models.people.exp import ExpenseClaim, ExpenseClaimItem, ExpenseClaimStatus
 from app.models.people.hr.employee import Employee
 from app.models.people.leave import LeaveApplication, LeaveApplicationStatus
-from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
-from app.models.finance.core_org.pfa_directory import PFADirectory
+from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
 from app.models.person import Gender as PersonGender
+from app.services.common import PaginationParams, ValidationError, coerce_uuid
 from app.services.finance.banking.bank_directory import BankDirectoryService
-from app.services.people.hr.info_change_service import InfoChangeService
-from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.attendance import AttendanceService
 from app.services.people.attendance.attendance_service import AttendanceServiceError
 from app.services.people.expense import ExpenseService
 from app.services.people.hr import EmployeeService
 from app.services.people.hr.employee_types import EmployeeFilters
+from app.services.people.hr.info_change_service import InfoChangeService
 from app.services.people.leave import LeaveService
 from app.services.people.payroll.paye_calculator import PAYECalculator
-from app.services.common import ValidationError
 from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
+from app.web.deps import WebAuthContext, base_context
+
+logger = logging.getLogger(__name__)
 
 
 class SelfServiceWebService:
@@ -1695,8 +1697,8 @@ class SelfServiceWebService:
                 request, auth, db, "Discipline", "self-discipline"
             )
 
-        from app.services.people.discipline import DisciplineService
         from app.models.people.discipline import CaseStatus
+        from app.services.people.discipline import DisciplineService
 
         discipline_service = DisciplineService(db)
         try:
@@ -1749,8 +1751,8 @@ class SelfServiceWebService:
 
         employee_id = self._get_employee_id(db, org_id, person_id)
 
-        from app.services.people.discipline import DisciplineService
         from app.schemas.people.discipline import CaseResponseCreate
+        from app.services.people.discipline import DisciplineService
 
         discipline_service = DisciplineService(db)
         case = discipline_service.get_case_or_404(case_id)
@@ -1782,8 +1784,8 @@ class SelfServiceWebService:
 
         employee_id = self._get_employee_id(db, org_id, person_id)
 
-        from app.services.people.discipline import DisciplineService
         from app.schemas.people.discipline import FileAppealRequest
+        from app.services.people.discipline import DisciplineService
 
         discipline_service = DisciplineService(db)
         case = discipline_service.get_case_or_404(case_id)

@@ -3,18 +3,20 @@ Project Mapping from ERPNext to DotMac ERP.
 
 Maps ERPNext Project DocType to DotMac core_org.project.
 """
+
+import logging
 from typing import Any
 
 from .base import (
     DocTypeMapping,
     FieldMapping,
     clean_string,
-    default_currency,
     parse_date,
     parse_datetime,
     parse_decimal,
 )
 
+logger = logging.getLogger(__name__)
 
 # ERPNext Project status to DotMac ProjectStatus
 PROJECT_STATUS_MAP = {

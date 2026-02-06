@@ -4,6 +4,7 @@ Pension Export Service.
 Generates pension contribution schedules for PFAs.
 Supports Paypen and generic formats for uploading to PenCom CPRS.
 """
+
 from __future__ import annotations
 
 import csv
@@ -11,7 +12,7 @@ import io
 import logging
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal, Optional
 from uuid import UUID
 
@@ -20,9 +21,9 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.payroll.salary_slip import (
     SalarySlip,
-    SalarySlipStatus,
-    SalarySlipEarning,
     SalarySlipDeduction,
+    SalarySlipEarning,
+    SalarySlipStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -108,7 +109,9 @@ class PensionExportService:
             .options(
                 joinedload(SalarySlip.employee),
                 joinedload(SalarySlip.earnings).joinedload(SalarySlipEarning.component),
-                joinedload(SalarySlip.deductions).joinedload(SalarySlipDeduction.component),
+                joinedload(SalarySlip.deductions).joinedload(
+                    SalarySlipDeduction.component
+                ),
             )
             .where(
                 SalarySlip.organization_id == organization_id,
@@ -146,16 +149,18 @@ class PensionExportService:
         writer = csv.writer(output)
 
         # Header row
-        writer.writerow([
-            "PFA_CODE",
-            "STAFF_ID",
-            "RSA_PIN",
-            "EMPLOYEE_NAME",
-            "EMPLOYEE_CONTRIBUTION",
-            "EMPLOYER_CONTRIBUTION",
-            "TOTAL_CONTRIBUTION",
-            "PERIOD",
-        ])
+        writer.writerow(
+            [
+                "PFA_CODE",
+                "STAFF_ID",
+                "RSA_PIN",
+                "EMPLOYEE_NAME",
+                "EMPLOYEE_CONTRIBUTION",
+                "EMPLOYER_CONTRIBUTION",
+                "TOTAL_CONTRIBUTION",
+                "PERIOD",
+            ]
+        )
 
         errors: list[str] = []
         total_employee = Decimal("0")
@@ -196,16 +201,18 @@ class PensionExportService:
             staff_id = employee.employee_code
             total_contribution = pension_employee + pension_employer
 
-            writer.writerow([
-                pfa_code,
-                staff_id,
-                rsa_pin,
-                employee.full_name,
-                str(_round_currency(pension_employee)),
-                str(_round_currency(pension_employer)),
-                str(_round_currency(total_contribution)),
-                period,
-            ])
+            writer.writerow(
+                [
+                    pfa_code,
+                    staff_id,
+                    rsa_pin,
+                    employee.full_name,
+                    str(_round_currency(pension_employee)),
+                    str(_round_currency(pension_employer)),
+                    str(_round_currency(total_contribution)),
+                    period,
+                ]
+            )
 
             total_employee += pension_employee
             total_employer += pension_employer
@@ -240,22 +247,24 @@ class PensionExportService:
         writer = csv.writer(output)
 
         # Header row
-        writer.writerow([
-            "S/N",
-            "Staff ID",
-            "Employee Name",
-            "PFA Code",
-            "PFA Name",
-            "RSA PIN",
-            "Basic Salary",
-            "Housing",
-            "Transport",
-            "BHT (Pension Base)",
-            "Employee Contribution (8%)",
-            "Employer Contribution (10%)",
-            "Total Contribution",
-            "Period",
-        ])
+        writer.writerow(
+            [
+                "S/N",
+                "Staff ID",
+                "Employee Name",
+                "PFA Code",
+                "PFA Name",
+                "RSA PIN",
+                "Basic Salary",
+                "Housing",
+                "Transport",
+                "BHT (Pension Base)",
+                "Employee Contribution (8%)",
+                "Employer Contribution (10%)",
+                "Total Contribution",
+                "Period",
+            ]
+        )
 
         errors: list[str] = []
         total_employee = Decimal("0")
@@ -295,7 +304,9 @@ class PensionExportService:
             transport = Decimal("0")
 
             for earning in slip.earnings:
-                component_code = (earning.component.component_code if earning.component else "").upper()
+                component_code = (
+                    earning.component.component_code if earning.component else ""
+                ).upper()
                 amount = earning.amount or Decimal("0")
 
                 if component_code == "BASIC":
@@ -308,22 +319,24 @@ class PensionExportService:
             bht = basic + housing + transport
             total_contribution = pension_employee + pension_employer
 
-            writer.writerow([
-                idx,
+            writer.writerow(
+                [
+                    idx,
                     employee.employee_code,
-                employee.full_name,
-                pfa_code,
-                pfa_name,
-                rsa_pin,
-                str(_round_currency(basic)),
-                str(_round_currency(housing)),
-                str(_round_currency(transport)),
-                str(_round_currency(bht)),
-                str(_round_currency(pension_employee)),
-                str(_round_currency(pension_employer)),
-                str(_round_currency(total_contribution)),
-                period_str,
-            ])
+                    employee.full_name,
+                    pfa_code,
+                    pfa_name,
+                    rsa_pin,
+                    str(_round_currency(basic)),
+                    str(_round_currency(housing)),
+                    str(_round_currency(transport)),
+                    str(_round_currency(bht)),
+                    str(_round_currency(pension_employee)),
+                    str(_round_currency(pension_employer)),
+                    str(_round_currency(total_contribution)),
+                    period_str,
+                ]
+            )
 
             total_employee += pension_employee
             total_employer += pension_employer
@@ -347,10 +360,14 @@ class PensionExportService:
         """Map deduction component codes to totals."""
         totals: dict[str, Decimal] = {}
         for deduction in slip.deductions:
-            component_code = (deduction.component.component_code if deduction.component else "").upper()
+            component_code = (
+                deduction.component.component_code if deduction.component else ""
+            ).upper()
             if not component_code:
                 continue
-            totals[component_code] = totals.get(component_code, Decimal("0")) + (deduction.amount or Decimal("0"))
+            totals[component_code] = totals.get(component_code, Decimal("0")) + (
+                deduction.amount or Decimal("0")
+            )
         return totals
 
 

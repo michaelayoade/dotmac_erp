@@ -9,9 +9,9 @@ Adds fields for statutory exports:
 - pfa_code: Reference to PFA directory
 - nhf_number: NHF registration number
 """
+
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 
 revision = "20260130_add_tax_profile_pension"

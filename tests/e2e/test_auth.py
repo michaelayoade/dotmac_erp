@@ -27,7 +27,9 @@ def wait_for_alpine(page, timeout=10000):
     # Wait for form to be visible (Alpine.js has initialized)
     page.wait_for_selector("form", state="visible", timeout=timeout)
     # Also wait for input fields to be ready
-    page.wait_for_selector("input[name='username'], input[name='email']", state="visible", timeout=timeout)
+    page.wait_for_selector(
+        "input[name='username'], input[name='email']", state="visible", timeout=timeout
+    )
 
 
 @pytest.mark.e2e
@@ -52,7 +54,9 @@ class TestLoginPage:
         wait_for_alpine(page)
 
         # Look for username or email input
-        username_field = page.locator("input[name='username'], input[name='email'], input[type='email']").first
+        username_field = page.locator(
+            "input[name='username'], input[name='email'], input[type='email']"
+        ).first
         expect(username_field).to_be_visible()
 
     def test_login_page_has_password_field(self, page, base_url):
@@ -77,7 +81,9 @@ class TestLoginPage:
         wait_for_alpine(page)
 
         # Look for forgot password link
-        forgot_link = page.locator("a[href*='forgot'], a:has-text('Forgot'), a:has-text('forgot')")
+        forgot_link = page.locator(
+            "a[href*='forgot'], a:has-text('Forgot'), a:has-text('forgot')"
+        )
         # May or may not exist, so just check if visible when present
         if forgot_link.count() > 0:
             expect(forgot_link.first).to_be_visible()
@@ -90,6 +96,7 @@ class TestLoginWithCredentials:
     def test_login_with_valid_credentials_redirects(self, page, base_url):
         """Test that valid credentials redirect to dashboard."""
         import os
+
         username = os.environ.get("E2E_TEST_USERNAME", "e2e_testuser")
         password = os.environ.get("E2E_TEST_PASSWORD", "e2e_testpassword123")
 
@@ -97,7 +104,9 @@ class TestLoginWithCredentials:
         wait_for_alpine(page)
 
         # Fill in credentials
-        username_field = page.locator("input[name='username'], input[name='email']").first
+        username_field = page.locator(
+            "input[name='username'], input[name='email']"
+        ).first
         password_field = page.locator("input[type='password']").first
 
         username_field.fill(username)
@@ -116,7 +125,9 @@ class TestLoginWithCredentials:
         wait_for_alpine(page)
 
         # Fill in invalid credentials
-        username_field = page.locator("input[name='username'], input[name='email']").first
+        username_field = page.locator(
+            "input[name='username'], input[name='email']"
+        ).first
         password_field = page.locator("input[type='password']").first
 
         username_field.fill("invalid_user_that_does_not_exist")
@@ -134,7 +145,9 @@ class TestLoginWithCredentials:
             pass
         else:
             # If redirected, there should be an error indication
-            error_indicator = page.locator(".error, .alert-error, .text-red, [class*='error']")
+            error_indicator = page.locator(
+                ".error, .alert-error, .text-red, [class*='error']"
+            )
             if error_indicator.count() > 0:
                 expect(error_indicator.first).to_be_visible()
 
@@ -292,12 +305,16 @@ class TestResetPassword:
         # Without token, should show error or redirect
         # Check for error message or redirect to login/forgot-password
         url = page.url
-        has_error = page.locator(".error, .alert-error, .text-red, [class*='error']").count() > 0
+        has_error = (
+            page.locator(".error, .alert-error, .text-red, [class*='error']").count()
+            > 0
+        )
         is_redirected = "login" in url or "forgot" in url
 
         # Token is required - page should either error, redirect, or require token param
-        assert has_error or is_redirected or "token" in url or response.status >= 400, \
+        assert has_error or is_redirected or "token" in url or response.status >= 400, (
             "Reset password should require token"
+        )
 
     def test_reset_password_with_invalid_token(self, page, base_url):
         """Test reset password with invalid token shows error."""
@@ -310,14 +327,20 @@ class TestResetPassword:
 
         # Should show invalid token error or redirect
         url = page.url
-        has_error = page.locator(".error, .alert-error, .text-red, [class*='error'], [class*='invalid']").count() > 0
+        has_error = (
+            page.locator(
+                ".error, .alert-error, .text-red, [class*='error'], [class*='invalid']"
+            ).count()
+            > 0
+        )
         is_redirected = "login" in url or "forgot" in url or "expired" in url
 
         # Page may display the reset form but show error on submit
         # Just verify we're on the reset password page or redirected
         is_on_reset_page = "reset-password" in url
-        assert has_error or is_redirected or is_on_reset_page, \
+        assert has_error or is_redirected or is_on_reset_page, (
             "Invalid token should show error, redirect, or display reset page"
+        )
 
 
 @pytest.mark.e2e
@@ -359,5 +382,6 @@ class TestAdminLogin:
 
         # User should either be on admin page (if has role) or redirected/forbidden
         # All three outcomes are valid depending on user's role
-        assert is_admin or is_login or is_forbidden, \
+        assert is_admin or is_login or is_forbidden, (
             "Should either access admin, redirect to login, or show forbidden"
+        )

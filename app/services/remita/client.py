@@ -68,9 +68,7 @@ class RemitaClient:
     """
 
     RRR_ENDPOINT = "/remita/exapp/api/v1/send/api/echannelsvc/merchant/api/paymentinit"
-    STATUS_ENDPOINT = (
-        "/remita/exapp/api/v1/send/api/echannelsvc/{merchant_id}/{rrr}/{api_hash}/status.reg"
-    )
+    STATUS_ENDPOINT = "/remita/exapp/api/v1/send/api/echannelsvc/{merchant_id}/{rrr}/{api_hash}/status.reg"
 
     def __init__(
         self,

@@ -9,14 +9,14 @@ import uuid
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from sqlalchemy import select, update, delete, func
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app.models.notification import (
-    Notification,
     EntityType,
-    NotificationType,
+    Notification,
     NotificationChannel,
+    NotificationType,
 )
 
 logger = logging.getLogger(__name__)
@@ -502,9 +502,7 @@ class NotificationService:
         Returns:
             List of notifications ordered by creation time (newest first)
         """
-        query = select(Notification).where(
-            Notification.recipient_id == recipient_id
-        )
+        query = select(Notification).where(Notification.recipient_id == recipient_id)
 
         if organization_id:
             query = query.where(Notification.organization_id == organization_id)
@@ -516,10 +514,7 @@ class NotificationService:
             query = query.where(Notification.entity_type == entity_type)
 
         query = (
-            query
-            .order_by(Notification.created_at.desc())
-            .offset(offset)
-            .limit(limit)
+            query.order_by(Notification.created_at.desc()).offset(offset).limit(limit)
         )
 
         return list(db.execute(query).scalars().all())

@@ -16,9 +16,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.config import settings
 from app.db import SessionLocal, get_auth_db_session
-from app.templates import templates
 from app.services.auth_flow import AuthFlow, hash_session_token
-from app.web.deps import brand_context, WebAuthContext
+from app.templates import templates
+from app.web.deps import WebAuthContext, brand_context
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +166,9 @@ class AuthWebService:
                 "brand": brand_context(),
                 "next": safe_next_url,
                 "is_authenticated": auth.is_authenticated,
-                "has_admin_role": "admin" in auth.roles if auth.is_authenticated else False,
+                "has_admin_role": "admin" in auth.roles
+                if auth.is_authenticated
+                else False,
             },
         )
 
@@ -215,7 +217,9 @@ class AuthWebService:
         For SSO clients, revokes in the shared auth database.
         """
         from datetime import datetime, timezone
-        from app.models.auth import Session as AuthSession, SessionStatus
+
+        from app.models.auth import Session as AuthSession
+        from app.models.auth import SessionStatus
 
         token_hash = hash_session_token(refresh_token)
 

@@ -3,53 +3,52 @@ ERPNext Sync Orchestrator.
 
 Coordinates the full migration process with proper dependency ordering.
 """
+
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, Optional, Sequence, cast
 
 from sqlalchemy.orm import Session
 
-from app.models.sync import SyncHistory, SyncJobStatus, SyncType
+from app.models.sync import SyncHistory, SyncType
 from app.services.erpnext.client import ERPNextClient, ERPNextConfig
-
-from .base import SyncResult
 
 # Core sync services
 from .accounts import AccountSyncService
-from .items import ItemCategorySyncService, ItemSyncService
 from .assets import AssetCategorySyncService, AssetSyncService
+from .attendance import AttendanceSyncService, ShiftTypeSyncService
+from .base import SyncResult
 from .contacts import CustomerSyncService, SupplierSyncService
-from .warehouses import WarehouseSyncService
+
+# Expense sync services
+from .expense import ExpenseCategorySyncService, ExpenseClaimSyncService
 
 # HR sync services
 from .hr import (
     DepartmentSyncService,
     DesignationSyncService,
-    EmploymentTypeSyncService,
     EmployeeGradeSyncService,
     EmployeeSyncService,
+    EmploymentTypeSyncService,
 )
+from .items import ItemCategorySyncService, ItemSyncService
 
 # Leave & Attendance sync services
 from .leave import (
-    LeaveTypeSyncService,
     LeaveAllocationSyncService,
     LeaveApplicationSyncService,
+    LeaveTypeSyncService,
 )
-from .attendance import ShiftTypeSyncService, AttendanceSyncService
-
-# Expense sync services
-from .expense import ExpenseCategorySyncService, ExpenseClaimSyncService
+from .material_request import MaterialRequestSyncService
 
 # Project & Support sync services
 from .projects import ProjectSyncService
+from .stock_ledger import StockLedgerSyncService
 from .support import TicketSyncService
 from .tasks import TaskSyncService
 from .timesheets import TimesheetSyncService
-from .material_request import MaterialRequestSyncService
-from .stock_ledger import StockLedgerSyncService
+from .warehouses import WarehouseSyncService
 
 logger = logging.getLogger(__name__)
 
@@ -272,7 +271,9 @@ class ERPNextSyncOrchestrator:
         if hasattr(service, "asset_account_id"):
             service.asset_account_id = self.config.default_asset_account_id
         if hasattr(service, "depreciation_account_id"):
-            service.depreciation_account_id = self.config.default_depreciation_account_id
+            service.depreciation_account_id = (
+                self.config.default_depreciation_account_id
+            )
 
         return service
 
@@ -386,9 +387,16 @@ class ERPNextSyncOrchestrator:
         filters: dict[str, Any] = {}
         # Company filters for company-scoped DocTypes
         if self.config.erpnext_company and entity_type in [
-            "accounts", "assets", "warehouses", "departments",
-            "employees", "projects", "expense_claims", "timesheets",
-            "material_requests", "stock_ledger_entries",
+            "accounts",
+            "assets",
+            "warehouses",
+            "departments",
+            "employees",
+            "projects",
+            "expense_claims",
+            "timesheets",
+            "material_requests",
+            "stock_ledger_entries",
         ]:
             filters["company"] = self.config.erpnext_company
 
@@ -458,9 +466,9 @@ class ERPNextSyncOrchestrator:
             result = cast(
                 SyncResult,
                 service.sync(
-                client=self.client,
-                incremental=incremental,
-                batch_size=self.config.batch_size,
+                    client=self.client,
+                    incremental=incremental,
+                    batch_size=self.config.batch_size,
                 ),
             )
             return result

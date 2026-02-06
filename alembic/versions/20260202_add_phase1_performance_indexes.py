@@ -32,7 +32,10 @@ def upgrade() -> None:
     # ar.customer_payment: composite index on (organization_id, status)
     # Speeds up approval workflow queries and dashboard filtering
     if inspector.has_table("customer_payment", schema="ar"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("customer_payment", schema="ar")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("customer_payment", schema="ar")
+        }
         if "idx_customer_payment_org_status" not in indexes:
             op.create_index(
                 "idx_customer_payment_org_status",
@@ -44,7 +47,10 @@ def upgrade() -> None:
     # ar.payment_allocation: index on payment_id
     # Speeds up finding allocations for a payment during cash application
     if inspector.has_table("payment_allocation", schema="ar"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("payment_allocation", schema="ar")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("payment_allocation", schema="ar")
+        }
         if "idx_payment_alloc_payment" not in indexes:
             op.create_index(
                 "idx_payment_alloc_payment",
@@ -68,7 +74,10 @@ def upgrade() -> None:
     # ap.supplier_payment: composite index on (organization_id, status)
     # Speeds up batch payment processing and approval workflows
     if inspector.has_table("supplier_payment", schema="ap"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("supplier_payment", schema="ap")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("supplier_payment", schema="ap")
+        }
         if "idx_supplier_payment_org_status" not in indexes:
             op.create_index(
                 "idx_supplier_payment_org_status",
@@ -80,7 +89,10 @@ def upgrade() -> None:
     # ap.payment_allocation: index on payment_id
     # Speeds up finding allocations for a supplier payment
     if inspector.has_table("payment_allocation", schema="ap"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("payment_allocation", schema="ap")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("payment_allocation", schema="ap")
+        }
         if "idx_ap_payment_alloc_payment" not in indexes:
             op.create_index(
                 "idx_ap_payment_alloc_payment",
@@ -106,26 +118,62 @@ def downgrade() -> None:
 
     # --- Drop AP Schema Indexes ---
     if inspector.has_table("payment_allocation", schema="ap"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("payment_allocation", schema="ap")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("payment_allocation", schema="ap")
+        }
         if "idx_ap_payment_alloc_invoice" in indexes:
-            op.drop_index("idx_ap_payment_alloc_invoice", table_name="payment_allocation", schema="ap")
+            op.drop_index(
+                "idx_ap_payment_alloc_invoice",
+                table_name="payment_allocation",
+                schema="ap",
+            )
         if "idx_ap_payment_alloc_payment" in indexes:
-            op.drop_index("idx_ap_payment_alloc_payment", table_name="payment_allocation", schema="ap")
+            op.drop_index(
+                "idx_ap_payment_alloc_payment",
+                table_name="payment_allocation",
+                schema="ap",
+            )
 
     if inspector.has_table("supplier_payment", schema="ap"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("supplier_payment", schema="ap")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("supplier_payment", schema="ap")
+        }
         if "idx_supplier_payment_org_status" in indexes:
-            op.drop_index("idx_supplier_payment_org_status", table_name="supplier_payment", schema="ap")
+            op.drop_index(
+                "idx_supplier_payment_org_status",
+                table_name="supplier_payment",
+                schema="ap",
+            )
 
     # --- Drop AR Schema Indexes ---
     if inspector.has_table("payment_allocation", schema="ar"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("payment_allocation", schema="ar")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("payment_allocation", schema="ar")
+        }
         if "idx_payment_alloc_invoice" in indexes:
-            op.drop_index("idx_payment_alloc_invoice", table_name="payment_allocation", schema="ar")
+            op.drop_index(
+                "idx_payment_alloc_invoice",
+                table_name="payment_allocation",
+                schema="ar",
+            )
         if "idx_payment_alloc_payment" in indexes:
-            op.drop_index("idx_payment_alloc_payment", table_name="payment_allocation", schema="ar")
+            op.drop_index(
+                "idx_payment_alloc_payment",
+                table_name="payment_allocation",
+                schema="ar",
+            )
 
     if inspector.has_table("customer_payment", schema="ar"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("customer_payment", schema="ar")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("customer_payment", schema="ar")
+        }
         if "idx_customer_payment_org_status" in indexes:
-            op.drop_index("idx_customer_payment_org_status", table_name="customer_payment", schema="ar")
+            op.drop_index(
+                "idx_customer_payment_org_status",
+                table_name="customer_payment",
+                schema="ar",
+            )

@@ -6,9 +6,9 @@ Manages deferred tax basis tracking, temporary differences, and movements.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import List, Optional
 from uuid import UUID
 
@@ -18,9 +18,10 @@ from sqlalchemy.orm import Session
 
 from app.models.finance.tax.deferred_tax_basis import DeferredTaxBasis, DifferenceType
 from app.models.finance.tax.deferred_tax_movement import DeferredTaxMovement
-from app.models.finance.tax.tax_jurisdiction import TaxJurisdiction
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -185,7 +186,9 @@ class DeferredTaxService(ListResponseMixin):
             unrecognized = deferred_tax
 
         # Partial recognition based on probability
-        if input.recognition_probability and input.recognition_probability < Decimal("1"):
+        if input.recognition_probability and input.recognition_probability < Decimal(
+            "1"
+        ):
             recognized = (deferred_tax * input.recognition_probability).quantize(
                 Decimal("0.01"), rounding=ROUND_HALF_UP
             )
@@ -265,7 +268,10 @@ class DeferredTaxService(ListResponseMixin):
 
         # Apply recognition
         if basis.is_recognized:
-            if basis.recognition_probability and basis.recognition_probability < Decimal("1"):
+            if (
+                basis.recognition_probability
+                and basis.recognition_probability < Decimal("1")
+            ):
                 recognized = (deferred_tax * basis.recognition_probability).quantize(
                     Decimal("0.01"), rounding=ROUND_HALF_UP
                 )
@@ -351,16 +357,21 @@ class DeferredTaxService(ListResponseMixin):
         )
 
         # Calculate closing deferred tax at closing rate
-        deferred_tax_closing_gross, is_asset = DeferredTaxService.calculate_deferred_tax(
-            temp_diff_closing, tax_rate_closing
+        deferred_tax_closing_gross, is_asset = (
+            DeferredTaxService.calculate_deferred_tax(
+                temp_diff_closing, tax_rate_closing
+            )
         )
 
         # Apply recognition
         if basis.is_recognized:
-            if basis.recognition_probability and basis.recognition_probability < Decimal("1"):
-                deferred_tax_closing = (deferred_tax_closing_gross * basis.recognition_probability).quantize(
-                    Decimal("0.01"), rounding=ROUND_HALF_UP
-                )
+            if (
+                basis.recognition_probability
+                and basis.recognition_probability < Decimal("1")
+            ):
+                deferred_tax_closing = (
+                    deferred_tax_closing_gross * basis.recognition_probability
+                ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
                 unrecognized = deferred_tax_closing_gross - deferred_tax_closing
             else:
                 deferred_tax_closing = deferred_tax_closing_gross
@@ -376,9 +387,9 @@ class DeferredTaxService(ListResponseMixin):
 
         # Tax rate change impact (at opening temp diff)
         if tax_rate_closing != tax_rate_opening:
-            tax_rate_change_impact = (abs(temp_diff_opening) * (tax_rate_closing - tax_rate_opening)).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
+            tax_rate_change_impact = (
+                abs(temp_diff_opening) * (tax_rate_closing - tax_rate_opening)
+            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             if temp_diff_opening < 0:  # DTA
                 tax_rate_change_impact = -tax_rate_change_impact
         else:
@@ -388,13 +399,14 @@ class DeferredTaxService(ListResponseMixin):
         total_dt_movement = deferred_tax_closing - deferred_tax_opening
 
         # P&L movement = total - OCI - equity
-        dt_movement_pl = total_dt_movement - deferred_tax_movement_oci - deferred_tax_movement_equity
+        dt_movement_pl = (
+            total_dt_movement - deferred_tax_movement_oci - deferred_tax_movement_equity
+        )
 
         # Recognition change
         recognition_change = (
-            (deferred_tax_closing_gross - deferred_tax_closing)
-            - basis.unrecognized_amount
-        )
+            deferred_tax_closing_gross - deferred_tax_closing
+        ) - basis.unrecognized_amount
 
         # Create movement record
         movement = DeferredTaxMovement(
@@ -471,7 +483,9 @@ class DeferredTaxService(ListResponseMixin):
         )
 
         if jurisdiction_id:
-            query = query.filter(DeferredTaxBasis.jurisdiction_id == coerce_uuid(jurisdiction_id))
+            query = query.filter(
+                DeferredTaxBasis.jurisdiction_id == coerce_uuid(jurisdiction_id)
+            )
 
         bases = query.all()
 
@@ -516,10 +530,18 @@ class DeferredTaxService(ListResponseMixin):
 
         result = (
             db.query(
-                func.sum(DeferredTaxMovement.deferred_tax_movement_pl).label("pl_total"),
-                func.sum(DeferredTaxMovement.deferred_tax_movement_oci).label("oci_total"),
-                func.sum(DeferredTaxMovement.deferred_tax_movement_equity).label("equity_total"),
-                func.sum(DeferredTaxMovement.tax_rate_change_impact).label("rate_change"),
+                func.sum(DeferredTaxMovement.deferred_tax_movement_pl).label(
+                    "pl_total"
+                ),
+                func.sum(DeferredTaxMovement.deferred_tax_movement_oci).label(
+                    "oci_total"
+                ),
+                func.sum(DeferredTaxMovement.deferred_tax_movement_equity).label(
+                    "equity_total"
+                ),
+                func.sum(DeferredTaxMovement.tax_rate_change_impact).label(
+                    "rate_change"
+                ),
                 func.sum(DeferredTaxMovement.recognition_change).label("recognition"),
             )
             .join(DeferredTaxBasis)

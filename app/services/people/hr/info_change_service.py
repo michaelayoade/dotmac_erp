@@ -15,23 +15,23 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
+from app.models.notification import EntityType, NotificationChannel, NotificationType
 from app.models.people.hr.employee import Employee
-from app.models.person import Gender as PersonGender, Person
 from app.models.people.hr.info_change_request import (
     EmployeeInfoChangeRequest,
     InfoChangeStatus,
     InfoChangeType,
 )
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
-from app.models.notification import EntityType, NotificationChannel, NotificationType
+from app.models.person import Gender as PersonGender
 from app.models.person import Person
 from app.models.rbac import PersonRole, Role
 from app.services.email import send_email
-from app.config import settings
 from app.services.notification import NotificationService
 
 if TYPE_CHECKING:
-    from app.web.deps import WebAuthContext
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,9 @@ class InfoChangeService:
 
         # Determine change type and collect previous values
         change_type = self._determine_change_type(proposed_changes)
-        previous_values = self._get_previous_values(employee, tax_profile, proposed_changes)
+        previous_values = self._get_previous_values(
+            employee, tax_profile, proposed_changes
+        )
 
         # Create expiry time
         expires_at = datetime.now(timezone.utc) + timedelta(days=expiry_days)
@@ -137,7 +139,12 @@ class InfoChangeService:
 
     def _determine_change_type(self, changes: dict[str, Any]) -> InfoChangeType:
         """Determine the type of change based on fields being updated."""
-        bank_fields = {"bank_name", "bank_account_number", "bank_account_name", "bank_branch_code"}
+        bank_fields = {
+            "bank_name",
+            "bank_account_number",
+            "bank_account_name",
+            "bank_branch_code",
+        }
         tax_fields = {"tin", "tax_state"}
         pension_fields = {"rsa_pin", "pfa_code"}
         nhf_fields = {"nhf_number"}
@@ -186,7 +193,9 @@ class InfoChangeService:
             if "phone" in proposed:
                 previous["phone"] = person.phone
             if "date_of_birth" in proposed:
-                previous["date_of_birth"] = person.date_of_birth.isoformat() if person.date_of_birth else None
+                previous["date_of_birth"] = (
+                    person.date_of_birth.isoformat() if person.date_of_birth else None
+                )
             if "gender" in proposed:
                 previous["gender"] = person.gender.value if person.gender else None
             if "address_line1" in proposed:
@@ -259,7 +268,9 @@ class InfoChangeService:
             raise ValueError(f"Request {request_id} not found")
 
         if not request.is_actionable:
-            raise ValueError(f"Request {request_id} is not actionable (status={request.status.value})")
+            raise ValueError(
+                f"Request {request_id} is not actionable (status={request.status.value})"
+            )
 
         # Apply the changes
         self._apply_changes(request)
@@ -309,7 +320,9 @@ class InfoChangeService:
             raise ValueError(f"Request {request_id} not found")
 
         if not request.is_actionable:
-            raise ValueError(f"Request {request_id} is not actionable (status={request.status.value})")
+            raise ValueError(
+                f"Request {request_id} is not actionable (status={request.status.value})"
+            )
 
         # Update request status
         request.status = InfoChangeStatus.REJECTED
@@ -350,7 +363,12 @@ class InfoChangeService:
             return text
 
         # Apply bank changes to employee
-        bank_fields = ["bank_name", "bank_account_number", "bank_account_name", "bank_branch_code"]
+        bank_fields = [
+            "bank_name",
+            "bank_account_number",
+            "bank_account_name",
+            "bank_branch_code",
+        ]
         for field in bank_fields:
             if field in changes:
                 setattr(employee, field, _clean_text(changes[field]))
@@ -424,6 +442,7 @@ class InfoChangeService:
             if not tax_profile:
                 # Create new tax profile
                 from datetime import date
+
                 tax_profile = EmployeeTaxProfile(
                     employee_id=request.employee_id,
                     organization_id=request.organization_id,
@@ -515,7 +534,9 @@ class InfoChangeService:
         )
 
         if not include_resolved:
-            stmt = stmt.where(EmployeeInfoChangeRequest.status == InfoChangeStatus.PENDING)
+            stmt = stmt.where(
+                EmployeeInfoChangeRequest.status == InfoChangeStatus.PENDING
+            )
 
         return list(self.db.scalars(stmt).all())
 
@@ -524,8 +545,7 @@ class InfoChangeService:
         from sqlalchemy import func
 
         count = self.db.scalar(
-            select(func.count(EmployeeInfoChangeRequest.request_id))
-            .where(
+            select(func.count(EmployeeInfoChangeRequest.request_id)).where(
                 EmployeeInfoChangeRequest.organization_id == organization_id,
                 EmployeeInfoChangeRequest.employee_id == employee_id,
                 EmployeeInfoChangeRequest.status == InfoChangeStatus.PENDING,
@@ -641,7 +661,7 @@ class InfoChangeService:
             )
             body_html = (
                 f"<p>{employee_name} submitted a request to update their {change_label}.</p>"
-                f"<p><a href=\"{action_url}\">Review request</a></p>"
+                f'<p><a href="{action_url}">Review request</a></p>'
             )
             self._send_email_safe(admin.email, subject, body_html, body_text)
 
@@ -656,7 +676,9 @@ class InfoChangeService:
             return
 
         status = "approved" if approved else "rejected"
-        notification_type = NotificationType.APPROVED if approved else NotificationType.REJECTED
+        notification_type = (
+            NotificationType.APPROVED if approved else NotificationType.REJECTED
+        )
         action_path = "/people/self/tax-info"
         action_url = self._build_app_url(action_path)
         change_label = request.change_type.value.lower().replace("_", " ")
@@ -674,7 +696,11 @@ class InfoChangeService:
                 message=(
                     f"Your request to update your {change_label} "
                     f"has been {status}."
-                    + (f" Reason: {request.reviewer_notes}" if request.reviewer_notes else "")
+                    + (
+                        f" Reason: {request.reviewer_notes}"
+                        if request.reviewer_notes
+                        else ""
+                    )
                 ),
                 channel=NotificationChannel.IN_APP,
                 action_url=action_path,
@@ -683,7 +709,9 @@ class InfoChangeService:
             logger.warning("Failed to notify employee of decision: %s", e)
 
         subject = f"Your info change request was {status}"
-        reason_line = f"\nReason: {request.reviewer_notes}" if request.reviewer_notes else ""
+        reason_line = (
+            f"\nReason: {request.reviewer_notes}" if request.reviewer_notes else ""
+        )
         body_text = (
             f"Your request to update your {change_label} was {status}."
             f"{reason_line}\n"
@@ -692,6 +720,6 @@ class InfoChangeService:
         body_html = (
             f"<p>Your request to update your {change_label} was {status}.</p>"
             f"{f'<p>Reason: {request.reviewer_notes}</p>' if request.reviewer_notes else ''}"
-            f"<p><a href=\"{action_url}\">View details</a></p>"
+            f'<p><a href="{action_url}">View details</a></p>'
         )
         self._send_email_safe(employee_email, subject, body_html, body_text)

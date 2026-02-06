@@ -8,10 +8,9 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
 from typing import Optional
-from uuid import UUID
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -24,19 +23,19 @@ from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
 from app.services.common import coerce_uuid
-from app.services.finance.platform.org_context import org_context_service
-from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
+from app.services.finance.gl.journal import JournalService
 from app.services.finance.gl.web.base import (
-    format_date,
     format_currency,
+    format_date,
     journal_entry_view,
     journal_line_view,
     parse_date,
     parse_status,
     period_option_view,
 )
-from app.services.finance.gl.journal import JournalService
+from app.services.finance.platform.org_context import org_context_service
+from app.templates import templates
+from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +61,10 @@ class JournalWebService:
         """Get context for journal listing page."""
         logger.debug(
             "list_journals_context: org=%s search=%r status=%s page=%d",
-            organization_id, search, status, page
+            organization_id,
+            search,
+            status,
+            page,
         )
         org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
@@ -87,7 +89,9 @@ class JournalWebService:
                 | (JournalEntry.reference.ilike(search_pattern))
             )
 
-        total_count = query.with_entities(func.count(JournalEntry.journal_entry_id)).scalar() or 0
+        total_count = (
+            query.with_entities(func.count(JournalEntry.journal_entry_id)).scalar() or 0
+        )
         entries = (
             query.order_by(JournalEntry.created_at.desc())
             .limit(limit)
@@ -104,8 +108,12 @@ class JournalWebService:
                     "entry_date": format_date(entry.entry_date),
                     "description": entry.description,
                     "source_module": entry.source_module or "MANUAL",
-                    "total_debit": format_currency(entry.total_debit, entry.currency_code),
-                    "total_credit": format_currency(entry.total_credit, entry.currency_code),
+                    "total_debit": format_currency(
+                        entry.total_debit, entry.currency_code
+                    ),
+                    "total_credit": format_currency(
+                        entry.total_credit, entry.currency_code
+                    ),
                     "status": entry.status.value,
                 }
             )
@@ -135,7 +143,8 @@ class JournalWebService:
         """Get context for journal create/edit form."""
         logger.debug(
             "journal_form_context: org=%s journal_entry_id=%s",
-            organization_id, journal_entry_id
+            organization_id,
+            journal_entry_id,
         )
         org_id = coerce_uuid(organization_id)
 
@@ -153,8 +162,12 @@ class JournalWebService:
                 )
 
                 account_ids = [line.account_id for line in lines]
-                accounts = db.query(Account).filter(Account.account_id.in_(account_ids)).all()
-                account_map = {a.account_id: (a.account_code, a.account_name) for a in accounts}
+                accounts = (
+                    db.query(Account).filter(Account.account_id.in_(account_ids)).all()
+                )
+                account_map = {
+                    a.account_id: (a.account_code, a.account_name) for a in accounts
+                }
 
                 for line in lines:
                     acct = account_map.get(line.account_id, ("", ""))
@@ -213,7 +226,8 @@ class JournalWebService:
         """Get context for journal detail page."""
         logger.debug(
             "journal_detail_context: org=%s journal_entry_id=%s",
-            organization_id, journal_entry_id
+            organization_id,
+            journal_entry_id,
         )
         org_id = coerce_uuid(organization_id)
         entry = db.get(JournalEntry, coerce_uuid(journal_entry_id))
@@ -264,7 +278,9 @@ class JournalWebService:
         """Create a new journal entry with lines. Returns (entry, error)."""
         logger.debug(
             "create_journal: org=%s type=%s date=%s",
-            organization_id, journal_type, entry_date
+            organization_id,
+            journal_type,
+            entry_date,
         )
         org_id = coerce_uuid(organization_id)
         uid = coerce_uuid(user_id)
@@ -328,20 +344,28 @@ class JournalWebService:
                 return None, f"Line {idx + 1}: Either debit or credit must be non-zero"
 
             if debit != 0 and credit != 0:
-                return None, f"Line {idx + 1}: Cannot have both debit and credit on same line"
+                return (
+                    None,
+                    f"Line {idx + 1}: Cannot have both debit and credit on same line",
+                )
 
             total_debit += debit
             total_credit += credit
-            validated_lines.append({
-                "account_id": coerce_uuid(account_id),
-                "description": line_data.get("description", ""),
-                "debit": debit,
-                "credit": credit,
-            })
+            validated_lines.append(
+                {
+                    "account_id": coerce_uuid(account_id),
+                    "description": line_data.get("description", ""),
+                    "debit": debit,
+                    "credit": credit,
+                }
+            )
 
         # Check balance
         if total_debit != total_credit:
-            return None, f"Journal is out of balance. Debit: {total_debit}, Credit: {total_credit}"
+            return (
+                None,
+                f"Journal is out of balance. Debit: {total_debit}, Credit: {total_credit}",
+            )
 
         # Generate journal number
         count = (
@@ -389,7 +413,9 @@ class JournalWebService:
 
             db.commit()
             db.refresh(entry)
-            logger.info("create_journal: created %s for org %s", entry.journal_number, org_id)
+            logger.info(
+                "create_journal: created %s for org %s", entry.journal_number, org_id
+            )
             return entry, None
 
         except Exception as e:
@@ -413,10 +439,7 @@ class JournalWebService:
         lines_json: str = "[]",
     ) -> tuple[Optional[JournalEntry], Optional[str]]:
         """Update a journal entry. Only DRAFT entries can be updated. Returns (entry, error)."""
-        logger.debug(
-            "update_journal: org=%s entry_id=%s",
-            organization_id, entry_id
-        )
+        logger.debug("update_journal: org=%s entry_id=%s", organization_id, entry_id)
         org_id = coerce_uuid(organization_id)
         ent_id = coerce_uuid(entry_id)
 
@@ -486,20 +509,28 @@ class JournalWebService:
                 return None, f"Line {idx + 1}: Either debit or credit must be non-zero"
 
             if debit != 0 and credit != 0:
-                return None, f"Line {idx + 1}: Cannot have both debit and credit on same line"
+                return (
+                    None,
+                    f"Line {idx + 1}: Cannot have both debit and credit on same line",
+                )
 
             total_debit += debit
             total_credit += credit
-            validated_lines.append({
-                "account_id": coerce_uuid(account_id),
-                "description": line_data.get("description", ""),
-                "debit": debit,
-                "credit": credit,
-            })
+            validated_lines.append(
+                {
+                    "account_id": coerce_uuid(account_id),
+                    "description": line_data.get("description", ""),
+                    "debit": debit,
+                    "credit": credit,
+                }
+            )
 
         # Check balance
         if total_debit != total_credit:
-            return None, f"Journal is out of balance. Debit: {total_debit}, Credit: {total_credit}"
+            return (
+                None,
+                f"Journal is out of balance. Debit: {total_debit}, Credit: {total_credit}",
+            )
 
         try:
             # Update header
@@ -537,7 +568,9 @@ class JournalWebService:
 
             db.commit()
             db.refresh(entry)
-            logger.info("update_journal: updated %s for org %s", entry.journal_number, org_id)
+            logger.info(
+                "update_journal: updated %s for org %s", entry.journal_number, org_id
+            )
             return entry, None
 
         except Exception as e:
@@ -552,10 +585,7 @@ class JournalWebService:
         entry_id: str,
     ) -> Optional[str]:
         """Delete a journal entry. Only DRAFT entries can be deleted. Returns error message or None."""
-        logger.debug(
-            "delete_journal: org=%s entry_id=%s",
-            organization_id, entry_id
-        )
+        logger.debug("delete_journal: org=%s entry_id=%s", organization_id, entry_id)
         org_id = coerce_uuid(organization_id)
         ent_id = coerce_uuid(entry_id)
 
@@ -617,7 +647,9 @@ class JournalWebService:
         """Render new journal entry form page."""
         context = base_context(request, auth, "New Journal Entry", "gl")
         context.update(self.journal_form_context(db, str(auth.organization_id)))
-        return templates.TemplateResponse(request, "finance/gl/journal_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/gl/journal_form.html", context
+        )
 
     def journal_detail_response(
         self,
@@ -635,7 +667,9 @@ class JournalWebService:
                 entry_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/gl/journal_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/gl/journal_detail.html", context
+        )
 
     def journal_edit_form_response(
         self,
@@ -653,7 +687,9 @@ class JournalWebService:
                 journal_entry_id=entry_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/gl/journal_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/gl/journal_form.html", context
+        )
 
     def create_journal_response(
         self,
@@ -708,9 +744,13 @@ class JournalWebService:
                 "exchange_rate": exchange_rate,
                 "lines_json": lines_json,
             }
-            return templates.TemplateResponse(request, "finance/gl/journal_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/gl/journal_form.html", context
+            )
 
-        return RedirectResponse(url=f"/finance/gl/journals/{entry.journal_entry_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/finance/gl/journals/{entry.journal_entry_id}", status_code=303
+        )
 
     def update_journal_response(
         self,
@@ -761,7 +801,9 @@ class JournalWebService:
                 )
             )
             context["error"] = error
-            return templates.TemplateResponse(request, "finance/gl/journal_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/gl/journal_form.html", context
+            )
 
         return RedirectResponse(url=f"/finance/gl/journals/{entry_id}", status_code=303)
 
@@ -785,7 +827,9 @@ class JournalWebService:
                 )
             )
             context["error"] = error
-            return templates.TemplateResponse(request, "finance/gl/journal_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/gl/journal_detail.html", context
+            )
 
         return RedirectResponse(url="/finance/gl/journals", status_code=303)
 

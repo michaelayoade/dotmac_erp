@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -31,8 +31,8 @@ class IPSASStatementService:
 
         Used to filter GL data by fund when generating fund-level statements.
         """
-        from app.models.finance.ipsas.commitment import Commitment
         from app.models.finance.ipsas.appropriation import Appropriation
+        from app.models.finance.ipsas.commitment import Commitment
 
         # Accounts referenced by commitments in this fund
         commitment_accounts = set(
@@ -265,8 +265,8 @@ class IPSASStatementService:
 
         Shows movements in restricted and unrestricted net assets.
         """
-        from app.models.finance.ipsas.fund import Fund
         from app.models.finance.ipsas.enums import FundStatus
+        from app.models.finance.ipsas.fund import Fund
 
         # Get funds to separate restricted vs unrestricted
         fund_stmt = select(Fund).where(

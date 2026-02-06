@@ -16,7 +16,7 @@ from app.services.operations.inv_web import operations_inv_web_service
 from app.web.deps import (
     get_db,
     require_inventory_access,
-    require_web_permission,
+    require_any_web_permission,
     WebAuthContext,
 )
 
@@ -36,7 +36,9 @@ def list_items(
     db: Session = Depends(get_db),
 ):
     """Items list page."""
-    return inv_web_service.list_items_response(request, auth, search, category, status, page, limit, db)
+    return inv_web_service.list_items_response(
+        request, auth, search, category, status, page, limit, db
+    )
 
 
 @router.get("/items/new", response_class=HTMLResponse)
@@ -299,7 +301,9 @@ def list_categories(
     db: Session = Depends(get_db),
 ):
     """Item categories list page."""
-    return inv_web_service.list_categories_response(request, auth, search, status, page, limit, db)
+    return inv_web_service.list_categories_response(
+        request, auth, search, status, page, limit, db
+    )
 
 
 @router.get("/categories/new", response_class=HTMLResponse)
@@ -397,7 +401,9 @@ def toggle_category_status(
     db: Session = Depends(get_db),
 ):
     """Toggle category active/inactive status."""
-    return inv_web_service.toggle_category_status_response(request, auth, category_id, db)
+    return inv_web_service.toggle_category_status_response(
+        request, auth, category_id, db
+    )
 
 
 # ============================================================================
@@ -416,7 +422,9 @@ def list_warehouses(
     db: Session = Depends(get_db),
 ):
     """Warehouses list page."""
-    return inv_web_service.list_warehouses_response(request, auth, search, status, page, limit, db)
+    return inv_web_service.list_warehouses_response(
+        request, auth, search, status, page, limit, db
+    )
 
 
 @router.get("/warehouses/new", response_class=HTMLResponse)
@@ -553,7 +561,9 @@ def toggle_warehouse_status(
     db: Session = Depends(get_db),
 ):
     """Toggle warehouse active/inactive status."""
-    return inv_web_service.toggle_warehouse_status_response(request, auth, warehouse_id, db)
+    return inv_web_service.toggle_warehouse_status_response(
+        request, auth, warehouse_id, db
+    )
 
 
 # ============================================================================
@@ -587,8 +597,18 @@ def create_receipt_transaction(
 ):
     """Create a manual inventory receipt."""
     return inv_web_service.create_transaction_response(
-        request, auth, "RECEIPT", item_id, warehouse_id, quantity,
-        unit_cost, transaction_date, reference, notes, lot_number, db
+        request,
+        auth,
+        "RECEIPT",
+        item_id,
+        warehouse_id,
+        quantity,
+        unit_cost,
+        transaction_date,
+        reference,
+        notes,
+        lot_number,
+        db,
     )
 
 
@@ -618,8 +638,18 @@ def create_issue_transaction(
 ):
     """Create a manual inventory issue."""
     return inv_web_service.create_transaction_response(
-        request, auth, "ISSUE", item_id, warehouse_id, quantity,
-        unit_cost, transaction_date, reference, notes, lot_number, db
+        request,
+        auth,
+        "ISSUE",
+        item_id,
+        warehouse_id,
+        quantity,
+        unit_cost,
+        transaction_date,
+        reference,
+        notes,
+        lot_number,
+        db,
     )
 
 
@@ -649,8 +679,17 @@ def create_transfer_transaction(
 ):
     """Create an inventory transfer."""
     return inv_web_service.create_transfer_response(
-        request, auth, item_id, from_warehouse_id, to_warehouse_id,
-        quantity, transaction_date, reference, notes, lot_number, db
+        request,
+        auth,
+        item_id,
+        from_warehouse_id,
+        to_warehouse_id,
+        quantity,
+        transaction_date,
+        reference,
+        notes,
+        lot_number,
+        db,
     )
 
 
@@ -680,8 +719,17 @@ def create_adjustment_transaction(
 ):
     """Create an inventory adjustment."""
     return inv_web_service.create_adjustment_response(
-        request, auth, item_id, warehouse_id, quantity, unit_cost,
-        transaction_date, adjustment_type, reason, reference, db
+        request,
+        auth,
+        item_id,
+        warehouse_id,
+        quantity,
+        unit_cost,
+        transaction_date,
+        adjustment_type,
+        reason,
+        reference,
+        db,
     )
 
 
@@ -700,9 +748,6 @@ def material_request_list(
     project_id: Optional[str] = None,
     page: int = 1,
     limit: int = 50,
-    _perm: WebAuthContext = Depends(
-        require_web_permission("inv:material_requests:read")
-    ),
     auth: WebAuthContext = Depends(require_inventory_access),
     db: Session = Depends(get_db),
 ):
@@ -723,7 +768,12 @@ def material_request_list(
 def new_material_request_form(
     request: Request,
     _perm: WebAuthContext = Depends(
-        require_web_permission("inv:material_requests:create")
+        require_any_web_permission(
+            [
+                "inv:material_requests:create",
+                "inventory:material_requests:create",
+            ]
+        )
     ),
     auth: WebAuthContext = Depends(require_inventory_access),
     db: Session = Depends(get_db),
@@ -741,7 +791,12 @@ def material_request_requested_by_search(
     q: str = Query(..., min_length=1),
     limit: int = Query(default=8, ge=1, le=20),
     _perm: WebAuthContext = Depends(
-        require_web_permission("inv:material_requests:create")
+        require_any_web_permission(
+            [
+                "inv:material_requests:create",
+                "inventory:material_requests:create",
+            ]
+        )
     ),
     auth: WebAuthContext = Depends(require_inventory_access),
     db: Session = Depends(get_db),
@@ -760,7 +815,12 @@ def material_request_requested_by_search(
 async def create_material_request(
     request: Request,
     _perm: WebAuthContext = Depends(
-        require_web_permission("inv:material_requests:create")
+        require_any_web_permission(
+            [
+                "inv:material_requests:create",
+                "inventory:material_requests:create",
+            ]
+        )
     ),
     auth: WebAuthContext = Depends(require_inventory_access),
     db: Session = Depends(get_db),
@@ -783,9 +843,6 @@ def material_request_report(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     group_by: str = Query(default="status", pattern="^(status|type)$"),
-    _perm: WebAuthContext = Depends(
-        require_web_permission("inv:material_requests:read")
-    ),
     auth: WebAuthContext = Depends(require_inventory_access),
     db: Session = Depends(get_db),
 ):
@@ -804,9 +861,6 @@ def material_request_report(
 def material_request_detail(
     request: Request,
     request_id: str,
-    _perm: WebAuthContext = Depends(
-        require_web_permission("inv:material_requests:read")
-    ),
     auth: WebAuthContext = Depends(require_inventory_access),
     db: Session = Depends(get_db),
 ):
@@ -824,7 +878,12 @@ def edit_material_request_form(
     request: Request,
     request_id: str,
     _perm: WebAuthContext = Depends(
-        require_web_permission("inv:material_requests:create")
+        require_any_web_permission(
+            [
+                "inv:material_requests:create",
+                "inventory:material_requests:create",
+            ]
+        )
     ),
     auth: WebAuthContext = Depends(require_inventory_access),
     db: Session = Depends(get_db),
@@ -843,7 +902,12 @@ async def update_material_request(
     request: Request,
     request_id: str,
     _perm: WebAuthContext = Depends(
-        require_web_permission("inv:material_requests:create")
+        require_any_web_permission(
+            [
+                "inv:material_requests:create",
+                "inventory:material_requests:create",
+            ]
+        )
     ),
     auth: WebAuthContext = Depends(require_inventory_access),
     db: Session = Depends(get_db),
@@ -866,7 +930,12 @@ def submit_material_request(
     request: Request,
     request_id: str,
     _perm: WebAuthContext = Depends(
-        require_web_permission("inv:material_requests:submit")
+        require_any_web_permission(
+            [
+                "inv:material_requests:submit",
+                "inventory:material_requests:submit",
+            ]
+        )
     ),
     auth: WebAuthContext = Depends(require_inventory_access),
     db: Session = Depends(get_db),
@@ -884,7 +953,12 @@ def approve_material_request(
     request: Request,
     request_id: str,
     _perm: WebAuthContext = Depends(
-        require_web_permission("inv:material_requests:submit")
+        require_any_web_permission(
+            [
+                "inv:material_requests:approve",
+                "inventory:material_requests:approve",
+            ]
+        )
     ),
     auth: WebAuthContext = Depends(require_inventory_access),
     db: Session = Depends(get_db),
@@ -902,7 +976,12 @@ def cancel_material_request(
     request: Request,
     request_id: str,
     _perm: WebAuthContext = Depends(
-        require_web_permission("inv:material_requests:submit")
+        require_any_web_permission(
+            [
+                "inv:material_requests:submit",
+                "inventory:material_requests:submit",
+            ]
+        )
     ),
     auth: WebAuthContext = Depends(require_inventory_access),
     db: Session = Depends(get_db),
@@ -920,7 +999,12 @@ def delete_material_request(
     request: Request,
     request_id: str,
     _perm: WebAuthContext = Depends(
-        require_web_permission("inv:material_requests:delete")
+        require_any_web_permission(
+            [
+                "inv:material_requests:delete",
+                "inventory:material_requests:delete",
+            ]
+        )
     ),
     auth: WebAuthContext = Depends(require_inventory_access),
     db: Session = Depends(get_db),

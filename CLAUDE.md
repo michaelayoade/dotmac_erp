@@ -133,11 +133,12 @@ notification_service.create(
 ## Code Style
 
 ### Python
-- Type hints on ALL function signatures (mypy must pass)
+- Type hints on ALL function signatures (mypy must pass), **including private helpers**
 - Use `from __future__ import annotations` if needed for forward refs
 - Imports: stdlib, then third-party, then local (absolute imports preferred)
 - Line length: 88 chars (black/ruff default)
 - Use `Optional[X]` or `X | None` for nullable types
+- Every service file MUST have a logger: `logger = logging.getLogger(__name__)`
 
 ### SQLAlchemy 2.0 Style
 ```python
@@ -162,12 +163,64 @@ class InvoiceCreate(BaseModel):
     amount: Decimal
 ```
 
+### API Pagination Standard
+All list endpoints MUST use consistent pagination parameters:
+```python
+from fastapi import Query
+
+@router.get("/items")
+def list_items(
+    offset: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=100),  # Default 25, max 100
+):
+    ...
+```
+
 ## Testing
 
 ### Test Structure
 - Tests use SQLite in-memory (conftest patches PostgreSQL UUID)
 - Use fixtures from `tests/conftest.py` for db sessions and auth
 - Mock external services (ERPNext, email, payment providers)
+
+### Test Requirements for New Code
+Every new service MUST have a corresponding test file covering:
+1. **Happy path** for all public methods
+2. **Error cases** (NotFoundError, ValidationError, permission denied)
+3. **Multi-tenancy isolation** (org_id filtering prevents cross-tenant data access)
+4. **Edge cases** (None values, empty lists, boundary conditions)
+
+```python
+# Minimum: 1 test file per service file
+# tests/services/test_my_service.py
+
+def test_create_success(db_session):
+    """Happy path."""
+    service = MyService(db_session)
+    result = service.create(valid_data)
+    assert result.id is not None
+
+def test_create_missing_required_field(db_session):
+    """Validation error case."""
+    with pytest.raises(ValidationError):
+        service.create(incomplete_data)
+
+def test_list_isolates_by_org(db_session):
+    """Multi-tenancy: org A cannot see org B's data."""
+    results = service.list_for_org(org_a_id)
+    assert all(r.organization_id == org_a_id for r in results)
+```
+
+### E2E Test Assertions
+Every page test MUST assert something meaningful about the content:
+```python
+# WRONG - always passes, tests nothing
+expect(page.locator("body")).to_be_visible()
+
+# CORRECT - verifies actual content rendered
+expect(page.locator("h1")).to_contain_text("Invoices")
+expect(page.locator("table")).to_be_visible()
+```
 
 ### Running Tests
 ```bash
@@ -200,6 +253,11 @@ poetry run mypy app/path/to/new/files.py --ignore-missing-imports  # Type check 
 poetry run ruff check app/path/to/new/files.py                      # Lint check
 poetry run ruff format app/path/to/new/files.py                     # Format
 ```
+
+For template changes, also verify:
+- Every `<form method="POST">` includes `{{ request.state.csrf_form | safe }}`
+- No `| safe` on user-submitted content (use `| sanitize_html` instead)
+- New test file exists for any new service file
 
 ## Writing New Code - Process
 
@@ -336,6 +394,20 @@ def detail(id: UUID, auth: WebAuthContext, db: Session):
     return templates.TemplateResponse(request, "template.html", context)
 ```
 
+### Web Service Dependency Exception
+Files in `app/services/*/web.py` or `app/services/*/web/*.py` are **web-layer helpers**, not pure business logic services. They MAY import from `app.web.deps` for `WebAuthContext` and `base_context()`. They must NOT contain database queries directly — delegate to the parent service.
+
+**Pure business logic services** (`*_service.py`) must **NEVER** import from `app.web.*`:
+```python
+# WRONG - service importing web layer
+# app/services/finance/ar/invoice_service.py
+from app.web.deps import WebAuthContext  # Don't do this in a _service.py file
+
+# CORRECT - only web service files import web deps
+# app/services/finance/ar/web/invoice_web.py
+from app.web.deps import WebAuthContext, base_context  # OK here
+```
+
 ### Reusable Template Partials
 For UI components used across pages, create Jinja2 macros:
 ```html
@@ -372,6 +444,82 @@ def generate_form_context_with_org(self, organization_id: UUID) -> dict:
         "payer_phone": org.contact_phone or "",
     }
     return context
+```
+
+## Error Handling Rules
+
+### Never Use Bare `except:`
+Bare except clauses catch ALL exceptions including `KeyboardInterrupt` and `SystemExit`, making debugging impossible and hiding real errors.
+
+```python
+# WRONG - catches everything, silent failures
+try:
+    num = Decimal(value)
+except:
+    continue
+
+# CORRECT - catch specific exceptions
+try:
+    num = Decimal(value)
+except (ValueError, TypeError, ArithmeticError) as e:
+    logger.warning("Invalid number in row %s: %s", row_num, e)
+    continue
+```
+
+### Side Effects Must Not Break Main Flow
+When a side effect (notification, audit log, webhook) fails, log the error but don't fail the primary operation:
+
+```python
+try:
+    send_notification(...)  # Side effect
+except Exception as e:
+    logger.exception("Notification failed: %s", e)
+    # Continue - main operation succeeded
+```
+
+### Log at Appropriate Levels
+- `logger.debug()` - Diagnostic details (query params, intermediate values)
+- `logger.info()` - Business events (created, updated, deleted, processed)
+- `logger.warning()` - Unexpected but recoverable (missing optional config, deprecated usage)
+- `logger.error()` - Errors needing attention (failed external API call)
+- `logger.exception()` - Exceptions with stack trace (inside `except` blocks)
+
+**NEVER log sensitive data** (passwords, tokens, PII, full request bodies with credentials).
+
+## Template Security
+
+### Output Escaping
+Jinja2 auto-escapes by default. The `| safe` filter disables this and **must be used carefully**.
+
+**Allowed uses of `| safe`:**
+```html
+{{ request.state.csrf_form | safe }}        {# Framework-generated CSRF input #}
+{{ data | tojson | safe }}                   {# Serialized JSON for JavaScript #}
+{{ org_branding.css | safe }}               {# Admin-configured CSS only #}
+```
+
+**For user-submitted content, use `| sanitize_html`** (defined in `app/templates.py`):
+```html
+{# WRONG - stored XSS vulnerability #}
+{{ ticket.description | safe }}
+
+{# CORRECT - strips dangerous tags/attributes, keeps safe formatting #}
+{{ ticket.description | sanitize_html }}
+```
+
+**For plain text with newlines, use `| nl2br`** (also in `app/templates.py`):
+```html
+{# Escapes HTML then converts \n to <br> #}
+{{ comment.text | nl2br }}
+```
+
+### CSRF Protection
+Every `<form method="POST">` MUST include the CSRF hidden input:
+```html
+<form method="POST" action="/some/endpoint">
+    {{ request.state.csrf_form | safe }}
+    <!-- form fields -->
+</form>
 ```
 
 ## Common Gotchas
@@ -431,10 +579,11 @@ def downgrade() -> None:
 
 ### External Integrations
 For any external API integration (Remita, Paystack, etc.):
-1. Add configuration to `app/config.py` with empty string defaults
+1. Add configuration to `app/config.py` with empty string or `None` defaults
 2. Add `is_configured()` method that checks if credentials are set
 3. Raise clear error if trying to use unconfigured service
 4. Show warning in UI when not configured
+5. **NEVER** use production URLs as default values — use empty string
 
 ```python
 # In service
@@ -446,6 +595,15 @@ def client(self):
     if not self.is_configured():
         raise ValueError("Service not configured. Set API_KEY and API_SECRET.")
     return self._create_client()
+```
+
+```python
+# In config.py
+# WRONG - dev environment accidentally hits production
+crm_api_url: str = os.getenv("CRM_API_URL", "https://crm.dotmac.io")
+
+# CORRECT - explicit empty default, checked at usage
+crm_api_url: str = os.getenv("CRM_API_URL", "")
 ```
 
 ## Discipline Module
@@ -499,3 +657,15 @@ Optional:
 - `ERPNEXT_API_KEY`, `ERPNEXT_API_SECRET` - ERPNext integration
 - `SMTP_*` - Email configuration
 - `PAYSTACK_SECRET_KEY` - Payment processing
+
+## Security Checklist (Pre-Commit)
+
+Before committing ANY code that accepts user input, queries the database, renders HTML templates, or handles file uploads, verify:
+
+- [ ] No raw SQL or string formatting in queries (use SQLAlchemy ORM)
+- [ ] All queries filter by `organization_id` (multi-tenancy)
+- [ ] All POST forms include `{{ request.state.csrf_form | safe }}`
+- [ ] User-submitted content uses `| sanitize_html`, never `| safe`
+- [ ] File uploads validate content type and size
+- [ ] No secrets hardcoded in code (use environment variables)
+- [ ] No bare `except:` clauses (catch specific exceptions)

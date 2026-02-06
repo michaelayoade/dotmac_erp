@@ -5,6 +5,7 @@ Revises: add_flexible_tax_support
 Create Date: 2024-01-16
 
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -51,24 +52,42 @@ def upgrade() -> None:
     # Create sync_entity table
     op.create_table(
         "sync_entity",
-        sa.Column("sync_id", postgresql.UUID(as_uuid=True), nullable=False,
-                  server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "sync_id",
+            postgresql.UUID(as_uuid=True),
+            nullable=False,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
         sa.Column("organization_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("source_system", sa.String(50), nullable=False),
         sa.Column("source_doctype", sa.String(100), nullable=False),
         sa.Column("source_name", sa.String(255), nullable=False),
         sa.Column("target_table", sa.String(100), nullable=False),
         sa.Column("target_id", postgresql.UUID(as_uuid=True), nullable=True),
-        sa.Column("sync_status", postgresql.ENUM("PENDING", "SYNCED", "FAILED", "SKIPPED",
-                                                  name="sync_status", schema="sync",
-                                                  create_type=False),
-                  nullable=False, server_default="PENDING"),
+        sa.Column(
+            "sync_status",
+            postgresql.ENUM(
+                "PENDING",
+                "SYNCED",
+                "FAILED",
+                "SKIPPED",
+                name="sync_status",
+                schema="sync",
+                create_type=False,
+            ),
+            nullable=False,
+            server_default="PENDING",
+        ),
         sa.Column("source_modified", sa.DateTime(timezone=True), nullable=True),
         sa.Column("synced_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("retry_count", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False,
-                  server_default=sa.text("now()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
             ["organization_id"],
@@ -77,33 +96,67 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("sync_id"),
         sa.UniqueConstraint(
-            "organization_id", "source_system", "source_doctype", "source_name",
-            name="uq_sync_entity_source"
+            "organization_id",
+            "source_system",
+            "source_doctype",
+            "source_name",
+            name="uq_sync_entity_source",
         ),
         schema="sync",
     )
-    op.create_index("idx_sync_entity_org", "sync_entity", ["organization_id"], schema="sync")
-    op.create_index("idx_sync_entity_status", "sync_entity", ["sync_status"], schema="sync")
-    op.create_index("idx_sync_entity_target", "sync_entity", ["target_table", "target_id"],
-                    schema="sync")
+    op.create_index(
+        "idx_sync_entity_org", "sync_entity", ["organization_id"], schema="sync"
+    )
+    op.create_index(
+        "idx_sync_entity_status", "sync_entity", ["sync_status"], schema="sync"
+    )
+    op.create_index(
+        "idx_sync_entity_target",
+        "sync_entity",
+        ["target_table", "target_id"],
+        schema="sync",
+    )
 
     # Create sync_history table
     op.create_table(
         "sync_history",
-        sa.Column("history_id", postgresql.UUID(as_uuid=True), nullable=False,
-                  server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "history_id",
+            postgresql.UUID(as_uuid=True),
+            nullable=False,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
         sa.Column("organization_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("source_system", sa.String(50), nullable=False),
-        sa.Column("sync_type", postgresql.ENUM("FULL", "INCREMENTAL",
-                                                name="sync_type", schema="sync",
-                                                create_type=False),
-                  nullable=False, server_default="FULL"),
+        sa.Column(
+            "sync_type",
+            postgresql.ENUM(
+                "FULL",
+                "INCREMENTAL",
+                name="sync_type",
+                schema="sync",
+                create_type=False,
+            ),
+            nullable=False,
+            server_default="FULL",
+        ),
         sa.Column("entity_types", postgresql.JSONB(), nullable=True),
-        sa.Column("status", postgresql.ENUM("PENDING", "RUNNING", "COMPLETED",
-                                            "COMPLETED_WITH_ERRORS", "FAILED", "CANCELLED",
-                                            name="sync_job_status", schema="sync",
-                                            create_type=False),
-                  nullable=False, server_default="PENDING"),
+        sa.Column(
+            "status",
+            postgresql.ENUM(
+                "PENDING",
+                "RUNNING",
+                "COMPLETED",
+                "COMPLETED_WITH_ERRORS",
+                "FAILED",
+                "CANCELLED",
+                name="sync_job_status",
+                schema="sync",
+                create_type=False,
+            ),
+            nullable=False,
+            server_default="PENDING",
+        ),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("total_records", sa.Integer(), nullable=False, server_default="0"),
@@ -112,8 +165,12 @@ def upgrade() -> None:
         sa.Column("error_count", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("errors", postgresql.JSONB(), nullable=True),
         sa.Column("created_by_user_id", postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False,
-                  server_default=sa.text("now()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
         sa.ForeignKeyConstraint(
             ["organization_id"],
             ["core_org.organization.organization_id"],
@@ -122,9 +179,15 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("history_id"),
         schema="sync",
     )
-    op.create_index("idx_sync_history_org", "sync_history", ["organization_id"], schema="sync")
-    op.create_index("idx_sync_history_status", "sync_history", ["status"], schema="sync")
-    op.create_index("idx_sync_history_started", "sync_history", ["started_at"], schema="sync")
+    op.create_index(
+        "idx_sync_history_org", "sync_history", ["organization_id"], schema="sync"
+    )
+    op.create_index(
+        "idx_sync_history_status", "sync_history", ["status"], schema="sync"
+    )
+    op.create_index(
+        "idx_sync_history_started", "sync_history", ["started_at"], schema="sync"
+    )
 
 
 def downgrade() -> None:

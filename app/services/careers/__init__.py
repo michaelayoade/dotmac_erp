@@ -9,10 +9,10 @@ Provides services for the public-facing careers portal, including:
 - CAPTCHA verification
 """
 
-from app.services.careers.careers_service import CareersService
-from app.services.careers.resume_service import ResumeService
 from app.services.careers.candidate_notifications import CandidateNotificationService
 from app.services.careers.captcha import verify_captcha
+from app.services.careers.careers_service import CareersService
+from app.services.careers.resume_service import ResumeService
 
 __all__ = [
     "CareersService",

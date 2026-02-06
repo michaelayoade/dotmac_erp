@@ -5,6 +5,7 @@ Enables/disables features per organization for gradual rollout
 and A/B testing capabilities.
 """
 
+import logging
 from typing import List, Optional
 from uuid import UUID
 
@@ -12,10 +13,14 @@ from fastapi import HTTPException
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
-from app.models.finance.core_config.system_configuration import ConfigType, SystemConfiguration
+from app.models.finance.core_config.system_configuration import (
+    ConfigType,
+    SystemConfiguration,
+)
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
 
+logger = logging.getLogger(__name__)
 
 # Feature flag prefix for identification in system_configuration
 FEATURE_FLAG_PREFIX = "feature."
@@ -386,7 +391,11 @@ class FeatureFlagService(ListResponseMixin):
             List of SystemConfiguration records
         """
         return FeatureFlagService.list_all_flags(
-            db, organization_id, include_system_defaults=True, limit=limit, offset=offset
+            db,
+            organization_id,
+            include_system_defaults=True,
+            limit=limit,
+            offset=offset,
         )
 
 

@@ -6,19 +6,22 @@ Prepares tax rate reconciliation for financial statement disclosures.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.finance.tax.tax_reconciliation import TaxReconciliation
 from app.models.finance.tax.tax_jurisdiction import TaxJurisdiction
+from app.models.finance.tax.tax_reconciliation import TaxReconciliation
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -253,7 +256,8 @@ class TaxReconciliationService(ListResponseMixin):
 
         if reconciliation.non_deductible_expenses != 0:
             rate_effect = (
-                reconciliation.non_deductible_expenses / reconciliation.profit_before_tax
+                reconciliation.non_deductible_expenses
+                / reconciliation.profit_before_tax
                 if reconciliation.profit_before_tax != 0
                 else Decimal("0")
             )
@@ -281,7 +285,8 @@ class TaxReconciliationService(ListResponseMixin):
 
         if reconciliation.rate_differential_on_foreign_income != 0:
             rate_effect = (
-                reconciliation.rate_differential_on_foreign_income / reconciliation.profit_before_tax
+                reconciliation.rate_differential_on_foreign_income
+                / reconciliation.profit_before_tax
                 if reconciliation.profit_before_tax != 0
                 else Decimal("0")
             )
@@ -309,7 +314,8 @@ class TaxReconciliationService(ListResponseMixin):
 
         if reconciliation.change_in_unrecognized_dta != 0:
             rate_effect = (
-                reconciliation.change_in_unrecognized_dta / reconciliation.profit_before_tax
+                reconciliation.change_in_unrecognized_dta
+                / reconciliation.profit_before_tax
                 if reconciliation.profit_before_tax != 0
                 else Decimal("0")
             )
@@ -323,7 +329,8 @@ class TaxReconciliationService(ListResponseMixin):
 
         if reconciliation.effect_of_tax_rate_change != 0:
             rate_effect = (
-                reconciliation.effect_of_tax_rate_change / reconciliation.profit_before_tax
+                reconciliation.effect_of_tax_rate_change
+                / reconciliation.profit_before_tax
                 if reconciliation.profit_before_tax != 0
                 else Decimal("0")
             )
@@ -351,7 +358,8 @@ class TaxReconciliationService(ListResponseMixin):
 
         if reconciliation.other_reconciling_items != 0:
             rate_effect = (
-                reconciliation.other_reconciling_items / reconciliation.profit_before_tax
+                reconciliation.other_reconciling_items
+                / reconciliation.profit_before_tax
                 if reconciliation.profit_before_tax != 0
                 else Decimal("0")
             )

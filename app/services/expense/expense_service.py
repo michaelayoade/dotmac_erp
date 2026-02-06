@@ -4,15 +4,17 @@ Handles expense categories, claims, cash advances, and corporate cards.
 Independent module with HR integration for employee tracking.
 Includes expense limit enforcement on claim submission.
 """
+
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, joinedload
 
@@ -24,13 +26,17 @@ from app.models.expense import (
     CorporateCard,
     ExpenseCategory,
     ExpenseClaim,
+    ExpenseClaimAction,
+    ExpenseClaimActionStatus,
+    ExpenseClaimActionType,
     ExpenseClaimItem,
     ExpenseClaimStatus,
-    ExpenseClaimAction,
-    ExpenseClaimActionType,
-    ExpenseClaimActionStatus,
 )
+from app.models.finance.audit.audit_log import AuditAction
+from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import PaginatedResult, PaginationParams
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.models.expense import ExpenseLimitRule
@@ -241,11 +247,11 @@ class ExpenseService:
 
     def _next_claim_number(self) -> str:
         if self.db.bind and self.db.bind.dialect.name == "postgresql":
-            seq = self.db.scalar(text("select nextval('expense.expense_claim_number_seq')"))
+            seq = self.db.scalar(
+                text("select nextval('expense.expense_claim_number_seq')")
+            )
             return f"EXP-{date.today().year}-{int(seq):05d}"
-        count = self.db.scalar(
-            select(func.count(ExpenseClaim.claim_id))
-        ) or 0
+        count = self.db.scalar(select(func.count(ExpenseClaim.claim_id))) or 0
         return f"EXP-{date.today().year}-{count + 1:05d}"
 
     # =========================================================================
@@ -487,9 +493,7 @@ class ExpenseService:
                     category.max_amount_per_claim is not None
                     and item_data["claimed_amount"] > category.max_amount_per_claim
                 ):
-                    raise ExpenseServiceError(
-                        "Claimed amount exceeds category limit"
-                    )
+                    raise ExpenseServiceError("Claimed amount exceeds category limit")
                 item = ExpenseClaimItem(
                     organization_id=org_id,
                     claim_id=claim.claim_id,
@@ -514,6 +518,22 @@ class ExpenseService:
 
         claim.total_claimed_amount = total_amount
         self.db.flush()
+
+        fire_audit_event(
+            db=self.db,
+            organization_id=org_id,
+            table_schema="expense",
+            table_name="expense_claim",
+            record_id=str(claim.claim_id),
+            action=AuditAction.INSERT,
+            new_values={
+                "claim_number": claim.claim_number,
+                "status": ExpenseClaimStatus.DRAFT.value,
+                "total_claimed_amount": str(claim.total_claimed_amount),
+                "purpose": claim.purpose,
+            },
+        )
+
         return claim
 
     def add_claim_item(
@@ -606,9 +626,9 @@ class ExpenseService:
         Returns:
             SubmitClaimResult with claim and evaluation details
         """
-        from app.services.expense.limit_service import ExpenseLimitService
-        from app.services.expense.approval_service import ExpenseApprovalService
         from app.models.expense import LimitResultType
+        from app.services.expense.approval_service import ExpenseApprovalService
+        from app.services.expense.limit_service import ExpenseLimitService
 
         claim = self.get_claim(org_id, claim_id)
 
@@ -627,7 +647,9 @@ class ExpenseService:
         if not claim.items:
             raise ExpenseServiceError("Cannot submit claim with no items")
 
-        action_started = self._begin_action(org_id, claim_id, ExpenseClaimActionType.SUBMIT)
+        action_started = self._begin_action(
+            org_id, claim_id, ExpenseClaimActionType.SUBMIT
+        )
         if not action_started:
             return SubmitClaimResult(claim=claim)
 
@@ -636,7 +658,9 @@ class ExpenseService:
             receipt_warnings = []
             if not skip_receipt_validation:
                 approval_service = ExpenseApprovalService(self.db, self.ctx)
-                validation_result = approval_service.validate_receipt_requirements(claim)
+                validation_result = approval_service.validate_receipt_requirements(
+                    claim
+                )
 
                 if not validation_result.is_valid:
                     # Block submission if required receipts are missing
@@ -669,9 +693,22 @@ class ExpenseService:
                     claim.status = ExpenseClaimStatus.SUBMITTED
                     self.db.flush()
 
+                    fire_audit_event(
+                        db=self.db,
+                        organization_id=org_id,
+                        table_schema="expense",
+                        table_name="expense_claim",
+                        record_id=str(claim.claim_id),
+                        action=AuditAction.UPDATE,
+                        old_values={"status": ExpenseClaimStatus.DRAFT.value},
+                        new_values={"status": ExpenseClaimStatus.SUBMITTED.value},
+                    )
+
                     # Send notifications to eligible approvers
                     if notify_approvers and evaluation_result.eligible_approvers:
-                        self._notify_approvers(claim, evaluation_result.eligible_approvers)
+                        self._notify_approvers(
+                            claim, evaluation_result.eligible_approvers
+                        )
 
                     # Combine warnings
                     warning_msg = None
@@ -697,6 +734,17 @@ class ExpenseService:
                     claim.status = ExpenseClaimStatus.SUBMITTED
                     self.db.flush()
 
+                    fire_audit_event(
+                        db=self.db,
+                        organization_id=org_id,
+                        table_schema="expense",
+                        table_name="expense_claim",
+                        record_id=str(claim.claim_id),
+                        action=AuditAction.UPDATE,
+                        old_values={"status": ExpenseClaimStatus.DRAFT.value},
+                        new_values={"status": ExpenseClaimStatus.SUBMITTED.value},
+                    )
+
                     # Combine limit warning with receipt warnings
                     all_warnings = [evaluation_result.message] + receipt_warnings
                     self._set_action_status(
@@ -715,9 +763,23 @@ class ExpenseService:
             claim.status = ExpenseClaimStatus.SUBMITTED
             self.db.flush()
 
+            fire_audit_event(
+                db=self.db,
+                organization_id=org_id,
+                table_schema="expense",
+                table_name="expense_claim",
+                record_id=str(claim.claim_id),
+                action=AuditAction.UPDATE,
+                old_values={"status": ExpenseClaimStatus.DRAFT.value},
+                new_values={"status": ExpenseClaimStatus.SUBMITTED.value},
+            )
+
             # Fire workflow automation event
             try:
-                from app.services.finance.automation.event_dispatcher import fire_workflow_event
+                from app.services.finance.automation.event_dispatcher import (
+                    fire_workflow_event,
+                )
+
                 fire_workflow_event(
                     db=self.db,
                     organization_id=org_id,
@@ -754,10 +816,14 @@ class ExpenseService:
             )
             raise
 
-    def _notify_approvers(self, claim: ExpenseClaim, approvers: List["EligibleApprover"]) -> None:
+    def _notify_approvers(
+        self, claim: ExpenseClaim, approvers: List["EligibleApprover"]
+    ) -> None:
         """Send approval request notifications to eligible approvers."""
-        from app.services.expense.expense_notifications import ExpenseNotificationService
         from app.models.people.hr.employee import Employee
+        from app.services.expense.expense_notifications import (
+            ExpenseNotificationService,
+        )
 
         notification_service = ExpenseNotificationService(self.db)
 
@@ -833,7 +899,9 @@ class ExpenseService:
 
             # Post to GL if requested
             if auto_post_gl and approver_id:
-                from app.services.expense.expense_posting_adapter import ExpensePostingAdapter
+                from app.services.expense.expense_posting_adapter import (
+                    ExpensePostingAdapter,
+                )
 
                 posting_result = ExpensePostingAdapter.post_expense_claim(
                     self.db,
@@ -847,6 +915,7 @@ class ExpenseService:
                 if not posting_result.success:
                     # Log but don't fail the approval
                     import logging
+
                     logger = logging.getLogger(__name__)
                     logger.warning(
                         "GL posting failed for claim %s: %s",
@@ -856,17 +925,22 @@ class ExpenseService:
 
             # Create supplier invoice if requested
             if create_supplier_invoice and approver_id:
-                from app.services.expense.expense_posting_adapter import ExpensePostingAdapter
+                from app.services.expense.expense_posting_adapter import (
+                    ExpensePostingAdapter,
+                )
 
-                invoice_result = ExpensePostingAdapter.create_supplier_invoice_from_expense(
-                    self.db,
-                    org_id,
-                    claim_id,
-                    approver_id,
+                invoice_result = (
+                    ExpensePostingAdapter.create_supplier_invoice_from_expense(
+                        self.db,
+                        org_id,
+                        claim_id,
+                        approver_id,
+                    )
                 )
 
                 if not invoice_result.success:
                     import logging
+
                     logger = logging.getLogger(__name__)
                     logger.warning(
                         "Supplier invoice creation failed for claim %s: %s",
@@ -876,23 +950,45 @@ class ExpenseService:
 
             # Send notification if requested
             if send_notification and claim.employee and claim.employee.work_email:
-                from app.services.expense.expense_notifications import ExpenseNotificationService
+                from app.services.expense.expense_notifications import (
+                    ExpenseNotificationService,
+                )
 
                 notification_service = ExpenseNotificationService(self.db)
                 approver_name = None
                 if approver_id:
                     from app.models.people.hr.employee import Employee
+
                     approver = self.db.get(Employee, approver_id)
                     if approver:
                         approver_name = f"{approver.first_name} {approver.last_name}"
 
-                notification_service.notify_claim_approved(claim, approver_name=approver_name)
+                notification_service.notify_claim_approved(
+                    claim, approver_name=approver_name
+                )
 
             self.db.flush()
 
+            fire_audit_event(
+                db=self.db,
+                organization_id=org_id,
+                table_schema="expense",
+                table_name="expense_claim",
+                record_id=str(claim.claim_id),
+                action=AuditAction.UPDATE,
+                old_values={"status": ExpenseClaimStatus.SUBMITTED.value},
+                new_values={
+                    "status": ExpenseClaimStatus.APPROVED.value,
+                    "total_approved_amount": str(claim.total_approved_amount),
+                },
+            )
+
             # Fire workflow automation event
             try:
-                from app.services.finance.automation.event_dispatcher import fire_workflow_event
+                from app.services.finance.automation.event_dispatcher import (
+                    fire_workflow_event,
+                )
+
                 fire_workflow_event(
                     db=self.db,
                     organization_id=org_id,
@@ -969,12 +1065,15 @@ class ExpenseService:
 
             # Send notification if requested
             if send_notification and claim.employee and claim.employee.work_email:
-                from app.services.expense.expense_notifications import ExpenseNotificationService
+                from app.services.expense.expense_notifications import (
+                    ExpenseNotificationService,
+                )
 
                 notification_service = ExpenseNotificationService(self.db)
                 approver_name = None
                 if approver_id:
                     from app.models.people.hr.employee import Employee
+
                     approver = self.db.get(Employee, approver_id)
                     if approver:
                         approver_name = f"{approver.first_name} {approver.last_name}"
@@ -987,9 +1086,26 @@ class ExpenseService:
 
             self.db.flush()
 
+            fire_audit_event(
+                db=self.db,
+                organization_id=org_id,
+                table_schema="expense",
+                table_name="expense_claim",
+                record_id=str(claim.claim_id),
+                action=AuditAction.UPDATE,
+                old_values={"status": ExpenseClaimStatus.SUBMITTED.value},
+                new_values={
+                    "status": ExpenseClaimStatus.REJECTED.value,
+                    "rejection_reason": reason,
+                },
+            )
+
             # Fire workflow automation event
             try:
-                from app.services.finance.automation.event_dispatcher import fire_workflow_event
+                from app.services.finance.automation.event_dispatcher import (
+                    fire_workflow_event,
+                )
+
                 fire_workflow_event(
                     db=self.db,
                     organization_id=org_id,
@@ -1124,7 +1240,9 @@ class ExpenseService:
 
             # Send payment notification
             if send_notification and claim.employee and claim.employee.work_email:
-                from app.services.expense.expense_notifications import ExpenseNotificationService
+                from app.services.expense.expense_notifications import (
+                    ExpenseNotificationService,
+                )
 
                 notification_service = ExpenseNotificationService(self.db)
                 notification_service.notify_claim_paid(
@@ -1164,7 +1282,9 @@ class ExpenseService:
         if claim.status not in {ExpenseClaimStatus.DRAFT, ExpenseClaimStatus.SUBMITTED}:
             raise ExpenseClaimStatusError(claim.status.value, "link advance")
 
-        if not self._begin_action(org_id, claim_id, ExpenseClaimActionType.LINK_ADVANCE):
+        if not self._begin_action(
+            org_id, claim_id, ExpenseClaimActionType.LINK_ADVANCE
+        ):
             return claim
 
         try:
@@ -1172,7 +1292,9 @@ class ExpenseService:
             claim.advance_adjusted = amount_to_adjust
 
             if claim.total_approved_amount:
-                claim.net_payable_amount = claim.total_approved_amount - amount_to_adjust
+                claim.net_payable_amount = (
+                    claim.total_approved_amount - amount_to_adjust
+                )
 
             self.db.flush()
             self._set_action_status(
@@ -1267,11 +1389,14 @@ class ExpenseService:
     ) -> CashAdvance:
         """Create a new cash advance request."""
         # Generate advance number
-        count = self.db.scalar(
-            select(func.count(CashAdvance.advance_id)).where(
-                CashAdvance.organization_id == org_id
+        count = (
+            self.db.scalar(
+                select(func.count(CashAdvance.advance_id)).where(
+                    CashAdvance.organization_id == org_id
+                )
             )
-        ) or 0
+            or 0
+        )
         advance_number = f"ADV-{date.today().year}-{count + 1:05d}"
 
         advance = CashAdvance(
@@ -1770,12 +1895,15 @@ class ExpenseService:
         month_start = today.replace(day=1)
 
         # Pending claims
-        pending_claims = self.db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                ExpenseClaim.organization_id == org_id,
-                ExpenseClaim.status == ExpenseClaimStatus.SUBMITTED,
+        pending_claims = (
+            self.db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(
+                    ExpenseClaim.organization_id == org_id,
+                    ExpenseClaim.status == ExpenseClaimStatus.SUBMITTED,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Total pending amount
         total_pending = self.db.scalar(
@@ -1786,12 +1914,15 @@ class ExpenseService:
         ) or Decimal("0")
 
         # Claims this month
-        claims_this_month = self.db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                ExpenseClaim.organization_id == org_id,
-                ExpenseClaim.claim_date >= month_start,
+        claims_this_month = (
+            self.db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(
+                    ExpenseClaim.organization_id == org_id,
+                    ExpenseClaim.claim_date >= month_start,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Amount this month
         amount_this_month = self.db.scalar(
@@ -1802,18 +1933,23 @@ class ExpenseService:
         ) or Decimal("0")
 
         # Outstanding advances
-        outstanding_advances = self.db.scalar(
-            select(func.count(CashAdvance.advance_id)).where(
-                CashAdvance.organization_id == org_id,
-                CashAdvance.status == CashAdvanceStatus.DISBURSED,
+        outstanding_advances = (
+            self.db.scalar(
+                select(func.count(CashAdvance.advance_id)).where(
+                    CashAdvance.organization_id == org_id,
+                    CashAdvance.status == CashAdvanceStatus.DISBURSED,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Outstanding advance amount
         advance_amount = self.db.scalar(
             select(
                 func.sum(
-                    CashAdvance.approved_amount - CashAdvance.amount_settled - CashAdvance.amount_refunded
+                    CashAdvance.approved_amount
+                    - CashAdvance.amount_settled
+                    - CashAdvance.amount_refunded
                 )
             ).where(
                 CashAdvance.organization_id == org_id,
@@ -1851,14 +1987,17 @@ class ExpenseService:
             period_end = date(target_year, target_month + 1, 1)
 
         # Claims in period
-        claims_in_period = self.db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                ExpenseClaim.organization_id == org_id,
-                ExpenseClaim.employee_id == employee_id,
-                ExpenseClaim.claim_date >= period_start,
-                ExpenseClaim.claim_date < period_end,
+        claims_in_period = (
+            self.db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(
+                    ExpenseClaim.organization_id == org_id,
+                    ExpenseClaim.employee_id == employee_id,
+                    ExpenseClaim.claim_date >= period_start,
+                    ExpenseClaim.claim_date < period_end,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Total claimed in period
         total_claimed = self.db.scalar(
@@ -1882,19 +2021,24 @@ class ExpenseService:
         ) or Decimal("0")
 
         # Pending claims
-        pending_claims = self.db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                ExpenseClaim.organization_id == org_id,
-                ExpenseClaim.employee_id == employee_id,
-                ExpenseClaim.status == ExpenseClaimStatus.SUBMITTED,
+        pending_claims = (
+            self.db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(
+                    ExpenseClaim.organization_id == org_id,
+                    ExpenseClaim.employee_id == employee_id,
+                    ExpenseClaim.status == ExpenseClaimStatus.SUBMITTED,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Outstanding advances
         outstanding_advances = self.db.scalar(
             select(
                 func.sum(
-                    CashAdvance.approved_amount - CashAdvance.amount_settled - CashAdvance.amount_refunded
+                    CashAdvance.approved_amount
+                    - CashAdvance.amount_settled
+                    - CashAdvance.amount_refunded
                 )
             ).where(
                 CashAdvance.organization_id == org_id,
@@ -1943,9 +2087,12 @@ class ExpenseService:
         ]
 
         # Total claims
-        total_claims = self.db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(*base_filters)
-        ) or 0
+        total_claims = (
+            self.db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(*base_filters)
+            )
+            or 0
+        )
 
         # Total claimed amount
         total_claimed = self.db.scalar(
@@ -1955,12 +2102,15 @@ class ExpenseService:
         # By status breakdown
         status_breakdown = []
         for status in ExpenseClaimStatus:
-            count = self.db.scalar(
-                select(func.count(ExpenseClaim.claim_id)).where(
-                    *base_filters,
-                    ExpenseClaim.status == status,
+            count = (
+                self.db.scalar(
+                    select(func.count(ExpenseClaim.claim_id)).where(
+                        *base_filters,
+                        ExpenseClaim.status == status,
+                    )
                 )
-            ) or 0
+                or 0
+            )
             amount = self.db.scalar(
                 select(func.sum(ExpenseClaim.total_claimed_amount)).where(
                     *base_filters,
@@ -1968,32 +2118,44 @@ class ExpenseService:
                 )
             ) or Decimal("0")
             if count > 0:
-                status_breakdown.append({
-                    "status": status.value,
-                    "count": count,
-                    "amount": amount,
-                })
+                status_breakdown.append(
+                    {
+                        "status": status.value,
+                        "count": count,
+                        "amount": amount,
+                    }
+                )
 
         # Approved vs rejected
-        approved_count = self.db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                *base_filters,
-                ExpenseClaim.status.in_([ExpenseClaimStatus.APPROVED, ExpenseClaimStatus.PAID]),
+        approved_count = (
+            self.db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(
+                    *base_filters,
+                    ExpenseClaim.status.in_(
+                        [ExpenseClaimStatus.APPROVED, ExpenseClaimStatus.PAID]
+                    ),
+                )
             )
-        ) or 0
+            or 0
+        )
         approved_amount = self.db.scalar(
             select(func.sum(ExpenseClaim.total_approved_amount)).where(
                 *base_filters,
-                ExpenseClaim.status.in_([ExpenseClaimStatus.APPROVED, ExpenseClaimStatus.PAID]),
+                ExpenseClaim.status.in_(
+                    [ExpenseClaimStatus.APPROVED, ExpenseClaimStatus.PAID]
+                ),
             )
         ) or Decimal("0")
 
-        rejected_count = self.db.scalar(
-            select(func.count(ExpenseClaim.claim_id)).where(
-                *base_filters,
-                ExpenseClaim.status == ExpenseClaimStatus.REJECTED,
+        rejected_count = (
+            self.db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(
+                    *base_filters,
+                    ExpenseClaim.status == ExpenseClaimStatus.REJECTED,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         return {
             "start_date": start_date,
@@ -2033,14 +2195,21 @@ class ExpenseService:
                 func.sum(ExpenseClaimItem.claimed_amount).label("claimed_amount"),
                 func.sum(ExpenseClaimItem.approved_amount).label("approved_amount"),
             )
-            .join(ExpenseClaimItem, ExpenseClaimItem.category_id == ExpenseCategory.category_id)
+            .join(
+                ExpenseClaimItem,
+                ExpenseClaimItem.category_id == ExpenseCategory.category_id,
+            )
             .join(ExpenseClaim, ExpenseClaim.claim_id == ExpenseClaimItem.claim_id)
             .filter(
                 ExpenseClaim.organization_id == org_id,
                 ExpenseClaim.claim_date >= start_date,
                 ExpenseClaim.claim_date <= end_date,
             )
-            .group_by(ExpenseCategory.category_id, ExpenseCategory.category_code, ExpenseCategory.category_name)
+            .group_by(
+                ExpenseCategory.category_id,
+                ExpenseCategory.category_code,
+                ExpenseCategory.category_name,
+            )
             .order_by(func.sum(ExpenseClaimItem.claimed_amount).desc())
             .all()
         )
@@ -2052,13 +2221,15 @@ class ExpenseService:
         for row in results:
             claimed = row.claimed_amount or Decimal("0")
             approved = row.approved_amount or Decimal("0")
-            categories.append({
-                "category_code": row.category_code,
-                "category_name": row.category_name,
-                "item_count": row.item_count,
-                "claimed_amount": claimed,
-                "approved_amount": approved,
-            })
+            categories.append(
+                {
+                    "category_code": row.category_code,
+                    "category_name": row.category_name,
+                    "item_count": row.item_count,
+                    "claimed_amount": claimed,
+                    "approved_amount": approved,
+                }
+            )
             total_claimed += claimed
             total_approved += approved
 
@@ -2090,8 +2261,8 @@ class ExpenseService:
 
         Returns list of employees with claim counts and amounts.
         """
-        from app.models.people.hr.employee import Employee
         from app.models.people.hr.department import Department
+        from app.models.people.hr.employee import Employee
         from app.models.person import Person
 
         today = date.today()
@@ -2125,8 +2296,7 @@ class ExpenseService:
             query = query.filter(Employee.department_id == department_id)
 
         results = (
-            query
-            .group_by(
+            query.group_by(
                 Employee.employee_id,
                 Person.first_name,
                 Person.last_name,
@@ -2143,14 +2313,16 @@ class ExpenseService:
         for row in results:
             claimed = row.claimed_amount or Decimal("0")
             approved = row.approved_amount or Decimal("0")
-            employees.append({
-                "employee_id": str(row.employee_id),
-                "employee_name": f"{row.first_name} {row.last_name}",
-                "department_name": row.department_name or "No Department",
-                "claim_count": row.claim_count,
-                "claimed_amount": claimed,
-                "approved_amount": approved,
-            })
+            employees.append(
+                {
+                    "employee_id": str(row.employee_id),
+                    "employee_name": f"{row.first_name} {row.last_name}",
+                    "department_name": row.department_name or "No Department",
+                    "claim_count": row.claim_count,
+                    "claimed_amount": claimed,
+                    "approved_amount": approved,
+                }
+            )
             total_claimed += claimed
             total_approved += approved
 
@@ -2218,13 +2390,15 @@ class ExpenseService:
             if month_key in monthly_data:
                 months_list.append(monthly_data[month_key])
             else:
-                months_list.append({
-                    "month": month_key,
-                    "month_label": current.strftime("%b %Y"),
-                    "claim_count": 0,
-                    "claimed_amount": Decimal("0"),
-                    "approved_amount": Decimal("0"),
-                })
+                months_list.append(
+                    {
+                        "month": month_key,
+                        "month_label": current.strftime("%b %Y"),
+                        "claim_count": 0,
+                        "claimed_amount": Decimal("0"),
+                        "approved_amount": Decimal("0"),
+                    }
+                )
             current = current + relativedelta(months=1)
 
         # Calculate totals

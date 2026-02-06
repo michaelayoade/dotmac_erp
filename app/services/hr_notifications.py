@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import date
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy.orm import Session
@@ -138,7 +137,7 @@ class HRNotificationService:
 
 This is a reminder that the probation period for {employee_name} is ending {urgency}.
 
-Probation End Date: {employee.probation_end_date.strftime("%B %d, %Y") if employee.probation_end_date else 'N/A'}
+Probation End Date: {employee.probation_end_date.strftime("%B %d, %Y") if employee.probation_end_date else "N/A"}
 
 Please review their performance and make a decision about their confirmation.
 
@@ -209,7 +208,7 @@ HR Notifications
 
 This is to inform you that the contract for {employee_name} will expire in {days_remaining} days.
 
-Contract End Date: {contract_end_date.strftime("%B %d, %Y") if contract_end_date else 'N/A'}
+Contract End Date: {contract_end_date.strftime("%B %d, %Y") if contract_end_date else "N/A"}
 
 Please take necessary action regarding contract renewal or extension.
 
@@ -268,7 +267,9 @@ HR Notifications
         manager_first = _employee_first_name(manager)
 
         if is_milestone:
-            subject = f"Milestone Anniversary: {employee_name} - {years_of_service} Years!"
+            subject = (
+                f"Milestone Anniversary: {employee_name} - {years_of_service} Years!"
+            )
         else:
             subject = f"Work Anniversary: {employee_name} - {years_of_service} Year(s)"
 
@@ -405,7 +406,7 @@ HR Notifications
 
 This is a reminder that your self-assessment for the {cycle_name} cycle is {urgency}.
 
-Deadline: {cycle.self_assessment_deadline.strftime("%B %d, %Y") if cycle.self_assessment_deadline else 'N/A'}
+Deadline: {cycle.self_assessment_deadline.strftime("%B %d, %Y") if cycle.self_assessment_deadline else "N/A"}
 
 Please complete your self-assessment to ensure a timely review process.
 
@@ -473,7 +474,7 @@ HR Notifications
 
 This is a reminder that your review for {employee_name} in the {cycle_name} cycle is due in {days_remaining} day(s).
 
-Review Deadline: {cycle.manager_review_deadline.strftime("%B %d, %Y") if cycle.manager_review_deadline else 'N/A'}
+Review Deadline: {cycle.manager_review_deadline.strftime("%B %d, %Y") if cycle.manager_review_deadline else "N/A"}
 
 Please complete the review to ensure a timely appraisal process.
 
@@ -537,8 +538,8 @@ HR Notifications
 
 Your certification "{cert_name}" is expiring in {days_remaining} days.
 
-Expiry Date: {certification.valid_until.strftime("%B %d, %Y") if certification.valid_until else 'N/A'}
-Issuing Organization: {certification.issuing_organization or 'N/A'}
+Expiry Date: {certification.valid_until.strftime("%B %d, %Y") if certification.valid_until else "N/A"}
+Issuing Organization: {certification.issuing_organization or "N/A"}
 
 Please take necessary steps to renew your certification before it expires.
 

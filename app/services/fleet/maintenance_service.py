@@ -6,7 +6,6 @@ Handles maintenance scheduling, tracking, and completion.
 
 import logging
 from datetime import date
-from decimal import Decimal
 from typing import Dict, List, Optional
 from uuid import UUID
 
@@ -28,6 +27,8 @@ from app.services.common import (
     ValidationError,
     paginate,
 )
+from app.models.finance.audit.audit_log import AuditAction
+from app.services.audit_dispatcher import fire_audit_event
 
 logger = logging.getLogger(__name__)
 
@@ -155,6 +156,23 @@ class MaintenanceService:
         self.db.add(record)
         self.db.flush()
 
+        fire_audit_event(
+            self.db,
+            self.organization_id,
+            "fleet",
+            "maintenance_record",
+            str(record.maintenance_id),
+            AuditAction.INSERT,
+            new_values={
+                "vehicle_id": str(data.vehicle_id),
+                "maintenance_type": data.maintenance_type.value
+                if hasattr(data.maintenance_type, "value")
+                else str(data.maintenance_type),
+                "description": data.description,
+                "scheduled_date": str(data.scheduled_date),
+            },
+        )
+
         logger.info(
             "Created maintenance record for vehicle %s: %s",
             vehicle.vehicle_code,
@@ -186,6 +204,17 @@ class MaintenanceService:
             raise ValidationError("Can only start scheduled maintenance")
 
         record.status = MaintenanceStatus.IN_PROGRESS
+
+        fire_audit_event(
+            self.db,
+            self.organization_id,
+            "fleet",
+            "maintenance_record",
+            str(record.maintenance_id),
+            AuditAction.UPDATE,
+            old_values={"status": "SCHEDULED"},
+            new_values={"status": "IN_PROGRESS"},
+        )
 
         # Update vehicle status
         vehicle = self.db.get(Vehicle, record.vehicle_id)
@@ -234,15 +263,36 @@ class MaintenanceService:
             vehicle.status = VehicleStatus.ACTIVE
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=self.db, organization_id=self.organization_id,
-                entity_type="FLEET_MAINTENANCE", entity_id=record.maintenance_id,
+                db=self.db,
+                organization_id=self.organization_id,
+                entity_type="FLEET_MAINTENANCE",
+                entity_id=record.maintenance_id,
                 event="ON_STATUS_CHANGE",
-                old_values={}, new_values={"status": "COMPLETED"},
+                old_values={},
+                new_values={"status": "COMPLETED"},
             )
         except Exception:
             pass
+
+        fire_audit_event(
+            self.db,
+            self.organization_id,
+            "fleet",
+            "maintenance_record",
+            str(record.maintenance_id),
+            AuditAction.UPDATE,
+            new_values={
+                "status": "COMPLETED",
+                "completed_date": str(record.completed_date),
+                "actual_cost": str(data.actual_cost) if data.actual_cost else None,
+            },
+            reason="Maintenance completed",
+        )
 
         logger.info("Completed maintenance %s", maintenance_id)
         return record
@@ -268,15 +318,32 @@ class MaintenanceService:
             vehicle.status = VehicleStatus.ACTIVE
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=self.db, organization_id=self.organization_id,
-                entity_type="FLEET_MAINTENANCE", entity_id=record.maintenance_id,
+                db=self.db,
+                organization_id=self.organization_id,
+                entity_type="FLEET_MAINTENANCE",
+                entity_id=record.maintenance_id,
                 event="ON_STATUS_CHANGE",
-                old_values={}, new_values={"status": "CANCELLED"},
+                old_values={},
+                new_values={"status": "CANCELLED"},
             )
         except Exception:
             pass
+
+        fire_audit_event(
+            self.db,
+            self.organization_id,
+            "fleet",
+            "maintenance_record",
+            str(record.maintenance_id),
+            AuditAction.UPDATE,
+            new_values={"status": "CANCELLED"},
+            reason=reason,
+        )
 
         logger.info("Cancelled maintenance %s: %s", maintenance_id, reason)
         return record

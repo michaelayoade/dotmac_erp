@@ -7,6 +7,7 @@ and segregation of duties enforcement.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -17,14 +18,22 @@ from fastapi import HTTPException
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
-from app.models.finance.audit.approval_decision import ApprovalDecision, ApprovalDecisionAction
-from app.models.finance.audit.approval_request import ApprovalRequest, ApprovalRequestStatus
+from app.models.finance.audit.approval_decision import (
+    ApprovalDecision,
+    ApprovalDecisionAction,
+)
+from app.models.finance.audit.approval_request import (
+    ApprovalRequest,
+    ApprovalRequestStatus,
+)
 from app.models.finance.audit.approval_workflow import ApprovalWorkflow
 from app.models.rbac import PersonRole, Role
 from app.services.common import coerce_uuid
 from app.services.finance.platform.authorization import AuthorizationService
 from app.services.finance.platform.fx import FXService
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -121,7 +130,7 @@ class ApprovalWorkflowService(ListResponseMixin):
 
                 # Check if document amount exceeds threshold
                 if amount_to_compare >= workflow.threshold_amount:
-                        return workflow.workflow_id
+                    return workflow.workflow_id
 
         return fallback_workflow_id
 
@@ -172,7 +181,9 @@ class ApprovalWorkflowService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Approval workflow not found")
 
         if not workflow.is_active:
-            raise HTTPException(status_code=400, detail="Approval workflow is not active")
+            raise HTTPException(
+                status_code=400, detail="Approval workflow is not active"
+            )
 
         # Create approval request
         request = ApprovalRequest(
@@ -416,13 +427,10 @@ class ApprovalWorkflowService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        query = (
-            db.query(ApprovalRequest)
-            .filter(
-                and_(
-                    ApprovalRequest.organization_id == org_id,
-                    ApprovalRequest.status == ApprovalRequestStatus.PENDING,
-                )
+        query = db.query(ApprovalRequest).filter(
+            and_(
+                ApprovalRequest.organization_id == org_id,
+                ApprovalRequest.status == ApprovalRequestStatus.PENDING,
             )
         )
 
@@ -445,20 +453,22 @@ class ApprovalWorkflowService(ListResponseMixin):
             )
             if not is_allowed:
                 continue
-            results.append({
-                "request_id": str(request.request_id),
-                "document_type": request.document_type,
-                "document_id": str(request.document_id),
-                "document_reference": request.document_reference,
-                "document_amount": float(request.document_amount)
-                if request.document_amount is not None
-                else None,
-                "document_currency_code": request.document_currency_code,
-                "requested_by_user_id": str(request.requested_by_user_id),
-                "requested_at": request.requested_at.isoformat(),
-                "current_level": request.current_level,
-                "workflow_name": request.workflow.workflow_name,
-            })
+            results.append(
+                {
+                    "request_id": str(request.request_id),
+                    "document_type": request.document_type,
+                    "document_id": str(request.document_id),
+                    "document_reference": request.document_reference,
+                    "document_amount": float(request.document_amount)
+                    if request.document_amount is not None
+                    else None,
+                    "document_currency_code": request.document_currency_code,
+                    "requested_by_user_id": str(request.requested_by_user_id),
+                    "requested_at": request.requested_at.isoformat(),
+                    "current_level": request.current_level,
+                    "workflow_name": request.workflow.workflow_name,
+                }
+            )
 
         return results
 
@@ -491,15 +501,17 @@ class ApprovalWorkflowService(ListResponseMixin):
 
         decisions = []
         for decision in request.decisions:
-            decisions.append({
-                "decision_id": str(decision.decision_id),
-                "level": decision.level,
-                "approver_user_id": str(decision.approver_user_id),
-                "action": decision.action.value,
-                "comments": decision.comments,
-                "decided_at": decision.decided_at.isoformat(),
-                "mfa_verified": decision.mfa_verified,
-            })
+            decisions.append(
+                {
+                    "decision_id": str(decision.decision_id),
+                    "level": decision.level,
+                    "approver_user_id": str(decision.approver_user_id),
+                    "action": decision.action.value,
+                    "comments": decision.comments,
+                    "decided_at": decision.decided_at.isoformat(),
+                    "mfa_verified": decision.mfa_verified,
+                }
+            )
 
         can_approve = request.status == ApprovalRequestStatus.PENDING
         can_reject = request.status == ApprovalRequestStatus.PENDING

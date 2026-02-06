@@ -5,8 +5,7 @@ Business logic for vendor prequalification management.
 """
 
 import logging
-from datetime import datetime
-from datetime import timezone
+from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 from uuid import UUID
 

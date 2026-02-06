@@ -5,6 +5,7 @@ Events are written to the database atomically with business data,
 then published asynchronously by a background processor.
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, List, Optional
 from uuid import UUID
@@ -15,6 +16,8 @@ from sqlalchemy.orm import Session
 from app.models.finance.platform.event_outbox import EventOutbox, EventStatus
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 class OutboxPublisher(ListResponseMixin):

@@ -15,17 +15,17 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.people.hr.employee import Employee
-from app.models.people.payroll.loan_type import LoanType, InterestMethod
 from app.models.people.payroll.employee_loan import EmployeeLoan, LoanStatus
 from app.models.people.payroll.loan_repayment import (
     LoanRepayment,
     RepaymentType,
     SalarySlipLoanDeduction,
 )
+from app.models.people.payroll.loan_type import InterestMethod, LoanType
 from app.services.common import coerce_uuid
 
 logger = logging.getLogger(__name__)
@@ -90,8 +90,7 @@ class LoanService:
         from sqlalchemy import func
 
         max_seq = self.db.scalar(
-            select(func.max(EmployeeLoan.loan_number))
-            .where(
+            select(func.max(EmployeeLoan.loan_number)).where(
                 EmployeeLoan.organization_id == organization_id,
                 EmployeeLoan.loan_number.like(f"LOAN-{year}-%"),
             )
@@ -182,7 +181,9 @@ class LoanService:
         )
 
         status_validator = EmployeeStatusValidator(self.db)
-        result = status_validator.validate_operation(emp_id, OperationType.LOAN_APPLICATION)
+        result = status_validator.validate_operation(
+            emp_id, OperationType.LOAN_APPLICATION
+        )
         if not result.is_valid:
             raise HTTPException(status_code=400, detail=result.message)
 
@@ -231,8 +232,7 @@ class LoanService:
 
         # Check for existing active loans of same type (optional policy)
         existing = self.db.scalar(
-            select(EmployeeLoan)
-            .where(
+            select(EmployeeLoan).where(
                 EmployeeLoan.employee_id == emp_id,
                 EmployeeLoan.loan_type_id == type_id,
                 EmployeeLoan.status == LoanStatus.DISBURSED,
@@ -246,11 +246,13 @@ class LoanService:
             )
 
         # Calculate loan terms
-        total_interest, total_repayable, monthly_installment = self.calculate_loan_terms(
-            input.principal_amount,
-            input.tenure_months,
-            loan_type.default_interest_rate,
-            loan_type.interest_method,
+        total_interest, total_repayable, monthly_installment = (
+            self.calculate_loan_terms(
+                input.principal_amount,
+                input.tenure_months,
+                loan_type.default_interest_rate,
+                loan_type.interest_method,
+            )
         )
 
         # Generate loan number
@@ -279,7 +281,9 @@ class LoanService:
             outstanding_balance=total_repayable,
             first_repayment_date=first_repayment,
             purpose=input.purpose,
-            status=LoanStatus.PENDING if loan_type.requires_approval else LoanStatus.APPROVED,
+            status=LoanStatus.PENDING
+            if loan_type.requires_approval
+            else LoanStatus.APPROVED,
             created_by_id=user_id,
         )
 
@@ -324,13 +328,19 @@ class LoanService:
         self.db.flush()
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=self.db, organization_id=loan.organization_id,
-                entity_type="LOAN", entity_id=loan.loan_id,
+                db=self.db,
+                organization_id=loan.organization_id,
+                entity_type="LOAN",
+                entity_id=loan.loan_id,
                 event="ON_APPROVAL",
                 old_values={"status": "PENDING"},
-                new_values={"status": "APPROVED"}, user_id=user_id,
+                new_values={"status": "APPROVED"},
+                user_id=user_id,
             )
         except Exception:
             pass
@@ -365,13 +375,19 @@ class LoanService:
         self.db.flush()
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=self.db, organization_id=loan.organization_id,
-                entity_type="LOAN", entity_id=loan.loan_id,
+                db=self.db,
+                organization_id=loan.organization_id,
+                entity_type="LOAN",
+                entity_id=loan.loan_id,
                 event="ON_REJECTION",
                 old_values={"status": "PENDING"},
-                new_values={"status": "REJECTED"}, user_id=coerce_uuid(rejected_by_id),
+                new_values={"status": "REJECTED"},
+                user_id=coerce_uuid(rejected_by_id),
             )
         except Exception:
             pass
@@ -485,7 +501,9 @@ class LoanService:
                 LoanDeductionItem(
                     loan_id=loan.loan_id,
                     loan_number=loan.loan_number,
-                    loan_type_name=loan.loan_type.type_name if loan.loan_type else "Loan",
+                    loan_type_name=loan.loan_type.type_name
+                    if loan.loan_type
+                    else "Loan",
                     amount=amount,
                     principal_portion=principal_portion,
                     interest_portion=interest_portion,

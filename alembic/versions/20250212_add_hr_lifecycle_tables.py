@@ -4,6 +4,7 @@ Revision ID: 20250212_add_hr_lifecycle_tables
 Revises: 4f4e6f737d70
 Create Date: 2025-02-12 00:00:00.000000
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -93,7 +94,9 @@ def upgrade() -> None:
         sa.Column("template_name", sa.String(length=200), nullable=True),
         sa.Column("status", boarding_status, nullable=False),
         sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
         sa.Column(
             "created_by_id",
@@ -190,7 +193,9 @@ def upgrade() -> None:
         sa.Column("template_name", sa.String(length=200), nullable=True),
         sa.Column("status", separation_status, nullable=False),
         sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
         sa.Column(
             "created_by_id",
@@ -269,7 +274,9 @@ def upgrade() -> None:
         ),
         sa.Column("promotion_date", sa.Date(), nullable=False),
         sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
         sa.Column(
             "created_by_id",
@@ -341,7 +348,9 @@ def upgrade() -> None:
         ),
         sa.Column("transfer_date", sa.Date(), nullable=False),
         sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
         sa.Column(
             "created_by_id",
@@ -393,26 +402,52 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("idx_transfer_detail_transfer", table_name="employee_transfer_detail", schema="hr")
+    op.drop_index(
+        "idx_transfer_detail_transfer",
+        table_name="employee_transfer_detail",
+        schema="hr",
+    )
     op.drop_table("employee_transfer_detail", schema="hr")
     op.drop_index("idx_transfer_employee", table_name="employee_transfer", schema="hr")
     op.drop_table("employee_transfer", schema="hr")
 
-    op.drop_index("idx_promotion_detail_promotion", table_name="employee_promotion_detail", schema="hr")
+    op.drop_index(
+        "idx_promotion_detail_promotion",
+        table_name="employee_promotion_detail",
+        schema="hr",
+    )
     op.drop_table("employee_promotion_detail", schema="hr")
-    op.drop_index("idx_promotion_employee", table_name="employee_promotion", schema="hr")
+    op.drop_index(
+        "idx_promotion_employee", table_name="employee_promotion", schema="hr"
+    )
     op.drop_table("employee_promotion", schema="hr")
 
-    op.drop_index("idx_separation_activity_separation", table_name="employee_separation_activity", schema="hr")
+    op.drop_index(
+        "idx_separation_activity_separation",
+        table_name="employee_separation_activity",
+        schema="hr",
+    )
     op.drop_table("employee_separation_activity", schema="hr")
-    op.drop_index("idx_separation_employee", table_name="employee_separation", schema="hr")
-    op.drop_index("idx_separation_status", table_name="employee_separation", schema="hr")
+    op.drop_index(
+        "idx_separation_employee", table_name="employee_separation", schema="hr"
+    )
+    op.drop_index(
+        "idx_separation_status", table_name="employee_separation", schema="hr"
+    )
     op.drop_table("employee_separation", schema="hr")
 
-    op.drop_index("idx_onboarding_activity_onboarding", table_name="employee_onboarding_activity", schema="hr")
+    op.drop_index(
+        "idx_onboarding_activity_onboarding",
+        table_name="employee_onboarding_activity",
+        schema="hr",
+    )
     op.drop_table("employee_onboarding_activity", schema="hr")
-    op.drop_index("idx_onboarding_employee", table_name="employee_onboarding", schema="hr")
-    op.drop_index("idx_onboarding_status", table_name="employee_onboarding", schema="hr")
+    op.drop_index(
+        "idx_onboarding_employee", table_name="employee_onboarding", schema="hr"
+    )
+    op.drop_index(
+        "idx_onboarding_status", table_name="employee_onboarding", schema="hr"
+    )
     op.drop_table("employee_onboarding", schema="hr")
 
     op.execute("DROP TYPE IF EXISTS separation_status")

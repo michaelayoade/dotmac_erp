@@ -8,7 +8,6 @@ import hashlib
 import logging
 import os
 import uuid
-from datetime import datetime
 from pathlib import Path
 from typing import BinaryIO, List, Optional, Tuple
 
@@ -97,9 +96,7 @@ class AttachmentService:
         Returns:
             List of attachments
         """
-        query = select(TicketAttachment).where(
-            TicketAttachment.ticket_id == ticket_id
-        )
+        query = select(TicketAttachment).where(TicketAttachment.ticket_id == ticket_id)
 
         if not include_deleted:
             query = query.where(TicketAttachment.is_deleted == False)  # noqa: E712
@@ -145,12 +142,18 @@ class AttachmentService:
         """
         # Check file size
         if file_size > MAX_FILE_SIZE:
-            return False, f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB"
+            return (
+                False,
+                f"File too large. Maximum size is {MAX_FILE_SIZE // (1024 * 1024)}MB",
+            )
 
         # Check extension
         ext = os.path.splitext(filename)[1].lower()
         if ext not in ALLOWED_EXTENSIONS:
-            return False, f"File type not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS.keys())}"
+            return (
+                False,
+                f"File type not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS.keys())}",
+            )
 
         return True, None
 

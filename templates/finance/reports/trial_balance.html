@@ -45,9 +45,12 @@
 
     <!-- Report Header -->
     <div class="card p-6 print:shadow-none print:border-0">
+        {% include "partials/_document_header.html" with {
+            "doc_title": "Trial balance",
+            "doc_number": as_of_date
+        } %}
         <div class="text-center mb-6 print:mb-4">
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Trial balance</h1>
-            <p class="text-slate-500 dark:text-slate-400 mt-1">As of {{ as_of_date }}</p>
+            <p class="text-slate-500 dark:text-slate-400">As of {{ as_of_date }}</p>
             <p class="text-sm text-slate-400 dark:text-slate-500">Period: {{ period_name }}</p>
         </div>
 

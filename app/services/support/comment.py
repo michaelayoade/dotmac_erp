@@ -6,14 +6,12 @@ Handles comments, internal notes, and activity tracking for support tickets.
 
 import logging
 import uuid
-from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
-from sqlalchemy import select, and_
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.support.comment import TicketComment, CommentType
-from app.models.support.ticket import Ticket
+from app.models.support.comment import CommentType, TicketComment
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +38,7 @@ class CommentService:
         Returns:
             List of comments ordered by creation time
         """
-        query = select(TicketComment).where(
-            TicketComment.ticket_id == ticket_id
-        )
+        query = select(TicketComment).where(TicketComment.ticket_id == ticket_id)
 
         if not include_internal:
             query = query.where(TicketComment.is_internal == False)  # noqa: E712
@@ -85,7 +81,9 @@ class CommentService:
         """
         comment = TicketComment(
             ticket_id=ticket_id,
-            comment_type=CommentType.INTERNAL_NOTE if is_internal else CommentType.COMMENT,
+            comment_type=CommentType.INTERNAL_NOTE
+            if is_internal
+            else CommentType.COMMENT,
             content=content,
             author_id=author_id,
             is_internal=is_internal,

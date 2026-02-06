@@ -15,20 +15,17 @@ import os
 from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
-from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from app.models.expense import (
     ExpenseClaim,
-    ExpenseClaimStatus,
     ExpenseLimitRule,
 )
 from app.services.email import send_email
 
 if TYPE_CHECKING:
     from app.models.people.hr.employee import Employee
-    from app.models.people.core import Person
 
 logger = logging.getLogger(__name__)
 
@@ -223,7 +220,9 @@ This is an automated notification from the expense management system.
         """
 
         try:
-            return send_email(self.db, approver.work_email, subject, body_html, body_text)
+            return send_email(
+                self.db, approver.work_email, subject, body_html, body_text
+            )
         except Exception as e:
             logger.error(f"Failed to send approval notification: {e}")
             return False
@@ -483,7 +482,9 @@ View claim at: {claim_url}
             subject = f"Expense Claim Warning: Limit Exceeded - {claim.claim_number}"
             status_color = "#ffc107"
             status_text = "WARNING"
-            action_text = "Your claim has been submitted but may require additional approval."
+            action_text = (
+                "Your claim has been submitted but may require additional approval."
+            )
 
         body_html = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -586,7 +587,9 @@ View claim at: {claim_url}
         app_url = _get_app_url()
         claim_url = f"{app_url}/expense/claims/{claim.claim_id}"
 
-        subject = f"Reminder: Expense Claim Awaiting Your Approval - {claim.claim_number}"
+        subject = (
+            f"Reminder: Expense Claim Awaiting Your Approval - {claim.claim_number}"
+        )
 
         urgency_note = ""
         if days_pending >= 7:
@@ -654,7 +657,9 @@ Review now at: {claim_url}
         """
 
         try:
-            return send_email(self.db, approver.work_email, subject, body_html, body_text)
+            return send_email(
+                self.db, approver.work_email, subject, body_html, body_text
+            )
         except Exception as e:
             logger.error(f"Failed to send reminder notification: {e}")
             return False
@@ -682,7 +687,11 @@ Review now at: {claim_url}
             return False
 
         employee = claim.employee
-        amount = claim.net_payable_amount or claim.total_approved_amount or claim.total_claimed_amount
+        amount = (
+            claim.net_payable_amount
+            or claim.total_approved_amount
+            or claim.total_claimed_amount
+        )
         currency = claim.currency_code
 
         app_url = _get_app_url()
@@ -692,7 +701,9 @@ Review now at: {claim_url}
 
         payment_info = ""
         if payment_reference:
-            payment_info = f"<p><strong>Payment Reference:</strong> {payment_reference}</p>"
+            payment_info = (
+                f"<p><strong>Payment Reference:</strong> {payment_reference}</p>"
+            )
         if payment_date:
             payment_info += f"<p><strong>Payment Date:</strong> {payment_date}</p>"
 
@@ -738,8 +749,8 @@ Your expense reimbursement has been processed!
 
 Claim Number: {claim.claim_number}
 Amount Paid: {currency} {amount:,.2f}
-{f'Payment Reference: {payment_reference}' if payment_reference else ''}
-{f'Payment Date: {payment_date}' if payment_date else ''}
+{f"Payment Reference: {payment_reference}" if payment_reference else ""}
+{f"Payment Date: {payment_date}" if payment_date else ""}
 
 View details at: {claim_url}
         """

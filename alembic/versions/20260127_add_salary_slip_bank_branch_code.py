@@ -22,7 +22,9 @@ def upgrade() -> None:
     if not inspector.has_table("salary_slip", schema="payroll"):
         return
 
-    columns = {col["name"] for col in inspector.get_columns("salary_slip", schema="payroll")}
+    columns = {
+        col["name"] for col in inspector.get_columns("salary_slip", schema="payroll")
+    }
 
     if "bank_branch_code" not in columns:
         op.add_column(
@@ -39,7 +41,9 @@ def downgrade() -> None:
     if not inspector.has_table("salary_slip", schema="payroll"):
         return
 
-    columns = {col["name"] for col in inspector.get_columns("salary_slip", schema="payroll")}
+    columns = {
+        col["name"] for col in inspector.get_columns("salary_slip", schema="payroll")
+    }
 
     if "bank_branch_code" in columns:
         op.drop_column("salary_slip", "bank_branch_code", schema="payroll")

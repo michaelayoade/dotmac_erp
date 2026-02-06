@@ -8,17 +8,18 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from app.config import settings
-from app.models.finance.gl.account import Account, AccountType, NormalBalance
+from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.models.finance.gl.fiscal_period import FiscalPeriod
 from app.models.finance.gl.fiscal_year import FiscalYear
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
+from app.services.formatters import format_currency as format_currency  # noqa: F401
+from app.services.formatters import format_date as format_date  # noqa: F401
+from app.services.formatters import parse_date as parse_date  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -26,31 +27,6 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 # Parsing utilities
 # -----------------------------------------------------------------------------
-
-def parse_date(value: Optional[str]) -> Optional[date]:
-    """Parse a date string in YYYY-MM-DD format."""
-    if not value:
-        return None
-    try:
-        return datetime.strptime(value, "%Y-%m-%d").date()
-    except ValueError:
-        return None
-
-
-def format_date(value: Optional[date]) -> str:
-    """Format a date as YYYY-MM-DD."""
-    return value.strftime("%Y-%m-%d") if value else ""
-
-
-def format_currency(
-    amount: Optional[Decimal],
-    currency: str = settings.default_presentation_currency_code,
-) -> Optional[str]:
-    """Format a decimal amount with currency symbol."""
-    if amount is None:
-        return None
-    value = Decimal(str(amount))
-    return f"{currency} {value:,.2f}"
 
 
 def ifrs_label(category: IFRSCategory) -> str:
@@ -93,6 +69,7 @@ def parse_status(value: Optional[str]) -> Optional[JournalStatus]:
 # -----------------------------------------------------------------------------
 # View transformers
 # -----------------------------------------------------------------------------
+
 
 def category_option_view(category: AccountCategory) -> dict:
     """Transform an account category for select options."""
@@ -218,8 +195,10 @@ def fiscal_year_option_view(year: FiscalYear) -> dict:
 # Data classes
 # -----------------------------------------------------------------------------
 
+
 @dataclass
 class TrialBalanceTotals:
     """Totals for trial balance display."""
+
     total_debits: Decimal = Decimal("0")
     total_credits: Decimal = Decimal("0")

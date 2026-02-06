@@ -170,7 +170,9 @@ class ProjectSyncService(BaseCRMSyncService[Project]):
             "description": record.get("description"),
             "status": self._map_status(record.get("status")),
             "project_priority": self._map_priority(record.get("priority")),
-            "project_type": self._map_type(record.get("project_type") or record.get("type")),
+            "project_type": self._map_type(
+                record.get("project_type") or record.get("type")
+            ),
             "start_date": start_date,
             "end_date": end_date,
             "budget_amount": budget_amount,
@@ -311,10 +313,6 @@ class ProjectSyncService(BaseCRMSyncService[Project]):
 
         Returns count of tickets linked.
         """
-        from app.models.support.ticket import Ticket
-        from app.models.sync import SyncEntity
-
-        from .base import CRM_SOURCE_SYSTEM
 
         # Get ERP project
         project = self.get_by_crm_id(crm_project_id)

@@ -4,17 +4,19 @@ Items/Inventory Importer.
 Imports inventory items from CSV data into the IFRS-based inventory system.
 """
 
-from decimal import Decimal
+import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.inventory.item import Item, ItemType, CostingMethod
+from app.models.inventory.item import CostingMethod, Item, ItemType
 from app.models.inventory.item_category import ItemCategory
 
 from .base import BaseImporter, FieldMapping, ImportConfig
+
+logger = logging.getLogger(__name__)
 
 
 class ItemCategoryImporter(BaseImporter[ItemCategory]):
@@ -147,9 +149,12 @@ class ItemImporter(BaseImporter[Item]):
         super().__init__(db, config)
         self._code_counter = 0
         self._category_importer = ItemCategoryImporter(
-            db, config,
-            inventory_account_id, cogs_account_id,
-            revenue_account_id, adjustment_account_id
+            db,
+            config,
+            inventory_account_id,
+            cogs_account_id,
+            revenue_account_id,
+            adjustment_account_id,
         )
 
     def get_field_mappings(self) -> List[FieldMapping]:
@@ -178,60 +183,124 @@ class ItemImporter(BaseImporter[Item]):
             FieldMapping("UOM", "uom_alt", required=False),
             FieldMapping("Base Unit", "base_unit_alt", required=False),
             # Pricing
-            FieldMapping("Purchase Price", "purchase_cost", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Cost", "cost_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Unit Cost", "unit_cost_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Selling Price", "list_price", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Sales Price", "sales_price_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("List Price", "list_price_alt", required=False,
-                         transformer=self.parse_decimal),
+            FieldMapping(
+                "Purchase Price",
+                "purchase_cost",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Cost", "cost_alt", required=False, transformer=self.parse_decimal
+            ),
+            FieldMapping(
+                "Unit Cost",
+                "unit_cost_alt",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Selling Price",
+                "list_price",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Sales Price",
+                "sales_price_alt",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "List Price",
+                "list_price_alt",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
             # Currency
-            FieldMapping("Currency Code", "currency_code", required=False, default="NGN"),
+            FieldMapping(
+                "Currency Code", "currency_code", required=False, default="NGN"
+            ),
             FieldMapping("Currency", "currency_alt", required=False),
             # Stock management
-            FieldMapping("Reorder Point", "reorder_point", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Reorder Level", "reorder_level_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Reorder Quantity", "reorder_quantity", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Minimum Stock", "minimum_stock", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Maximum Stock", "maximum_stock", required=False,
-                         transformer=self.parse_decimal),
+            FieldMapping(
+                "Reorder Point",
+                "reorder_point",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Reorder Level",
+                "reorder_level_alt",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Reorder Quantity",
+                "reorder_quantity",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Minimum Stock",
+                "minimum_stock",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Maximum Stock",
+                "maximum_stock",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
             # Flags
-            FieldMapping("Track Inventory", "track_inventory", required=False,
-                         transformer=self.parse_boolean, default=True),
-            FieldMapping("Is Taxable", "is_taxable", required=False,
-                         transformer=self.parse_boolean, default=True),
-            FieldMapping("Taxable", "taxable_alt", required=False,
-                         transformer=self.parse_boolean),
+            FieldMapping(
+                "Track Inventory",
+                "track_inventory",
+                required=False,
+                transformer=self.parse_boolean,
+                default=True,
+            ),
+            FieldMapping(
+                "Is Taxable",
+                "is_taxable",
+                required=False,
+                transformer=self.parse_boolean,
+                default=True,
+            ),
+            FieldMapping(
+                "Taxable", "taxable_alt", required=False, transformer=self.parse_boolean
+            ),
             FieldMapping("Status", "status_str", required=False),
-            FieldMapping("Is Active", "is_active", required=False,
-                         transformer=self.parse_boolean, default=True),
+            FieldMapping(
+                "Is Active",
+                "is_active",
+                required=False,
+                transformer=self.parse_boolean,
+                default=True,
+            ),
             # Additional
             FieldMapping("Barcode", "barcode", required=False),
-            FieldMapping("Manufacturer Part Number", "manufacturer_part_number", required=False),
+            FieldMapping(
+                "Manufacturer Part Number", "manufacturer_part_number", required=False
+            ),
             FieldMapping("MPN", "mpn_alt", required=False),
-            FieldMapping("Weight", "weight", required=False,
-                         transformer=self.parse_decimal),
+            FieldMapping(
+                "Weight", "weight", required=False, transformer=self.parse_decimal
+            ),
             FieldMapping("Weight Unit", "weight_uom", required=False),
         ]
 
     def get_unique_key(self, row: Dict[str, Any]) -> str:
         """Unique key is item code or SKU."""
-        code = str(row.get("Item Code") or row.get("SKU") or
-                   row.get("Product Code") or "").strip()
+        code = str(
+            row.get("Item Code") or row.get("SKU") or row.get("Product Code") or ""
+        ).strip()
         if code:
             return code
         # Fallback to name
-        name = str(row.get("Item Name") or row.get("Name") or
-                   row.get("Product Name") or "").strip()
+        name = str(
+            row.get("Item Name") or row.get("Name") or row.get("Product Name") or ""
+        ).strip()
         return name
 
     def check_duplicate(self, row: Dict[str, Any]) -> Optional[Item]:
@@ -252,8 +321,9 @@ class ItemImporter(BaseImporter[Item]):
             return existing
 
         # Check by name
-        name = str(row.get("Item Name") or row.get("Name") or
-                   row.get("Product Name") or "").strip()
+        name = str(
+            row.get("Item Name") or row.get("Name") or row.get("Product Name") or ""
+        ).strip()
         if name:
             existing = self.db.execute(
                 select(Item).where(
@@ -267,12 +337,17 @@ class ItemImporter(BaseImporter[Item]):
     def create_entity(self, row: Dict[str, Any]) -> Item:
         """Create a new item from transformed row data."""
         # Get item name (try multiple fields)
-        item_name = str(row.get("item_name") or row.get("item_name_alt") or
-                        row.get("item_name_alt2") or "Unknown Item").strip()
+        item_name = str(
+            row.get("item_name")
+            or row.get("item_name_alt")
+            or row.get("item_name_alt2")
+            or "Unknown Item"
+        ).strip()
 
         # Get item code (try multiple fields or generate)
-        item_code = str(row.get("item_code") or row.get("sku") or
-                        row.get("product_code") or "").strip()
+        item_code = str(
+            row.get("item_code") or row.get("sku") or row.get("product_code") or ""
+        ).strip()
         if not item_code:
             self._code_counter += 1
             item_code = f"ITEM{self._code_counter:05d}"
@@ -281,27 +356,42 @@ class ItemImporter(BaseImporter[Item]):
         description = row.get("description") or row.get("description_alt")
 
         # Determine item type
-        type_str = str(row.get("item_type_str") or row.get("type_alt") or "INVENTORY").upper()
+        type_str = str(
+            row.get("item_type_str") or row.get("type_alt") or "INVENTORY"
+        ).upper()
         item_type = self._parse_item_type(type_str)
 
         # Get category
-        category_name = str(row.get("category_name") or row.get("item_group") or
-                            row.get("category_alt") or "Default")
+        category_name = str(
+            row.get("category_name")
+            or row.get("item_group")
+            or row.get("category_alt")
+            or "Default"
+        )
         category_id = self._category_importer.get_category_id(category_name)
 
         # Get UOM
-        base_uom = str(row.get("base_uom") or row.get("uom_alt") or
-                       row.get("base_unit_alt") or "EACH")[:20]
+        base_uom = str(
+            row.get("base_uom")
+            or row.get("uom_alt")
+            or row.get("base_unit_alt")
+            or "EACH"
+        )[:20]
 
         # Get pricing
-        purchase_cost = (row.get("purchase_cost") or row.get("cost_alt") or
-                         row.get("unit_cost_alt"))
-        list_price = (row.get("list_price") or row.get("sales_price_alt") or
-                      row.get("list_price_alt"))
+        purchase_cost = (
+            row.get("purchase_cost") or row.get("cost_alt") or row.get("unit_cost_alt")
+        )
+        list_price = (
+            row.get("list_price")
+            or row.get("sales_price_alt")
+            or row.get("list_price_alt")
+        )
 
         # Get currency
-        currency_code = str(row.get("currency_code") or
-                            row.get("currency_alt") or "NGN")[:3]
+        currency_code = str(
+            row.get("currency_code") or row.get("currency_alt") or "NGN"
+        )[:3]
 
         # Get stock management
         reorder_point = row.get("reorder_point") or row.get("reorder_level_alt")
@@ -330,7 +420,9 @@ class ItemImporter(BaseImporter[Item]):
             last_purchase_cost=purchase_cost,
             currency_code=currency_code,
             list_price=list_price,
-            track_inventory=track_inventory if item_type == ItemType.INVENTORY else False,
+            track_inventory=track_inventory
+            if item_type == ItemType.INVENTORY
+            else False,
             track_lots=False,
             track_serial_numbers=False,
             reorder_point=reorder_point,
@@ -338,7 +430,8 @@ class ItemImporter(BaseImporter[Item]):
             minimum_stock=row.get("minimum_stock"),
             maximum_stock=row.get("maximum_stock"),
             barcode=row.get("barcode"),
-            manufacturer_part_number=row.get("manufacturer_part_number") or row.get("mpn_alt"),
+            manufacturer_part_number=row.get("manufacturer_part_number")
+            or row.get("mpn_alt"),
             weight=row.get("weight"),
             weight_uom=row.get("weight_uom"),
             is_taxable=is_taxable,

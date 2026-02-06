@@ -21,7 +21,9 @@ class TestTaxReturns:
         assert response.ok, f"Returns page failed with status {response.status}"
         authenticated_page.wait_for_load_state("networkidle")
 
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("Tax Returns")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "Tax Returns"
+        )
         expect(authenticated_page.get_by_test_id("tax-returns-new")).to_be_visible()
         expect(authenticated_page.get_by_test_id("tax-returns-table")).to_be_visible()
 
@@ -30,7 +32,9 @@ class TestTaxOverduePeriods:
     """Test overdue tax periods pages."""
 
     @pytest.mark.e2e
-    def test_overdue_periods_page_has_filter(self, authenticated_page: Page, base_url: str):
+    def test_overdue_periods_page_has_filter(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Ensure overdue periods page loads and shows the date filter."""
         response = authenticated_page.goto(f"{base_url}/tax/periods/overdue")
         assert response is not None, "No response from overdue periods navigation"
@@ -53,10 +57,14 @@ class TestTaxReferenceData:
         authenticated_page.goto(f"{base_url}/tax/codes")
         authenticated_page.wait_for_load_state("networkidle")
 
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("Tax Codes")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "Tax Codes"
+        )
 
     @pytest.mark.e2e
-    def test_tax_jurisdictions_page_loads(self, authenticated_page: Page, base_url: str):
+    def test_tax_jurisdictions_page_loads(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Ensure tax jurisdictions page loads."""
         authenticated_page.goto(f"{base_url}/tax/jurisdictions")
         authenticated_page.wait_for_load_state("networkidle")
@@ -73,7 +81,9 @@ class TestTaxReferenceData:
         assert response.ok, f"Tax periods page failed with status {response.status}"
         authenticated_page.wait_for_load_state("networkidle")
 
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("Tax Periods")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "Tax Periods"
+        )
 
 
 class TestTaxReturnDetail:

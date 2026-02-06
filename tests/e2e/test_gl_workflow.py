@@ -66,7 +66,9 @@ class TestGLAccountCreateWorkflow:
 
         # Fill required fields
         authenticated_page.fill("input[name='account_code']", account_code)
-        authenticated_page.fill("input[name='account_name']", f"Test Account {unique_id}")
+        authenticated_page.fill(
+            "input[name='account_name']", f"Test Account {unique_id}"
+        )
 
         # Select category if available
         category_select = authenticated_page.locator("select[name='category_id']")
@@ -131,7 +133,9 @@ class TestGLJournalEntryCreateWorkflow:
         expect(authenticated_page).to_have_url(re.compile(r".*/gl/journals/new.*"))
 
     @pytest.mark.e2e
-    def test_journal_form_has_header_fields(self, authenticated_page: Page, base_url: str):
+    def test_journal_form_has_header_fields(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that journal form has header fields."""
         authenticated_page.goto(f"{base_url}/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -145,7 +149,9 @@ class TestGLJournalEntryCreateWorkflow:
         expect(form.locator("input[name='description']")).to_be_visible()
 
     @pytest.mark.e2e
-    def test_journal_form_has_add_line_button(self, authenticated_page: Page, base_url: str):
+    def test_journal_form_has_add_line_button(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that journal form has add line button."""
         authenticated_page.goto(f"{base_url}/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -184,7 +190,9 @@ class TestGLJournalEntryCreateWorkflow:
         expect(totals).to_be_visible()
 
     @pytest.mark.e2e
-    def test_journal_submit_disabled_when_unbalanced(self, authenticated_page: Page, base_url: str):
+    def test_journal_submit_disabled_when_unbalanced(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that submit is disabled when journal is unbalanced."""
         authenticated_page.goto(f"{base_url}/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
@@ -207,7 +215,9 @@ class TestGLJournalDetailWorkflow:
         authenticated_page.goto(f"{base_url}/gl/journals/{entry_id}")
         authenticated_page.wait_for_load_state("networkidle")
 
-        expect(authenticated_page.get_by_text("Journal entry not found")).to_be_visible()
+        expect(
+            authenticated_page.get_by_text("Journal entry not found")
+        ).to_be_visible()
 
     @pytest.mark.e2e
     def test_journals_list_page(self, authenticated_page: Page, base_url: str):
@@ -229,7 +239,9 @@ class TestGLJournalDetailWorkflow:
         expect(search).to_be_visible()
 
     @pytest.mark.e2e
-    def test_journals_list_has_action_buttons(self, authenticated_page: Page, base_url: str):
+    def test_journals_list_has_action_buttons(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that journals list shows action buttons."""
         authenticated_page.goto(f"{base_url}/gl/journals")
         authenticated_page.wait_for_load_state("networkidle")
@@ -250,7 +262,9 @@ class TestGLFiscalPeriodWorkflow:
         expect(authenticated_page).to_have_url(re.compile(r".*/gl/periods.*"))
 
     @pytest.mark.e2e
-    def test_periods_has_status_indicators(self, authenticated_page: Page, base_url: str):
+    def test_periods_has_status_indicators(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that periods page shows status indicators."""
         authenticated_page.goto(f"{base_url}/gl/periods")
         authenticated_page.wait_for_load_state("networkidle")
@@ -265,7 +279,9 @@ class TestGLFiscalPeriodWorkflow:
 
         form = authenticated_page.locator("form").first
         expect(form).to_be_visible()
-        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text("New Fiscal Year")
+        expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
+            "New Fiscal Year"
+        )
 
 
 class TestGLTrialBalanceWorkflow:
@@ -279,7 +295,9 @@ class TestGLTrialBalanceWorkflow:
         expect(authenticated_page).to_have_url(re.compile(r".*/gl/trial-balance.*"))
 
     @pytest.mark.e2e
-    def test_trial_balance_has_date_filter(self, authenticated_page: Page, base_url: str):
+    def test_trial_balance_has_date_filter(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that trial balance has date filter."""
         authenticated_page.goto(f"{base_url}/gl/trial-balance")
         authenticated_page.wait_for_load_state("networkidle")
@@ -288,7 +306,9 @@ class TestGLTrialBalanceWorkflow:
         expect(date_filter).to_be_visible()
 
     @pytest.mark.e2e
-    def test_trial_balance_shows_accounts(self, authenticated_page: Page, base_url: str):
+    def test_trial_balance_shows_accounts(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that trial balance displays account data."""
         authenticated_page.goto(f"{base_url}/gl/trial-balance")
         authenticated_page.wait_for_load_state("networkidle")
@@ -318,7 +338,9 @@ class TestGLPeriodCloseWorkflow:
         expect(authenticated_page.get_by_test_id("page-title")).to_be_visible()
 
     @pytest.mark.e2e
-    def test_period_close_shows_checklist(self, authenticated_page: Page, base_url: str):
+    def test_period_close_shows_checklist(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that period close shows a checklist or steps."""
         authenticated_page.goto(f"{base_url}/gl/period-close")
         authenticated_page.wait_for_load_state("networkidle")
@@ -330,7 +352,9 @@ class TestGLPeriodCloseWorkflow:
         expect(checklist).to_be_visible()
 
     @pytest.mark.e2e
-    def test_period_close_has_close_button(self, authenticated_page: Page, base_url: str):
+    def test_period_close_has_close_button(
+        self, authenticated_page: Page, base_url: str
+    ):
         """Test that period close has a close button."""
         authenticated_page.goto(f"{base_url}/gl/period-close")
         authenticated_page.wait_for_load_state("networkidle")
@@ -383,7 +407,7 @@ class TestGLResponsiveDesign:
         authenticated_page.set_viewport_size({"width": 375, "height": 667})
         authenticated_page.goto(f"{base_url}/gl/accounts")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
     @pytest.mark.e2e
     def test_gl_journals_mobile(self, authenticated_page: Page, base_url: str):
@@ -391,7 +415,7 @@ class TestGLResponsiveDesign:
         authenticated_page.set_viewport_size({"width": 375, "height": 667})
         authenticated_page.goto(f"{base_url}/gl/journals")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()
 
     @pytest.mark.e2e
     def test_journal_form_tablet(self, authenticated_page: Page, base_url: str):
@@ -399,4 +423,4 @@ class TestGLResponsiveDesign:
         authenticated_page.set_viewport_size({"width": 768, "height": 1024})
         authenticated_page.goto(f"{base_url}/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
-        expect(authenticated_page.locator("body")).to_be_visible()
+        expect(authenticated_page.locator("main")).to_be_visible()

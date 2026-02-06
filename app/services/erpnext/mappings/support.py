@@ -3,7 +3,16 @@ Support/Ticket Mapping from ERPNext to DotMac ERP.
 
 Maps ERPNext Issue (or HD Ticket in v14+) DocType to DotMac support.ticket.
 """
+
+import logging
 from typing import Any
+
+from app.models.support.ticket import (
+    ERPNEXT_PRIORITY_MAP,
+    ERPNEXT_STATUS_MAP,
+    TicketPriority,
+    TicketStatus,
+)
 
 from .base import (
     DocTypeMapping,
@@ -13,12 +22,7 @@ from .base import (
     parse_datetime,
 )
 
-from app.models.support.ticket import (
-    TicketStatus,
-    TicketPriority,
-    ERPNEXT_STATUS_MAP,
-    ERPNEXT_PRIORITY_MAP,
-)
+logger = logging.getLogger(__name__)
 
 
 def map_ticket_status(value: Any) -> str:

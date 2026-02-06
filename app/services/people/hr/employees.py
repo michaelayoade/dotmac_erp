@@ -8,8 +8,10 @@ This service encapsulates employee-related business logic:
 
 Routes should call this service and control the transaction boundary.
 """
+
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, List, Optional
@@ -20,6 +22,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.auth import AuthProvider, UserCredential
 from app.models.finance.core_org.cost_center import CostCenter
 from app.models.finance.core_org.location import Location
+from app.models.people.attendance.shift_type import ShiftType
 from app.models.people.hr import (
     Department,
     Designation,
@@ -28,18 +31,12 @@ from app.models.people.hr import (
     EmployeeStatus,
     EmploymentType,
 )
-from app.models.people.attendance.shift_type import ShiftType
 from app.models.person import Person
+from app.models.finance.audit.audit_log import AuditAction
+from app.services.audit_dispatcher import fire_audit_event
 from app.services.auth_flow import hash_password
 from app.services.common import PaginatedResult, PaginationParams, paginate
 
-from .errors import (
-    EmployeeAlreadyExistsError,
-    EmployeeNotFoundError,
-    EmployeeStatusError,
-    InvalidManagerError,
-    ValidationError,
-)
 from .employee_types import (
     BulkResult,
     BulkUpdateData,
@@ -50,6 +47,15 @@ from .employee_types import (
     OrgChartNode,
     TerminationData,
 )
+from .errors import (
+    EmployeeAlreadyExistsError,
+    EmployeeNotFoundError,
+    EmployeeStatusError,
+    InvalidManagerError,
+    ValidationError,
+)
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.auth import Principal
@@ -142,14 +148,13 @@ class EmployeeService:
 
         # Get current max sequence for this year
         prefix = f"EMP-{year}-"
-        seq_expr = cast(func.substring(Employee.employee_code, len(prefix) + 1), Integer)
-        stmt = (
-            select(func.max(seq_expr))
-            .where(
-                Employee.organization_id == self.organization_id,
-                Employee.employee_code.like(f"{prefix}%"),
-                Employee.employee_code.op("~")(f"^{prefix}\\d+$"),
-            )
+        seq_expr = cast(
+            func.substring(Employee.employee_code, len(prefix) + 1), Integer
+        )
+        stmt = select(func.max(seq_expr)).where(
+            Employee.organization_id == self.organization_id,
+            Employee.employee_code.like(f"{prefix}%"),
+            Employee.employee_code.op("~")(f"^{prefix}\\d+$"),
         )
         max_seq = self.db.scalar(stmt)
         next_seq = (max_seq or 0) + 1
@@ -166,7 +171,10 @@ class EmployeeService:
         if entity_id is None:
             return
         record = self.db.get(model, entity_id)
-        if not record or getattr(record, "organization_id", None) != self.organization_id:
+        if (
+            not record
+            or getattr(record, "organization_id", None) != self.organization_id
+        ):
             raise ValidationError(f"{label} {entity_id} not found")
         if getattr(record, "is_deleted", False):
             raise ValidationError(f"{label} {entity_id} not found")
@@ -449,20 +457,17 @@ class EmployeeService:
         Returns:
             List of OrgChartNode objects with nested direct_reports.
         """
+
         def build_node(employee: Employee, current_depth: int) -> OrgChartNode:
             person = employee.person
             name = f"{person.first_name} {person.last_name}".strip() if person else ""
             email = person.email if person else None
 
             designation_name = (
-                employee.designation.designation_name
-                if employee.designation
-                else None
+                employee.designation.designation_name if employee.designation else None
             )
             department_name = (
-                employee.department.department_name
-                if employee.department
-                else None
+                employee.department.department_name if employee.department else None
             )
 
             node = OrgChartNode(
@@ -480,6 +485,7 @@ class EmployeeService:
                     node.direct_reports.append(build_node(report, current_depth + 1))
 
             return node
+
         reports_by_manager: dict[Optional[uuid.UUID], list[Employee]] = {}
 
         if root_employee_id:
@@ -626,7 +632,9 @@ class EmployeeService:
         employee_code = data.employee_number
         if not employee_code:
             # Serialize code generation per org/year to avoid duplicates.
-            lock_key = (self.organization_id.int ^ datetime.now(timezone.utc).year) % (2**63)
+            lock_key = (self.organization_id.int ^ datetime.now(timezone.utc).year) % (
+                2**63
+            )
             self.db.execute(
                 text("SELECT pg_advisory_xact_lock(:key)"),
                 {"key": lock_key},
@@ -655,11 +663,15 @@ class EmployeeService:
 
         self._validate_org_reference(Department, data.department_id, "Department")
         self._validate_org_reference(Designation, data.designation_id, "Designation")
-        self._validate_org_reference(EmploymentType, data.employment_type_id, "Employment type")
+        self._validate_org_reference(
+            EmploymentType, data.employment_type_id, "Employment type"
+        )
         self._validate_org_reference(EmployeeGrade, data.grade_id, "Employee grade")
         self._validate_org_reference(CostCenter, data.cost_center_id, "Cost center")
         self._validate_org_reference(Location, data.assigned_location_id, "Location")
-        self._validate_org_reference(ShiftType, data.default_shift_type_id, "Shift type")
+        self._validate_org_reference(
+            ShiftType, data.default_shift_type_id, "Shift type"
+        )
 
         employee = Employee(
             organization_id=self.organization_id,
@@ -697,6 +709,19 @@ class EmployeeService:
         self.db.add(employee)
         self.db.flush()
 
+        fire_audit_event(
+            db=self.db,
+            organization_id=employee.organization_id,
+            table_schema="hr",
+            table_name="employee",
+            record_id=str(employee.employee_id),
+            action=AuditAction.INSERT,
+            new_values={
+                "employee_number": employee.employee_code,
+                "person_id": str(employee.person_id),
+            },
+        )
+
         return employee
 
     def update_employee(
@@ -722,7 +747,10 @@ class EmployeeService:
         use_provided_fields = bool(provided_fields)
 
         # Validate and update employee code
-        if data.employee_number is not None and data.employee_number != employee.employee_code:
+        if (
+            data.employee_number is not None
+            and data.employee_number != employee.employee_code
+        ):
             existing = self.get_employee_by_code(data.employee_number)
             if existing and existing.employee_id != employee_id:
                 raise EmployeeAlreadyExistsError(
@@ -732,7 +760,10 @@ class EmployeeService:
             employee.employee_code = data.employee_number
 
         # Validate manager doesn't create cycle
-        if data.reports_to_id is not None and data.reports_to_id != employee.reports_to_id:
+        if (
+            data.reports_to_id is not None
+            and data.reports_to_id != employee.reports_to_id
+        ):
             if data.reports_to_id:
                 manager = self.db.scalar(
                     select(Employee).where(
@@ -742,7 +773,9 @@ class EmployeeService:
                     )
                 )
                 if not manager:
-                    raise ValidationError(f"Manager with ID {data.reports_to_id} not found")
+                    raise ValidationError(
+                        f"Manager with ID {data.reports_to_id} not found"
+                    )
                 if not self._validate_manager(employee_id, data.reports_to_id):
                     raise InvalidManagerError()
             employee.reports_to_id = data.reports_to_id
@@ -758,13 +791,17 @@ class EmployeeService:
 
         # Update designation
         if data.designation_id is not None:
-            self._validate_org_reference(Designation, data.designation_id, "Designation")
+            self._validate_org_reference(
+                Designation, data.designation_id, "Designation"
+            )
             employee.designation_id = data.designation_id
         elif use_provided_fields and "designation_id" in provided_fields:
             employee.designation_id = None
 
         if data.employment_type_id is not None:
-            self._validate_org_reference(EmploymentType, data.employment_type_id, "Employment type")
+            self._validate_org_reference(
+                EmploymentType, data.employment_type_id, "Employment type"
+            )
             employee.employment_type_id = data.employment_type_id
         elif use_provided_fields and "employment_type_id" in provided_fields:
             employee.employment_type_id = None
@@ -782,13 +819,17 @@ class EmployeeService:
             employee.cost_center_id = None
 
         if data.assigned_location_id is not None:
-            self._validate_org_reference(Location, data.assigned_location_id, "Location")
+            self._validate_org_reference(
+                Location, data.assigned_location_id, "Location"
+            )
             employee.assigned_location_id = data.assigned_location_id
         elif use_provided_fields and "assigned_location_id" in provided_fields:
             employee.assigned_location_id = None
 
         if data.default_shift_type_id is not None:
-            self._validate_org_reference(ShiftType, data.default_shift_type_id, "Shift type")
+            self._validate_org_reference(
+                ShiftType, data.default_shift_type_id, "Shift type"
+            )
             employee.default_shift_type_id = data.default_shift_type_id
         elif use_provided_fields and "default_shift_type_id" in provided_fields:
             employee.default_shift_type_id = None
@@ -867,6 +908,16 @@ class EmployeeService:
         employee.updated_at = datetime.now(timezone.utc)
         employee.updated_by_id = self.principal.id if self.principal else None
         employee.version += 1
+
+        fire_audit_event(
+            db=self.db,
+            organization_id=employee.organization_id,
+            table_schema="hr",
+            table_name="employee",
+            record_id=str(employee.employee_id),
+            action=AuditAction.UPDATE,
+            new_values={"updated_fields": "employee_data"},
+        )
 
         return employee
 
@@ -1028,10 +1079,24 @@ class EmployeeService:
                 "Employee is already terminated",
             )
 
+        old_status = employee.status.value if employee.status else None
+
         employee.status = EmployeeStatus.TERMINATED
         employee.date_of_leaving = data.date_of_leaving
         employee.updated_at = datetime.now(timezone.utc)
         employee.updated_by_id = self.principal.id if self.principal else None
+
+        fire_audit_event(
+            db=self.db,
+            organization_id=employee.organization_id,
+            table_schema="hr",
+            table_name="employee",
+            record_id=str(employee.employee_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": old_status},
+            new_values={"status": "TERMINATED"},
+            reason=data.reason if hasattr(data, "reason") else None,
+        )
 
         return employee
 
@@ -1109,7 +1174,9 @@ class EmployeeService:
             self._validate_org_reference(Department, data.department_id, "Department")
             updates["department_id"] = data.department_id
         if data.designation_id is not None:
-            self._validate_org_reference(Designation, data.designation_id, "Designation")
+            self._validate_org_reference(
+                Designation, data.designation_id, "Designation"
+            )
             updates["designation_id"] = data.designation_id
         if data.status is not None:
             updates["status"] = data.status

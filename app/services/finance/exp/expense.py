@@ -3,19 +3,26 @@ Expense Service.
 
 Business logic for expense entry management.
 """
+
+import logging
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models.finance.exp.expense_entry import ExpenseEntry, ExpenseStatus, PaymentMethod
+from app.models.finance.exp.expense_entry import (
+    ExpenseEntry,
+    ExpenseStatus,
+    PaymentMethod,
+)
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
 from app.services.common import coerce_uuid
+
+logger = logging.getLogger(__name__)
 
 
 class ExpenseService:
@@ -76,7 +83,9 @@ class ExpenseService:
             expense_number=ExpenseService.generate_expense_number(db, org_id),
             expense_date=expense_date,
             expense_account_id=coerce_uuid(expense_account_id),
-            payment_account_id=coerce_uuid(payment_account_id) if payment_account_id else None,
+            payment_account_id=coerce_uuid(payment_account_id)
+            if payment_account_id
+            else None,
             amount=amount,
             tax_amount=tax_amount,
             currency_code=currency_code,
@@ -88,7 +97,9 @@ class ExpenseService:
             notes=notes,
             project_id=coerce_uuid(project_id) if project_id else None,
             cost_center_id=coerce_uuid(cost_center_id) if cost_center_id else None,
-            business_unit_id=coerce_uuid(business_unit_id) if business_unit_id else None,
+            business_unit_id=coerce_uuid(business_unit_id)
+            if business_unit_id
+            else None,
             status=ExpenseStatus.DRAFT,
             created_by=coerce_uuid(created_by),
         )
@@ -107,10 +118,14 @@ class ExpenseService:
     ) -> ExpenseEntry:
         """Submit expense for approval."""
         org_id = coerce_uuid(organization_id)
-        expense = db.query(ExpenseEntry).filter(
-            ExpenseEntry.expense_id == coerce_uuid(expense_id),
-            ExpenseEntry.organization_id == org_id,
-        ).first()
+        expense = (
+            db.query(ExpenseEntry)
+            .filter(
+                ExpenseEntry.expense_id == coerce_uuid(expense_id),
+                ExpenseEntry.organization_id == org_id,
+            )
+            .first()
+        )
         if not expense:
             raise ValueError("Expense not found")
 
@@ -133,10 +148,14 @@ class ExpenseService:
     ) -> ExpenseEntry:
         """Approve expense."""
         org_id = coerce_uuid(organization_id)
-        expense = db.query(ExpenseEntry).filter(
-            ExpenseEntry.expense_id == coerce_uuid(expense_id),
-            ExpenseEntry.organization_id == org_id,
-        ).first()
+        expense = (
+            db.query(ExpenseEntry)
+            .filter(
+                ExpenseEntry.expense_id == coerce_uuid(expense_id),
+                ExpenseEntry.organization_id == org_id,
+            )
+            .first()
+        )
         if not expense:
             raise ValueError("Expense not found")
 
@@ -159,10 +178,14 @@ class ExpenseService:
     ) -> ExpenseEntry:
         """Reject expense."""
         org_id = coerce_uuid(organization_id)
-        expense = db.query(ExpenseEntry).filter(
-            ExpenseEntry.expense_id == coerce_uuid(expense_id),
-            ExpenseEntry.organization_id == org_id,
-        ).first()
+        expense = (
+            db.query(ExpenseEntry)
+            .filter(
+                ExpenseEntry.expense_id == coerce_uuid(expense_id),
+                ExpenseEntry.organization_id == org_id,
+            )
+            .first()
+        )
         if not expense:
             raise ValueError("Expense not found")
 
@@ -192,10 +215,14 @@ class ExpenseService:
         from app.models.finance.gl.fiscal_period import FiscalPeriod
 
         org_id = coerce_uuid(organization_id)
-        expense = db.query(ExpenseEntry).filter(
-            ExpenseEntry.expense_id == coerce_uuid(expense_id),
-            ExpenseEntry.organization_id == org_id,
-        ).first()
+        expense = (
+            db.query(ExpenseEntry)
+            .filter(
+                ExpenseEntry.expense_id == coerce_uuid(expense_id),
+                ExpenseEntry.organization_id == org_id,
+            )
+            .first()
+        )
         if not expense:
             raise ValueError("Expense not found")
 
@@ -211,7 +238,9 @@ class ExpenseService:
         # Validate fiscal period belongs to the organization
         fiscal_period = db.get(FiscalPeriod, period_id)
         if not fiscal_period or fiscal_period.organization_id != org_id:
-            raise ValueError("Fiscal period not found or does not belong to organization")
+            raise ValueError(
+                "Fiscal period not found or does not belong to organization"
+            )
 
         # Use savepoint for transactional consistency
         savepoint = db.begin_nested()
@@ -276,6 +305,7 @@ class ExpenseService:
             line_num = 2
             if expense.tax_amount > 0 and expense.tax_code_id:
                 from app.models.finance.tax.tax_code import TaxCode
+
                 tax_code = db.get(TaxCode, expense.tax_code_id)
                 if tax_code and tax_code.tax_paid_account_id:
                     tax_line = JournalEntryLine(
@@ -329,7 +359,9 @@ class ExpenseService:
             raise ValueError("Expense not found")
 
         if expense.status == ExpenseStatus.POSTED:
-            raise ValueError("Cannot void posted expense - reverse the journal entry instead")
+            raise ValueError(
+                "Cannot void posted expense - reverse the journal entry instead"
+            )
 
         expense.status = ExpenseStatus.VOID
         expense.updated_by = coerce_uuid(voided_by)

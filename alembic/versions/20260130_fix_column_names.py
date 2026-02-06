@@ -5,11 +5,12 @@ Revises: 20260130_emp_doc_type
 Create Date: 2026-01-30
 
 """
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = '20260130_fix_columns'
-down_revision = '20260130_emp_doc_type'
+revision = "20260130_fix_columns"
+down_revision = "20260130_emp_doc_type"
 branch_labels = None
 depends_on = None
 
@@ -67,12 +68,20 @@ def downgrade() -> None:
     op.execute("ALTER TABLE hr.hr_document RENAME COLUMN metadata TO extra_data")
 
     # Revert job_description_competency
-    op.execute("ALTER TABLE hr.job_description_competency RENAME COLUMN updated_by_id TO updated_by")
-    op.execute("ALTER TABLE hr.job_description_competency RENAME COLUMN created_by_id TO created_by")
+    op.execute(
+        "ALTER TABLE hr.job_description_competency RENAME COLUMN updated_by_id TO updated_by"
+    )
+    op.execute(
+        "ALTER TABLE hr.job_description_competency RENAME COLUMN created_by_id TO created_by"
+    )
 
     # Revert job_description
-    op.execute("ALTER TABLE hr.job_description RENAME COLUMN updated_by_id TO updated_by")
-    op.execute("ALTER TABLE hr.job_description RENAME COLUMN created_by_id TO created_by")
+    op.execute(
+        "ALTER TABLE hr.job_description RENAME COLUMN updated_by_id TO updated_by"
+    )
+    op.execute(
+        "ALTER TABLE hr.job_description RENAME COLUMN created_by_id TO created_by"
+    )
 
     # Revert competency
     op.execute("ALTER TABLE hr.competency RENAME COLUMN updated_by_id TO updated_by")

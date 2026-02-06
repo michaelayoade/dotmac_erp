@@ -7,9 +7,10 @@ Handles multiple taxes per line, compound taxes, and inclusive taxes.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 from uuid import UUID
 
@@ -18,6 +19,8 @@ from sqlalchemy.orm import Session
 
 from app.models.finance.tax.tax_code import TaxCode
 from app.services.common import coerce_uuid
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -266,7 +269,9 @@ class TaxCalculationService:
             # Update running base (extract tax from total)
             running_base = net_base
 
-        net_amount = running_base  # This is the net amount after extracting inclusive taxes
+        net_amount = (
+            running_base  # This is the net amount after extracting inclusive taxes
+        )
 
         # Process exclusive taxes (add on top)
         compound_base = net_amount

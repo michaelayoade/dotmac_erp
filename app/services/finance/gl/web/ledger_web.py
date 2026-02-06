@@ -7,23 +7,21 @@ Provides view-focused data and operations for viewing all posted ledger entries.
 from __future__ import annotations
 
 import logging
-from datetime import date
 from decimal import Decimal
 from typing import Optional
-from uuid import UUID
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from app.models.finance.gl.account import Account, NormalBalance
 from app.models.finance.gl.journal_entry import JournalEntry
 from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
 from app.services.common import coerce_uuid
+from app.services.finance.gl.web.base import format_currency, format_date, parse_date
 from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
-from app.services.finance.gl.web.base import format_date, format_currency, parse_date
+from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +62,10 @@ class LedgerWebService:
         """
         logger.debug(
             "list_ledger_context: org=%s account=%s search=%r page=%d",
-            organization_id, account_id, search, page
+            organization_id,
+            account_id,
+            search,
+            page,
         )
         org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
@@ -94,9 +95,10 @@ class LedgerWebService:
             )
 
         # Get total count
-        total_count = query.with_entities(
-            func.count(PostedLedgerLine.ledger_line_id)
-        ).scalar() or 0
+        total_count = (
+            query.with_entities(func.count(PostedLedgerLine.ledger_line_id)).scalar()
+            or 0
+        )
 
         # Fetch lines ordered by posting date and posted_at
         lines = (
@@ -146,8 +148,7 @@ class LedgerWebService:
                 .all()
             )
             journal_map = {
-                row.journal_entry_id: row.journal_number
-                for row in journal_rows
+                row.journal_entry_id: row.journal_number for row in journal_rows
             }
 
         # Calculate running balance if single account selected
@@ -195,7 +196,9 @@ class LedgerWebService:
         # Build lines view with running balance
         lines_view = []
         for line in lines:
-            acct_info = account_map.get(line.account_id, {"code": line.account_code, "name": ""})
+            acct_info = account_map.get(
+                line.account_id, {"code": line.account_code, "name": ""}
+            )
             journal_number = journal_map.get(line.journal_entry_id, "")
 
             # Update running balance for this line
@@ -205,20 +208,28 @@ class LedgerWebService:
                 else:
                     running_balance += line.credit_amount - line.debit_amount
 
-            lines_view.append({
-                "ledger_line_id": str(line.ledger_line_id),
-                "posting_date": format_date(line.posting_date),
-                "account_code": acct_info["code"],
-                "account_name": acct_info["name"],
-                "account_id": str(line.account_id),
-                "journal_entry_id": str(line.journal_entry_id),
-                "journal_number": journal_number,
-                "description": line.description or "",
-                "reference": line.journal_reference or "",
-                "debit": format_currency(line.debit_amount) if line.debit_amount else "",
-                "credit": format_currency(line.credit_amount) if line.credit_amount else "",
-                "balance": format_currency(running_balance) if selected_account else None,
-            })
+            lines_view.append(
+                {
+                    "ledger_line_id": str(line.ledger_line_id),
+                    "posting_date": format_date(line.posting_date),
+                    "account_code": acct_info["code"],
+                    "account_name": acct_info["name"],
+                    "account_id": str(line.account_id),
+                    "journal_entry_id": str(line.journal_entry_id),
+                    "journal_number": journal_number,
+                    "description": line.description or "",
+                    "reference": line.journal_reference or "",
+                    "debit": format_currency(line.debit_amount)
+                    if line.debit_amount
+                    else "",
+                    "credit": format_currency(line.credit_amount)
+                    if line.credit_amount
+                    else "",
+                    "balance": format_currency(running_balance)
+                    if selected_account
+                    else None,
+                }
+            )
 
         total_pages = max(1, (total_count + limit - 1) // limit)
 
@@ -242,7 +253,9 @@ class LedgerWebService:
                 "account_id": str(selected_account.account_id),
                 "account_code": selected_account.account_code,
                 "account_name": selected_account.account_name,
-            } if selected_account else None,
+            }
+            if selected_account
+            else None,
             "show_balance_column": selected_account is not None,
             "search": search or "",
             "start_date": start_date or "",
@@ -299,7 +312,9 @@ class LedgerWebService:
             request,
             "finance/gl/ledger.html",
             {
-                **base_context(request, auth, page_title="General Ledger", active_module="gl"),
+                **base_context(
+                    request, auth, page_title="General Ledger", active_module="gl"
+                ),
                 **context,
             },
         )

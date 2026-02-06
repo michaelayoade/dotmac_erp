@@ -8,6 +8,7 @@ Revision ID: 20260124_material_request
 Revises: None
 Create Date: 2026-01-24
 """
+
 from alembic import op
 from app.alembic_utils import ensure_enum
 

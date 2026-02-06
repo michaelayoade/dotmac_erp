@@ -7,16 +7,16 @@ Calculates SLA metrics, breach detection, and reporting for support tickets.
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.support.ticket import Ticket, TicketPriority, TicketStatus
-from app.models.support.comment import TicketComment, CommentType
 from app.models.support.category import TicketCategory
+from app.models.support.comment import CommentType, TicketComment
 from app.models.support.team import SupportTeam
+from app.models.support.ticket import Ticket, TicketPriority, TicketStatus
 from app.services.common import coerce_uuid
 
 logger = logging.getLogger(__name__)
@@ -222,7 +222,11 @@ class SLAService:
         sla_target = self.get_sla_target(db, ticket)
         first_response = self.get_first_response_time(db, ticket.ticket_id)
 
-        now = datetime.now(ticket.created_at.tzinfo) if ticket.created_at.tzinfo else datetime.now()
+        now = (
+            datetime.now(ticket.created_at.tzinfo)
+            if ticket.created_at.tzinfo
+            else datetime.now()
+        )
 
         # Response calculations
         response_due_at = ticket.created_at + timedelta(hours=sla_target.response_hours)
@@ -237,12 +241,17 @@ class SLAService:
                 response_breach_hours = response_hours - sla_target.response_hours
         else:
             # Not yet responded - check if overdue
-            if now > response_due_at and ticket.status not in (TicketStatus.RESOLVED, TicketStatus.CLOSED):
+            if now > response_due_at and ticket.status not in (
+                TicketStatus.RESOLVED,
+                TicketStatus.CLOSED,
+            ):
                 response_breached = True
                 response_breach_hours = (now - response_due_at).total_seconds() / 3600
 
         # Resolution calculations
-        resolution_due_at = ticket.created_at + timedelta(hours=sla_target.resolution_hours)
+        resolution_due_at = ticket.created_at + timedelta(
+            hours=sla_target.resolution_hours
+        )
         resolution_hours = None
         resolution_breached = False
         resolution_breach_hours = None
@@ -259,9 +268,14 @@ class SLAService:
                 resolution_breach_hours = resolution_hours - sla_target.resolution_hours
         else:
             # Not yet resolved - check if overdue
-            if now > resolution_due_at and ticket.status not in (TicketStatus.RESOLVED, TicketStatus.CLOSED):
+            if now > resolution_due_at and ticket.status not in (
+                TicketStatus.RESOLVED,
+                TicketStatus.CLOSED,
+            ):
                 resolution_breached = True
-                resolution_breach_hours = (now - resolution_due_at).total_seconds() / 3600
+                resolution_breach_hours = (
+                    now - resolution_due_at
+                ).total_seconds() / 3600
 
         return TicketSLAStatus(
             ticket_id=ticket.ticket_id,
@@ -275,16 +289,22 @@ class SLAService:
             first_response_at=first_response,
             response_hours=round(response_hours, 2) if response_hours else None,
             response_breached=response_breached,
-            response_breach_hours=round(response_breach_hours, 2) if response_breach_hours else None,
+            response_breach_hours=round(response_breach_hours, 2)
+            if response_breach_hours
+            else None,
             resolution_target_hours=sla_target.resolution_hours,
             resolution_due_at=resolution_due_at,
             resolved_at=resolved_at,
             resolution_hours=round(resolution_hours, 2) if resolution_hours else None,
             resolution_breached=resolution_breached,
-            resolution_breach_hours=round(resolution_breach_hours, 2) if resolution_breach_hours else None,
+            resolution_breach_hours=round(resolution_breach_hours, 2)
+            if resolution_breach_hours
+            else None,
             category_name=ticket.category.category_name if ticket.category else None,
             team_name=ticket.team.team_name if ticket.team else None,
-            assigned_to_name=ticket.assigned_to.full_name if ticket.assigned_to else None,
+            assigned_to_name=ticket.assigned_to.full_name
+            if ticket.assigned_to
+            else None,
         )
 
     def get_breached_tickets(
@@ -322,11 +342,13 @@ class SLAService:
 
         if not include_resolved:
             query = query.where(
-                Ticket.status.in_([
-                    TicketStatus.OPEN,
-                    TicketStatus.REPLIED,
-                    TicketStatus.ON_HOLD,
-                ])
+                Ticket.status.in_(
+                    [
+                        TicketStatus.OPEN,
+                        TicketStatus.REPLIED,
+                        TicketStatus.ON_HOLD,
+                    ]
+                )
             )
 
         tickets = list(db.execute(query).scalars().unique().all())
@@ -340,7 +362,9 @@ class SLAService:
                 is_breached = True
             elif breach_type == "resolution" and sla_status.resolution_breached:
                 is_breached = True
-            elif breach_type == "all" and (sla_status.response_breached or sla_status.resolution_breached):
+            elif breach_type == "all" and (
+                sla_status.response_breached or sla_status.resolution_breached
+            ):
                 is_breached = True
 
             if is_breached:
@@ -389,21 +413,31 @@ class SLAService:
                 query = query.where(Ticket.status.in_(status_enums))
         else:
             query = query.where(
-                Ticket.status.in_([
-                    TicketStatus.OPEN,
-                    TicketStatus.REPLIED,
-                    TicketStatus.ON_HOLD,
-                ])
+                Ticket.status.in_(
+                    [
+                        TicketStatus.OPEN,
+                        TicketStatus.REPLIED,
+                        TicketStatus.ON_HOLD,
+                    ]
+                )
             )
 
         tickets = list(db.execute(query).scalars().unique().all())
 
         # Define buckets
         buckets = [
-            AgingBucket(label="0-24 hours", min_hours=0, max_hours=24, count=0, tickets=[]),
-            AgingBucket(label="1-3 days", min_hours=24, max_hours=72, count=0, tickets=[]),
-            AgingBucket(label="3-7 days", min_hours=72, max_hours=168, count=0, tickets=[]),
-            AgingBucket(label="7+ days", min_hours=168, max_hours=None, count=0, tickets=[]),
+            AgingBucket(
+                label="0-24 hours", min_hours=0, max_hours=24, count=0, tickets=[]
+            ),
+            AgingBucket(
+                label="1-3 days", min_hours=24, max_hours=72, count=0, tickets=[]
+            ),
+            AgingBucket(
+                label="3-7 days", min_hours=72, max_hours=168, count=0, tickets=[]
+            ),
+            AgingBucket(
+                label="7+ days", min_hours=168, max_hours=None, count=0, tickets=[]
+            ),
         ]
 
         now = datetime.now()
@@ -426,7 +460,9 @@ class SLAService:
                 "age_hours": round(age_hours, 1),
                 "category": ticket.category.category_name if ticket.category else None,
                 "team": ticket.team.team_name if ticket.team else None,
-                "assigned_to": ticket.assigned_to.full_name if ticket.assigned_to else None,
+                "assigned_to": ticket.assigned_to.full_name
+                if ticket.assigned_to
+                else None,
             }
 
             for bucket in buckets:
@@ -578,14 +614,18 @@ class SLAService:
                 else:
                     by_team[team_key]["response_met"] += 1
                 if sla_status.response_hours:
-                    by_team[team_key]["response_times"].append(sla_status.response_hours)
+                    by_team[team_key]["response_times"].append(
+                        sla_status.response_hours
+                    )
             if sla_status.resolved_at:
                 if sla_status.resolution_breached:
                     by_team[team_key]["resolution_breached"] += 1
                 else:
                     by_team[team_key]["resolution_met"] += 1
                 if sla_status.resolution_hours:
-                    by_team[team_key]["resolution_times"].append(sla_status.resolution_hours)
+                    by_team[team_key]["resolution_times"].append(
+                        sla_status.resolution_hours
+                    )
 
             # By category
             category_key = sla_status.category_name or "Uncategorized"
@@ -612,16 +652,24 @@ class SLAService:
         # Calculate averages for teams
         for team_data in by_team.values():
             times = team_data.pop("response_times")
-            team_data["avg_response_hours"] = round(sum(times) / len(times), 2) if times else None
+            team_data["avg_response_hours"] = (
+                round(sum(times) / len(times), 2) if times else None
+            )
             times = team_data.pop("resolution_times")
-            team_data["avg_resolution_hours"] = round(sum(times) / len(times), 2) if times else None
+            team_data["avg_resolution_hours"] = (
+                round(sum(times) / len(times), 2) if times else None
+            )
 
         # Calculate compliance percentages
         response_total = response_met + response_breached
-        response_compliance = (response_met / response_total * 100) if response_total > 0 else 100.0
+        response_compliance = (
+            (response_met / response_total * 100) if response_total > 0 else 100.0
+        )
 
         resolution_total = resolution_met + resolution_breached
-        resolution_compliance = (resolution_met / resolution_total * 100) if resolution_total > 0 else 100.0
+        resolution_compliance = (
+            (resolution_met / resolution_total * 100) if resolution_total > 0 else 100.0
+        )
 
         return SLAMetrics(
             total_tickets=total,
@@ -631,12 +679,16 @@ class SLAService:
             response_breached=response_breached,
             response_pending=response_pending,
             response_compliance_pct=round(response_compliance, 1),
-            avg_response_hours=round(sum(response_times) / len(response_times), 2) if response_times else None,
+            avg_response_hours=round(sum(response_times) / len(response_times), 2)
+            if response_times
+            else None,
             resolution_met=resolution_met,
             resolution_breached=resolution_breached,
             resolution_pending=resolution_pending,
             resolution_compliance_pct=round(resolution_compliance, 1),
-            avg_resolution_hours=round(sum(resolution_times) / len(resolution_times), 2) if resolution_times else None,
+            avg_resolution_hours=round(sum(resolution_times) / len(resolution_times), 2)
+            if resolution_times
+            else None,
             by_priority=by_priority,
             by_team=by_team,
             by_category=by_category,
@@ -655,7 +707,9 @@ class SLAService:
 
         Returns list of team stats sorted by compliance rate.
         """
-        metrics = self.get_sla_metrics(db, organization_id, date_from=date_from, date_to=date_to)
+        metrics = self.get_sla_metrics(
+            db, organization_id, date_from=date_from, date_to=date_to
+        )
 
         results = []
         for team_name, data in metrics.by_team.items():
@@ -663,22 +717,28 @@ class SLAService:
             response_total = data["response_met"] + data["response_breached"]
             resolution_total = data["resolution_met"] + data["resolution_breached"]
 
-            results.append({
-                "team_name": team_name,
-                "total_tickets": total,
-                "response_compliance_pct": round(
-                    data["response_met"] / response_total * 100, 1
-                ) if response_total > 0 else 100.0,
-                "resolution_compliance_pct": round(
-                    data["resolution_met"] / resolution_total * 100, 1
-                ) if resolution_total > 0 else 100.0,
-                "avg_response_hours": data.get("avg_response_hours"),
-                "avg_resolution_hours": data.get("avg_resolution_hours"),
-                "response_met": data["response_met"],
-                "response_breached": data["response_breached"],
-                "resolution_met": data["resolution_met"],
-                "resolution_breached": data["resolution_breached"],
-            })
+            results.append(
+                {
+                    "team_name": team_name,
+                    "total_tickets": total,
+                    "response_compliance_pct": round(
+                        data["response_met"] / response_total * 100, 1
+                    )
+                    if response_total > 0
+                    else 100.0,
+                    "resolution_compliance_pct": round(
+                        data["resolution_met"] / resolution_total * 100, 1
+                    )
+                    if resolution_total > 0
+                    else 100.0,
+                    "avg_response_hours": data.get("avg_response_hours"),
+                    "avg_resolution_hours": data.get("avg_resolution_hours"),
+                    "response_met": data["response_met"],
+                    "response_breached": data["response_breached"],
+                    "resolution_met": data["resolution_met"],
+                    "resolution_breached": data["resolution_breached"],
+                }
+            )
 
         # Sort by resolution compliance (descending)
         results.sort(key=lambda x: x["resolution_compliance_pct"], reverse=True)
@@ -696,7 +756,9 @@ class SLAService:
         """
         Get performance metrics per category.
         """
-        metrics = self.get_sla_metrics(db, organization_id, date_from=date_from, date_to=date_to)
+        metrics = self.get_sla_metrics(
+            db, organization_id, date_from=date_from, date_to=date_to
+        )
 
         results = []
         for category_name, data in metrics.by_category.items():
@@ -704,20 +766,26 @@ class SLAService:
             response_total = data["response_met"] + data["response_breached"]
             resolution_total = data["resolution_met"] + data["resolution_breached"]
 
-            results.append({
-                "category_name": category_name,
-                "total_tickets": total,
-                "response_compliance_pct": round(
-                    data["response_met"] / response_total * 100, 1
-                ) if response_total > 0 else 100.0,
-                "resolution_compliance_pct": round(
-                    data["resolution_met"] / resolution_total * 100, 1
-                ) if resolution_total > 0 else 100.0,
-                "response_met": data["response_met"],
-                "response_breached": data["response_breached"],
-                "resolution_met": data["resolution_met"],
-                "resolution_breached": data["resolution_breached"],
-            })
+            results.append(
+                {
+                    "category_name": category_name,
+                    "total_tickets": total,
+                    "response_compliance_pct": round(
+                        data["response_met"] / response_total * 100, 1
+                    )
+                    if response_total > 0
+                    else 100.0,
+                    "resolution_compliance_pct": round(
+                        data["resolution_met"] / resolution_total * 100, 1
+                    )
+                    if resolution_total > 0
+                    else 100.0,
+                    "response_met": data["response_met"],
+                    "response_breached": data["response_breached"],
+                    "resolution_met": data["resolution_met"],
+                    "resolution_breached": data["resolution_breached"],
+                }
+            )
 
         results.sort(key=lambda x: x["total_tickets"], reverse=True)
 

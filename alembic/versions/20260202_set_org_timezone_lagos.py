@@ -7,7 +7,6 @@ Create Date: 2026-02-02 08:08:00.000000
 """
 
 from alembic import op
-import sqlalchemy as sa
 
 
 revision = "20260202_set_org_timezone_lagos"

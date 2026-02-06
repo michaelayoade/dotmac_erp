@@ -8,6 +8,7 @@ This migration adds:
 - FK constraint for project_id on expense_claim (links to Project sync'd from ERPNext)
 - ticket_id column and FK on expense_claim (links to Ticket sync'd from ERPNext)
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -73,12 +74,23 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Drop indexes
-    op.drop_index("idx_expense_claim_project", table_name="expense_claim", schema="expense")
-    op.drop_index("idx_expense_claim_ticket", table_name="expense_claim", schema="expense")
+    op.drop_index(
+        "idx_expense_claim_project", table_name="expense_claim", schema="expense"
+    )
+    op.drop_index(
+        "idx_expense_claim_ticket", table_name="expense_claim", schema="expense"
+    )
 
     # Drop FK constraints
-    op.drop_constraint("fk_expense_claim_project", "expense_claim", type_="foreignkey", schema="expense")
-    op.drop_constraint("fk_expense_claim_ticket", "expense_claim", type_="foreignkey", schema="expense")
+    op.drop_constraint(
+        "fk_expense_claim_project",
+        "expense_claim",
+        type_="foreignkey",
+        schema="expense",
+    )
+    op.drop_constraint(
+        "fk_expense_claim_ticket", "expense_claim", type_="foreignkey", schema="expense"
+    )
 
     # Drop ticket_id column
     op.drop_column("expense_claim", "ticket_id", schema="expense")

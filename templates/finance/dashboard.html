@@ -27,7 +27,7 @@
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-10">
             <!-- Revenue -->
             <div class="stat-hero" data-testid="dashboard-stat-total-revenue">
-                <div class="stat-hero-icon stat-hero-icon-finance">
+                <div class="stat-hero-icon stat-hero-icon-revenue">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
                     </svg>
@@ -50,7 +50,7 @@
 
             <!-- Expenses -->
             <div class="stat-hero" data-testid="dashboard-stat-total-expenses">
-                <div class="stat-hero-icon stat-hero-icon-finance">
+                <div class="stat-hero-icon stat-hero-icon-expenses">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
                     </svg>
@@ -61,7 +61,7 @@
 
             <!-- Net Income -->
             <div class="stat-hero" data-testid="dashboard-stat-net-income">
-                <div class="stat-hero-icon stat-hero-icon-finance">
+                <div class="stat-hero-icon stat-hero-icon-net-income">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                     </svg>
@@ -84,7 +84,7 @@
 
             <!-- Cash Flow -->
             <div class="stat-hero" data-testid="dashboard-stat-cash-flow">
-                <div class="stat-hero-icon stat-hero-icon-finance">
+                <div class="stat-hero-icon stat-hero-icon-cashflow">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
@@ -99,19 +99,19 @@
 
         <!-- Secondary Metrics Bar -->
         <div class="mt-8 pt-6 border-t border-teal-100/50 dark:border-teal-800/30 grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div class="text-center">
+            <div class="rounded-lg bg-slate-50/80 dark:bg-slate-800/40 px-4 py-3 border-l-2 border-slate-300 dark:border-slate-600">
                 <span class="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">{% if is_ipsas %}Cost of Services{% else %}COGS{% endif %}</span>
                 <span class="block text-lg font-semibold font-mono text-slate-900 dark:text-white mt-1">{{ stats.cogs_spend | default(currency_zero) }}</span>
             </div>
-            <div class="text-center">
+            <div class="rounded-lg bg-rose-50/60 dark:bg-rose-900/10 px-4 py-3 border-l-2 border-rose-300 dark:border-rose-700">
                 <span class="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">{% if is_ipsas %}Operating Exp.{% else %}OpEx{% endif %}</span>
                 <span class="block text-lg font-semibold font-mono text-slate-900 dark:text-white mt-1">{{ stats.opex_spend | default(currency_zero) }}</span>
             </div>
-            <div class="text-center">
+            <div class="rounded-lg bg-teal-50/60 dark:bg-teal-900/10 px-4 py-3 border-l-2 border-teal-300 dark:border-teal-700">
                 <span class="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">AR Control</span>
                 <span class="block text-lg font-semibold font-mono text-teal-600 dark:text-teal-400 mt-1">{{ stats.ar_control_balance | default(currency_zero) }}</span>
             </div>
-            <div class="text-center">
+            <div class="rounded-lg bg-amber-50/60 dark:bg-amber-900/10 px-4 py-3 border-l-2 border-amber-300 dark:border-amber-700">
                 <span class="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">AP Control</span>
                 <span class="block text-lg font-semibold font-mono text-amber-600 dark:text-amber-400 mt-1">{{ stats.ap_control_balance | default(currency_zero) }}</span>
             </div>

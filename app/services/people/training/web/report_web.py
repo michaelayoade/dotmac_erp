@@ -116,13 +116,17 @@ class ReportWebService:
         end_date: Optional[str] = None,
     ) -> HTMLResponse:
         """Render completion report page."""
-        context = base_context(request, auth, "Training Completion Report", "training", db=db)
+        context = base_context(
+            request, auth, "Training Completion Report", "training", db=db
+        )
         context.update(
             self.completion_report_context(
                 db, coerce_uuid(auth.organization_id), start_date, end_date
             )
         )
-        return templates.TemplateResponse(request, "people/training/reports/completion.html", context)
+        return templates.TemplateResponse(
+            request, "people/training/reports/completion.html", context
+        )
 
     def by_department_report_response(
         self,
@@ -133,13 +137,17 @@ class ReportWebService:
         end_date: Optional[str] = None,
     ) -> HTMLResponse:
         """Render by-department report page."""
-        context = base_context(request, auth, "Training by Department", "training", db=db)
+        context = base_context(
+            request, auth, "Training by Department", "training", db=db
+        )
         context.update(
             self.by_department_report_context(
                 db, coerce_uuid(auth.organization_id), start_date, end_date
             )
         )
-        return templates.TemplateResponse(request, "people/training/reports/by_department.html", context)
+        return templates.TemplateResponse(
+            request, "people/training/reports/by_department.html", context
+        )
 
     def cost_analysis_report_response(
         self,
@@ -150,13 +158,17 @@ class ReportWebService:
         end_date: Optional[str] = None,
     ) -> HTMLResponse:
         """Render cost analysis report page."""
-        context = base_context(request, auth, "Training Cost Analysis", "training", db=db)
+        context = base_context(
+            request, auth, "Training Cost Analysis", "training", db=db
+        )
         context.update(
             self.cost_analysis_report_context(
                 db, coerce_uuid(auth.organization_id), start_date, end_date
             )
         )
-        return templates.TemplateResponse(request, "people/training/reports/cost_analysis.html", context)
+        return templates.TemplateResponse(
+            request, "people/training/reports/cost_analysis.html", context
+        )
 
     def effectiveness_report_response(
         self,
@@ -167,10 +179,14 @@ class ReportWebService:
         end_date: Optional[str] = None,
     ) -> HTMLResponse:
         """Render effectiveness report page."""
-        context = base_context(request, auth, "Training Effectiveness", "training", db=db)
+        context = base_context(
+            request, auth, "Training Effectiveness", "training", db=db
+        )
         context.update(
             self.effectiveness_report_context(
                 db, coerce_uuid(auth.organization_id), start_date, end_date
             )
         )
-        return templates.TemplateResponse(request, "people/training/reports/effectiveness.html", context)
+        return templates.TemplateResponse(
+            request, "people/training/reports/effectiveness.html", context
+        )

@@ -10,6 +10,7 @@ only - organization scoping is handled at the API/route layer.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Set
@@ -19,6 +20,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.people.hr.employee import Employee, EmployeeStatus
+
+logger = logging.getLogger(__name__)
 
 
 class OperationType(str, Enum):
@@ -64,21 +67,17 @@ OPERATION_ALLOWED_STATUSES: dict[OperationType, Set[EmployeeStatus]] = {
     OperationType.SALARY_SLIP: {EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE},
     OperationType.SALARY_ASSIGNMENT: {EmployeeStatus.ACTIVE, EmployeeStatus.DRAFT},
     OperationType.BONUS: {EmployeeStatus.ACTIVE},
-
     # Leave - active and on-leave can apply
     OperationType.LEAVE_APPLICATION: {EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE},
     OperationType.LEAVE_ENCASHMENT: {EmployeeStatus.ACTIVE},
-
     # Loans - only active employees
     OperationType.LOAN_APPLICATION: {EmployeeStatus.ACTIVE},
     OperationType.SALARY_ADVANCE: {EmployeeStatus.ACTIVE},
-
     # HR operations - active employees only
     OperationType.PROMOTION: {EmployeeStatus.ACTIVE},
     OperationType.TRANSFER: {EmployeeStatus.ACTIVE},
     OperationType.DEMOTION: {EmployeeStatus.ACTIVE, EmployeeStatus.SUSPENDED},
     OperationType.TRAINING: {EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE},
-
     # Attendance - active employees only
     OperationType.ATTENDANCE_MARK: {EmployeeStatus.ACTIVE},
     OperationType.OVERTIME: {EmployeeStatus.ACTIVE},
@@ -261,11 +260,15 @@ class EmployeeStatusValidator:
 
     def can_apply_for_leave(self, employee_id: UUID) -> bool:
         """Check if employee can apply for leave."""
-        return self.validate_operation(employee_id, OperationType.LEAVE_APPLICATION).is_valid
+        return self.validate_operation(
+            employee_id, OperationType.LEAVE_APPLICATION
+        ).is_valid
 
     def can_apply_for_loan(self, employee_id: UUID) -> bool:
         """Check if employee can apply for a loan."""
-        return self.validate_operation(employee_id, OperationType.LOAN_APPLICATION).is_valid
+        return self.validate_operation(
+            employee_id, OperationType.LOAN_APPLICATION
+        ).is_valid
 
     def can_be_promoted(self, employee_id: UUID) -> bool:
         """Check if employee can be promoted."""
@@ -277,7 +280,9 @@ class EmployeeStatusValidator:
 
     def can_mark_attendance(self, employee_id: UUID) -> bool:
         """Check if attendance can be marked for employee."""
-        return self.validate_operation(employee_id, OperationType.ATTENDANCE_MARK).is_valid
+        return self.validate_operation(
+            employee_id, OperationType.ATTENDANCE_MARK
+        ).is_valid
 
     # Bulk validation methods
 

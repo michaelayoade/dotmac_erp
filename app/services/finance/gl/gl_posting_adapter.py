@@ -6,6 +6,7 @@ Thin adapter layer for posting journal entries from API endpoints.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
 from typing import Optional
@@ -13,8 +14,12 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.services.finance.gl.journal import JournalService, JournalInput, JournalLineInput
-from app.services.common import coerce_uuid
+from app.services.finance.gl.journal import (
+    JournalInput,
+    JournalService,
+)
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

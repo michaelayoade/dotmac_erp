@@ -3,36 +3,41 @@
 Handles shift types, attendance records, and reporting.
 Adapted from DotMac People for the unified ERP platform.
 """
+
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta, timezone, tzinfo as dt_tzinfo
-from decimal import Decimal
+import logging
 import math
-from typing import TYPE_CHECKING, Any, List, Optional, Sequence
+from datetime import date, datetime, time, timedelta, timezone
+from datetime import tzinfo as dt_tzinfo
+from decimal import Decimal
+from typing import TYPE_CHECKING, Any, List, Optional
 from uuid import UUID
-
-from sqlalchemy import and_, case, func, literal_column, or_, select
-from sqlalchemy.orm import Session
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import case, func, literal_column, or_, select
+from sqlalchemy.orm import Session
+
+from app.models.finance.core_org.location import Location
+from app.models.finance.core_org.organization import Organization
 from app.models.people.attendance import (
     Attendance,
-    AttendanceStatus,
     AttendanceRequest,
     AttendanceRequestStatus,
+    AttendanceStatus,
     ShiftAssignment,
     ShiftType,
 )
 from app.models.people.hr.employee import Employee
-from app.models.finance.core_org.location import Location
-from app.models.finance.core_org.organization import Organization
-from app.services.common import PaginatedResult, PaginationParams
-from app.services.common import ValidationError
+from app.services.common import PaginatedResult, PaginationParams, ValidationError
+
+logger = logging.getLogger(__name__)
 
 # Shapely for GeoJSON polygon validation
 try:
     from shapely.geometry import Point, shape
     from shapely.validation import make_valid
+
     SHAPELY_AVAILABLE = True
 except ImportError:
     SHAPELY_AVAILABLE = False
@@ -725,9 +730,7 @@ class AttendanceService:
         if shift_type_id:
             shift = self.get_shift_type(org_id, shift_type_id)
             tzinfo = now.tzinfo
-            shift_start = self._combine_date_time(
-                today, shift.start_time, tzinfo
-            )
+            shift_start = self._combine_date_time(today, shift.start_time, tzinfo)
             grace_end = shift_start + timedelta(minutes=shift.late_entry_grace_period)
             late_entry = now > grace_end
 
@@ -789,9 +792,7 @@ class AttendanceService:
         if attendance.shift_type_id:
             shift = self.get_shift_type(org_id, attendance.shift_type_id)
             tzinfo = now.tzinfo
-            shift_end = self._combine_date_time(
-                today, shift.end_time, tzinfo
-            )
+            shift_end = self._combine_date_time(today, shift.end_time, tzinfo)
             if shift.end_time <= shift.start_time:
                 shift_end += timedelta(days=1)
             grace_start = shift_end - timedelta(minutes=shift.early_exit_grace_period)
@@ -926,7 +927,9 @@ class AttendanceService:
                     records.append(
                         {
                             "employee_id": emp_id,
-                            "status": status.value if isinstance(status, AttendanceStatus) else status,
+                            "status": status.value
+                            if isinstance(status, AttendanceStatus)
+                            else status,
                             "shift_type_id": shift_type_id,
                             "notes": remarks,
                         }
@@ -940,11 +943,15 @@ class AttendanceService:
             employee_id = record["employee_id"]
             status_value = record.get("status", "PRESENT")
             record_status = (
-                status_value if isinstance(status_value, AttendanceStatus) else AttendanceStatus(status_value)
+                status_value
+                if isinstance(status_value, AttendanceStatus)
+                else AttendanceStatus(status_value)
             )
 
             try:
-                existing = self.get_attendance_by_date(org_id, employee_id, attendance_date)
+                existing = self.get_attendance_by_date(
+                    org_id, employee_id, attendance_date
+                )
                 if existing:
                     existing.status = record_status
                     if "notes" in record and record["notes"]:
@@ -1095,7 +1102,9 @@ class AttendanceService:
         if to_date < from_date:
             raise AttendanceServiceError("from_date must be on or before to_date")
         if half_day and not half_day_date:
-            raise AttendanceServiceError("half_day_date is required when half_day is true")
+            raise AttendanceServiceError(
+                "half_day_date is required when half_day is true"
+            )
 
         request = AttendanceRequest(
             organization_id=org_id,
@@ -1128,12 +1137,16 @@ class AttendanceService:
         if request.to_date < request.from_date:
             raise AttendanceServiceError("from_date must be on or before to_date")
         if request.half_day and not request.half_day_date:
-            raise AttendanceServiceError("half_day_date is required when half_day is true")
+            raise AttendanceServiceError(
+                "half_day_date is required when half_day is true"
+            )
 
         self.db.flush()
         return request
 
-    def submit_attendance_request(self, org_id: UUID, request_id: UUID) -> AttendanceRequest:
+    def submit_attendance_request(
+        self, org_id: UUID, request_id: UUID
+    ) -> AttendanceRequest:
         """Submit an attendance request for approval."""
         request = self.get_attendance_request(org_id, request_id)
         if request.status != AttendanceRequestStatus.DRAFT:
@@ -1312,13 +1325,15 @@ class AttendanceService:
         total_days = (end_date - start_date).days + 1
         present_count = sum(1 for r in records if r.status == AttendanceStatus.PRESENT)
         absent_count = sum(1 for r in records if r.status == AttendanceStatus.ABSENT)
-        half_day_count = sum(1 for r in records if r.status == AttendanceStatus.HALF_DAY)
-        on_leave_count = sum(1 for r in records if r.status == AttendanceStatus.ON_LEAVE)
+        half_day_count = sum(
+            1 for r in records if r.status == AttendanceStatus.HALF_DAY
+        )
+        on_leave_count = sum(
+            1 for r in records if r.status == AttendanceStatus.ON_LEAVE
+        )
         late_count = sum(1 for r in records if r.late_entry)
         early_exit_count = sum(1 for r in records if r.early_exit)
-        total_hours = sum(
-            (r.working_hours or Decimal("0")) for r in records
-        )
+        total_hours = sum((r.working_hours or Decimal("0")) for r in records)
 
         return {
             "employee_id": employee_id,
@@ -1334,7 +1349,9 @@ class AttendanceService:
             "total_working_hours": total_hours,
             "attendance_percentage": round(
                 (present_count + half_day_count * Decimal("0.5")) / total_days * 100, 2
-            ) if total_days > 0 else Decimal("0"),
+            )
+            if total_days > 0
+            else Decimal("0"),
         }
 
     def get_daily_summary(
@@ -1371,29 +1388,38 @@ class AttendanceService:
         today = self.get_org_today(org_id)
 
         # Today's attendance
-        today_present = self.db.scalar(
-            select(func.count(Attendance.attendance_id)).where(
-                Attendance.organization_id == org_id,
-                Attendance.attendance_date == today,
-                Attendance.status == AttendanceStatus.PRESENT,
+        today_present = (
+            self.db.scalar(
+                select(func.count(Attendance.attendance_id)).where(
+                    Attendance.organization_id == org_id,
+                    Attendance.attendance_date == today,
+                    Attendance.status == AttendanceStatus.PRESENT,
+                )
             )
-        ) or 0
+            or 0
+        )
 
-        today_absent = self.db.scalar(
-            select(func.count(Attendance.attendance_id)).where(
-                Attendance.organization_id == org_id,
-                Attendance.attendance_date == today,
-                Attendance.status == AttendanceStatus.ABSENT,
+        today_absent = (
+            self.db.scalar(
+                select(func.count(Attendance.attendance_id)).where(
+                    Attendance.organization_id == org_id,
+                    Attendance.attendance_date == today,
+                    Attendance.status == AttendanceStatus.ABSENT,
+                )
             )
-        ) or 0
+            or 0
+        )
 
-        today_late = self.db.scalar(
-            select(func.count(Attendance.attendance_id)).where(
-                Attendance.organization_id == org_id,
-                Attendance.attendance_date == today,
-                Attendance.late_entry == True,
+        today_late = (
+            self.db.scalar(
+                select(func.count(Attendance.attendance_id)).where(
+                    Attendance.organization_id == org_id,
+                    Attendance.attendance_date == today,
+                    Attendance.late_entry == True,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         return {
             "today_present": today_present,
@@ -1419,9 +1445,7 @@ class AttendanceService:
 
         Returns status breakdown, late/early stats, and working hours summary.
         """
-        from app.models.people.hr import Employee, Department
-        from app.models.person import Person
-        from app.models.person import Person
+        from app.models.people.hr import Employee
 
         today = self.get_org_today(org_id)
         if not start_date:
@@ -1433,12 +1457,24 @@ class AttendanceService:
         query = (
             self.db.query(
                 func.count(Attendance.attendance_id).label("total_records"),
-                func.count(case((Attendance.status == AttendanceStatus.PRESENT, 1))).label("present"),
-                func.count(case((Attendance.status == AttendanceStatus.ABSENT, 1))).label("absent"),
-                func.count(case((Attendance.status == AttendanceStatus.HALF_DAY, 1))).label("half_day"),
-                func.count(case((Attendance.status == AttendanceStatus.ON_LEAVE, 1))).label("on_leave"),
-                func.count(case((Attendance.late_entry == True, 1))).label("late_entries"),
-                func.count(case((Attendance.early_exit == True, 1))).label("early_exits"),
+                func.count(
+                    case((Attendance.status == AttendanceStatus.PRESENT, 1))
+                ).label("present"),
+                func.count(
+                    case((Attendance.status == AttendanceStatus.ABSENT, 1))
+                ).label("absent"),
+                func.count(
+                    case((Attendance.status == AttendanceStatus.HALF_DAY, 1))
+                ).label("half_day"),
+                func.count(
+                    case((Attendance.status == AttendanceStatus.ON_LEAVE, 1))
+                ).label("on_leave"),
+                func.count(case((Attendance.late_entry == True, 1))).label(
+                    "late_entries"
+                ),
+                func.count(case((Attendance.early_exit == True, 1))).label(
+                    "early_exits"
+                ),
                 func.sum(Attendance.working_hours).label("total_working_hours"),
                 func.sum(Attendance.overtime_hours).label("total_overtime_hours"),
             )
@@ -1489,7 +1525,7 @@ class AttendanceService:
 
         Returns list of employees with their attendance metrics.
         """
-        from app.models.people.hr import Employee, Department
+        from app.models.people.hr import Department, Employee
         from app.models.person import Person
 
         today = self.get_org_today(org_id)
@@ -1506,10 +1542,18 @@ class AttendanceService:
                 Person.last_name,
                 Department.department_name.label("department_name"),
                 func.count(Attendance.attendance_id).label("total_days"),
-                func.count(case((Attendance.status == AttendanceStatus.PRESENT, 1))).label("present"),
-                func.count(case((Attendance.status == AttendanceStatus.ABSENT, 1))).label("absent"),
-                func.count(case((Attendance.late_entry == True, 1))).label("late_entries"),
-                func.count(case((Attendance.early_exit == True, 1))).label("early_exits"),
+                func.count(
+                    case((Attendance.status == AttendanceStatus.PRESENT, 1))
+                ).label("present"),
+                func.count(
+                    case((Attendance.status == AttendanceStatus.ABSENT, 1))
+                ).label("absent"),
+                func.count(case((Attendance.late_entry == True, 1))).label(
+                    "late_entries"
+                ),
+                func.count(case((Attendance.early_exit == True, 1))).label(
+                    "early_exits"
+                ),
                 func.sum(Attendance.working_hours).label("total_hours"),
                 func.sum(Attendance.overtime_hours).label("overtime_hours"),
             )
@@ -1538,19 +1582,21 @@ class AttendanceService:
             total_days = row.total_days or 0
             present = row.present or 0
             attendance_pct = (present / total_days * 100) if total_days > 0 else 0
-            employees.append({
-                "employee_id": str(row.employee_id),
-                "employee_name": f"{row.first_name} {row.last_name}",
-                "department_name": row.department_name or "No Department",
-                "total_days": total_days,
-                "present": present,
-                "absent": row.absent or 0,
-                "late_entries": row.late_entries or 0,
-                "early_exits": row.early_exits or 0,
-                "total_hours": row.total_hours or Decimal("0"),
-                "overtime_hours": row.overtime_hours or Decimal("0"),
-                "attendance_percentage": round(attendance_pct, 1),
-            })
+            employees.append(
+                {
+                    "employee_id": str(row.employee_id),
+                    "employee_name": f"{row.first_name} {row.last_name}",
+                    "department_name": row.department_name or "No Department",
+                    "total_days": total_days,
+                    "present": present,
+                    "absent": row.absent or 0,
+                    "late_entries": row.late_entries or 0,
+                    "early_exits": row.early_exits or 0,
+                    "total_hours": row.total_hours or Decimal("0"),
+                    "overtime_hours": row.overtime_hours or Decimal("0"),
+                    "attendance_percentage": round(attendance_pct, 1),
+                }
+            )
 
         # Sort by attendance percentage descending
         employees.sort(key=lambda x: x["attendance_percentage"], reverse=True)
@@ -1575,7 +1621,7 @@ class AttendanceService:
 
         Returns list of late/early records with employee details.
         """
-        from app.models.people.hr import Employee, Department
+        from app.models.people.hr import Department, Employee
         from app.models.person import Person
 
         today = self.get_org_today(org_id)
@@ -1617,8 +1663,12 @@ class AttendanceService:
                 "employee_name": f"{first_name} {last_name}",
                 "department_name": dept_name or "No Department",
                 "date": attendance.attendance_date.isoformat(),
-                "check_in": attendance.check_in.strftime("%H:%M") if attendance.check_in else None,
-                "check_out": attendance.check_out.strftime("%H:%M") if attendance.check_out else None,
+                "check_in": attendance.check_in.strftime("%H:%M")
+                if attendance.check_in
+                else None,
+                "check_out": attendance.check_out.strftime("%H:%M")
+                if attendance.check_out
+                else None,
             }
 
             if attendance.late_entry:
@@ -1661,9 +1711,15 @@ class AttendanceService:
             self.db.query(
                 month_bucket,
                 func.count(Attendance.attendance_id).label("total_records"),
-                func.count(case((Attendance.status == AttendanceStatus.PRESENT, 1))).label("present"),
-                func.count(case((Attendance.status == AttendanceStatus.ABSENT, 1))).label("absent"),
-                func.count(case((Attendance.late_entry == True, 1))).label("late_entries"),
+                func.count(
+                    case((Attendance.status == AttendanceStatus.PRESENT, 1))
+                ).label("present"),
+                func.count(
+                    case((Attendance.status == AttendanceStatus.ABSENT, 1))
+                ).label("absent"),
+                func.count(case((Attendance.late_entry == True, 1))).label(
+                    "late_entries"
+                ),
                 func.sum(Attendance.working_hours).label("total_hours"),
             )
             .filter(
@@ -1707,20 +1763,24 @@ class AttendanceService:
                 total_records += monthly_data[month_key]["total_records"]
                 total_present += monthly_data[month_key]["present"]
             else:
-                months_list.append({
-                    "month": month_key,
-                    "month_label": current.strftime("%b %Y"),
-                    "total_records": 0,
-                    "present": 0,
-                    "absent": 0,
-                    "late_entries": 0,
-                    "total_hours": Decimal("0"),
-                    "attendance_percentage": 0,
-                })
+                months_list.append(
+                    {
+                        "month": month_key,
+                        "month_label": current.strftime("%b %Y"),
+                        "total_records": 0,
+                        "present": 0,
+                        "absent": 0,
+                        "late_entries": 0,
+                        "total_hours": Decimal("0"),
+                        "attendance_percentage": 0,
+                    }
+                )
             current = current + relativedelta(months=1)
 
         num_months = len(months_list)
-        average_attendance_pct = (total_present / total_records * 100) if total_records > 0 else 0
+        average_attendance_pct = (
+            (total_present / total_records * 100) if total_records > 0 else 0
+        )
 
         return {
             "months": months_list,

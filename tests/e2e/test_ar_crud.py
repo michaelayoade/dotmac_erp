@@ -29,7 +29,9 @@ class TestCustomerList:
         authenticated_page.goto(f"{base_url}/ar/customers")
         authenticated_page.wait_for_load_state("networkidle")
 
-        search = authenticated_page.locator("input[type='search'], input[name='search'], input[placeholder*='Search']")
+        search = authenticated_page.locator(
+            "input[type='search'], input[name='search'], input[placeholder*='Search']"
+        )
         if search.count() > 0:
             search.first.fill("test")
             authenticated_page.keyboard.press("Enter")
@@ -54,7 +56,9 @@ class TestCustomerList:
         authenticated_page.goto(f"{base_url}/ar/customers")
         authenticated_page.wait_for_load_state("networkidle")
 
-        new_btn = authenticated_page.locator("a[href*='/ar/customers/new'], button:has-text('New')")
+        new_btn = authenticated_page.locator(
+            "a[href*='/ar/customers/new'], button:has-text('New')"
+        )
         expect(new_btn.first).to_be_visible()
 
 
@@ -74,7 +78,9 @@ class TestCustomerCreate:
         authenticated_page.goto(f"{base_url}/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("#customer_code, input[name='customer_code']")
+        field = authenticated_page.locator(
+            "#customer_code, input[name='customer_code']"
+        )
         expect(field).to_be_visible()
 
     def test_customer_create_has_name_field(self, authenticated_page, base_url):
@@ -82,7 +88,9 @@ class TestCustomerCreate:
         authenticated_page.goto(f"{base_url}/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("#customer_name, input[name='customer_name']")
+        field = authenticated_page.locator(
+            "#customer_name, input[name='customer_name']"
+        )
         expect(field).to_be_visible()
 
     def test_customer_create_has_currency_field(self, authenticated_page, base_url):
@@ -128,8 +136,12 @@ class TestCustomerCreate:
         uid = unique_id()
 
         # Fill required fields
-        authenticated_page.locator("#customer_code, input[name='customer_code']").fill(f"CUST-{uid}")
-        authenticated_page.locator("#customer_name, input[name='customer_name']").fill(f"Test Customer {uid}")
+        authenticated_page.locator("#customer_code, input[name='customer_code']").fill(
+            f"CUST-{uid}"
+        )
+        authenticated_page.locator("#customer_name, input[name='customer_name']").fill(
+            f"Test Customer {uid}"
+        )
 
         # Select currency if dropdown
         currency = authenticated_page.locator("select[name*='currency']")
@@ -151,8 +163,12 @@ class TestCustomerCreate:
         uid = unique_id()
 
         # Fill all fields
-        authenticated_page.locator("#customer_code, input[name='customer_code']").fill(f"CUST-{uid}")
-        authenticated_page.locator("#customer_name, input[name='customer_name']").fill(f"Test Customer {uid}")
+        authenticated_page.locator("#customer_code, input[name='customer_code']").fill(
+            f"CUST-{uid}"
+        )
+        authenticated_page.locator("#customer_name, input[name='customer_name']").fill(
+            f"Test Customer {uid}"
+        )
 
         # Currency
         currency = authenticated_page.locator("select[name*='currency']")
@@ -191,7 +207,9 @@ class TestCustomerEdit:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Click first customer link
-        customer_link = authenticated_page.locator("table tbody tr a, .customer-list a").first
+        customer_link = authenticated_page.locator(
+            "table tbody tr a, .customer-list a"
+        ).first
         if customer_link.count() > 0:
             customer_link.click()
             authenticated_page.wait_for_load_state("networkidle")
@@ -203,12 +221,16 @@ class TestCustomerEdit:
         authenticated_page.goto(f"{base_url}/ar/customers")
         authenticated_page.wait_for_load_state("networkidle")
 
-        customer_link = authenticated_page.locator("table tbody tr a, a[href*='/ar/customers/']").first
+        customer_link = authenticated_page.locator(
+            "table tbody tr a, a[href*='/ar/customers/']"
+        ).first
         if customer_link.count() > 0:
             customer_link.click()
             authenticated_page.wait_for_load_state("networkidle")
 
-            edit_btn = authenticated_page.locator("a[href*='/edit'], button:has-text('Edit'), a:has-text('Edit')")
+            edit_btn = authenticated_page.locator(
+                "a[href*='/edit'], button:has-text('Edit'), a:has-text('Edit')"
+            )
             if edit_btn.count() > 0:
                 expect(edit_btn.first).to_be_visible()
 
@@ -229,7 +251,9 @@ class TestARInvoiceList:
         authenticated_page.goto(f"{base_url}/ar/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
-        customer_filter = authenticated_page.locator("select[name='customer'], select[name='customer_id']")
+        customer_filter = authenticated_page.locator(
+            "select[name='customer'], select[name='customer_id']"
+        )
         if customer_filter.count() > 0:
             expect(customer_filter.first).to_be_visible()
 
@@ -256,7 +280,9 @@ class TestARInvoiceList:
         authenticated_page.goto(f"{base_url}/ar/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
-        new_btn = authenticated_page.locator("a[href*='/ar/invoices/new'], button:has-text('New')")
+        new_btn = authenticated_page.locator(
+            "a[href*='/ar/invoices/new'], button:has-text('New')"
+        )
         expect(new_btn.first).to_be_visible()
 
 
@@ -276,7 +302,9 @@ class TestARInvoiceCreate:
         authenticated_page.goto(f"{base_url}/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("select[name='customer_id'], select[name='customer'], #customer_id")
+        field = authenticated_page.locator(
+            "select[name='customer_id'], select[name='customer'], #customer_id"
+        )
         expect(field.first).to_be_visible()
 
     def test_invoice_create_has_date_fields(self, authenticated_page, base_url):
@@ -292,7 +320,9 @@ class TestARInvoiceCreate:
         authenticated_page.goto(f"{base_url}/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        lines = authenticated_page.locator("text=Line, text=Items, button:has-text('Add'), [class*='line']")
+        lines = authenticated_page.locator(
+            "text=Line, text=Items, button:has-text('Add'), [class*='line']"
+        )
         expect(lines.first).to_be_visible()
 
     def test_invoice_create_has_add_line_button(self, authenticated_page, base_url):
@@ -300,7 +330,9 @@ class TestARInvoiceCreate:
         authenticated_page.goto(f"{base_url}/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        add_btn = authenticated_page.locator("button:has-text('Add'), a:has-text('Add Line'), button[class*='add']")
+        add_btn = authenticated_page.locator(
+            "button:has-text('Add'), a:has-text('Add Line'), button[class*='add']"
+        )
         if add_btn.count() > 0:
             expect(add_btn.first).to_be_visible()
 
@@ -309,7 +341,9 @@ class TestARInvoiceCreate:
         authenticated_page.goto(f"{base_url}/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        totals = authenticated_page.locator("text=Total, text=Subtotal, [class*='total']")
+        totals = authenticated_page.locator(
+            "text=Total, text=Subtotal, [class*='total']"
+        )
         if totals.count() > 0:
             expect(totals.first).to_be_visible()
 
@@ -330,7 +364,9 @@ class TestARReceiptList:
         authenticated_page.goto(f"{base_url}/ar/receipts")
         authenticated_page.wait_for_load_state("networkidle")
 
-        new_btn = authenticated_page.locator("a[href*='/ar/receipts/new'], button:has-text('New')")
+        new_btn = authenticated_page.locator(
+            "a[href*='/ar/receipts/new'], button:has-text('New')"
+        )
         expect(new_btn.first).to_be_visible()
 
     def test_receipt_list_by_customer(self, authenticated_page, base_url):
@@ -338,7 +374,9 @@ class TestARReceiptList:
         authenticated_page.goto(f"{base_url}/ar/receipts")
         authenticated_page.wait_for_load_state("networkidle")
 
-        customer_filter = authenticated_page.locator("select[name='customer'], select[name='customer_id']")
+        customer_filter = authenticated_page.locator(
+            "select[name='customer'], select[name='customer_id']"
+        )
         if customer_filter.count() > 0:
             expect(customer_filter.first).to_be_visible()
 
@@ -359,7 +397,9 @@ class TestARReceiptCreate:
         authenticated_page.goto(f"{base_url}/ar/receipts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("select[name='customer_id'], select[name='customer']")
+        field = authenticated_page.locator(
+            "select[name='customer_id'], select[name='customer']"
+        )
         expect(field.first).to_be_visible()
 
     def test_receipt_create_has_amount_field(self, authenticated_page, base_url):
@@ -367,7 +407,9 @@ class TestARReceiptCreate:
         authenticated_page.goto(f"{base_url}/ar/receipts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("input[name='amount'], input[name*='amount']")
+        field = authenticated_page.locator(
+            "input[name='amount'], input[name*='amount']"
+        )
         expect(field.first).to_be_visible()
 
     def test_receipt_create_has_date_field(self, authenticated_page, base_url):
@@ -404,7 +446,9 @@ class TestCreditNoteList:
         authenticated_page.goto(f"{base_url}/ar/credit-notes")
         authenticated_page.wait_for_load_state("networkidle")
 
-        new_btn = authenticated_page.locator("a[href*='/ar/credit-notes/new'], button:has-text('New')")
+        new_btn = authenticated_page.locator(
+            "a[href*='/ar/credit-notes/new'], button:has-text('New')"
+        )
         expect(new_btn.first).to_be_visible()
 
 
@@ -424,7 +468,9 @@ class TestCreditNoteCreate:
         authenticated_page.goto(f"{base_url}/ar/credit-notes/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("select[name='customer_id'], select[name='customer']")
+        field = authenticated_page.locator(
+            "select[name='customer_id'], select[name='customer']"
+        )
         expect(field.first).to_be_visible()
 
     def test_credit_note_create_has_reason_field(self, authenticated_page, base_url):
@@ -453,7 +499,9 @@ class TestARAgingReport:
         authenticated_page.goto(f"{base_url}/ar/aging")
         authenticated_page.wait_for_load_state("networkidle")
 
-        date_filter = authenticated_page.locator("input[type='date'], input[name='as_of_date']")
+        date_filter = authenticated_page.locator(
+            "input[type='date'], input[name='as_of_date']"
+        )
         if date_filter.count() > 0:
             expect(date_filter.first).to_be_visible()
 
@@ -462,6 +510,8 @@ class TestARAgingReport:
         authenticated_page.goto(f"{base_url}/ar/aging")
         authenticated_page.wait_for_load_state("networkidle")
 
-        buckets = authenticated_page.locator("text=Current, text=30, text=60, text=90, th:has-text('Days')")
+        buckets = authenticated_page.locator(
+            "text=Current, text=30, text=60, text=90, th:has-text('Days')"
+        )
         if buckets.count() > 0:
             expect(buckets.first).to_be_visible()

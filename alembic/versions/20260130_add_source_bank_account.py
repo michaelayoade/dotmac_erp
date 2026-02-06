@@ -8,6 +8,7 @@ Adds source bank account reference for:
 - Bank upload file generation (debit account)
 - Payment processing integration
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql

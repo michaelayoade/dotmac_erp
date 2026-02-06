@@ -6,31 +6,28 @@ Manages payment batch creation, approval, processing, and bank file generation.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Any, List, Optional, cast
+from typing import Any, List, Optional
 from uuid import UUID
-import uuid as uuid_lib
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.finance.ap.payment_batch import APPaymentBatch, APBatchStatus
+from app.models.finance.ap.payment_batch import APBatchStatus, APPaymentBatch
 from app.models.finance.ap.supplier import Supplier
-from app.models.finance.ap.supplier_invoice import (
-    SupplierInvoice,
-    SupplierInvoiceStatus,
-)
 from app.models.finance.ap.supplier_payment import (
-    SupplierPayment,
-    APPaymentMethod,
     APPaymentStatus,
+    SupplierPayment,
 )
 from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.services.common import coerce_uuid
 from app.services.finance.platform.sequence import SequenceService
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -89,14 +86,11 @@ class PaymentBatchService(ListResponseMixin):
 
         if not input.payments:
             raise HTTPException(
-                status_code=400,
-                detail="Payment batch must have at least one payment"
+                status_code=400, detail="Payment batch must have at least one payment"
             )
 
         # Generate batch number
-        batch_number = SequenceService.get_next_number(
-            db, org_id, SequenceType.PAYMENT
-        )
+        batch_number = SequenceService.get_next_number(db, org_id, SequenceType.PAYMENT)
         batch_number = f"BATCH-{batch_number}"
 
         # Calculate totals
@@ -147,10 +141,14 @@ class PaymentBatchService(ListResponseMixin):
         batch_id = coerce_uuid(batch_id)
         payment_id = coerce_uuid(payment_id)
 
-        batch = db.query(APPaymentBatch).filter(
-            APPaymentBatch.batch_id == batch_id,
-            APPaymentBatch.organization_id == org_id,
-        ).first()
+        batch = (
+            db.query(APPaymentBatch)
+            .filter(
+                APPaymentBatch.batch_id == batch_id,
+                APPaymentBatch.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not batch:
             raise HTTPException(status_code=404, detail="Payment batch not found")
@@ -158,27 +156,30 @@ class PaymentBatchService(ListResponseMixin):
         if batch.status != APBatchStatus.DRAFT:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot modify batch in {batch.status.value} status"
+                detail=f"Cannot modify batch in {batch.status.value} status",
             )
 
-        payment = db.query(SupplierPayment).filter(
-            SupplierPayment.payment_id == payment_id,
-            SupplierPayment.organization_id == org_id,
-        ).first()
+        payment = (
+            db.query(SupplierPayment)
+            .filter(
+                SupplierPayment.payment_id == payment_id,
+                SupplierPayment.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not payment:
             raise HTTPException(status_code=404, detail="Payment not found")
 
         if payment.payment_batch_id is not None:
             raise HTTPException(
-                status_code=400,
-                detail="Payment already belongs to a batch"
+                status_code=400, detail="Payment already belongs to a batch"
             )
 
         if payment.status not in [APPaymentStatus.DRAFT, APPaymentStatus.PENDING]:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot add payment with status {payment.status.value} to batch"
+                detail=f"Cannot add payment with status {payment.status.value} to batch",
             )
 
         # Add payment to batch
@@ -216,10 +217,14 @@ class PaymentBatchService(ListResponseMixin):
         batch_id = coerce_uuid(batch_id)
         payment_id = coerce_uuid(payment_id)
 
-        batch = db.query(APPaymentBatch).filter(
-            APPaymentBatch.batch_id == batch_id,
-            APPaymentBatch.organization_id == org_id,
-        ).first()
+        batch = (
+            db.query(APPaymentBatch)
+            .filter(
+                APPaymentBatch.batch_id == batch_id,
+                APPaymentBatch.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not batch:
             raise HTTPException(status_code=404, detail="Payment batch not found")
@@ -227,18 +232,21 @@ class PaymentBatchService(ListResponseMixin):
         if batch.status != APBatchStatus.DRAFT:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot modify batch in {batch.status.value} status"
+                detail=f"Cannot modify batch in {batch.status.value} status",
             )
 
-        payment = db.query(SupplierPayment).filter(
-            SupplierPayment.payment_id == payment_id,
-            SupplierPayment.payment_batch_id == batch_id,
-        ).first()
+        payment = (
+            db.query(SupplierPayment)
+            .filter(
+                SupplierPayment.payment_id == payment_id,
+                SupplierPayment.payment_batch_id == batch_id,
+            )
+            .first()
+        )
 
         if not payment:
             raise HTTPException(
-                status_code=404,
-                detail="Payment not found in this batch"
+                status_code=404, detail="Payment not found in this batch"
             )
 
         # Remove payment from batch
@@ -276,10 +284,14 @@ class PaymentBatchService(ListResponseMixin):
         batch_id = coerce_uuid(batch_id)
         user_id = coerce_uuid(approved_by_user_id)
 
-        batch = db.query(APPaymentBatch).filter(
-            APPaymentBatch.batch_id == batch_id,
-            APPaymentBatch.organization_id == org_id,
-        ).first()
+        batch = (
+            db.query(APPaymentBatch)
+            .filter(
+                APPaymentBatch.batch_id == batch_id,
+                APPaymentBatch.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not batch:
             raise HTTPException(status_code=404, detail="Payment batch not found")
@@ -287,35 +299,36 @@ class PaymentBatchService(ListResponseMixin):
         if batch.status != APBatchStatus.DRAFT:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot approve batch in {batch.status.value} status"
+                detail=f"Cannot approve batch in {batch.status.value} status",
             )
 
         # Segregation of Duties check
         if batch.created_by_user_id == user_id:
             raise HTTPException(
                 status_code=400,
-                detail="Segregation of duties violation: creator cannot approve"
+                detail="Segregation of duties violation: creator cannot approve",
             )
 
         # Verify batch has payments
-        payment_count = db.query(SupplierPayment).filter(
-            SupplierPayment.payment_batch_id == batch_id
-        ).count()
+        payment_count = (
+            db.query(SupplierPayment)
+            .filter(SupplierPayment.payment_batch_id == batch_id)
+            .count()
+        )
 
         if payment_count == 0:
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot approve empty batch"
-            )
+            raise HTTPException(status_code=400, detail="Cannot approve empty batch")
 
         batch.status = APBatchStatus.APPROVED
         batch.approved_by_user_id = user_id
         batch.approved_at = datetime.now(timezone.utc)
 
         # Also approve all payments in the batch
-        payments = db.query(SupplierPayment).filter(
-            SupplierPayment.payment_batch_id == batch_id
-        ).all()
+        payments = (
+            db.query(SupplierPayment)
+            .filter(SupplierPayment.payment_batch_id == batch_id)
+            .all()
+        )
 
         for payment in payments:
             if payment.status == APPaymentStatus.DRAFT:
@@ -353,10 +366,14 @@ class PaymentBatchService(ListResponseMixin):
         batch_id = coerce_uuid(batch_id)
         user_id = coerce_uuid(processed_by_user_id)
 
-        batch = db.query(APPaymentBatch).filter(
-            APPaymentBatch.batch_id == batch_id,
-            APPaymentBatch.organization_id == org_id,
-        ).first()
+        batch = (
+            db.query(APPaymentBatch)
+            .filter(
+                APPaymentBatch.batch_id == batch_id,
+                APPaymentBatch.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not batch:
             raise HTTPException(status_code=404, detail="Payment batch not found")
@@ -364,16 +381,20 @@ class PaymentBatchService(ListResponseMixin):
         if batch.status != APBatchStatus.APPROVED:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot process batch in {batch.status.value} status"
+                detail=f"Cannot process batch in {batch.status.value} status",
             )
 
         batch.status = APBatchStatus.PROCESSING
 
         # Process each payment
-        payments = db.query(SupplierPayment).filter(
-            SupplierPayment.payment_batch_id == batch_id,
-            SupplierPayment.status == APPaymentStatus.APPROVED,
-        ).all()
+        payments = (
+            db.query(SupplierPayment)
+            .filter(
+                SupplierPayment.payment_batch_id == batch_id,
+                SupplierPayment.status == APPaymentStatus.APPROVED,
+            )
+            .all()
+        )
 
         all_success = True
         for payment in payments:
@@ -420,10 +441,14 @@ class PaymentBatchService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         batch_id = coerce_uuid(batch_id)
 
-        batch = db.query(APPaymentBatch).filter(
-            APPaymentBatch.batch_id == batch_id,
-            APPaymentBatch.organization_id == org_id,
-        ).first()
+        batch = (
+            db.query(APPaymentBatch)
+            .filter(
+                APPaymentBatch.batch_id == batch_id,
+                APPaymentBatch.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not batch:
             raise HTTPException(status_code=404, detail="Payment batch not found")
@@ -431,13 +456,15 @@ class PaymentBatchService(ListResponseMixin):
         if batch.status not in [APBatchStatus.APPROVED, APBatchStatus.COMPLETED]:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot generate bank file for batch in {batch.status.value} status"
+                detail=f"Cannot generate bank file for batch in {batch.status.value} status",
             )
 
         # Get payments
-        payments = db.query(SupplierPayment).filter(
-            SupplierPayment.payment_batch_id == batch_id
-        ).all()
+        payments = (
+            db.query(SupplierPayment)
+            .filter(SupplierPayment.payment_batch_id == batch_id)
+            .all()
+        )
 
         # Generate file reference
         file_reference = f"{file_format}-{batch.batch_number}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -448,9 +475,11 @@ class PaymentBatchService(ListResponseMixin):
         ]
 
         for payment in payments:
-            supplier = db.query(Supplier).filter(
-                Supplier.supplier_id == payment.supplier_id
-            ).first()
+            supplier = (
+                db.query(Supplier)
+                .filter(Supplier.supplier_id == payment.supplier_id)
+                .first()
+            )
             if supplier:
                 supplier_name = supplier.trading_name or supplier.legal_name
             else:
@@ -497,10 +526,14 @@ class PaymentBatchService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         batch_id = coerce_uuid(batch_id)
 
-        batch = db.query(APPaymentBatch).filter(
-            APPaymentBatch.batch_id == batch_id,
-            APPaymentBatch.organization_id == org_id,
-        ).first()
+        batch = (
+            db.query(APPaymentBatch)
+            .filter(
+                APPaymentBatch.batch_id == batch_id,
+                APPaymentBatch.organization_id == org_id,
+            )
+            .first()
+        )
 
         if not batch:
             raise HTTPException(status_code=404, detail="Payment batch not found")
@@ -515,9 +548,11 @@ class PaymentBatchService(ListResponseMixin):
     @staticmethod
     def get(db: Session, batch_id: str) -> Optional[APPaymentBatch]:
         """Get a payment batch by ID."""
-        return db.query(APPaymentBatch).filter(
-            APPaymentBatch.batch_id == coerce_uuid(batch_id)
-        ).first()
+        return (
+            db.query(APPaymentBatch)
+            .filter(APPaymentBatch.batch_id == coerce_uuid(batch_id))
+            .first()
+        )
 
     @staticmethod
     def list(
@@ -560,7 +595,12 @@ class PaymentBatchService(ListResponseMixin):
         if to_date:
             query = query.filter(APPaymentBatch.batch_date <= to_date)
 
-        return query.order_by(APPaymentBatch.batch_date.desc()).offset(offset).limit(limit).all()
+        return (
+            query.order_by(APPaymentBatch.batch_date.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
 
 
 # Module-level instance

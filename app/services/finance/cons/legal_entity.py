@@ -6,6 +6,7 @@ Manages legal entities within a consolidation group (IFRS 10).
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -16,12 +17,14 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models.finance.cons.legal_entity import (
-    LegalEntity,
-    EntityType,
     ConsolidationMethod,
+    EntityType,
+    LegalEntity,
 )
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -183,13 +186,19 @@ class LegalEntityService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Entity not found")
 
         # Validate method for entity type
-        if entity.entity_type == EntityType.PARENT and new_method != ConsolidationMethod.FULL:
+        if (
+            entity.entity_type == EntityType.PARENT
+            and new_method != ConsolidationMethod.FULL
+        ):
             raise HTTPException(
                 status_code=400,
                 detail="Parent entity must use FULL consolidation method",
             )
 
-        if entity.entity_type == EntityType.ASSOCIATE and new_method != ConsolidationMethod.EQUITY:
+        if (
+            entity.entity_type == EntityType.ASSOCIATE
+            and new_method != ConsolidationMethod.EQUITY
+        ):
             raise HTTPException(
                 status_code=400,
                 detail="Associate entities must use EQUITY method",
@@ -274,7 +283,9 @@ class LegalEntityService(ListResponseMixin):
                 detail="Entity has no goodwill recorded",
             )
 
-        current_goodwill = entity.goodwill_at_acquisition - entity.accumulated_goodwill_impairment
+        current_goodwill = (
+            entity.goodwill_at_acquisition - entity.accumulated_goodwill_impairment
+        )
         if impairment_amount > current_goodwill:
             raise HTTPException(
                 status_code=400,
@@ -314,8 +325,10 @@ class LegalEntityService(ListResponseMixin):
 
         if as_of_date:
             query = query.filter(
-                (LegalEntity.acquisition_date <= as_of_date) | (LegalEntity.acquisition_date.is_(None)),
-                (LegalEntity.disposal_date > as_of_date) | (LegalEntity.disposal_date.is_(None)),
+                (LegalEntity.acquisition_date <= as_of_date)
+                | (LegalEntity.acquisition_date.is_(None)),
+                (LegalEntity.disposal_date > as_of_date)
+                | (LegalEntity.disposal_date.is_(None)),
             )
 
         entities = query.all()
@@ -339,7 +352,9 @@ class LegalEntityService(ListResponseMixin):
                         entity=entity,
                         children=children,
                         level=level,
-                        effective_ownership=Decimal("100") if level == 0 else Decimal("0"),
+                        effective_ownership=Decimal("100")
+                        if level == 0
+                        else Decimal("0"),
                     )
                 )
             return result
@@ -372,7 +387,9 @@ class LegalEntityService(ListResponseMixin):
         )
 
         if consolidation_method:
-            query = query.filter(LegalEntity.consolidation_method == consolidation_method)
+            query = query.filter(
+                LegalEntity.consolidation_method == consolidation_method
+            )
 
         return query.order_by(LegalEntity.entity_code).all()
 
@@ -409,7 +426,10 @@ class LegalEntityService(ListResponseMixin):
         total_goodwill = Decimal("0")
         for entity in entities:
             if entity.goodwill_at_acquisition:
-                carrying_value = entity.goodwill_at_acquisition - entity.accumulated_goodwill_impairment
+                carrying_value = (
+                    entity.goodwill_at_acquisition
+                    - entity.accumulated_goodwill_impairment
+                )
                 total_goodwill += carrying_value
 
         return total_goodwill
@@ -446,7 +466,9 @@ class LegalEntityService(ListResponseMixin):
             query = query.filter(LegalEntity.entity_type == entity_type)
 
         if consolidation_method:
-            query = query.filter(LegalEntity.consolidation_method == consolidation_method)
+            query = query.filter(
+                LegalEntity.consolidation_method == consolidation_method
+            )
 
         if is_active is not None:
             query = query.filter(LegalEntity.is_active == is_active)

@@ -17,7 +17,7 @@
 {% endblock %}
 
 {% block header_actions %}
-{% if material_request.can_edit and auth is defined and (auth.is_admin or auth.has_permission('inv:material_requests:create')) %}
+{% if material_request.can_edit and auth is defined and (auth.is_admin or auth.has_any_permission(['inv:material_requests:create', 'inventory:material_requests:create'])) %}
 <a href="/inventory/material-requests/{{ material_request.request_id }}/edit" class="btn btn-secondary">
     <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
@@ -248,7 +248,7 @@
     <div class="card p-6">
         <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Actions</h3>
         <div class="flex flex-wrap gap-3">
-{% if material_request.can_submit and auth is defined and auth.is_admin %}
+{% if material_request.can_submit and auth is defined and auth.has_any_permission(['inv:material_requests:submit', 'inventory:material_requests:submit']) %}
             <form method="post" action="/inventory/material-requests/{{ material_request.request_id }}/submit" class="inline">
                 <button type="submit" class="btn btn-warning">
                     <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -259,7 +259,7 @@
             </form>
             {% endif %}
 
-{% if material_request.can_approve and auth is defined and auth.is_admin %}
+{% if material_request.can_approve and auth is defined and auth.has_any_permission(['inv:material_requests:approve', 'inventory:material_requests:approve']) %}
             <form method="post" action="/inventory/material-requests/{{ material_request.request_id }}/approve" class="inline"
                   onsubmit="return confirm('Approve this request? {% if material_request.request_type in ['ISSUE', 'TRANSFER', 'MANUFACTURE'] %}Stock will be deducted from the warehouse immediately.{% else %}This will mark the request as ordered.{% endif %}')">
                 <button type="submit" class="btn btn-success">
@@ -271,7 +271,7 @@
             </form>
             {% endif %}
 
-{% if material_request.can_cancel and auth is defined and auth.is_admin %}
+{% if material_request.can_cancel and auth is defined and auth.has_any_permission(['inv:material_requests:submit', 'inventory:material_requests:submit']) %}
             <form method="post" action="/inventory/material-requests/{{ material_request.request_id }}/cancel" class="inline" onsubmit="return confirm('Are you sure you want to cancel this request?')">
                 <button type="submit" class="btn btn-secondary text-rose-600 hover:text-rose-700">
                     <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -282,7 +282,7 @@
             </form>
             {% endif %}
 
-{% if material_request.can_delete and auth is defined and auth.is_admin %}
+{% if material_request.can_delete and auth is defined and auth.has_any_permission(['inv:material_requests:delete', 'inventory:material_requests:delete']) %}
             <form method="post" action="/inventory/material-requests/{{ material_request.request_id }}/delete" class="inline" onsubmit="return confirm('Delete this material request? This cannot be undone.')">
                 <button type="submit" class="btn btn-secondary text-rose-600 hover:text-rose-700">
                     <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

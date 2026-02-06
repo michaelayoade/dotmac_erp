@@ -20,7 +20,6 @@ Create Date: 2026-01-31
 """
 
 from alembic import op
-import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "20260131_update_email_module_enum"

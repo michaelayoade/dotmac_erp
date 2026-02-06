@@ -589,9 +589,7 @@ class ProcurementWebService:
         # Enrich with supplier data
         supplier = self.db.get(Supplier, preq.supplier_id)
         preq.supplier_name = (  # type: ignore[attr-defined]
-            (supplier.trading_name or supplier.legal_name)
-            if supplier
-            else "Unknown"
+            (supplier.trading_name or supplier.legal_name) if supplier else "Unknown"
         )
         preq.registration_number = (  # type: ignore[attr-defined]
             supplier.registration_number if supplier else None
@@ -599,27 +597,51 @@ class ProcurementWebService:
 
         # Build compliance checklist from model fields
         checklist = [
-            {"requirement": "Documents Verified", "compliant": preq.documents_verified, "notes": None},
-            {"requirement": "Tax Clearance Valid", "compliant": preq.tax_clearance_valid, "notes": None},
-            {"requirement": "Pension Compliance", "compliant": preq.pension_compliance, "notes": None},
-            {"requirement": "ITF Compliance", "compliant": preq.itf_compliance, "notes": "Industrial Training Fund"},
-            {"requirement": "NSITF Compliance", "compliant": preq.nsitf_compliance, "notes": "Nigeria Social Insurance Trust Fund"},
+            {
+                "requirement": "Documents Verified",
+                "compliant": preq.documents_verified,
+                "notes": None,
+            },
+            {
+                "requirement": "Tax Clearance Valid",
+                "compliant": preq.tax_clearance_valid,
+                "notes": None,
+            },
+            {
+                "requirement": "Pension Compliance",
+                "compliant": preq.pension_compliance,
+                "notes": None,
+            },
+            {
+                "requirement": "ITF Compliance",
+                "compliant": preq.itf_compliance,
+                "notes": "Industrial Training Fund",
+            },
+            {
+                "requirement": "NSITF Compliance",
+                "compliant": preq.nsitf_compliance,
+                "notes": "Nigeria Social Insurance Trust Fund",
+            },
         ]
 
         # Build qualification scores from capability scores
         qualification_scores = []
         if preq.financial_capability_score is not None:
-            qualification_scores.append({
-                "category": "Financial Capability",
-                "weight": 40,
-                "score": float(preq.financial_capability_score),
-            })
+            qualification_scores.append(
+                {
+                    "category": "Financial Capability",
+                    "weight": 40,
+                    "score": float(preq.financial_capability_score),
+                }
+            )
         if preq.technical_capability_score is not None:
-            qualification_scores.append({
-                "category": "Technical Capability",
-                "weight": 60,
-                "score": float(preq.technical_capability_score),
-            })
+            qualification_scores.append(
+                {
+                    "category": "Technical Capability",
+                    "weight": 60,
+                    "score": float(preq.technical_capability_score),
+                }
+            )
 
         return {
             "vendor": preq,

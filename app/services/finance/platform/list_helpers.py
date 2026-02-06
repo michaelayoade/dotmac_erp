@@ -6,13 +6,14 @@ Provides consistent patterns across all list views.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, TypeVar
 from urllib.parse import urlencode
 
-from sqlalchemy import func
 from sqlalchemy.orm import Query
 
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 

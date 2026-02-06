@@ -7,6 +7,7 @@ Provides view-focused data and operations for AP goods receipt web routes.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
@@ -19,30 +20,32 @@ from sqlalchemy.orm import Session
 
 from app.models.finance.ap.goods_receipt import GoodsReceipt, ReceiptStatus
 from app.models.finance.ap.goods_receipt_line import GoodsReceiptLine
-from app.models.finance.ap.purchase_order import PurchaseOrder, POStatus
+from app.models.finance.ap.purchase_order import POStatus, PurchaseOrder
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.common.attachment import AttachmentCategory
 from app.services.common import coerce_uuid
 from app.services.finance.ap.goods_receipt import (
-    goods_receipt_service,
     GoodsReceiptInput,
     GRLineInput,
+    goods_receipt_service,
 )
 from app.services.finance.ap.supplier import supplier_service
-from app.services.finance.common.attachment import attachment_service, AttachmentInput
-from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
 from app.services.finance.ap.web.base import (
+    format_currency,
+    format_date,
+    format_file_size,
     logger,
     parse_date,
-    format_date,
-    format_currency,
-    format_file_size,
     supplier_display_name,
-    supplier_option_view,
     supplier_form_view,
+    supplier_option_view,
 )
+from app.services.finance.common.attachment import AttachmentInput, attachment_service
+from app.templates import templates
+from app.web.deps import WebAuthContext, base_context
+
+logger = logging.getLogger(__name__)
 
 
 class GoodsReceiptWebService:
@@ -68,7 +71,12 @@ class GoodsReceiptWebService:
         """Build context for goods receipts list page."""
         logger.debug(
             "list_goods_receipts_context: org=%s search=%r supplier_id=%s po_id=%s status=%s page=%d",
-            organization_id, search, supplier_id, po_id, status, page
+            organization_id,
+            search,
+            supplier_id,
+            po_id,
+            status,
+            page,
         )
         org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
@@ -112,7 +120,9 @@ class GoodsReceiptWebService:
                 )
             )
 
-        total_count = query.with_entities(func.count(GoodsReceipt.receipt_id)).scalar() or 0
+        total_count = (
+            query.with_entities(func.count(GoodsReceipt.receipt_id)).scalar() or 0
+        )
         receipts = (
             query.order_by(GoodsReceipt.receipt_date.desc())
             .limit(limit)
@@ -127,7 +137,8 @@ class GoodsReceiptWebService:
                 GoodsReceipt.organization_id == org_id,
                 GoodsReceipt.status == ReceiptStatus.RECEIVED,
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
         inspecting_count = (
             db.query(func.count(GoodsReceipt.receipt_id))
@@ -135,7 +146,8 @@ class GoodsReceiptWebService:
                 GoodsReceipt.organization_id == org_id,
                 GoodsReceipt.status == ReceiptStatus.INSPECTING,
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
         accepted_count = (
             db.query(func.count(GoodsReceipt.receipt_id))
@@ -143,7 +155,8 @@ class GoodsReceiptWebService:
                 GoodsReceipt.organization_id == org_id,
                 GoodsReceipt.status == ReceiptStatus.ACCEPTED,
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
 
         receipts_view = []
@@ -152,19 +165,22 @@ class GoodsReceiptWebService:
             line_count = (
                 db.query(func.count(GoodsReceiptLine.line_id))
                 .filter(GoodsReceiptLine.receipt_id == gr.receipt_id)
-                .scalar() or 0
+                .scalar()
+                or 0
             )
-            receipts_view.append({
-                "receipt_id": gr.receipt_id,
-                "receipt_number": gr.receipt_number,
-                "supplier_name": supplier_display_name(supplier),
-                "po_number": po.po_number,
-                "po_id": po.po_id,
-                "receipt_date": format_date(gr.receipt_date),
-                "status": gr.status.value,
-                "line_count": line_count,
-                "notes": gr.notes,
-            })
+            receipts_view.append(
+                {
+                    "receipt_id": gr.receipt_id,
+                    "receipt_number": gr.receipt_number,
+                    "supplier_name": supplier_display_name(supplier),
+                    "po_number": po.po_number,
+                    "po_id": po.po_id,
+                    "receipt_date": format_date(gr.receipt_date),
+                    "status": gr.status.value,
+                    "line_count": line_count,
+                    "notes": gr.notes,
+                }
+            )
 
         suppliers_list = [
             supplier_option_view(supplier)
@@ -211,7 +227,8 @@ class GoodsReceiptWebService:
         """Build context for goods receipt detail page."""
         logger.debug(
             "goods_receipt_detail_context: org=%s receipt_id=%s",
-            organization_id, receipt_id
+            organization_id,
+            receipt_id,
         )
         org_id = coerce_uuid(organization_id)
         receipt_uuid = coerce_uuid(receipt_id)
@@ -220,7 +237,8 @@ class GoodsReceiptWebService:
         if not gr or gr.organization_id != org_id:
             logger.warning(
                 "goods_receipt_detail_context: receipt not found org=%s receipt_id=%s",
-                organization_id, receipt_id
+                organization_id,
+                receipt_id,
             )
             return {"receipt": None, "supplier": None, "order": None, "lines": []}
 
@@ -229,7 +247,10 @@ class GoodsReceiptWebService:
 
         lines = (
             db.query(GoodsReceiptLine, PurchaseOrderLine)
-            .join(PurchaseOrderLine, GoodsReceiptLine.po_line_id == PurchaseOrderLine.line_id)
+            .join(
+                PurchaseOrderLine,
+                GoodsReceiptLine.po_line_id == PurchaseOrderLine.line_id,
+            )
             .filter(GoodsReceiptLine.receipt_id == receipt_uuid)
             .order_by(GoodsReceiptLine.line_number)
             .all()
@@ -237,18 +258,22 @@ class GoodsReceiptWebService:
 
         lines_view = []
         for gr_line, po_line in lines:
-            lines_view.append({
-                "line_id": gr_line.line_id,
-                "line_number": gr_line.line_number,
-                "description": po_line.description,
-                "quantity_ordered": po_line.quantity_ordered,
-                "quantity_received": gr_line.quantity_received,
-                "quantity_accepted": gr_line.quantity_accepted,
-                "quantity_rejected": gr_line.quantity_rejected,
-                "rejection_reason": gr_line.rejection_reason,
-                "lot_number": gr_line.lot_number,
-                "unit_price": format_currency(po_line.unit_price, po.currency_code) if po else None,
-            })
+            lines_view.append(
+                {
+                    "line_id": gr_line.line_id,
+                    "line_number": gr_line.line_number,
+                    "description": po_line.description,
+                    "quantity_ordered": po_line.quantity_ordered,
+                    "quantity_received": gr_line.quantity_received,
+                    "quantity_accepted": gr_line.quantity_accepted,
+                    "quantity_rejected": gr_line.quantity_rejected,
+                    "rejection_reason": gr_line.rejection_reason,
+                    "lot_number": gr_line.lot_number,
+                    "unit_price": format_currency(po_line.unit_price, po.currency_code)
+                    if po
+                    else None,
+                }
+            )
 
         receipt_view = {
             "receipt_id": gr.receipt_id,
@@ -288,7 +313,8 @@ class GoodsReceiptWebService:
 
         logger.debug(
             "goods_receipt_detail_context: found receipt %s with %d lines",
-            gr.receipt_number, len(lines_view)
+            gr.receipt_number,
+            len(lines_view),
         )
 
         return {
@@ -300,7 +326,9 @@ class GoodsReceiptWebService:
                 "po_date": format_date(po.po_date),
                 "status": po.status.value,
                 "total_amount": format_currency(po.total_amount, po.currency_code),
-            } if po else None,
+            }
+            if po
+            else None,
             "lines": lines_view,
             "attachments": attachments_view,
         }
@@ -313,8 +341,7 @@ class GoodsReceiptWebService:
     ) -> dict:
         """Build context for goods receipt form (create)."""
         logger.debug(
-            "goods_receipt_form_context: org=%s po_id=%s",
-            organization_id, po_id
+            "goods_receipt_form_context: org=%s po_id=%s", organization_id, po_id
         )
         org_id = coerce_uuid(organization_id)
 
@@ -334,15 +361,17 @@ class GoodsReceiptWebService:
 
         po_list = []
         for po, supplier in pos:
-            po_list.append({
-                "po_id": str(po.po_id),
-                "po_number": po.po_number,
-                "supplier_id": str(po.supplier_id),
-                "supplier_name": supplier_display_name(supplier),
-                "po_date": format_date(po.po_date),
-                "total_amount": format_currency(po.total_amount, po.currency_code),
-                "currency_code": po.currency_code,
-            })
+            po_list.append(
+                {
+                    "po_id": str(po.po_id),
+                    "po_number": po.po_number,
+                    "supplier_id": str(po.supplier_id),
+                    "supplier_name": supplier_display_name(supplier),
+                    "po_date": format_date(po.po_date),
+                    "total_amount": format_currency(po.total_amount, po.currency_code),
+                    "currency_code": po.currency_code,
+                }
+            )
 
         # If a specific PO is selected, get its lines
         selected_po = None
@@ -356,7 +385,9 @@ class GoodsReceiptWebService:
                     "po_id": str(po.po_id),
                     "po_number": po.po_number,
                     "supplier_id": str(po.supplier_id),
-                    "supplier_name": supplier_display_name(supplier) if supplier else "",
+                    "supplier_name": supplier_display_name(supplier)
+                    if supplier
+                    else "",
                     "po_date": format_date(po.po_date),
                     "currency_code": po.currency_code,
                 }
@@ -371,18 +402,21 @@ class GoodsReceiptWebService:
                 for line in lines:
                     remaining = line.quantity_ordered - line.quantity_received
                     if remaining > 0:
-                        po_lines.append({
-                            "line_id": str(line.line_id),
-                            "line_number": line.line_number,
-                            "description": line.description,
-                            "quantity_ordered": float(line.quantity_ordered),
-                            "quantity_received": float(line.quantity_received),
-                            "quantity_remaining": float(remaining),
-                            "unit_price": float(line.unit_price),
-                        })
+                        po_lines.append(
+                            {
+                                "line_id": str(line.line_id),
+                                "line_number": line.line_number,
+                                "description": line.description,
+                                "quantity_ordered": float(line.quantity_ordered),
+                                "quantity_received": float(line.quantity_received),
+                                "quantity_remaining": float(remaining),
+                                "unit_price": float(line.unit_price),
+                            }
+                        )
 
         # Get warehouses for selection
         from app.models.inventory.warehouse import Warehouse
+
         warehouses = (
             db.query(Warehouse)
             .filter(
@@ -403,7 +437,8 @@ class GoodsReceiptWebService:
 
         logger.debug(
             "goods_receipt_form_context: found %d POs, %d lines for selected PO",
-            len(po_list), len(po_lines)
+            len(po_list),
+            len(po_lines),
         )
 
         return {
@@ -445,7 +480,9 @@ class GoodsReceiptWebService:
                 page=page,
             )
         )
-        return templates.TemplateResponse(request, "finance/ap/goods_receipts.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/goods_receipts.html", context
+        )
 
     def goods_receipt_new_form_response(
         self,
@@ -456,8 +493,12 @@ class GoodsReceiptWebService:
     ) -> HTMLResponse:
         """Render new goods receipt form."""
         context = base_context(request, auth, "New Goods Receipt", "ap")
-        context.update(self.goods_receipt_form_context(db, str(auth.organization_id), po_id))
-        return templates.TemplateResponse(request, "finance/ap/goods_receipt_form.html", context)
+        context.update(
+            self.goods_receipt_form_context(db, str(auth.organization_id), po_id)
+        )
+        return templates.TemplateResponse(
+            request, "finance/ap/goods_receipt_form.html", context
+        )
 
     def goods_receipt_detail_response(
         self,
@@ -475,7 +516,9 @@ class GoodsReceiptWebService:
                 receipt_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ap/goods_receipt_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/goods_receipt_detail.html", context
+        )
 
     async def create_goods_receipt_response(
         self,
@@ -505,11 +548,13 @@ class GoodsReceiptWebService:
             for line in lines_data:
                 qty = Decimal(str(line.get("quantity_to_receive", 0)))
                 if qty > 0:
-                    lines.append(GRLineInput(
-                        po_line_id=UUID(line["line_id"]),
-                        quantity_received=qty,
-                        lot_number=line.get("lot_number"),
-                    ))
+                    lines.append(
+                        GRLineInput(
+                            po_line_id=UUID(line["line_id"]),
+                            quantity_received=qty,
+                            lot_number=line.get("lot_number"),
+                        )
+                    )
 
             if not lines:
                 raise ValueError("No items to receive")
@@ -524,7 +569,9 @@ class GoodsReceiptWebService:
             input_data = GoodsReceiptInput(
                 po_id=UUID(data["po_id"]),
                 receipt_date=receipt_date,
-                warehouse_id=UUID(data["warehouse_id"]) if data.get("warehouse_id") else None,
+                warehouse_id=UUID(data["warehouse_id"])
+                if data.get("warehouse_id")
+                else None,
                 notes=data.get("notes"),
                 lines=lines,
             )
@@ -538,7 +585,8 @@ class GoodsReceiptWebService:
 
             logger.info(
                 "create_goods_receipt_response: created receipt %s for org %s",
-                receipt.receipt_id, auth.organization_id
+                receipt.receipt_id,
+                auth.organization_id,
             )
 
             if "application/json" in content_type:
@@ -555,14 +603,18 @@ class GoodsReceiptWebService:
                 return JSONResponse(status_code=400, content={"detail": str(e)})
 
             context = base_context(request, auth, "New Goods Receipt", "ap")
-            context.update(self.goods_receipt_form_context(
-                db,
-                str(auth.organization_id),
-                data.get("po_id"),
-            ))
+            context.update(
+                self.goods_receipt_form_context(
+                    db,
+                    str(auth.organization_id),
+                    data.get("po_id"),
+                )
+            )
             context["error"] = str(e)
             context["form_data"] = data
-            return templates.TemplateResponse(request, "finance/ap/goods_receipt_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/goods_receipt_form.html", context
+            )
 
     def start_inspection_response(
         self,
@@ -582,14 +634,17 @@ class GoodsReceiptWebService:
             )
             logger.info(
                 "start_inspection_response: started inspection for receipt %s org %s",
-                receipt_id, auth.organization_id
+                receipt_id,
+                auth.organization_id,
             )
             return RedirectResponse(
                 url=f"/finance/ap/goods-receipts/{receipt_id}?success=Inspection+started",
                 status_code=303,
             )
         except Exception as e:
-            logger.exception("start_inspection_response: failed for receipt %s", receipt_id)
+            logger.exception(
+                "start_inspection_response: failed for receipt %s", receipt_id
+            )
             context = base_context(request, auth, "Goods Receipt Details", "ap")
             context.update(
                 self.goods_receipt_detail_context(
@@ -599,7 +654,9 @@ class GoodsReceiptWebService:
                 )
             )
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "finance/ap/goods_receipt_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/goods_receipt_detail.html", context
+            )
 
     def accept_all_response(
         self,
@@ -619,7 +676,8 @@ class GoodsReceiptWebService:
             )
             logger.info(
                 "accept_all_response: accepted all items for receipt %s org %s",
-                receipt_id, auth.organization_id
+                receipt_id,
+                auth.organization_id,
             )
             return RedirectResponse(
                 url=f"/finance/ap/goods-receipts/{receipt_id}?success=All+items+accepted",
@@ -636,7 +694,9 @@ class GoodsReceiptWebService:
                 )
             )
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "finance/ap/goods_receipt_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/goods_receipt_detail.html", context
+            )
 
     async def upload_goods_receipt_attachment_response(
         self,
@@ -678,7 +738,7 @@ class GoodsReceiptWebService:
 
             logger.info(
                 "upload_goods_receipt_attachment_response: uploaded attachment for receipt %s",
-                receipt_id
+                receipt_id,
             )
 
             return RedirectResponse(
@@ -692,7 +752,10 @@ class GoodsReceiptWebService:
                 status_code=303,
             )
         except Exception:
-            logger.exception("upload_goods_receipt_attachment_response: failed for receipt %s", receipt_id)
+            logger.exception(
+                "upload_goods_receipt_attachment_response: failed for receipt %s",
+                receipt_id,
+            )
             return RedirectResponse(
                 url=f"/finance/ap/goods-receipts/{receipt_id}?error=Upload+failed",
                 status_code=303,

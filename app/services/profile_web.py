@@ -4,17 +4,21 @@ Profile web view service.
 Provides response builders for profile-related web routes.
 """
 
+import logging
 from datetime import datetime, timezone
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.models.auth import Session as AuthSession, SessionStatus, UserCredential, MFAMethod, MFAMethodType
+from app.models.auth import MFAMethod, MFAMethodType, SessionStatus, UserCredential
+from app.models.auth import Session as AuthSession
 from app.models.person import Person
 from app.services.auth_flow import decode_access_token
 from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
+from app.web.deps import WebAuthContext, base_context
+
+logger = logging.getLogger(__name__)
 
 
 class ProfileWebService:
@@ -114,7 +118,9 @@ class ProfileWebService:
             }
         )
 
-        return templates.TemplateResponse(request, "finance/change_password.html", context)
+        return templates.TemplateResponse(
+            request, "finance/change_password.html", context
+        )
 
     def profile_response(
         self,

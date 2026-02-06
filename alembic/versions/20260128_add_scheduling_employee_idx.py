@@ -6,6 +6,7 @@ Create Date: 2026-01-28
 
 Adds standalone index on employee_id for employee schedule lookups.
 """
+
 from alembic import op
 
 # revision identifiers, used by Alembic.

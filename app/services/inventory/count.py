@@ -6,9 +6,10 @@ Manages inventory counts, variance calculation, and adjustment posting.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import List, Optional
 from uuid import UUID
 
@@ -16,13 +17,15 @@ from fastapi import HTTPException
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
-from app.models.inventory.inventory_count import InventoryCount, CountStatus
+from app.models.inventory.inventory_count import CountStatus, InventoryCount
 from app.models.inventory.inventory_count_line import InventoryCountLine
+from app.models.inventory.inventory_transaction import TransactionType
 from app.models.inventory.item import Item
 from app.models.inventory.warehouse import Warehouse
-from app.models.inventory.inventory_transaction import TransactionType
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -127,12 +130,16 @@ class InventoryCountService(ListResponseMixin):
         user_id = coerce_uuid(created_by_user_id)
 
         # Check for duplicate count number
-        existing = db.query(InventoryCount).filter(
-            and_(
-                InventoryCount.organization_id == org_id,
-                InventoryCount.count_number == input.count_number,
+        existing = (
+            db.query(InventoryCount)
+            .filter(
+                and_(
+                    InventoryCount.organization_id == org_id,
+                    InventoryCount.count_number == input.count_number,
+                )
             )
-        ).first()
+            .first()
+        )
 
         if existing:
             raise HTTPException(
@@ -147,7 +154,9 @@ class InventoryCountService(ListResponseMixin):
             count_description=input.count_description,
             count_date=input.count_date,
             fiscal_period_id=coerce_uuid(input.fiscal_period_id),
-            warehouse_id=coerce_uuid(input.warehouse_id) if input.warehouse_id else None,
+            warehouse_id=coerce_uuid(input.warehouse_id)
+            if input.warehouse_id
+            else None,
             location_id=coerce_uuid(input.location_id) if input.location_id else None,
             category_id=coerce_uuid(input.category_id) if input.category_id else None,
             is_full_count=input.is_full_count,
@@ -169,7 +178,9 @@ class InventoryCountService(ListResponseMixin):
         )
 
         if input.category_id:
-            items_query = items_query.filter(Item.category_id == coerce_uuid(input.category_id))
+            items_query = items_query.filter(
+                Item.category_id == coerce_uuid(input.category_id)
+            )
 
         items = items_query.all()
 
@@ -182,12 +193,16 @@ class InventoryCountService(ListResponseMixin):
             if wh:
                 warehouses = [wh]
         else:
-            warehouses = db.query(Warehouse).filter(
-                and_(
-                    Warehouse.organization_id == org_id,
-                    Warehouse.is_active == True,
+            warehouses = (
+                db.query(Warehouse)
+                .filter(
+                    and_(
+                        Warehouse.organization_id == org_id,
+                        Warehouse.is_active == True,
+                    )
                 )
-            ).all()
+                .all()
+            )
 
         for item in items:
             for warehouse in warehouses:
@@ -208,7 +223,9 @@ class InventoryCountService(ListResponseMixin):
                         location_id=count.location_id,
                         system_quantity=system_qty,
                         uom=item.base_uom,
-                        unit_cost=item.average_cost or item.standard_cost or Decimal("0"),
+                        unit_cost=item.average_cost
+                        or item.standard_cost
+                        or Decimal("0"),
                     )
                     db.add(line)
                     total_items += 1
@@ -258,14 +275,19 @@ class InventoryCountService(ListResponseMixin):
             )
 
         # Find or create line
-        line = db.query(InventoryCountLine).filter(
-            and_(
-                InventoryCountLine.count_id == cnt_id,
-                InventoryCountLine.item_id == itm_id,
-                InventoryCountLine.warehouse_id == wh_id,
-                InventoryCountLine.lot_id == (coerce_uuid(input.lot_id) if input.lot_id else None),
+        line = (
+            db.query(InventoryCountLine)
+            .filter(
+                and_(
+                    InventoryCountLine.count_id == cnt_id,
+                    InventoryCountLine.item_id == itm_id,
+                    InventoryCountLine.warehouse_id == wh_id,
+                    InventoryCountLine.lot_id
+                    == (coerce_uuid(input.lot_id) if input.lot_id else None),
+                )
             )
-        ).first()
+            .first()
+        )
 
         if not line:
             # Create new line (for items not in original snapshot)
@@ -277,7 +299,9 @@ class InventoryCountService(ListResponseMixin):
                 count_id=cnt_id,
                 item_id=itm_id,
                 warehouse_id=wh_id,
-                location_id=coerce_uuid(input.location_id) if input.location_id else None,
+                location_id=coerce_uuid(input.location_id)
+                if input.location_id
+                else None,
                 lot_id=coerce_uuid(input.lot_id) if input.lot_id else None,
                 system_quantity=Decimal("0"),  # New item not in snapshot
                 uom=item.base_uom,
@@ -311,18 +335,24 @@ class InventoryCountService(ListResponseMixin):
                 (line.variance_quantity / line.system_quantity) * 100
             ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         else:
-            line.variance_percent = Decimal("100") if line.variance_quantity > 0 else Decimal("0")
+            line.variance_percent = (
+                Decimal("100") if line.variance_quantity > 0 else Decimal("0")
+            )
 
         # Update count stats
         if line.variance_quantity != 0:
             # Recalculate items with variance
-            variance_count = db.query(func.count(InventoryCountLine.line_id)).filter(
-                and_(
-                    InventoryCountLine.count_id == cnt_id,
-                    InventoryCountLine.variance_quantity != 0,
-                    InventoryCountLine.variance_quantity.isnot(None),
+            variance_count = (
+                db.query(func.count(InventoryCountLine.line_id))
+                .filter(
+                    and_(
+                        InventoryCountLine.count_id == cnt_id,
+                        InventoryCountLine.variance_quantity != 0,
+                        InventoryCountLine.variance_quantity.isnot(None),
+                    )
                 )
-            ).scalar()
+                .scalar()
+            )
             count.items_with_variance = variance_count or 0
 
         # Update status to IN_PROGRESS
@@ -432,7 +462,10 @@ class InventoryCountService(ListResponseMixin):
         Returns:
             Updated InventoryCount
         """
-        from app.services.inventory.transaction import inventory_transaction_service, TransactionInput
+        from app.services.inventory.transaction import (
+            TransactionInput,
+            inventory_transaction_service,
+        )
 
         org_id = coerce_uuid(organization_id)
         cnt_id = coerce_uuid(count_id)
@@ -452,13 +485,17 @@ class InventoryCountService(ListResponseMixin):
             )
 
         # Get lines with variances
-        lines = db.query(InventoryCountLine).filter(
-            and_(
-                InventoryCountLine.count_id == cnt_id,
-                InventoryCountLine.variance_quantity != 0,
-                InventoryCountLine.variance_quantity.isnot(None),
+        lines = (
+            db.query(InventoryCountLine)
+            .filter(
+                and_(
+                    InventoryCountLine.count_id == cnt_id,
+                    InventoryCountLine.variance_quantity != 0,
+                    InventoryCountLine.variance_quantity.isnot(None),
+                )
             )
-        ).all()
+            .all()
+        )
 
         # Create adjustment transactions
         for line in lines:
@@ -469,7 +506,9 @@ class InventoryCountService(ListResponseMixin):
             variance_qty = line.variance_quantity or Decimal("0")
             txn_input = TransactionInput(
                 transaction_type=TransactionType.COUNT_ADJUSTMENT,
-                transaction_date=datetime.combine(count.count_date, datetime.min.time()),
+                transaction_date=datetime.combine(
+                    count.count_date, datetime.min.time()
+                ),
                 fiscal_period_id=count.fiscal_period_id,
                 item_id=line.item_id,
                 warehouse_id=line.warehouse_id,
@@ -517,23 +556,31 @@ class InventoryCountService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Count not found")
 
         # Calculate variance totals
-        variance_stats = db.query(
-            func.sum(InventoryCountLine.variance_value).label("total"),
-            func.sum(
-                func.case(
-                    (InventoryCountLine.variance_value > 0, InventoryCountLine.variance_value),
-                    else_=Decimal("0"),
-                )
-            ).label("positive"),
-            func.sum(
-                func.case(
-                    (InventoryCountLine.variance_value < 0, InventoryCountLine.variance_value),
-                    else_=Decimal("0"),
-                )
-            ).label("negative"),
-        ).filter(
-            InventoryCountLine.count_id == cnt_id
-        ).first()
+        variance_stats = (
+            db.query(
+                func.sum(InventoryCountLine.variance_value).label("total"),
+                func.sum(
+                    func.case(
+                        (
+                            InventoryCountLine.variance_value > 0,
+                            InventoryCountLine.variance_value,
+                        ),
+                        else_=Decimal("0"),
+                    )
+                ).label("positive"),
+                func.sum(
+                    func.case(
+                        (
+                            InventoryCountLine.variance_value < 0,
+                            InventoryCountLine.variance_value,
+                        ),
+                        else_=Decimal("0"),
+                    )
+                ).label("negative"),
+            )
+            .filter(InventoryCountLine.count_id == cnt_id)
+            .first()
+        )
 
         total_variance = Decimal("0")
         positive_variance = Decimal("0")
@@ -579,10 +626,14 @@ class InventoryCountService(ListResponseMixin):
         query = db.query(InventoryCount)
 
         if organization_id:
-            query = query.filter(InventoryCount.organization_id == coerce_uuid(organization_id))
+            query = query.filter(
+                InventoryCount.organization_id == coerce_uuid(organization_id)
+            )
 
         if warehouse_id:
-            query = query.filter(InventoryCount.warehouse_id == coerce_uuid(warehouse_id))
+            query = query.filter(
+                InventoryCount.warehouse_id == coerce_uuid(warehouse_id)
+            )
 
         if status:
             query = query.filter(InventoryCount.status == status)
@@ -602,7 +653,9 @@ class InventoryCountService(ListResponseMixin):
         """List count lines with optional filters."""
         cnt_id = coerce_uuid(count_id)
 
-        query = db.query(InventoryCountLine).filter(InventoryCountLine.count_id == cnt_id)
+        query = db.query(InventoryCountLine).filter(
+            InventoryCountLine.count_id == cnt_id
+        )
 
         if has_variance is True:
             query = query.filter(
@@ -613,8 +666,8 @@ class InventoryCountService(ListResponseMixin):
             )
         elif has_variance is False:
             query = query.filter(
-                (InventoryCountLine.variance_quantity == 0) |
-                (InventoryCountLine.variance_quantity.is_(None))
+                (InventoryCountLine.variance_quantity == 0)
+                | (InventoryCountLine.variance_quantity.is_(None))
             )
 
         if is_counted is True:

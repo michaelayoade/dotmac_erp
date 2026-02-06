@@ -1,28 +1,29 @@
 import hashlib
+import logging
 import os
 import secrets
 import time
 from datetime import datetime, timezone
+from typing import Any
 
-from fastapi import HTTPException, Request
 import redis
-from sqlalchemy.orm import Session
+from fastapi import HTTPException, Request
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.models.auth import (
     ApiKey,
     AuthProvider,
     MFAMethod,
     MFAMethodType,
-    Session as AuthSession,
     SessionStatus,
     UserCredential,
 )
-from app.services.common import coerce_uuid
-from app.services.response import ListResponseMixin
+from app.models.auth import (
+    Session as AuthSession,
+)
 from app.models.domain_settings import DomainSetting, SettingDomain
 from app.models.person import Person
-from app.services import settings_spec
 from app.schemas.auth import (
     ApiKeyCreate,
     ApiKeyGenerateRequest,
@@ -34,9 +35,16 @@ from app.schemas.auth import (
     UserCredentialCreate,
     UserCredentialUpdate,
 )
+from app.services import settings_spec
+from app.services.common import coerce_uuid
+from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
-def _apply_ordering(query, order_by, order_dir, allowed_columns):
+def _apply_ordering(
+    query: Any, order_by: str, order_dir: str, allowed_columns: dict[str, Any]
+) -> Any:
     if order_by not in allowed_columns:
         raise HTTPException(
             status_code=400,
@@ -48,7 +56,7 @@ def _apply_ordering(query, order_by, order_dir, allowed_columns):
     return query.order_by(column.asc())
 
 
-def _apply_pagination(query, limit, offset):
+def _apply_pagination(query: Any, limit: int, offset: int) -> Any:
     return query.limit(limit).offset(offset)
 
 
@@ -104,7 +112,7 @@ def _get_redis_client() -> redis.Redis | None:
         return None
 
 
-def _validate_enum(value, enum_cls, label):
+def _validate_enum(value: Any, enum_cls: type, label: str) -> Any:
     if value is None:
         return None
     try:
@@ -113,7 +121,7 @@ def _validate_enum(value, enum_cls, label):
         raise HTTPException(status_code=400, detail=f"Invalid {label}") from exc
 
 
-def _ensure_person(db: Session, person_id: str):
+def _ensure_person(db: Session, person_id: str) -> None:
     person = db.get(Person, coerce_uuid(person_id))
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
@@ -131,7 +139,7 @@ def _validate_local_credentials(
 
 class UserCredentials(ListResponseMixin):
     @staticmethod
-    def create(db: Session, payload: UserCredentialCreate):
+    def create(db: Session, payload: UserCredentialCreate) -> UserCredential:
         _ensure_person(db, str(payload.person_id))
         data = payload.model_dump()
         fields_set = payload.model_fields_set
@@ -160,7 +168,7 @@ class UserCredentials(ListResponseMixin):
         return credential
 
     @staticmethod
-    def get(db: Session, credential_id: str):
+    def get(db: Session, credential_id: str) -> UserCredential:
         credential = db.get(UserCredential, coerce_uuid(credential_id))
         if not credential:
             raise HTTPException(status_code=404, detail="User credential not found")
@@ -176,7 +184,7 @@ class UserCredentials(ListResponseMixin):
         order_dir: str,
         limit: int,
         offset: int,
-    ):
+    ) -> list[UserCredential]:
         query = db.query(UserCredential)
         if person_id:
             query = query.filter(UserCredential.person_id == coerce_uuid(person_id))
@@ -202,7 +210,9 @@ class UserCredentials(ListResponseMixin):
         return _apply_pagination(query, limit, offset).all()
 
     @staticmethod
-    def update(db: Session, credential_id: str, payload: UserCredentialUpdate):
+    def update(
+        db: Session, credential_id: str, payload: UserCredentialUpdate
+    ) -> UserCredential:
         credential = db.get(UserCredential, coerce_uuid(credential_id))
         if not credential:
             raise HTTPException(status_code=404, detail="User credential not found")
@@ -226,7 +236,7 @@ class UserCredentials(ListResponseMixin):
         return credential
 
     @staticmethod
-    def delete(db: Session, credential_id: str):
+    def delete(db: Session, credential_id: str) -> None:
         credential = db.get(UserCredential, coerce_uuid(credential_id))
         if not credential:
             raise HTTPException(status_code=404, detail="User credential not found")
@@ -236,7 +246,7 @@ class UserCredentials(ListResponseMixin):
 
 class MFAMethods(ListResponseMixin):
     @staticmethod
-    def create(db: Session, payload: MFAMethodCreate):
+    def create(db: Session, payload: MFAMethodCreate) -> MFAMethod:
         _ensure_person(db, str(payload.person_id))
         if payload.is_primary:
             db.query(MFAMethod).filter(
@@ -257,7 +267,7 @@ class MFAMethods(ListResponseMixin):
         return method
 
     @staticmethod
-    def get(db: Session, method_id: str):
+    def get(db: Session, method_id: str) -> MFAMethod:
         method = db.get(MFAMethod, coerce_uuid(method_id))
         if not method:
             raise HTTPException(status_code=404, detail="MFA method not found")
@@ -275,7 +285,7 @@ class MFAMethods(ListResponseMixin):
         order_dir: str,
         limit: int,
         offset: int,
-    ):
+    ) -> list[MFAMethod]:
         query = db.query(MFAMethod)
         if person_id:
             query = query.filter(MFAMethod.person_id == coerce_uuid(person_id))
@@ -305,7 +315,7 @@ class MFAMethods(ListResponseMixin):
         return _apply_pagination(query, limit, offset).all()
 
     @staticmethod
-    def update(db: Session, method_id: str, payload: MFAMethodUpdate):
+    def update(db: Session, method_id: str, payload: MFAMethodUpdate) -> MFAMethod:
         method = db.get(MFAMethod, coerce_uuid(method_id))
         if not method:
             raise HTTPException(status_code=404, detail="MFA method not found")
@@ -333,7 +343,7 @@ class MFAMethods(ListResponseMixin):
         return method
 
     @staticmethod
-    def delete(db: Session, method_id: str):
+    def delete(db: Session, method_id: str) -> None:
         method = db.get(MFAMethod, coerce_uuid(method_id))
         if not method:
             raise HTTPException(status_code=404, detail="MFA method not found")
@@ -345,7 +355,7 @@ class MFAMethods(ListResponseMixin):
 
 class Sessions(ListResponseMixin):
     @staticmethod
-    def create(db: Session, payload: SessionCreate):
+    def create(db: Session, payload: SessionCreate) -> AuthSession:
         _ensure_person(db, str(payload.person_id))
         data = payload.model_dump()
         session = AuthSession(**data)
@@ -355,7 +365,7 @@ class Sessions(ListResponseMixin):
         return session
 
     @staticmethod
-    def get(db: Session, session_id: str):
+    def get(db: Session, session_id: str) -> AuthSession:
         session = db.get(AuthSession, coerce_uuid(session_id))
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -370,14 +380,13 @@ class Sessions(ListResponseMixin):
         order_dir: str,
         limit: int,
         offset: int,
-    ):
+    ) -> list[AuthSession]:
         query = db.query(AuthSession)
         if person_id:
             query = query.filter(AuthSession.person_id == coerce_uuid(person_id))
         if status:
             query = query.filter(
-                AuthSession.status
-                == _validate_enum(status, SessionStatus, "status")
+                AuthSession.status == _validate_enum(status, SessionStatus, "status")
             )
         query = _apply_ordering(
             query,
@@ -392,7 +401,7 @@ class Sessions(ListResponseMixin):
         return _apply_pagination(query, limit, offset).all()
 
     @staticmethod
-    def update(db: Session, session_id: str, payload: SessionUpdate):
+    def update(db: Session, session_id: str, payload: SessionUpdate) -> AuthSession:
         session = db.get(AuthSession, coerce_uuid(session_id))
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -406,7 +415,7 @@ class Sessions(ListResponseMixin):
         return session
 
     @staticmethod
-    def delete(db: Session, session_id: str):
+    def delete(db: Session, session_id: str) -> None:
         session = db.get(AuthSession, coerce_uuid(session_id))
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -419,14 +428,16 @@ class ApiKeys(ListResponseMixin):
     @staticmethod
     def generate_with_rate_limit(
         db: Session, payload: ApiKeyGenerateRequest, request: Request | None
-    ):
+    ) -> dict[str, Any]:
         client_ip = "unknown"
         if request is not None and request.client:
             client_ip = request.client.host
         window_seconds = _auth_int_setting(
             db, "api_key_rate_window_seconds", _API_KEY_WINDOW_SECONDS
         )
-        max_per_window = _auth_int_setting(db, "api_key_rate_max", _API_KEY_MAX_PER_WINDOW)
+        max_per_window = _auth_int_setting(
+            db, "api_key_rate_max", _API_KEY_MAX_PER_WINDOW
+        )
         redis_client = _get_redis_client()
         if not redis_client:
             raise HTTPException(
@@ -450,7 +461,7 @@ class ApiKeys(ListResponseMixin):
         return {"key": raw_key, "api_key": api_key}
 
     @staticmethod
-    def generate(db: Session, payload: ApiKeyGenerateRequest):
+    def generate(db: Session, payload: ApiKeyGenerateRequest) -> tuple[ApiKey, str]:
         raw_key = secrets.token_urlsafe(32)
         data = payload.model_dump()
         data["key_hash"] = hash_api_key(raw_key)
@@ -464,7 +475,7 @@ class ApiKeys(ListResponseMixin):
         return api_key, raw_key
 
     @staticmethod
-    def create(db: Session, payload: ApiKeyCreate):
+    def create(db: Session, payload: ApiKeyCreate) -> ApiKey:
         if payload.person_id:
             _ensure_person(db, str(payload.person_id))
         data = payload.model_dump()
@@ -476,7 +487,7 @@ class ApiKeys(ListResponseMixin):
         return api_key
 
     @staticmethod
-    def get(db: Session, key_id: str):
+    def get(db: Session, key_id: str) -> ApiKey:
         api_key = db.get(ApiKey, coerce_uuid(key_id))
         if not api_key:
             raise HTTPException(status_code=404, detail="API key not found")
@@ -491,7 +502,7 @@ class ApiKeys(ListResponseMixin):
         order_dir: str,
         limit: int,
         offset: int,
-    ):
+    ) -> list[ApiKey]:
         query = db.query(ApiKey)
         if person_id:
             query = query.filter(ApiKey.person_id == coerce_uuid(person_id))
@@ -508,7 +519,7 @@ class ApiKeys(ListResponseMixin):
         return _apply_pagination(query, limit, offset).all()
 
     @staticmethod
-    def update(db: Session, key_id: str, payload: ApiKeyUpdate):
+    def update(db: Session, key_id: str, payload: ApiKeyUpdate) -> ApiKey:
         api_key = db.get(ApiKey, coerce_uuid(key_id))
         if not api_key:
             raise HTTPException(status_code=404, detail="API key not found")
@@ -524,7 +535,7 @@ class ApiKeys(ListResponseMixin):
         return api_key
 
     @staticmethod
-    def delete(db: Session, key_id: str):
+    def delete(db: Session, key_id: str) -> None:
         api_key = db.get(ApiKey, coerce_uuid(key_id))
         if not api_key:
             raise HTTPException(status_code=404, detail="API key not found")
@@ -533,7 +544,7 @@ class ApiKeys(ListResponseMixin):
         db.commit()
 
     @staticmethod
-    def revoke(db: Session, key_id: str):
+    def revoke(db: Session, key_id: str) -> None:
         ApiKeys.delete(db, key_id)
 
 

@@ -1,0 +1,263 @@
+{% extends "admin/base_admin.html" %}
+
+{% block page_title %}Data Changes{% endblock %}
+{% block page_subtitle %}Field-level audit trail with tamper detection{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <span class="text-sm text-slate-500 dark:text-slate-400">
+            {{ pagination.total }} change{{ 's' if pagination.total != 1 else '' }} recorded
+        </span>
+        <div class="flex flex-wrap items-center gap-3">
+            <div class="relative">
+                <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input
+                    type="text"
+                    name="search"
+                    value="{{ search | default('', true) }}"
+                    placeholder="Search record ID, reason..."
+                    class="w-56 pl-10 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                    hx-get="/admin/data-changes"
+                    hx-trigger="keyup changed delay:300ms"
+                    hx-target="#changes-table-container"
+                    hx-select="#changes-table-container"
+                    hx-push-url="true"
+                    hx-include="[name='module'], [name='entity'], [name='action']"
+                />
+            </div>
+            <select
+                name="module"
+                class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                hx-get="/admin/data-changes"
+                hx-trigger="change"
+                hx-target="#changes-table-container"
+                hx-select="#changes-table-container"
+                hx-push-url="true"
+                hx-include="[name='search'], [name='entity'], [name='action']"
+            >
+                <option value="" {{ 'selected' if not module_filter else '' }}>All Modules</option>
+                {% for m in modules %}
+                <option value="{{ m }}" {{ 'selected' if module_filter == m else '' }}>{{ m | replace('_', ' ') | title }}</option>
+                {% endfor %}
+            </select>
+            <select
+                name="entity"
+                class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                hx-get="/admin/data-changes"
+                hx-trigger="change"
+                hx-target="#changes-table-container"
+                hx-select="#changes-table-container"
+                hx-push-url="true"
+                hx-include="[name='search'], [name='module'], [name='action']"
+            >
+                <option value="" {{ 'selected' if not entity_filter else '' }}>All Entities</option>
+                {% for e in entities %}
+                <option value="{{ e }}" {{ 'selected' if entity_filter == e else '' }}>{{ e | replace('_', ' ') | title }}</option>
+                {% endfor %}
+            </select>
+            <select
+                name="action"
+                class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                hx-get="/admin/data-changes"
+                hx-trigger="change"
+                hx-target="#changes-table-container"
+                hx-select="#changes-table-container"
+                hx-push-url="true"
+                hx-include="[name='search'], [name='module'], [name='entity']"
+            >
+                <option value="" {{ 'selected' if not action_filter else '' }}>All Actions</option>
+                {% for a in actions %}
+                <option value="{{ a }}" {{ 'selected' if action_filter == a else '' }}>{{ a }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <div id="changes-table-container" class="admin-card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                    <tr>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Time</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Module</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Entity</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Action</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Changed Fields</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Details</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700" x-data>
+                    {% for log in logs %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+                        @click="$refs['detail_{{ loop.index }}'].classList.toggle('hidden')">
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">{{ log.occurred_at }}</td>
+                        <td class="px-6 py-4">
+                            <span class="inline-flex items-center rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+                                {{ log.table_schema }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <p class="text-sm text-slate-600 dark:text-slate-400">{{ log.table_name | replace('_', ' ') | title }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-500 font-mono truncate max-w-[180px]">{{ log.record_id }}</p>
+                        </td>
+                        <td class="px-6 py-4">
+                            {% if log.action == 'INSERT' %}
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                INSERT
+                            </span>
+                            {% elif log.action == 'UPDATE' %}
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                UPDATE
+                            </span>
+                            {% elif log.action == 'DELETE' %}
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                                DELETE
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-900/30 dark:text-slate-400">
+                                {{ log.action }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 max-w-[200px]">
+                            {% if log.changed_fields %}
+                            <div class="flex flex-wrap gap-1">
+                                {% for field in log.changed_fields[:3] %}
+                                <span class="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400">{{ field }}</span>
+                                {% endfor %}
+                                {% if log.changed_fields | length > 3 %}
+                                <span class="text-xs text-slate-400">+{{ log.changed_fields | length - 3 }} more</span>
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <span class="text-xs text-slate-400">&mdash;</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="flex items-center gap-2">
+                                {% if log.has_hash %}
+                                <svg class="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Hash chain verified">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                                </svg>
+                                {% endif %}
+                                {% if log.reason %}
+                                <span class="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[120px]" title="{{ log.reason }}">{{ log.reason }}</span>
+                                {% endif %}
+                                {% if log.user_id %}
+                                <span class="text-xs text-slate-400 font-mono" title="User ID">{{ log.user_id[:8] }}...</span>
+                                {% endif %}
+                                <svg class="h-4 w-4 text-slate-400 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                </svg>
+                            </div>
+                        </td>
+                    </tr>
+                    <!-- Expandable detail row -->
+                    <tr x-ref="detail_{{ loop.index }}" class="hidden">
+                        <td colspan="6" class="px-6 py-4 bg-slate-50 dark:bg-slate-800/30">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {% if log.old_values %}
+                                <div>
+                                    <h4 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-2">Old Values</h4>
+                                    <div class="bg-red-50 dark:bg-red-900/10 rounded-lg p-3 space-y-1">
+                                        {% for key, value in log.old_values.items() %}
+                                        <div class="flex items-start gap-2 text-xs">
+                                            <span class="font-mono font-medium text-slate-600 dark:text-slate-400 min-w-[80px]">{{ key }}:</span>
+                                            <span class="font-mono text-red-600 dark:text-red-400 break-all">{{ value }}</span>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                                {% if log.new_values %}
+                                <div>
+                                    <h4 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-2">New Values</h4>
+                                    <div class="bg-emerald-50 dark:bg-emerald-900/10 rounded-lg p-3 space-y-1">
+                                        {% for key, value in log.new_values.items() %}
+                                        <div class="flex items-start gap-2 text-xs">
+                                            <span class="font-mono font-medium text-slate-600 dark:text-slate-400 min-w-[80px]">{{ key }}:</span>
+                                            <span class="font-mono text-emerald-600 dark:text-emerald-400 break-all">{{ value }}</span>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                                {% if not log.old_values and not log.new_values %}
+                                <div class="col-span-2">
+                                    <p class="text-xs text-slate-400">No field-level data recorded for this change.</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="mt-3 flex items-center gap-4 text-xs text-slate-400">
+                                {% if log.ip_address %}
+                                <span>IP: {{ log.ip_address }}</span>
+                                {% endif %}
+                                {% if log.correlation_id %}
+                                <span>Request: <span class="font-mono">{{ log.correlation_id[:12] }}...</span></span>
+                                {% endif %}
+                                {% if log.user_id %}
+                                <span>User: <span class="font-mono">{{ log.user_id }}</span></span>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="px-6 py-16">
+                            <div class="text-center">
+                                <svg class="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
+                                </svg>
+                                <p class="text-sm font-medium text-slate-900 dark:text-white">No data changes recorded yet</p>
+                                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Changes to records will appear here as they happen.</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if pagination.total_pages > 1 %}
+        <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+            <div class="flex items-center justify-between">
+                <p class="text-sm text-slate-600 dark:text-slate-400">
+                    Showing {{ pagination.start }} to {{ pagination.end }} of {{ pagination.total }} changes
+                </p>
+                <div class="flex items-center gap-2">
+                    {% if pagination.has_prev %}
+                    <a href="/admin/data-changes?page={{ pagination.page - 1 }}{% if search %}&search={{ search }}{% endif %}{% if module_filter %}&module={{ module_filter }}{% endif %}{% if entity_filter %}&entity={{ entity_filter }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}"
+                       class="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700 transition-colors">
+                        Previous
+                    </a>
+                    {% endif %}
+
+                    <div class="flex items-center gap-1">
+                        {% for p in pagination.pages %}
+                        {% if p == '...' %}
+                        <span class="px-3 py-1.5 text-sm text-slate-400">...</span>
+                        {% else %}
+                        <a href="/admin/data-changes?page={{ p }}{% if search %}&search={{ search }}{% endif %}{% if module_filter %}&module={{ module_filter }}{% endif %}{% if entity_filter %}&entity={{ entity_filter }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}"
+                           class="px-3 py-1.5 rounded-lg text-sm font-medium {% if p == pagination.page %}bg-accent-500 text-white{% else %}text-slate-600 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700{% endif %}">
+                            {{ p }}
+                        </a>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+
+                    {% if pagination.has_next %}
+                    <a href="/admin/data-changes?page={{ pagination.page + 1 }}{% if search %}&search={{ search }}{% endif %}{% if module_filter %}&module={{ module_filter }}{% endif %}{% if entity_filter %}&entity={{ entity_filter }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}"
+                       class="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700 transition-colors">
+                        Next
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

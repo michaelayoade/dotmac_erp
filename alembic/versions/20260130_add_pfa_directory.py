@@ -5,6 +5,7 @@ Revises: 20260130_add_bank_directory
 Create Date: 2026-01-30
 
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -102,5 +103,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_pfa_directory_pfa_name", table_name="pfa_directory", schema="core_org")
+    op.drop_index(
+        "ix_pfa_directory_pfa_name", table_name="pfa_directory", schema="core_org"
+    )
     op.drop_table("pfa_directory", schema="core_org")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from decimal import Decimal, InvalidOperation
 from types import SimpleNamespace
 from typing import Any, Optional
@@ -17,6 +18,8 @@ from app.services.people.hr import OrganizationService
 from app.services.people.hr.web.employee_web import DEFAULT_PAGE_SIZE
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_bool(value: Any, default: bool = False) -> bool:
@@ -300,7 +303,10 @@ class LocationWebService:
                     location_id=location.location_id,
                     location_code=location_code or location.location_code,
                     location_name=location_name or location.location_name,
-                    location_type=location_type or (location.location_type.value if location.location_type else None),
+                    location_type=location_type
+                    or (
+                        location.location_type.value if location.location_type else None
+                    ),
                     address_line_1=address_line_1 or location.address_line_1,
                     address_line_2=address_line_2 or location.address_line_2,
                     city=city or location.city,
@@ -309,7 +315,9 @@ class LocationWebService:
                     country_code=country_code or location.country_code,
                     latitude=latitude if latitude_value else location.latitude,
                     longitude=longitude if longitude_value else location.longitude,
-                    geofence_radius_m=geofence_radius_m if radius_value else location.geofence_radius_m,
+                    geofence_radius_m=geofence_radius_m
+                    if radius_value
+                    else location.geofence_radius_m,
                     geofence_enabled=geofence_enabled,
                     is_active=is_active,
                 ),
@@ -370,7 +378,9 @@ class LocationWebService:
         }
 
         context = {
-            **base_context(request, auth, f"Geofence - {location.location_name}", "locations"),
+            **base_context(
+                request, auth, f"Geofence - {location.location_name}", "locations"
+            ),
             "location": location,
             "geofence_data": json.dumps(geofence_data),
         }
@@ -427,11 +437,13 @@ class LocationWebService:
 
         db.commit()
 
-        return JSONResponse({
-            "success": True,
-            "message": "Geofence saved successfully",
-            "mode": "polygon" if location.geofence_polygon else "circle",
-        })
+        return JSONResponse(
+            {
+                "success": True,
+                "message": "Geofence saved successfully",
+                "mode": "polygon" if location.geofence_polygon else "circle",
+            }
+        )
 
     @staticmethod
     async def test_geofence_response(
@@ -456,7 +468,9 @@ class LocationWebService:
         lng = body.get("longitude")
 
         if lat is None or lng is None:
-            return JSONResponse({"error": "latitude and longitude are required"}, status_code=400)
+            return JSONResponse(
+                {"error": "latitude and longitude are required"}, status_code=400
+            )
 
         if location.geofence_polygon:
             try:
@@ -470,18 +484,26 @@ class LocationWebService:
 
                 is_inside = polygon.contains(point)
 
-                return JSONResponse({
-                    "inside": is_inside,
-                    "mode": "polygon",
-                    "message": "Inside geofence" if is_inside else "Outside geofence",
-                })
+                return JSONResponse(
+                    {
+                        "inside": is_inside,
+                        "mode": "polygon",
+                        "message": "Inside geofence"
+                        if is_inside
+                        else "Outside geofence",
+                    }
+                )
             except ImportError:
-                return JSONResponse({"error": "Shapely library not installed"}, status_code=500)
+                return JSONResponse(
+                    {"error": "Shapely library not installed"}, status_code=500
+                )
             except Exception as e:
                 return JSONResponse({"error": f"Invalid polygon: {e}"}, status_code=400)
 
         if location.latitude is None or location.longitude is None:
-            return JSONResponse({"inside": False, "error": "No center coordinates configured"})
+            return JSONResponse(
+                {"inside": False, "error": "No center coordinates configured"}
+            )
 
         import math
 
@@ -506,13 +528,15 @@ class LocationWebService:
         radius = float(location.geofence_radius_m or 500)
         is_inside = distance <= radius
 
-        return JSONResponse({
-            "inside": is_inside,
-            "mode": "circle",
-            "distance_m": round(distance, 1),
-            "radius_m": radius,
-            "message": f"{'Inside' if is_inside else 'Outside'} geofence ({distance:.0f}m / {radius:.0f}m)",
-        })
+        return JSONResponse(
+            {
+                "inside": is_inside,
+                "mode": "circle",
+                "distance_m": round(distance, 1),
+                "radius_m": radius,
+                "message": f"{'Inside' if is_inside else 'Outside'} geofence ({distance:.0f}m / {radius:.0f}m)",
+            }
+        )
 
 
 location_web_service = LocationWebService()

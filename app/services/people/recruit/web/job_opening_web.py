@@ -7,8 +7,6 @@ Provides view-focused data and operations for job opening web routes.
 from __future__ import annotations
 
 import logging
-from datetime import date
-from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
@@ -32,11 +30,11 @@ from app.web.deps import WebAuthContext, base_context
 
 from .base import (
     logger,
-    parse_uuid,
     parse_date_only,
     parse_decimal,
     parse_int,
     parse_status,
+    parse_uuid,
 )
 
 logger = logging.getLogger(__name__)
@@ -118,7 +116,9 @@ class JobOpeningWebService:
         if job_opening_id:
             svc = RecruitmentService(db)
             try:
-                opening = svc.get_job_opening(organization_id, coerce_uuid(job_opening_id))
+                opening = svc.get_job_opening(
+                    organization_id, coerce_uuid(job_opening_id)
+                )
             except Exception:
                 opening = None
 
@@ -161,9 +161,15 @@ class JobOpeningWebService:
         return {
             "job_code": form_data.get("job_code", ""),
             "job_title": form_data.get("job_title", ""),
-            "department_id": coerce_uuid(form_data["department_id"]) if form_data.get("department_id") else None,
-            "designation_id": coerce_uuid(form_data["designation_id"]) if form_data.get("designation_id") else None,
-            "reports_to_id": coerce_uuid(form_data["reports_to_id"]) if form_data.get("reports_to_id") else None,
+            "department_id": coerce_uuid(form_data["department_id"])
+            if form_data.get("department_id")
+            else None,
+            "designation_id": coerce_uuid(form_data["designation_id"])
+            if form_data.get("designation_id")
+            else None,
+            "reports_to_id": coerce_uuid(form_data["reports_to_id"])
+            if form_data.get("reports_to_id")
+            else None,
             "employment_type": form_data.get("employment_type", "FULL_TIME"),
             "number_of_positions": int(form_data.get("number_of_positions", 1)),
             "location": form_data.get("location") or None,
@@ -207,7 +213,9 @@ class JobOpeningWebService:
                 page=page,
             )
         )
-        return templates.TemplateResponse(request, "people/recruit/job_openings.html", context)
+        return templates.TemplateResponse(
+            request, "people/recruit/job_openings.html", context
+        )
 
     def job_opening_new_form_response(
         self,
@@ -221,7 +229,9 @@ class JobOpeningWebService:
         context.update(
             self.job_opening_form_context(db, coerce_uuid(auth.organization_id))
         )
-        return templates.TemplateResponse(request, "people/recruit/job_opening_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/recruit/job_opening_form.html", context
+        )
 
     def job_opening_detail_response(
         self,
@@ -238,10 +248,14 @@ class JobOpeningWebService:
         if not ctx.get("opening"):
             return RedirectResponse(url="/people/recruit/jobs", status_code=303)
 
-        context = base_context(request, auth, ctx["opening"].job_title, "recruit", db=db)
+        context = base_context(
+            request, auth, ctx["opening"].job_title, "recruit", db=db
+        )
         context["request"] = request
         context.update(ctx)
-        return templates.TemplateResponse(request, "people/recruit/job_opening_detail.html", context)
+        return templates.TemplateResponse(
+            request, "people/recruit/job_opening_detail.html", context
+        )
 
     def job_opening_edit_form_response(
         self,
@@ -261,7 +275,9 @@ class JobOpeningWebService:
         context = base_context(request, auth, "Edit Job Opening", "recruit", db=db)
         context["request"] = request
         context.update(ctx)
-        return templates.TemplateResponse(request, "people/recruit/job_opening_form.html", context)
+        return templates.TemplateResponse(
+            request, "people/recruit/job_opening_form.html", context
+        )
 
     async def create_job_opening_response(
         self,
@@ -290,7 +306,9 @@ class JobOpeningWebService:
             context.update(self.job_opening_form_context(db, org_id))
             context["form_data"] = dict(form_data)
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "people/recruit/job_opening_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/recruit/job_opening_form.html", context
+            )
 
     async def update_job_opening_response(
         self,
@@ -319,7 +337,9 @@ class JobOpeningWebService:
             context["request"] = request
             context.update(self.job_opening_form_context(db, org_id, job_opening_id))
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "people/recruit/job_opening_form.html", context)
+            return templates.TemplateResponse(
+                request, "people/recruit/job_opening_form.html", context
+            )
 
     def publish_job_opening_response(
         self,
@@ -337,7 +357,9 @@ class JobOpeningWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url=f"/people/recruit/jobs/{job_opening_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/recruit/jobs/{job_opening_id}", status_code=303
+        )
 
     def hold_job_opening_response(
         self,
@@ -350,12 +372,16 @@ class JobOpeningWebService:
         svc = RecruitmentService(db)
 
         try:
-            svc.update_job_opening(org_id, coerce_uuid(job_opening_id), status=JobOpeningStatus.ON_HOLD)
+            svc.update_job_opening(
+                org_id, coerce_uuid(job_opening_id), status=JobOpeningStatus.ON_HOLD
+            )
             db.commit()
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url=f"/people/recruit/jobs/{job_opening_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/recruit/jobs/{job_opening_id}", status_code=303
+        )
 
     def reopen_job_opening_response(
         self,
@@ -368,12 +394,16 @@ class JobOpeningWebService:
         svc = RecruitmentService(db)
 
         try:
-            svc.update_job_opening(org_id, coerce_uuid(job_opening_id), status=JobOpeningStatus.OPEN)
+            svc.update_job_opening(
+                org_id, coerce_uuid(job_opening_id), status=JobOpeningStatus.OPEN
+            )
             db.commit()
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url=f"/people/recruit/jobs/{job_opening_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/recruit/jobs/{job_opening_id}", status_code=303
+        )
 
     def close_job_opening_response(
         self,
@@ -386,12 +416,16 @@ class JobOpeningWebService:
         svc = RecruitmentService(db)
 
         try:
-            svc.update_job_opening(org_id, coerce_uuid(job_opening_id), status=JobOpeningStatus.CLOSED)
+            svc.update_job_opening(
+                org_id, coerce_uuid(job_opening_id), status=JobOpeningStatus.CLOSED
+            )
             db.commit()
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url=f"/people/recruit/jobs/{job_opening_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/recruit/jobs/{job_opening_id}", status_code=303
+        )
 
     def delete_job_opening_response(
         self,
@@ -419,4 +453,6 @@ class JobOpeningWebService:
             return RedirectResponse(url="/people/recruit/jobs", status_code=303)
         except Exception:
             db.rollback()
-            return RedirectResponse(url=f"/people/recruit/jobs/{job_opening_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/people/recruit/jobs/{job_opening_id}", status_code=303
+            )

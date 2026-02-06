@@ -6,25 +6,27 @@ Generates aging snapshots and provides aging analysis for AP management.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
-import uuid as uuid_lib
 
-from sqlalchemy import and_, func
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
+from app.models.finance.ap.ap_aging_snapshot import APAgingSnapshot
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import (
     SupplierInvoice,
     SupplierInvoiceStatus,
 )
-from app.models.finance.ap.ap_aging_snapshot import APAgingSnapshot
 from app.services.common import coerce_uuid
-from app.services.response import ListResponseMixin
 from app.services.finance.platform.org_context import org_context_service
+from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -313,9 +315,7 @@ class APAgingService(ListResponseMixin):
         ref_date = as_of_date or date.today()
 
         # Get aging by supplier
-        supplier_aging = APAgingService.get_aging_by_supplier(
-            db, org_id, ref_date
-        )
+        supplier_aging = APAgingService.get_aging_by_supplier(db, org_id, ref_date)
 
         snapshots = []
         bucket_mapping = [
@@ -337,7 +337,9 @@ class APAgingService(ListResponseMixin):
                         supplier_id=aging.supplier_id,
                         aging_bucket=bucket_name,
                         amount_functional=amount,
-                        invoice_count=aging.invoice_count if bucket_name == "Current" else 0,
+                        invoice_count=aging.invoice_count
+                        if bucket_name == "Current"
+                        else 0,
                         currency_code=aging.currency_code,
                         amount_original_currency=amount,
                     )

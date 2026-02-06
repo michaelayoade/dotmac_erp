@@ -8,6 +8,7 @@ This migration creates tables for Nigeria PAYE tax calculation under NTA 2025:
 - tax_band: Progressive tax bands (0%, 15%, 18%, 21%, 23%, 25%)
 - employee_tax_profile: Employee-specific tax settings (TIN, rent relief, rates)
 """
+
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql

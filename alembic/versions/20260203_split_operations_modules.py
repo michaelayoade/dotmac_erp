@@ -4,6 +4,7 @@ Revision ID: 20260203_split_operations_modules
 Revises: 20260203_create_ipsas_schema
 Create Date: 2026-02-03
 """
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -71,7 +72,14 @@ def _grant_permission_from_prefix(prefix: str, target_key: str) -> None:
 
 def upgrade() -> None:
     # Expand settings domains
-    for value in ["support", "inventory", "projects", "fleet", "procurement", "settings"]:
+    for value in [
+        "support",
+        "inventory",
+        "projects",
+        "fleet",
+        "procurement",
+        "settings",
+    ]:
         _add_settingdomain_value(value)
 
     # Migrate legacy operations settings to module domains

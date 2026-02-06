@@ -5,6 +5,12 @@ Services for automation features: recurring transactions, workflows,
 custom fields, and document templates.
 """
 
+from app.services.finance.automation.custom_fields import (
+    CustomFieldInput,
+    CustomFieldsService,
+    custom_fields_service,
+)
+from app.services.finance.automation.event_dispatcher import fire_workflow_event
 from app.services.finance.automation.recurring import (
     GenerationResult,
     RecurringService,
@@ -18,12 +24,6 @@ from app.services.finance.automation.workflow import (
     WorkflowService,
     workflow_service,
 )
-from app.services.finance.automation.custom_fields import (
-    CustomFieldInput,
-    CustomFieldsService,
-    custom_fields_service,
-)
-from app.services.finance.automation.event_dispatcher import fire_workflow_event
 
 __all__ = [
     # Recurring

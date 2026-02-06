@@ -6,26 +6,29 @@ Manages creation, editing, submission, approval, and posting of journal entries.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Optional
 from uuid import UUID
-import uuid as uuid_lib
 
 from fastapi import HTTPException
-from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
-from app.models.finance.core_config.numbering_sequence import SequenceType
+from app.models.finance.audit.audit_log import AuditAction
+from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import coerce_uuid
-from app.services.finance.gl.period_guard import PeriodGuardService
 from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
+from app.services.finance.gl.period_guard import PeriodGuardService
 from app.services.finance.platform.sequence import SequenceService
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -103,7 +106,9 @@ class JournalService(ListResponseMixin):
 
         # Validate lines
         if not input.lines:
-            raise HTTPException(status_code=400, detail="Journal must have at least one line")
+            raise HTTPException(
+                status_code=400, detail="Journal must have at least one line"
+            )
 
         # Validate balance
         total_debit = sum(
@@ -118,7 +123,7 @@ class JournalService(ListResponseMixin):
         if abs(total_debit - total_credit) > Decimal("0.000001"):
             raise HTTPException(
                 status_code=400,
-                detail=f"Journal is unbalanced: debits={total_debit}, credits={total_credit}"
+                detail=f"Journal is unbalanced: debits={total_debit}, credits={total_credit}",
             )
 
         # Get fiscal period for posting date
@@ -126,7 +131,7 @@ class JournalService(ListResponseMixin):
         if not period:
             raise HTTPException(
                 status_code=400,
-                detail=f"No fiscal period found for posting date {input.posting_date}"
+                detail=f"No fiscal period found for posting date {input.posting_date}",
             )
 
         # Generate journal number
@@ -140,9 +145,13 @@ class JournalService(ListResponseMixin):
 
         for line_input in input.lines:
             if line_input.debit_amount_functional is None:
-                line_input.debit_amount_functional = line_input.debit_amount * input.exchange_rate
+                line_input.debit_amount_functional = (
+                    line_input.debit_amount * input.exchange_rate
+                )
             if line_input.credit_amount_functional is None:
-                line_input.credit_amount_functional = line_input.credit_amount * input.exchange_rate
+                line_input.credit_amount_functional = (
+                    line_input.credit_amount * input.exchange_rate
+                )
 
             functional_debit += line_input.debit_amount_functional
             functional_credit += line_input.credit_amount_functional
@@ -159,7 +168,9 @@ class JournalService(ListResponseMixin):
             reference=input.reference,
             currency_code=input.currency_code,
             exchange_rate=input.exchange_rate,
-            exchange_rate_type_id=coerce_uuid(input.exchange_rate_type_id) if input.exchange_rate_type_id else None,
+            exchange_rate_type_id=coerce_uuid(input.exchange_rate_type_id)
+            if input.exchange_rate_type_id
+            else None,
             total_debit=total_debit,
             total_credit=total_credit,
             total_debit_functional=functional_debit,
@@ -167,7 +178,9 @@ class JournalService(ListResponseMixin):
             status=JournalStatus.DRAFT,
             source_module=input.source_module,
             source_document_type=input.source_document_type,
-            source_document_id=coerce_uuid(input.source_document_id) if input.source_document_id else None,
+            source_document_id=coerce_uuid(input.source_document_id)
+            if input.source_document_id
+            else None,
             auto_reverse_date=input.auto_reverse_date,
             created_by_user_id=user_id,
             correlation_id=input.correlation_id,
@@ -189,15 +202,42 @@ class JournalService(ListResponseMixin):
                 credit_amount_functional=line_input.credit_amount_functional,
                 currency_code=line_input.currency_code or input.currency_code,
                 exchange_rate=line_input.exchange_rate or input.exchange_rate,
-                business_unit_id=coerce_uuid(line_input.business_unit_id) if line_input.business_unit_id else None,
-                cost_center_id=coerce_uuid(line_input.cost_center_id) if line_input.cost_center_id else None,
-                project_id=coerce_uuid(line_input.project_id) if line_input.project_id else None,
-                segment_id=coerce_uuid(line_input.segment_id) if line_input.segment_id else None,
+                business_unit_id=coerce_uuid(line_input.business_unit_id)
+                if line_input.business_unit_id
+                else None,
+                cost_center_id=coerce_uuid(line_input.cost_center_id)
+                if line_input.cost_center_id
+                else None,
+                project_id=coerce_uuid(line_input.project_id)
+                if line_input.project_id
+                else None,
+                segment_id=coerce_uuid(line_input.segment_id)
+                if line_input.segment_id
+                else None,
             )
             db.add(entry_line)
 
         db.commit()
         db.refresh(journal)
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="gl",
+            table_name="journal_entry",
+            record_id=str(journal.journal_entry_id),
+            action=AuditAction.INSERT,
+            new_values={
+                "journal_number": journal.journal_number,
+                "journal_type": journal.journal_type.value
+                if hasattr(journal.journal_type, "value")
+                else str(journal.journal_type),
+                "total_debit": str(total_debit),
+                "total_credit": str(total_credit),
+                "description": input.description,
+            },
+            user_id=user_id,
+        )
 
         return journal
 
@@ -236,12 +276,14 @@ class JournalService(ListResponseMixin):
         if journal.status != JournalStatus.DRAFT:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot update journal with status '{journal.status.value}'"
+                detail=f"Cannot update journal with status '{journal.status.value}'",
             )
 
         # Validate lines
         if not input.lines:
-            raise HTTPException(status_code=400, detail="Journal must have at least one line")
+            raise HTTPException(
+                status_code=400, detail="Journal must have at least one line"
+            )
 
         # Validate balance
         total_debit = sum(
@@ -256,7 +298,7 @@ class JournalService(ListResponseMixin):
         if abs(total_debit - total_credit) > Decimal("0.000001"):
             raise HTTPException(
                 status_code=400,
-                detail=f"Journal is unbalanced: debits={total_debit}, credits={total_credit}"
+                detail=f"Journal is unbalanced: debits={total_debit}, credits={total_credit}",
             )
 
         # Get fiscal period
@@ -264,7 +306,7 @@ class JournalService(ListResponseMixin):
         if not period:
             raise HTTPException(
                 status_code=400,
-                detail=f"No fiscal period found for posting date {input.posting_date}"
+                detail=f"No fiscal period found for posting date {input.posting_date}",
             )
 
         # Calculate functional amounts
@@ -273,9 +315,13 @@ class JournalService(ListResponseMixin):
 
         for line_input in input.lines:
             if line_input.debit_amount_functional is None:
-                line_input.debit_amount_functional = line_input.debit_amount * input.exchange_rate
+                line_input.debit_amount_functional = (
+                    line_input.debit_amount * input.exchange_rate
+                )
             if line_input.credit_amount_functional is None:
-                line_input.credit_amount_functional = line_input.credit_amount * input.exchange_rate
+                line_input.credit_amount_functional = (
+                    line_input.credit_amount * input.exchange_rate
+                )
 
             functional_debit += line_input.debit_amount_functional
             functional_credit += line_input.credit_amount_functional
@@ -314,10 +360,18 @@ class JournalService(ListResponseMixin):
                 credit_amount_functional=line_input.credit_amount_functional,
                 currency_code=line_input.currency_code or input.currency_code,
                 exchange_rate=line_input.exchange_rate or input.exchange_rate,
-                business_unit_id=coerce_uuid(line_input.business_unit_id) if line_input.business_unit_id else None,
-                cost_center_id=coerce_uuid(line_input.cost_center_id) if line_input.cost_center_id else None,
-                project_id=coerce_uuid(line_input.project_id) if line_input.project_id else None,
-                segment_id=coerce_uuid(line_input.segment_id) if line_input.segment_id else None,
+                business_unit_id=coerce_uuid(line_input.business_unit_id)
+                if line_input.business_unit_id
+                else None,
+                cost_center_id=coerce_uuid(line_input.cost_center_id)
+                if line_input.cost_center_id
+                else None,
+                project_id=coerce_uuid(line_input.project_id)
+                if line_input.project_id
+                else None,
+                segment_id=coerce_uuid(line_input.segment_id)
+                if line_input.segment_id
+                else None,
             )
             db.add(entry_line)
 
@@ -360,12 +414,24 @@ class JournalService(ListResponseMixin):
         if journal.status != JournalStatus.DRAFT:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot submit journal with status '{journal.status.value}'"
+                detail=f"Cannot submit journal with status '{journal.status.value}'",
             )
 
         journal.status = JournalStatus.SUBMITTED
         journal.submitted_by_user_id = user_id
         journal.submitted_at = datetime.now(timezone.utc)
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="gl",
+            table_name="journal_entry",
+            record_id=str(journal_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": "DRAFT"},
+            new_values={"status": "SUBMITTED"},
+            user_id=user_id,
+        )
 
         db.commit()
         db.refresh(journal)
@@ -407,19 +473,31 @@ class JournalService(ListResponseMixin):
         if journal.status != JournalStatus.SUBMITTED:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot approve journal with status '{journal.status.value}'"
+                detail=f"Cannot approve journal with status '{journal.status.value}'",
             )
 
         # SoD check - creator cannot approve
         if journal.created_by_user_id == user_id:
             raise HTTPException(
                 status_code=403,
-                detail="Segregation of duties: creator cannot approve their own journal"
+                detail="Segregation of duties: creator cannot approve their own journal",
             )
 
         journal.status = JournalStatus.APPROVED
         journal.approved_by_user_id = user_id
         journal.approved_at = datetime.now(timezone.utc)
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="gl",
+            table_name="journal_entry",
+            record_id=str(journal_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": "SUBMITTED"},
+            new_values={"status": "APPROVED"},
+            user_id=user_id,
+        )
 
         db.commit()
         db.refresh(journal)
@@ -469,7 +547,7 @@ class JournalService(ListResponseMixin):
         if journal.status not in {JournalStatus.APPROVED, JournalStatus.DRAFT}:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot post journal with status '{journal.status.value}'"
+                detail=f"Cannot post journal with status '{journal.status.value}'",
             )
 
         # Generate idempotency key if not provided
@@ -494,6 +572,18 @@ class JournalService(ListResponseMixin):
 
         if not result.success:
             raise HTTPException(status_code=400, detail=result.message)
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="gl",
+            table_name="journal_entry",
+            record_id=str(journal_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": "APPROVED"},
+            new_values={"status": "POSTED"},
+            user_id=user_id,
+        )
 
         # Refresh and return
         db.refresh(journal)
@@ -534,10 +624,24 @@ class JournalService(ListResponseMixin):
         if journal.status in {JournalStatus.POSTED, JournalStatus.REVERSED}:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot void journal with status '{journal.status.value}'. Use reversal instead."
+                detail=f"Cannot void journal with status '{journal.status.value}'. Use reversal instead.",
             )
 
+        old_status = journal.status.value
         journal.status = JournalStatus.VOID
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="gl",
+            table_name="journal_entry",
+            record_id=str(journal_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": old_status},
+            new_values={"status": "VOID"},
+            user_id=coerce_uuid(voided_by_user_id),
+            reason=reason,
+        )
 
         db.commit()
         db.refresh(journal)
@@ -666,7 +770,9 @@ class JournalService(ListResponseMixin):
         Returns:
             Created JournalEntry
         """
-        return JournalService.create_journal(db, organization_id, input, created_by_user_id)
+        return JournalService.create_journal(
+            db, organization_id, input, created_by_user_id
+        )
 
     @staticmethod
     def reverse_entry(
@@ -703,14 +809,12 @@ class JournalService(ListResponseMixin):
 
         if journal.status != JournalStatus.POSTED:
             raise HTTPException(
-                status_code=400,
-                detail="Only posted journals can be reversed"
+                status_code=400, detail="Only posted journals can be reversed"
             )
 
         if journal.reversal_journal_id:
             raise HTTPException(
-                status_code=400,
-                detail="Journal has already been reversed"
+                status_code=400, detail="Journal has already been reversed"
             )
 
         # Create reversal entry
@@ -761,6 +865,32 @@ class JournalService(ListResponseMixin):
         db.add(reversal)
         db.commit()
         db.refresh(reversal)
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="gl",
+            table_name="journal_entry",
+            record_id=str(reversal.journal_entry_id),
+            action=AuditAction.INSERT,
+            new_values={
+                "journal_number": reversal.journal_number,
+                "journal_type": "REVERSAL",
+                "reversed_journal_id": str(journal_id),
+            },
+            user_id=user_id,
+        )
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="gl",
+            table_name="journal_entry",
+            record_id=str(journal_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": "POSTED"},
+            new_values={"status": "REVERSED"},
+            user_id=user_id,
+        )
 
         return reversal
 

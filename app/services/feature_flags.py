@@ -14,7 +14,6 @@ from app.db import SessionLocal
 from app.models.domain_settings import SettingDomain
 from app.services.settings_cache import settings_cache
 
-
 # Feature flag keys matching SETTINGS_SPECS
 FEATURE_MULTI_CURRENCY = "enable_multi_currency"
 FEATURE_BUDGETING = "enable_budgeting"
@@ -64,7 +63,9 @@ def _get_feature_defaults() -> Dict[str, bool]:
         defaults = {}
         for spec in list_specs(SettingDomain.features):
             if spec.key.startswith("enable_"):
-                defaults[spec.key] = bool(spec.default) if spec.default is not None else False
+                defaults[spec.key] = (
+                    bool(spec.default) if spec.default is not None else False
+                )
         _feature_defaults_cache = defaults
         return defaults
     except ImportError:

@@ -5,14 +5,15 @@ Provides bank reconciliation functionality including auto-matching
 and reconciliation workflow.
 """
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.banking.bank_account import BankAccount
@@ -25,10 +26,13 @@ from app.models.finance.banking.bank_reconciliation import (
 from app.models.finance.banking.bank_statement import (
     BankStatement,
     BankStatementLine,
-    StatementLineType,
 )
+from app.models.finance.audit.audit_log import AuditAction
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
+from app.services.audit_dispatcher import fire_audit_event
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -79,7 +83,9 @@ class BankReconciliationService:
         # Validate bank account
         bank_account = db.get(BankAccount, bank_account_id)
         if not bank_account:
-            raise HTTPException(status_code=404, detail=f"Bank account {bank_account_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Bank account {bank_account_id} not found"
+            )
 
         # Check for existing reconciliation at this date
         existing = db.execute(
@@ -103,7 +109,9 @@ class BankReconciliationService:
         )
 
         # Get prior outstanding items
-        prior_recon = self._get_prior_reconciliation(db, bank_account_id, input.reconciliation_date)
+        prior_recon = self._get_prior_reconciliation(
+            db, bank_account_id, input.reconciliation_date
+        )
         prior_deposits = Decimal("0")
         prior_payments = Decimal("0")
 
@@ -136,6 +144,16 @@ class BankReconciliationService:
         # Calculate initial difference
         reconciliation.calculate_difference()
         db.flush()
+
+        fire_audit_event(
+            db=db,
+            organization_id=organization_id,
+            table_schema="banking",
+            table_name="reconciliation",
+            record_id=str(reconciliation.reconciliation_id),
+            action=AuditAction.INSERT,
+            new_values={"bank_account_id": str(bank_account_id), "status": "draft"},
+        )
 
         return reconciliation
 
@@ -219,23 +237,34 @@ class BankReconciliationService:
         """Add a match between statement line and GL entry."""
         reconciliation = db.get(BankReconciliation, reconciliation_id)
         if not reconciliation:
-            raise HTTPException(status_code=404, detail=f"Reconciliation {reconciliation_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Reconciliation {reconciliation_id} not found"
+            )
 
         if reconciliation.status not in [
             ReconciliationStatus.draft,
             ReconciliationStatus.pending_review,
         ]:
-            raise HTTPException(status_code=400, detail="Cannot modify an approved/rejected reconciliation")
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot modify an approved/rejected reconciliation",
+            )
 
         # Get statement line
         statement_line = db.get(BankStatementLine, input.statement_line_id)
         if not statement_line:
-            raise HTTPException(status_code=404, detail=f"Statement line {input.statement_line_id} not found")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Statement line {input.statement_line_id} not found",
+            )
 
         # Get GL line
         gl_line = db.get(JournalEntryLine, input.journal_line_id)
         if not gl_line:
-            raise HTTPException(status_code=404, detail=f"Journal line {input.journal_line_id} not found")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Journal line {input.journal_line_id} not found",
+            )
 
         # Calculate amounts
         statement_amount = statement_line.signed_amount
@@ -291,7 +320,9 @@ class BankReconciliationService:
         """Add a reconciling adjustment."""
         reconciliation = db.get(BankReconciliation, reconciliation_id)
         if not reconciliation:
-            raise HTTPException(status_code=404, detail=f"Reconciliation {reconciliation_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Reconciliation {reconciliation_id} not found"
+            )
 
         recon_line = BankReconciliationLine(
             reconciliation_id=reconciliation_id,
@@ -331,7 +362,9 @@ class BankReconciliationService:
         """Add an outstanding item (deposit in transit or outstanding check)."""
         reconciliation = db.get(BankReconciliation, reconciliation_id)
         if not reconciliation:
-            raise HTTPException(status_code=404, detail=f"Reconciliation {reconciliation_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Reconciliation {reconciliation_id} not found"
+            )
 
         recon_line = BankReconciliationLine(
             reconciliation_id=reconciliation_id,
@@ -369,7 +402,9 @@ class BankReconciliationService:
         """Automatically match statement lines to GL entries."""
         reconciliation = db.get(BankReconciliation, reconciliation_id)
         if not reconciliation:
-            raise HTTPException(status_code=404, detail=f"Reconciliation {reconciliation_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Reconciliation {reconciliation_id} not found"
+            )
 
         bank_account = reconciliation.bank_account
         result = AutoMatchResult(
@@ -380,32 +415,41 @@ class BankReconciliationService:
         )
 
         # Get unmatched statement lines
-        statement_lines = db.execute(
-            select(BankStatementLine)
-            .join(BankStatement)
-            .where(
-                and_(
-                    BankStatement.bank_account_id == reconciliation.bank_account_id,
-                    BankStatementLine.is_matched == False,
-                    BankStatementLine.transaction_date >= reconciliation.period_start,
-                    BankStatementLine.transaction_date <= reconciliation.period_end,
+        statement_lines = (
+            db.execute(
+                select(BankStatementLine)
+                .join(BankStatement)
+                .where(
+                    and_(
+                        BankStatement.bank_account_id == reconciliation.bank_account_id,
+                        BankStatementLine.is_matched == False,
+                        BankStatementLine.transaction_date
+                        >= reconciliation.period_start,
+                        BankStatementLine.transaction_date <= reconciliation.period_end,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         # Get unmatched GL lines for this account
-        gl_lines = db.execute(
-            select(JournalEntryLine)
-            .join(JournalEntry)
-            .where(
-                and_(
-                    JournalEntryLine.account_id == bank_account.gl_account_id,
-                    JournalEntry.status == JournalStatus.POSTED,
-                    JournalEntry.entry_date >= reconciliation.period_start,
-                    JournalEntry.entry_date <= reconciliation.period_end,
+        gl_lines = (
+            db.execute(
+                select(JournalEntryLine)
+                .join(JournalEntry)
+                .where(
+                    and_(
+                        JournalEntryLine.account_id == bank_account.gl_account_id,
+                        JournalEntry.status == JournalStatus.POSTED,
+                        JournalEntry.entry_date >= reconciliation.period_start,
+                        JournalEntry.entry_date <= reconciliation.period_end,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         # Build index of GL lines by amount for fast lookup
         gl_by_amount: Dict[Decimal, List[JournalEntryLine]] = {}
@@ -465,12 +509,14 @@ class BankReconciliationService:
                     recon_line.match_confidence = Decimal(str(best_score))
                     matched_gl_ids.add(best_match.line_id)
                     result.matches_created += 1
-                    result.match_details.append({
-                        "statement_line_id": str(stmt_line.line_id),
-                        "gl_line_id": str(best_match.line_id),
-                        "confidence": best_score,
-                    })
-                except Exception as e:
+                    result.match_details.append(
+                        {
+                            "statement_line_id": str(stmt_line.line_id),
+                            "gl_line_id": str(best_match.line_id),
+                            "confidence": best_score,
+                        }
+                    )
+                except Exception:
                     pass  # Skip failed matches
 
         # Count remaining unmatched
@@ -501,7 +547,9 @@ class BankReconciliationService:
             score += 35
 
         # Date proximity (30 points)
-        date_diff = abs((stmt_line.transaction_date - gl_line.journal_entry.entry_date).days)
+        date_diff = abs(
+            (stmt_line.transaction_date - gl_line.journal_entry.entry_date).days
+        )
         if date_diff == 0:
             score += 30
         elif date_diff <= 1:
@@ -532,16 +580,22 @@ class BankReconciliationService:
         as_of_date: date,
     ) -> Decimal:
         """Get GL account balance as of a date."""
-        query = select(
-            func.coalesce(func.sum(JournalEntryLine.debit_amount), 0).label("debits"),
-            func.coalesce(func.sum(JournalEntryLine.credit_amount), 0).label("credits"),
-        ).join(
-            JournalEntry
-        ).where(
-            and_(
-                JournalEntryLine.account_id == gl_account_id,
-                JournalEntry.status == JournalStatus.POSTED,
-                JournalEntry.entry_date <= as_of_date,
+        query = (
+            select(
+                func.coalesce(func.sum(JournalEntryLine.debit_amount), 0).label(
+                    "debits"
+                ),
+                func.coalesce(func.sum(JournalEntryLine.credit_amount), 0).label(
+                    "credits"
+                ),
+            )
+            .join(JournalEntry)
+            .where(
+                and_(
+                    JournalEntryLine.account_id == gl_account_id,
+                    JournalEntry.status == JournalStatus.POSTED,
+                    JournalEntry.entry_date <= as_of_date,
+                )
             )
         )
 
@@ -555,13 +609,18 @@ class BankReconciliationService:
         before_date: date,
     ) -> Optional[BankReconciliation]:
         """Get most recent approved reconciliation before a date."""
-        query = select(BankReconciliation).where(
-            and_(
-                BankReconciliation.bank_account_id == bank_account_id,
-                BankReconciliation.status == ReconciliationStatus.approved,
-                BankReconciliation.reconciliation_date < before_date,
+        query = (
+            select(BankReconciliation)
+            .where(
+                and_(
+                    BankReconciliation.bank_account_id == bank_account_id,
+                    BankReconciliation.status == ReconciliationStatus.approved,
+                    BankReconciliation.reconciliation_date < before_date,
+                )
             )
-        ).order_by(BankReconciliation.reconciliation_date.desc()).limit(1)
+            .order_by(BankReconciliation.reconciliation_date.desc())
+            .limit(1)
+        )
 
         return db.execute(query).scalar_one_or_none()
 
@@ -573,18 +632,27 @@ class BankReconciliationService:
         """Submit reconciliation for review."""
         reconciliation = db.get(BankReconciliation, reconciliation_id)
         if not reconciliation:
-            raise HTTPException(status_code=404, detail=f"Reconciliation {reconciliation_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Reconciliation {reconciliation_id} not found"
+            )
 
         if reconciliation.status != ReconciliationStatus.draft:
-            raise HTTPException(status_code=400, detail="Only draft reconciliations can be submitted for review")
+            raise HTTPException(
+                status_code=400,
+                detail="Only draft reconciliations can be submitted for review",
+            )
 
         reconciliation.status = ReconciliationStatus.pending_review
         db.flush()
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=db, organization_id=reconciliation.organization_id,
+                db=db,
+                organization_id=reconciliation.organization_id,
                 entity_type="RECONCILIATION",
                 entity_id=reconciliation.reconciliation_id,
                 event="ON_STATUS_CHANGE",
@@ -606,10 +674,14 @@ class BankReconciliationService:
         """Approve a reconciliation."""
         reconciliation = db.get(BankReconciliation, reconciliation_id)
         if not reconciliation:
-            raise HTTPException(status_code=404, detail=f"Reconciliation {reconciliation_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Reconciliation {reconciliation_id} not found"
+            )
 
         if reconciliation.status != ReconciliationStatus.pending_review:
-            raise HTTPException(status_code=400, detail="Only pending reconciliations can be approved")
+            raise HTTPException(
+                status_code=400, detail="Only pending reconciliations can be approved"
+            )
 
         if reconciliation.reconciliation_difference != Decimal("0"):
             raise HTTPException(
@@ -636,9 +708,13 @@ class BankReconciliationService:
         db.flush()
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=db, organization_id=reconciliation.organization_id,
+                db=db,
+                organization_id=reconciliation.organization_id,
                 entity_type="RECONCILIATION",
                 entity_id=reconciliation.reconciliation_id,
                 event="ON_APPROVAL",
@@ -661,10 +737,14 @@ class BankReconciliationService:
         """Reject a reconciliation."""
         reconciliation = db.get(BankReconciliation, reconciliation_id)
         if not reconciliation:
-            raise HTTPException(status_code=404, detail=f"Reconciliation {reconciliation_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Reconciliation {reconciliation_id} not found"
+            )
 
         if reconciliation.status != ReconciliationStatus.pending_review:
-            raise HTTPException(status_code=400, detail="Only pending reconciliations can be rejected")
+            raise HTTPException(
+                status_code=400, detail="Only pending reconciliations can be rejected"
+            )
 
         reconciliation.status = ReconciliationStatus.rejected
         reconciliation.reviewed_by = rejected_by
@@ -674,9 +754,13 @@ class BankReconciliationService:
         db.flush()
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=db, organization_id=reconciliation.organization_id,
+                db=db,
+                organization_id=reconciliation.organization_id,
                 entity_type="RECONCILIATION",
                 entity_id=reconciliation.reconciliation_id,
                 event="ON_REJECTION",
@@ -697,7 +781,9 @@ class BankReconciliationService:
         """Generate reconciliation report data."""
         reconciliation = db.get(BankReconciliation, reconciliation_id)
         if not reconciliation:
-            raise HTTPException(status_code=404, detail=f"Reconciliation {reconciliation_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Reconciliation {reconciliation_id} not found"
+            )
 
         # Get all lines
         lines = reconciliation.lines
@@ -727,12 +813,16 @@ class BankReconciliationService:
                 "items": adjustments,
             },
             "outstanding_deposits": {
-                "count": len([o for o in outstanding if o.outstanding_type == "deposit"]),
+                "count": len(
+                    [o for o in outstanding if o.outstanding_type == "deposit"]
+                ),
                 "total": reconciliation.outstanding_deposits,
                 "items": [o for o in outstanding if o.outstanding_type == "deposit"],
             },
             "outstanding_payments": {
-                "count": len([o for o in outstanding if o.outstanding_type == "payment"]),
+                "count": len(
+                    [o for o in outstanding if o.outstanding_type == "payment"]
+                ),
                 "total": reconciliation.outstanding_payments,
                 "items": [o for o in outstanding if o.outstanding_type == "payment"],
             },

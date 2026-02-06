@@ -4,6 +4,7 @@ Revision ID: 20260124_sequence_types_ops
 Revises: 20260124_notification
 Create Date: 2026-01-24
 """
+
 from alembic import op
 
 revision = "20260124_sequence_types_ops"

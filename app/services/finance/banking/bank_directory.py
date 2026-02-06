@@ -4,12 +4,13 @@ Bank Directory Service.
 Provides lookup services for Nigerian bank codes from bank names.
 Supports exact matching, alias matching, and fuzzy matching.
 """
+
 from __future__ import annotations
 
 import logging
 from typing import Optional
 
-from sqlalchemy import or_, select, func
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.core_org.bank_directory import BankDirectory
@@ -157,9 +158,9 @@ class BankDirectoryService:
             .where(
                 or_(
                     BankDirectory.bank_name.ilike(f"%{normalized}%"),
-                    func.lower(func.array_to_string(BankDirectory.aliases, ",")).contains(
-                        func.lower(normalized)
-                    ),
+                    func.lower(
+                        func.array_to_string(BankDirectory.aliases, ",")
+                    ).contains(func.lower(normalized)),
                 ),
                 BankDirectory.is_active == True,  # noqa: E712
             )

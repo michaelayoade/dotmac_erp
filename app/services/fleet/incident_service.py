@@ -17,6 +17,8 @@ from app.models.fleet.enums import IncidentSeverity, IncidentStatus, IncidentTyp
 from app.models.fleet.vehicle import Vehicle
 from app.models.fleet.vehicle_incident import VehicleIncident
 from app.schemas.fleet.incident import IncidentCreate, IncidentResolve, IncidentUpdate
+from app.models.finance.audit.audit_log import AuditAction
+from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import (
     NotFoundError,
     PaginatedResult,
@@ -155,6 +157,20 @@ class IncidentService:
         self.db.add(incident)
         self.db.flush()
 
+        fire_audit_event(
+            self.db,
+            self.organization_id,
+            "fleet",
+            "vehicle_incident",
+            str(incident.incident_id),
+            AuditAction.INSERT,
+            new_values={
+                "vehicle_id": str(data.vehicle_id),
+                "incident_type": data.incident_type.value,
+                "severity": data.severity.value,
+            },
+        )
+
         logger.info(
             "Reported incident for vehicle %s: %s (%s)",
             vehicle.vehicle_code,
@@ -194,6 +210,17 @@ class IncidentService:
 
         incident.status = new_status
 
+        fire_audit_event(
+            self.db,
+            self.organization_id,
+            "fleet",
+            "vehicle_incident",
+            str(incident.incident_id),
+            AuditAction.UPDATE,
+            old_values={"status": current.value},
+            new_values={"status": new_status.value},
+        )
+
         logger.info(
             "Incident %s status changed: %s -> %s",
             incident_id,
@@ -226,15 +253,35 @@ class IncidentService:
             incident.insurance_payout = data.insurance_payout
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=self.db, organization_id=self.organization_id,
-                entity_type="FLEET_INCIDENT", entity_id=incident.incident_id,
+                db=self.db,
+                organization_id=self.organization_id,
+                entity_type="FLEET_INCIDENT",
+                entity_id=incident.incident_id,
                 event="ON_STATUS_CHANGE",
-                old_values={}, new_values={"status": "RESOLVED"},
+                old_values={},
+                new_values={"status": "RESOLVED"},
             )
         except Exception:
             pass
+
+        fire_audit_event(
+            self.db,
+            self.organization_id,
+            "fleet",
+            "vehicle_incident",
+            str(incident.incident_id),
+            AuditAction.UPDATE,
+            new_values={
+                "status": "RESOLVED",
+                "resolution_date": str(incident.resolution_date),
+            },
+            reason="Incident resolved",
+        )
 
         logger.info("Resolved incident %s", incident_id)
         return incident
@@ -254,15 +301,32 @@ class IncidentService:
             incident.resolution_date = date.today()
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
+
             fire_workflow_event(
-                db=self.db, organization_id=self.organization_id,
-                entity_type="FLEET_INCIDENT", entity_id=incident.incident_id,
+                db=self.db,
+                organization_id=self.organization_id,
+                entity_type="FLEET_INCIDENT",
+                entity_id=incident.incident_id,
                 event="ON_STATUS_CHANGE",
-                old_values={}, new_values={"status": "CLOSED"},
+                old_values={},
+                new_values={"status": "CLOSED"},
             )
         except Exception:
             pass
+
+        fire_audit_event(
+            self.db,
+            self.organization_id,
+            "fleet",
+            "vehicle_incident",
+            str(incident.incident_id),
+            AuditAction.UPDATE,
+            new_values={"status": "CLOSED"},
+            reason="Incident closed",
+        )
 
         logger.info("Closed incident %s", incident_id)
         return incident
@@ -272,6 +336,16 @@ class IncidentService:
         incident = self.get_or_raise(incident_id)
         incident.is_deleted = True
         incident.deleted_at = datetime.now(timezone.utc)
+
+        fire_audit_event(
+            self.db,
+            self.organization_id,
+            "fleet",
+            "vehicle_incident",
+            str(incident.incident_id),
+            AuditAction.DELETE,
+            reason="Incident soft deleted",
+        )
 
         logger.info("Soft deleted incident %s", incident_id)
         return incident

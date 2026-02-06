@@ -3,10 +3,11 @@ Staging Sync Services - ERPNext to Staging Tables.
 
 Syncs ERPNext data to staging tables for validation before production import.
 """
+
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -121,27 +122,42 @@ class StagingSyncOrchestrator:
             # Sync each entity type
             if "departments" in entity_types:
                 result = self._sync_departments(batch.batch_id)
-                results["departments"] = {"synced": result.synced, "errors": len(result.errors)}
+                results["departments"] = {
+                    "synced": result.synced,
+                    "errors": len(result.errors),
+                }
                 total_records += result.synced
 
             if "designations" in entity_types:
                 result = self._sync_designations(batch.batch_id)
-                results["designations"] = {"synced": result.synced, "errors": len(result.errors)}
+                results["designations"] = {
+                    "synced": result.synced,
+                    "errors": len(result.errors),
+                }
                 total_records += result.synced
 
             if "employment_types" in entity_types:
                 result = self._sync_employment_types(batch.batch_id)
-                results["employment_types"] = {"synced": result.synced, "errors": len(result.errors)}
+                results["employment_types"] = {
+                    "synced": result.synced,
+                    "errors": len(result.errors),
+                }
                 total_records += result.synced
 
             if "employee_grades" in entity_types:
                 result = self._sync_employee_grades(batch.batch_id)
-                results["employee_grades"] = {"synced": result.synced, "errors": len(result.errors)}
+                results["employee_grades"] = {
+                    "synced": result.synced,
+                    "errors": len(result.errors),
+                }
                 total_records += result.synced
 
             if "employees" in entity_types:
                 result = self._sync_employees(batch.batch_id)
-                results["employees"] = {"synced": result.synced, "errors": len(result.errors)}
+                results["employees"] = {
+                    "synced": result.synced,
+                    "errors": len(result.errors),
+                }
                 total_records += result.synced
 
             # Update batch
@@ -336,8 +352,12 @@ class StagingSyncOrchestrator:
                     raw_data=record,
                     employee_code=transformed.get("employee_code", "")[:30],
                     employee_name=record.get("employee_name", "")[:200],
-                    first_name=record.get("first_name", "")[:100] if record.get("first_name") else None,
-                    last_name=record.get("last_name", "")[:100] if record.get("last_name") else None,
+                    first_name=record.get("first_name", "")[:100]
+                    if record.get("first_name")
+                    else None,
+                    last_name=record.get("last_name", "")[:100]
+                    if record.get("last_name")
+                    else None,
                     gender=transformed.get("gender"),
                     date_of_birth=transformed.get("date_of_birth"),
                     company_email=company_email,

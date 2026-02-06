@@ -23,7 +23,9 @@ def upgrade() -> None:
     if not inspector.has_table("salary_slip", schema="payroll"):
         return
 
-    columns = {col["name"] for col in inspector.get_columns("salary_slip", schema="payroll")}
+    columns = {
+        col["name"] for col in inspector.get_columns("salary_slip", schema="payroll")
+    }
 
     if "is_auto_generated" not in columns:
         op.add_column(
@@ -109,7 +111,9 @@ def downgrade() -> None:
     if not inspector.has_table("salary_slip", schema="payroll"):
         return
 
-    columns = {col["name"] for col in inspector.get_columns("salary_slip", schema="payroll")}
+    columns = {
+        col["name"] for col in inspector.get_columns("salary_slip", schema="payroll")
+    }
     fks = {
         fk.get("name")
         for fk in inspector.get_foreign_keys("salary_slip", schema="payroll")

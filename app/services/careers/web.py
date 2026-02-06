@@ -11,20 +11,22 @@ This service handles:
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import date
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.models.finance.core_org.organization import Organization
 from app.models.people.recruit.job_opening import JobOpening
+from app.services.careers.captcha import (
+    get_captcha_site_key,
+    is_captcha_enabled,
+    verify_captcha,
+)
 from app.services.careers.careers_service import (
     ApplicationSubmissionError,
     CareersService,
     JobNotFoundError,
 )
-from app.services.careers.captcha import get_captcha_site_key, is_captcha_enabled, verify_captcha
 from app.services.careers.resume_service import (
     FileTooLargeError,
     InvalidFileTypeError,
@@ -153,7 +155,9 @@ class CareersWebService:
         """Get a job opening by its code."""
         return self._careers_service.get_job_by_code(org_id, job_code)
 
-    def get_public_job(self, org_id: uuid.UUID, job_id: uuid.UUID) -> Optional[JobOpening]:
+    def get_public_job(
+        self, org_id: uuid.UUID, job_id: uuid.UUID
+    ) -> Optional[JobOpening]:
         """Get a job opening by ID."""
         return self._careers_service.get_public_job(org_id, job_id)
 

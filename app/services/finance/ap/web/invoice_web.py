@@ -19,12 +19,16 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models.finance.ap.supplier import Supplier
-from app.models.finance.ap.supplier_invoice import SupplierInvoice, SupplierInvoiceStatus, SupplierInvoiceType
-from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
 from app.models.finance.ap.purchase_order import PurchaseOrder
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
+from app.models.finance.ap.supplier import Supplier
+from app.models.finance.ap.supplier_invoice import (
+    SupplierInvoice,
+    SupplierInvoiceStatus,
+    SupplierInvoiceType,
+)
+from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
 from app.services.common import coerce_uuid
@@ -34,28 +38,28 @@ from app.services.finance.ap.supplier_invoice import (
     SupplierInvoiceInput,
     supplier_invoice_service,
 )
-from app.services.finance.common.attachment import attachment_service, AttachmentInput
-from app.services.finance.platform.currency_context import get_currency_context
-from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
 from app.services.finance.ap.web.base import (
+    InvoiceStats,
+    format_currency,
+    format_date,
+    format_file_size,
+    get_accounts,
+    invoice_detail_view,
+    invoice_line_view,
+    invoice_status_label,
     logger,
     parse_date,
     parse_invoice_status,
-    format_date,
-    format_currency,
-    format_file_size,
     supplier_display_name,
-    supplier_option_view,
     supplier_form_view,
-    invoice_status_label,
-    invoice_line_view,
-    invoice_detail_view,
-    get_accounts,
-    get_cost_centers,
-    get_projects,
-    InvoiceStats,
+    supplier_option_view,
 )
+from app.services.finance.common.attachment import AttachmentInput, attachment_service
+from app.services.finance.platform.currency_context import get_currency_context
+from app.templates import templates
+from app.web.deps import WebAuthContext, base_context
+
+logger = logging.getLogger(__name__)
 
 
 class InvoiceWebService:
@@ -75,8 +79,12 @@ class InvoiceWebService:
                 # Handle both new tax_code_ids array and legacy tax_code_id field
                 tax_code_ids = []
                 if line.get("tax_code_ids"):
-                    tax_code_ids = [UUID(tc_id) for tc_id in line["tax_code_ids"] if tc_id]
-                legacy_tax_code_id = UUID(line["tax_code_id"]) if line.get("tax_code_id") else None
+                    tax_code_ids = [
+                        UUID(tc_id) for tc_id in line["tax_code_ids"] if tc_id
+                    ]
+                legacy_tax_code_id = (
+                    UUID(line["tax_code_id"]) if line.get("tax_code_id") else None
+                )
 
                 lines.append(
                     InvoiceLineInput(
@@ -91,7 +99,9 @@ class InvoiceWebService:
                         cost_center_id=UUID(line["cost_center_id"])
                         if line.get("cost_center_id")
                         else None,
-                        project_id=UUID(line["project_id"]) if line.get("project_id") else None,
+                        project_id=UUID(line["project_id"])
+                        if line.get("project_id")
+                        else None,
                     )
                 )
 
@@ -129,7 +139,11 @@ class InvoiceWebService:
         """Get context for invoice listing page."""
         logger.debug(
             "list_invoices_context: org=%s search=%r supplier_id=%s status=%s page=%d",
-            organization_id, search, supplier_id, status, page
+            organization_id,
+            search,
+            supplier_id,
+            status,
+            page,
         )
         org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
@@ -146,7 +160,9 @@ class InvoiceWebService:
         )
 
         if supplier_id:
-            query = query.filter(SupplierInvoice.supplier_id == coerce_uuid(supplier_id))
+            query = query.filter(
+                SupplierInvoice.supplier_id == coerce_uuid(supplier_id)
+            )
         if status_value:
             query = query.filter(SupplierInvoice.status == status_value)
         if from_date:
@@ -163,7 +179,9 @@ class InvoiceWebService:
                 )
             )
 
-        total_count = query.with_entities(func.count(SupplierInvoice.invoice_id)).scalar() or 0
+        total_count = (
+            query.with_entities(func.count(SupplierInvoice.invoice_id)).scalar() or 0
+        )
         invoices = (
             query.order_by(SupplierInvoice.invoice_date.desc())
             .limit(limit)
@@ -176,45 +194,38 @@ class InvoiceWebService:
             SupplierInvoiceStatus.PARTIALLY_PAID,
         ]
         stats_base = query.with_entities(SupplierInvoice)
-        outstanding_filter = stats_base.filter(SupplierInvoice.status.in_(open_statuses))
-
-        total_outstanding = (
-            outstanding_filter.with_entities(
-                func.coalesce(
-                    func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
-                )
-            ).scalar()
-            or Decimal("0")
+        outstanding_filter = stats_base.filter(
+            SupplierInvoice.status.in_(open_statuses)
         )
 
-        past_due = (
-            outstanding_filter.filter(SupplierInvoice.due_date < today)
-            .with_entities(
-                func.coalesce(
-                    func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
-                )
+        total_outstanding = outstanding_filter.with_entities(
+            func.coalesce(
+                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
             )
-            .scalar()
-            or Decimal("0")
-        )
+        ).scalar() or Decimal("0")
+
+        past_due = outstanding_filter.filter(
+            SupplierInvoice.due_date < today
+        ).with_entities(
+            func.coalesce(
+                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
+            )
+        ).scalar() or Decimal("0")
 
         due_this_week_end = today + timedelta(days=7)
-        due_this_week = (
-            outstanding_filter.filter(
-                SupplierInvoice.due_date >= today,
-                SupplierInvoice.due_date <= due_this_week_end,
+        due_this_week = outstanding_filter.filter(
+            SupplierInvoice.due_date >= today,
+            SupplierInvoice.due_date <= due_this_week_end,
+        ).with_entities(
+            func.coalesce(
+                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
             )
-            .with_entities(
-                func.coalesce(
-                    func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
-                )
-            )
-            .scalar()
-            or Decimal("0")
-        )
+        ).scalar() or Decimal("0")
 
         pending_count = (
-            stats_base.filter(SupplierInvoice.status == SupplierInvoiceStatus.PENDING_APPROVAL)
+            stats_base.filter(
+                SupplierInvoice.status == SupplierInvoiceStatus.PENDING_APPROVAL
+            )
             .with_entities(func.count(SupplierInvoice.invoice_id))
             .scalar()
             or 0
@@ -237,7 +248,8 @@ class InvoiceWebService:
                     "status": invoice_status_label(invoice.status),
                     "is_overdue": (
                         invoice.due_date < today
-                        and invoice.status not in {SupplierInvoiceStatus.PAID, SupplierInvoiceStatus.VOID}
+                        and invoice.status
+                        not in {SupplierInvoiceStatus.PAID, SupplierInvoiceStatus.VOID}
                     ),
                 }
             )
@@ -288,12 +300,14 @@ class InvoiceWebService:
     ) -> dict:
         """Get context for invoice create form."""
         from app.models.finance.tax.tax_code import TaxCode
-        from app.models.inventory.item import Item
         from app.models.fixed_assets.asset_category import AssetCategory
+        from app.models.inventory.item import Item
 
         logger.debug(
             "invoice_form_context: org=%s supplier_id=%s po_id=%s",
-            organization_id, supplier_id, po_id
+            organization_id,
+            supplier_id,
+            po_id,
         )
         org_id = coerce_uuid(organization_id)
         suppliers_list = [
@@ -315,16 +329,20 @@ class InvoiceWebService:
                 "tax_code": tax.tax_code,
                 "tax_name": tax.tax_name,
                 "tax_rate": float(tax.tax_rate),
-                "rate_display": float((tax.tax_rate * 100).quantize(Decimal("0.01"))) if tax.tax_rate < 1 else float(tax.tax_rate),
+                "rate_display": float((tax.tax_rate * 100).quantize(Decimal("0.01")))
+                if tax.tax_rate < 1
+                else float(tax.tax_rate),
                 "is_inclusive": tax.is_inclusive,
                 "is_compound": tax.is_compound,
                 "is_recoverable": getattr(tax, "is_recoverable", True),
             }
-            for tax in db.query(TaxCode).filter(
+            for tax in db.query(TaxCode)
+            .filter(
                 TaxCode.organization_id == org_id,
                 TaxCode.is_active == True,
                 TaxCode.applies_to_purchases == True,
-            ).all()
+            )
+            .all()
         ]
 
         # Pre-populated data from PO
@@ -347,7 +365,9 @@ class InvoiceWebService:
                     "po_id": str(po.po_id),
                     "po_number": po.po_number,
                     "supplier_id": str(po.supplier_id),
-                    "supplier_name": supplier_display_name(supplier) if supplier else "",
+                    "supplier_name": supplier_display_name(supplier)
+                    if supplier
+                    else "",
                     "currency_code": po.currency_code,
                     "total_amount": float(po.total_amount) if po.total_amount else 0,
                 }
@@ -363,15 +383,19 @@ class InvoiceWebService:
                     .all()
                 )
                 for line in lines:
-                    po_lines.append({
-                        "line_id": str(line.line_id),
-                        "line_number": line.line_number,
-                        "description": line.description,
-                        "quantity": float(line.quantity_ordered),
-                        "unit_price": float(line.unit_price),
-                        "amount": float(line.quantity_ordered * line.unit_price),
-                        "expense_account_id": str(line.expense_account_id) if line.expense_account_id else "",
-                    })
+                    po_lines.append(
+                        {
+                            "line_id": str(line.line_id),
+                            "line_number": line.line_number,
+                            "description": line.description,
+                            "quantity": float(line.quantity_ordered),
+                            "unit_price": float(line.unit_price),
+                            "amount": float(line.quantity_ordered * line.unit_price),
+                            "expense_account_id": str(line.expense_account_id)
+                            if line.expense_account_id
+                            else "",
+                        }
+                    )
 
         # Get inventory items for AP -> INV integration
         items_list = [
@@ -379,14 +403,20 @@ class InvoiceWebService:
                 "item_id": str(item.item_id),
                 "item_code": item.item_code,
                 "item_name": item.item_name,
-                "unit_price": float(item.last_purchase_cost) if item.last_purchase_cost else 0,
+                "unit_price": float(item.last_purchase_cost)
+                if item.last_purchase_cost
+                else 0,
                 "uom": item.base_uom,
             }
-            for item in db.query(Item).filter(
+            for item in db.query(Item)
+            .filter(
                 Item.organization_id == org_id,
                 Item.is_active == True,
                 Item.is_purchaseable == True,
-            ).order_by(Item.item_code).limit(200).all()
+            )
+            .order_by(Item.item_code)
+            .limit(200)
+            .all()
         ]
 
         # Get asset accounts for capitalization (AP -> FA integration)
@@ -400,10 +430,13 @@ class InvoiceWebService:
                 "category_name": cat.category_name,
                 "threshold": float(cat.capitalization_threshold),
             }
-            for cat in db.query(AssetCategory).filter(
+            for cat in db.query(AssetCategory)
+            .filter(
                 AssetCategory.organization_id == org_id,
                 AssetCategory.is_active == True,
-            ).order_by(AssetCategory.category_code).all()
+            )
+            .order_by(AssetCategory.category_code)
+            .all()
         ]
 
         context = {
@@ -430,8 +463,7 @@ class InvoiceWebService:
     ) -> dict:
         """Get context for invoice detail page."""
         logger.debug(
-            "invoice_detail_context: org=%s invoice_id=%s",
-            organization_id, invoice_id
+            "invoice_detail_context: org=%s invoice_id=%s", organization_id, invoice_id
         )
         org_id = coerce_uuid(organization_id)
         invoice = None
@@ -454,9 +486,7 @@ class InvoiceWebService:
             organization_id=org_id,
             invoice_id=invoice.invoice_id,
         )
-        lines_view = [
-            invoice_line_view(line, invoice.currency_code) for line in lines
-        ]
+        lines_view = [invoice_line_view(line, invoice.currency_code) for line in lines]
 
         # Get attachments
         attachments = attachment_service.list_for_entity(
@@ -497,8 +527,7 @@ class InvoiceWebService:
     ) -> Optional[str]:
         """Delete an invoice. Returns error message or None on success."""
         logger.debug(
-            "delete_invoice: org=%s invoice_id=%s",
-            organization_id, invoice_id
+            "delete_invoice: org=%s invoice_id=%s", organization_id, invoice_id
         )
         org_id = coerce_uuid(organization_id)
         inv_id = coerce_uuid(invoice_id)
@@ -520,7 +549,9 @@ class InvoiceWebService:
         )
 
         if allocation_count > 0:
-            return f"Cannot delete invoice with {allocation_count} payment allocation(s)."
+            return (
+                f"Cannot delete invoice with {allocation_count} payment allocation(s)."
+            )
 
         try:
             # Delete invoice lines first
@@ -578,13 +609,17 @@ class InvoiceWebService:
     ) -> HTMLResponse:
         """Render new invoice form."""
         context = base_context(request, auth, "New AP Invoice", "ap")
-        context.update(self.invoice_form_context(
-            db,
-            str(auth.organization_id),
-            supplier_id=supplier_id,
-            po_id=po_id,
-        ))
-        return templates.TemplateResponse(request, "finance/ap/invoice_form.html", context)
+        context.update(
+            self.invoice_form_context(
+                db,
+                str(auth.organization_id),
+                supplier_id=supplier_id,
+                po_id=po_id,
+            )
+        )
+        return templates.TemplateResponse(
+            request, "finance/ap/invoice_form.html", context
+        )
 
     async def create_invoice_response(
         self,
@@ -635,7 +670,9 @@ class InvoiceWebService:
             context.update(self.invoice_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
             context["form_data"] = data
-            return templates.TemplateResponse(request, "finance/ap/invoice_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/invoice_form.html", context
+            )
 
     def invoice_detail_response(
         self,
@@ -653,7 +690,9 @@ class InvoiceWebService:
                 invoice_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ap/invoice_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ap/invoice_detail.html", context
+        )
 
     def delete_invoice_response(
         self,
@@ -675,7 +714,9 @@ class InvoiceWebService:
                 )
             )
             context["error"] = error
-            return templates.TemplateResponse(request, "finance/ap/invoice_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ap/invoice_detail.html", context
+            )
 
         return RedirectResponse(url="/finance/ap/invoices", status_code=303)
 

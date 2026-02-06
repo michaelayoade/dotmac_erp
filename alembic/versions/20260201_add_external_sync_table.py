@@ -5,6 +5,7 @@ Revises: 20260201_merge_heads_for_remita
 Create Date: 2026-02-01
 
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -31,7 +32,9 @@ def upgrade() -> None:
 
     if "external_source" not in existing_enums:
         external_source = postgresql.ENUM(
-            "SPLYNX", "ERPNEXT", "CRM",
+            "SPLYNX",
+            "ERPNEXT",
+            "CRM",
             name="external_source",
             schema="ar",
         )
@@ -39,7 +42,10 @@ def upgrade() -> None:
 
     if "sync_entity_type" not in existing_enums:
         sync_entity_type = postgresql.ENUM(
-            "CUSTOMER", "INVOICE", "PAYMENT", "CREDIT_NOTE",
+            "CUSTOMER",
+            "INVOICE",
+            "PAYMENT",
+            "CREDIT_NOTE",
             name="sync_entity_type",
             schema="ar",
         )
@@ -48,27 +54,81 @@ def upgrade() -> None:
     # Create table
     op.create_table(
         "external_sync",
-        sa.Column("sync_id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "sync_id",
+            sa.UUID(),
+            server_default=sa.text("gen_random_uuid()"),
+            nullable=False,
+        ),
         sa.Column("organization_id", sa.UUID(), nullable=False),
         sa.Column(
             "source",
-            postgresql.ENUM("SPLYNX", "ERPNEXT", "CRM", name="external_source", schema="ar", create_type=False),
+            postgresql.ENUM(
+                "SPLYNX",
+                "ERPNEXT",
+                "CRM",
+                name="external_source",
+                schema="ar",
+                create_type=False,
+            ),
             nullable=False,
         ),
         sa.Column(
             "entity_type",
-            postgresql.ENUM("CUSTOMER", "INVOICE", "PAYMENT", "CREDIT_NOTE", name="sync_entity_type", schema="ar", create_type=False),
+            postgresql.ENUM(
+                "CUSTOMER",
+                "INVOICE",
+                "PAYMENT",
+                "CREDIT_NOTE",
+                name="sync_entity_type",
+                schema="ar",
+                create_type=False,
+            ),
             nullable=False,
         ),
-        sa.Column("external_id", sa.String(100), nullable=False, comment="ID in the external system"),
-        sa.Column("local_entity_id", sa.UUID(), nullable=False, comment="UUID of the entity in ERP"),
-        sa.Column("external_updated_at", sa.DateTime(timezone=True), nullable=True, comment="Last update time in external system"),
-        sa.Column("synced_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False, comment="When this record was last synced"),
-        sa.Column("sync_hash", sa.String(64), nullable=True, comment="Hash of synced data for change detection"),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "external_id",
+            sa.String(100),
+            nullable=False,
+            comment="ID in the external system",
+        ),
+        sa.Column(
+            "local_entity_id",
+            sa.UUID(),
+            nullable=False,
+            comment="UUID of the entity in ERP",
+        ),
+        sa.Column(
+            "external_updated_at",
+            sa.DateTime(timezone=True),
+            nullable=True,
+            comment="Last update time in external system",
+        ),
+        sa.Column(
+            "synced_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+            comment="When this record was last synced",
+        ),
+        sa.Column(
+            "sync_hash",
+            sa.String(64),
+            nullable=True,
+            comment="Hash of synced data for change detection",
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("sync_id"),
         sa.UniqueConstraint(
-            "organization_id", "source", "entity_type", "external_id",
+            "organization_id",
+            "source",
+            "entity_type",
+            "external_id",
             name="uq_external_sync_source_entity",
         ),
         schema="ar",
@@ -94,8 +154,12 @@ def downgrade() -> None:
     inspector = sa.inspect(bind)
 
     if inspector.has_table("external_sync", schema="ar"):
-        op.drop_index("idx_external_sync_local", table_name="external_sync", schema="ar")
-        op.drop_index("idx_external_sync_lookup", table_name="external_sync", schema="ar")
+        op.drop_index(
+            "idx_external_sync_local", table_name="external_sync", schema="ar"
+        )
+        op.drop_index(
+            "idx_external_sync_lookup", table_name="external_sync", schema="ar"
+        )
         op.drop_table("external_sync", schema="ar")
 
     # Drop enums (optional, might be used elsewhere)

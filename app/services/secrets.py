@@ -40,7 +40,11 @@ def _openbao_allow_insecure(db: Session | None) -> bool:
                 .first()
             )
             if setting:
-                raw = setting.value_json if setting.value_json is not None else setting.value_text
+                raw = (
+                    setting.value_json
+                    if setting.value_json is not None
+                    else setting.value_text
+                )
                 return _coerce_bool(raw, default=False)
         except Exception:
             pass

@@ -13,7 +13,6 @@ from typing import Optional
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -23,18 +22,16 @@ from app.models.finance.gl.account_category import AccountCategory
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 from app.models.finance.gl.fiscal_year import FiscalYear
 from app.services.common import coerce_uuid
-from app.services.finance.platform.org_context import org_context_service
-from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
 from app.services.finance.gl.web.base import (
+    fiscal_year_option_view,
     format_currency,
     format_date,
-    fiscal_year_option_view,
     ifrs_label,
     parse_date,
     period_option_view,
-    TrialBalanceTotals,
 )
+from app.templates import templates
+from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
 
@@ -53,10 +50,7 @@ class PeriodWebService:
         year_id: Optional[str] = None,
     ) -> dict:
         """Get context for fiscal periods listing page."""
-        logger.debug(
-            "periods_context: org=%s year_id=%s",
-            organization_id, year_id
-        )
+        logger.debug("periods_context: org=%s year_id=%s", organization_id, year_id)
         org_id = coerce_uuid(organization_id)
 
         # Get fiscal years
@@ -106,8 +100,7 @@ class PeriodWebService:
     ) -> dict:
         """Get context for period create/edit form."""
         logger.debug(
-            "period_form_context: org=%s period_id=%s",
-            organization_id, period_id
+            "period_form_context: org=%s period_id=%s", organization_id, period_id
         )
         org_id = coerce_uuid(organization_id)
 
@@ -138,8 +131,7 @@ class PeriodWebService:
     ) -> dict:
         """Get context for trial balance report."""
         logger.debug(
-            "trial_balance_context: org=%s as_of_date=%s",
-            organization_id, as_of_date
+            "trial_balance_context: org=%s as_of_date=%s", organization_id, as_of_date
         )
         org_id = coerce_uuid(organization_id)
         ref_date = parse_date(as_of_date) or date.today()
@@ -173,7 +165,9 @@ class PeriodWebService:
             rows = (
                 db.query(AccountBalance, Account, AccountCategory)
                 .join(Account, AccountBalance.account_id == Account.account_id)
-                .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+                .join(
+                    AccountCategory, Account.category_id == AccountCategory.category_id
+                )
                 .filter(
                     AccountBalance.organization_id == org_id,
                     AccountBalance.fiscal_period_id == period.fiscal_period_id,
@@ -220,10 +214,7 @@ class PeriodWebService:
         period_id: str,
     ) -> Optional[str]:
         """Close a fiscal period. Returns error message or None on success."""
-        logger.debug(
-            "close_period: org=%s period_id=%s",
-            organization_id, period_id
-        )
+        logger.debug("close_period: org=%s period_id=%s", organization_id, period_id)
         org_id = coerce_uuid(organization_id)
         per_id = coerce_uuid(period_id)
 
@@ -256,7 +247,9 @@ class PeriodWebService:
     ) -> HTMLResponse:
         """Render period close checklist page."""
         context = base_context(request, auth, "Period Close", "gl")
-        return templates.TemplateResponse(request, "finance/gl/period_close.html", context)
+        return templates.TemplateResponse(
+            request, "finance/gl/period_close.html", context
+        )
 
     def list_periods_response(
         self,
@@ -278,7 +271,9 @@ class PeriodWebService:
         """Render new fiscal period form page."""
         context = base_context(request, auth, "New Fiscal Year", "gl")
         context.update(self.period_form_context(db, str(auth.organization_id)))
-        return templates.TemplateResponse(request, "finance/gl/period_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/gl/period_form.html", context
+        )
 
     def trial_balance_response(
         self,
@@ -296,4 +291,6 @@ class PeriodWebService:
                 as_of_date=as_of_date,
             )
         )
-        return templates.TemplateResponse(request, "finance/gl/trial_balance.html", context)
+        return templates.TemplateResponse(
+            request, "finance/gl/trial_balance.html", context
+        )

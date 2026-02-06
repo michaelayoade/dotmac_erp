@@ -48,6 +48,7 @@ def get_test_credentials():
         "password": os.environ.get("E2E_TEST_PASSWORD", "e2e_testpassword123"),
     }
 
+
 def get_admin_credentials():
     """Get admin test credentials from environment or fall back to test creds."""
     return {
@@ -167,7 +168,9 @@ def _login_for_tokens(base_url: str, creds: dict[str, str], user_label: str):
                 f"Login for {user_label} failed with status {response.status_code}: {response.text}",
             )
     except httpx.RequestError as e:
-        _skip_or_fail("login", f"Could not connect to server for {user_label} login: {e}")
+        _skip_or_fail(
+            "login", f"Could not connect to server for {user_label} login: {e}"
+        )
 
     return None
 
@@ -262,6 +265,7 @@ def browser_context_args(browser_context_args):
 # Authenticated Page Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def authenticated_page(page, base_url, auth_tokens):
     """
@@ -279,12 +283,16 @@ def authenticated_page(page, base_url, auth_tokens):
     # The cookie should already be set via browser_context_args,
     # but we can also set it directly if needed
     parsed = urlparse(base_url)
-    page.context.add_cookies([{
-        "name": "access_token",
-        "value": auth_tokens["access_token"],
-        "domain": parsed.hostname or "localhost",
-        "path": "/",
-    }])
+    page.context.add_cookies(
+        [
+            {
+                "name": "access_token",
+                "value": auth_tokens["access_token"],
+                "domain": parsed.hostname or "localhost",
+                "path": "/",
+            }
+        ]
+    )
 
     return page
 
@@ -299,19 +307,26 @@ def admin_authenticated_page(page, base_url, admin_auth_tokens):
     if not admin_auth_tokens:
         pytest.skip("No admin authentication token available")
 
-    _ensure_fresh_tokens(base_url, admin_auth_tokens, get_admin_credentials(), "admin user")
+    _ensure_fresh_tokens(
+        base_url, admin_auth_tokens, get_admin_credentials(), "admin user"
+    )
     if not admin_auth_tokens.get("access_token"):
         pytest.skip("No admin authentication token available")
 
     parsed = urlparse(base_url)
-    page.context.add_cookies([{
-        "name": "access_token",
-        "value": admin_auth_tokens["access_token"],
-        "domain": parsed.hostname or "localhost",
-        "path": "/",
-    }])
+    page.context.add_cookies(
+        [
+            {
+                "name": "access_token",
+                "value": admin_auth_tokens["access_token"],
+                "domain": parsed.hostname or "localhost",
+                "path": "/",
+            }
+        ]
+    )
 
     return page
+
 
 @pytest.fixture
 def dashboard_page(authenticated_page, base_url):
@@ -349,6 +364,7 @@ def ar_customers_page(authenticated_page, base_url):
 # Unauthenticated Page Fixtures (for testing login flows, etc.)
 # =============================================================================
 
+
 @pytest.fixture
 def unauthenticated_page(page):
     """Provide a page without authentication for testing login flows."""
@@ -358,6 +374,7 @@ def unauthenticated_page(page):
 # =============================================================================
 # Settings Page Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def settings_page(authenticated_page, base_url):
@@ -419,6 +436,7 @@ def numbering_page(authenticated_page, base_url):
 # AP Module Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def ap_invoices_page(authenticated_page, base_url):
     """Navigate to AP invoices list and return the page."""
@@ -455,6 +473,7 @@ def ap_goods_receipts_page(authenticated_page, base_url):
 # AR Module Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def ar_invoices_page(authenticated_page, base_url):
     """Navigate to AR invoices list and return the page."""
@@ -482,6 +501,7 @@ def ar_credit_notes_page(authenticated_page, base_url):
 # =============================================================================
 # GL Module Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def gl_journals_page(authenticated_page, base_url):
@@ -518,6 +538,7 @@ def gl_period_close_page(authenticated_page, base_url):
 # =============================================================================
 # Admin Module Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def admin_users_page(admin_authenticated_page, base_url):
@@ -563,6 +584,7 @@ def admin_audit_logs_page(admin_authenticated_page, base_url):
 # Fixed Assets Module Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def fixed_assets_page(authenticated_page, base_url):
     """Navigate to fixed assets list and return the page."""
@@ -591,6 +613,7 @@ def depreciation_page(authenticated_page, base_url):
 # Inventory Module Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def inventory_items_page(authenticated_page, base_url):
     """Navigate to inventory items list and return the page."""
@@ -618,6 +641,7 @@ def stock_levels_page(authenticated_page, base_url):
 # =============================================================================
 # Banking Module Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def bank_accounts_page(authenticated_page, base_url):
@@ -655,6 +679,7 @@ def statement_import_page(authenticated_page, base_url):
 # Quotes Module Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def quotes_page(authenticated_page, base_url):
     """Navigate to quotes list and return the page."""
@@ -675,6 +700,7 @@ def quote_create_page(authenticated_page, base_url):
 # Sales Orders Module Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def sales_orders_page(authenticated_page, base_url):
     """Navigate to sales orders list and return the page."""
@@ -694,6 +720,7 @@ def sales_order_create_page(authenticated_page, base_url):
 # =============================================================================
 # Expenses Module Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def expenses_page(authenticated_page, base_url):
@@ -722,6 +749,7 @@ def expense_reports_page(authenticated_page, base_url):
 # =============================================================================
 # Automation Module Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def recurring_templates_page(authenticated_page, base_url):
@@ -758,6 +786,7 @@ def document_templates_page(authenticated_page, base_url):
 # =============================================================================
 # Business Workflow Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def period_close_page(authenticated_page, base_url):
@@ -800,12 +829,16 @@ def mobile_page(page, base_url, fresh_auth_tokens):
     page.set_viewport_size(MOBILE_VIEWPORT)
 
     parsed = urlparse(base_url)
-    page.context.add_cookies([{
-        "name": "access_token",
-        "value": fresh_auth_tokens["access_token"],
-        "domain": parsed.hostname or "localhost",
-        "path": "/",
-    }])
+    page.context.add_cookies(
+        [
+            {
+                "name": "access_token",
+                "value": fresh_auth_tokens["access_token"],
+                "domain": parsed.hostname or "localhost",
+                "path": "/",
+            }
+        ]
+    )
 
     return page
 
@@ -818,12 +851,16 @@ def tablet_page(page, base_url, fresh_auth_tokens):
     page.set_viewport_size(TABLET_VIEWPORT)
 
     parsed = urlparse(base_url)
-    page.context.add_cookies([{
-        "name": "access_token",
-        "value": fresh_auth_tokens["access_token"],
-        "domain": parsed.hostname or "localhost",
-        "path": "/",
-    }])
+    page.context.add_cookies(
+        [
+            {
+                "name": "access_token",
+                "value": fresh_auth_tokens["access_token"],
+                "domain": parsed.hostname or "localhost",
+                "path": "/",
+            }
+        ]
+    )
 
     return page
 
@@ -836,12 +873,16 @@ def desktop_page(page, base_url, fresh_auth_tokens):
     page.set_viewport_size(DESKTOP_VIEWPORT)
 
     parsed = urlparse(base_url)
-    page.context.add_cookies([{
-        "name": "access_token",
-        "value": fresh_auth_tokens["access_token"],
-        "domain": parsed.hostname or "localhost",
-        "path": "/",
-    }])
+    page.context.add_cookies(
+        [
+            {
+                "name": "access_token",
+                "value": fresh_auth_tokens["access_token"],
+                "domain": parsed.hostname or "localhost",
+                "path": "/",
+            }
+        ]
+    )
 
     return page
 
@@ -849,6 +890,7 @@ def desktop_page(page, base_url, fresh_auth_tokens):
 # =============================================================================
 # Error Testing Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def invalid_uuid():
@@ -865,6 +907,7 @@ def nonexistent_page_url(base_url):
 # =============================================================================
 # Pagination Testing Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def paginated_suppliers_page(authenticated_page, base_url):
@@ -893,6 +936,7 @@ def paginated_journals_page(authenticated_page, base_url):
 # =============================================================================
 # Search and Filter Testing Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def filtered_suppliers_page(authenticated_page, base_url):

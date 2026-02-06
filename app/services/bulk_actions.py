@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 from abc import ABC, abstractmethod
 from typing import Any, Generic, TypeVar, cast
 from uuid import UUID
@@ -20,6 +21,8 @@ from sqlalchemy.orm import Session
 
 from app.schemas.bulk_actions import BulkActionResult
 from app.services.common import coerce_uuid
+
+logger = logging.getLogger(__name__)
 
 # Type variable for the model class
 T = TypeVar("T")
@@ -247,7 +250,9 @@ class BulkActionService(ABC, Generic[T]):
         entities = self._get_entities(ids)
 
         if not entities:
-            raise HTTPException(status_code=404, detail="No entities found with provided IDs")
+            raise HTTPException(
+                status_code=404, detail="No entities found with provided IDs"
+            )
 
         # Create CSV in memory
         output = io.StringIO()
@@ -259,7 +264,9 @@ class BulkActionService(ABC, Generic[T]):
 
         # Write data rows
         for entity in entities:
-            row = [self._get_export_value(entity, field) for field, _ in self.export_fields]
+            row = [
+                self._get_export_value(entity, field) for field, _ in self.export_fields
+            ]
             writer.writerow(row)
 
         output.seek(0)

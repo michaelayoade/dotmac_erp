@@ -3,6 +3,7 @@ Project Sync Service - ERPNext to DotMac ERP.
 
 Syncs ERPNext Project DocType to DotMac core_org.project.
 """
+
 import logging
 import uuid
 from datetime import datetime

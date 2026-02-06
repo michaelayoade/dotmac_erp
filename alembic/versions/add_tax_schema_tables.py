@@ -35,7 +35,16 @@ def upgrade() -> None:
         "FILED",
         "AMENDED",
     )
-    ensure_enum(bind, "tax_return_type", "VAT", "GST", "SALES_TAX", "WITHHOLDING", "INCOME", "PAYROLL")
+    ensure_enum(
+        bind,
+        "tax_return_type",
+        "VAT",
+        "GST",
+        "SALES_TAX",
+        "WITHHOLDING",
+        "INCOME",
+        "PAYROLL",
+    )
     ensure_enum(
         bind,
         "tax_transaction_type",

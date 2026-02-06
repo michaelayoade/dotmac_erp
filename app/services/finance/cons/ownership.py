@@ -6,19 +6,22 @@ Manages ownership interests, control determination, and NCI calculations (IFRS 1
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.models.finance.cons.legal_entity import ConsolidationMethod, LegalEntity
 from app.models.finance.cons.ownership_interest import OwnershipInterest
-from app.models.finance.cons.legal_entity import LegalEntity, ConsolidationMethod
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -131,12 +134,14 @@ class OwnershipService(ListResponseMixin):
             existing.effective_to = input.effective_from
 
         # Calculate effective ownership
-        effective_ownership = OwnershipService._calculate_effective_ownership_for_investor(
-            db, grp_id, input.investor_entity_id
+        effective_ownership = (
+            OwnershipService._calculate_effective_ownership_for_investor(
+                db, grp_id, input.investor_entity_id
+            )
         )
-        combined_effective = (effective_ownership * input.ownership_percentage / Decimal("100")).quantize(
-            Decimal("0.000001"), rounding=ROUND_HALF_UP
-        )
+        combined_effective = (
+            effective_ownership * input.ownership_percentage / Decimal("100")
+        ).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
 
         # NCI is 100% minus effective ownership by parent
         nci_percentage = Decimal("100") - input.ownership_percentage
@@ -259,7 +264,8 @@ class OwnershipService(ListResponseMixin):
         if as_of_date:
             ownership_query = ownership_query.filter(
                 OwnershipInterest.effective_from <= as_of_date,
-                (OwnershipInterest.effective_to > as_of_date) | (OwnershipInterest.effective_to.is_(None)),
+                (OwnershipInterest.effective_to > as_of_date)
+                | (OwnershipInterest.effective_to.is_(None)),
             )
 
         ownerships = ownership_query.all()
@@ -320,9 +326,9 @@ class OwnershipService(ListResponseMixin):
         while current_id in ownership_map and current_id not in visited:
             visited.add(current_id)
             investor_id, percentage, _ = ownership_map[current_id]
-            effective_ownership = (effective_ownership * percentage / Decimal("100")).quantize(
-                Decimal("0.000001"), rounding=ROUND_HALF_UP
-            )
+            effective_ownership = (
+                effective_ownership * percentage / Decimal("100")
+            ).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
 
             if current_id in entity_map:
                 chain.append(f"{entity_map[current_id].entity_code}({percentage}%)")

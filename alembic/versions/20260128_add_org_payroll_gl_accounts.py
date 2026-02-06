@@ -4,6 +4,7 @@ Revision ID: 20260128_payroll_gl
 Revises:
 Create Date: 2026-01-28
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql

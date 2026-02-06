@@ -13,7 +13,7 @@ from typing import Any, Callable, Optional, TypeVar
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 # Context variable for request-scoped cache
 _request_cache: ContextVar[Optional[dict[str, Any]]] = ContextVar(

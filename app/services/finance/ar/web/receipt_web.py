@@ -20,7 +20,11 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.finance.ar.customer import Customer
-from app.models.finance.ar.customer_payment import CustomerPayment, PaymentMethod, PaymentStatus
+from app.models.finance.ar.customer_payment import (
+    CustomerPayment,
+    PaymentMethod,
+    PaymentStatus,
+)
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 from app.models.finance.ar.payment_allocation import PaymentAllocation
 from app.models.finance.common.attachment import AttachmentCategory
@@ -29,28 +33,28 @@ from app.services.common import coerce_uuid
 from app.services.finance.ar.ar_aging import ar_aging_service
 from app.services.finance.ar.customer import customer_service
 from app.services.finance.ar.customer_payment import (
-    customer_payment_service,
     CustomerPaymentInput,
     PaymentAllocationInput,
+    customer_payment_service,
 )
-from app.services.finance.common.attachment import attachment_service, AttachmentInput
-from app.services.finance.platform.currency_context import get_currency_context
-from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
 from app.services.finance.ar.web.base import (
+    allocation_view,
+    customer_display_name,
+    customer_form_view,
+    customer_option_view,
+    format_currency,
+    format_date,
+    format_file_size,
+    get_accounts,
     parse_date,
     parse_receipt_status,
-    format_date,
-    format_currency,
-    format_file_size,
-    customer_display_name,
-    customer_option_view,
-    customer_form_view,
-    receipt_status_label,
     receipt_detail_view,
-    allocation_view,
-    get_accounts,
+    receipt_status_label,
 )
+from app.services.finance.common.attachment import AttachmentInput, attachment_service
+from app.services.finance.platform.currency_context import get_currency_context
+from app.templates import templates
+from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +118,9 @@ class ReceiptWebService:
                 settings.default_functional_currency_code,
             ),
             amount=Decimal(str(data.get("amount", 0))),
-            bank_account_id=UUID(data["bank_account_id"]) if data.get("bank_account_id") else None,
+            bank_account_id=UUID(data["bank_account_id"])
+            if data.get("bank_account_id")
+            else None,
             reference=data.get("reference"),
             description=data.get("description"),
             allocations=allocations,
@@ -140,7 +146,11 @@ class ReceiptWebService:
         """Get context for receipt listing page."""
         logger.debug(
             "list_receipts_context: org=%s search=%r customer_id=%s status=%s page=%d",
-            organization_id, search, customer_id, status, page
+            organization_id,
+            search,
+            customer_id,
+            status,
+            page,
         )
         org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
@@ -156,7 +166,9 @@ class ReceiptWebService:
         )
 
         if customer_id:
-            query = query.filter(CustomerPayment.customer_id == coerce_uuid(customer_id))
+            query = query.filter(
+                CustomerPayment.customer_id == coerce_uuid(customer_id)
+            )
         if status_value:
             query = query.filter(CustomerPayment.status == status_value)
         if from_date:
@@ -173,7 +185,9 @@ class ReceiptWebService:
                 )
             )
 
-        total_count = query.with_entities(func.count(CustomerPayment.payment_id)).scalar() or 0
+        total_count = (
+            query.with_entities(func.count(CustomerPayment.payment_id)).scalar() or 0
+        )
         receipts = (
             query.order_by(CustomerPayment.payment_date.desc())
             .limit(limit)
@@ -235,7 +249,9 @@ class ReceiptWebService:
         """Get context for receipt create/edit form."""
         logger.debug(
             "receipt_form_context: org=%s invoice_id=%s receipt_id=%s",
-            organization_id, invoice_id, receipt_id
+            organization_id,
+            invoice_id,
+            receipt_id,
         )
         from app.models.finance.tax.tax_code import TaxCode, TaxType
 
@@ -253,14 +269,26 @@ class ReceiptWebService:
                         "payment_id": str(receipt.payment_id),
                         "payment_number": receipt.payment_number,
                         "customer_id": str(receipt.customer_id),
-                        "payment_date": receipt.payment_date.isoformat() if receipt.payment_date else None,
-                        "payment_method": receipt.payment_method.value if receipt.payment_method else None,
-                        "bank_account_id": str(receipt.bank_account_id) if receipt.bank_account_id else None,
+                        "payment_date": receipt.payment_date.isoformat()
+                        if receipt.payment_date
+                        else None,
+                        "payment_method": receipt.payment_method.value
+                        if receipt.payment_method
+                        else None,
+                        "bank_account_id": str(receipt.bank_account_id)
+                        if receipt.bank_account_id
+                        else None,
                         "currency_code": receipt.currency_code,
                         "amount": float(receipt.amount),
-                        "gross_amount": float(receipt.gross_amount) if receipt.gross_amount else None,
-                        "wht_amount": float(receipt.wht_amount) if receipt.wht_amount else 0,
-                        "wht_code_id": str(receipt.wht_code_id) if receipt.wht_code_id else None,
+                        "gross_amount": float(receipt.gross_amount)
+                        if receipt.gross_amount
+                        else None,
+                        "wht_amount": float(receipt.wht_amount)
+                        if receipt.wht_amount
+                        else 0,
+                        "wht_code_id": str(receipt.wht_code_id)
+                        if receipt.wht_code_id
+                        else None,
                         "wht_certificate_number": receipt.wht_certificate_number,
                         "reference": receipt.reference,
                         "description": receipt.description,
@@ -273,11 +301,15 @@ class ReceiptWebService:
                     )
                     for alloc in allocations:
                         inv = db.get(Invoice, alloc.invoice_id)
-                        existing_allocations.append({
-                            "invoice_id": str(alloc.invoice_id),
-                            "invoice_number": inv.invoice_number if inv else "Unknown",
-                            "amount": float(alloc.allocated_amount),
-                        })
+                        existing_allocations.append(
+                            {
+                                "invoice_id": str(alloc.invoice_id),
+                                "invoice_number": inv.invoice_number
+                                if inv
+                                else "Unknown",
+                                "amount": float(alloc.allocated_amount),
+                            }
+                        )
             except Exception:
                 pass
 
@@ -290,8 +322,14 @@ class ReceiptWebService:
             limit=200,
         ):
             cust_view = customer_option_view(customer)
-            cust_view["is_wht_applicable"] = getattr(customer, "is_wht_applicable", False)
-            cust_view["default_wht_code_id"] = str(customer.default_wht_code_id) if getattr(customer, "default_wht_code_id", None) else None
+            cust_view["is_wht_applicable"] = getattr(
+                customer, "is_wht_applicable", False
+            )
+            cust_view["default_wht_code_id"] = (
+                str(customer.default_wht_code_id)
+                if getattr(customer, "default_wht_code_id", None)
+                else None
+            )
             customers_list.append(cust_view)
 
         # Get WHT tax codes
@@ -302,11 +340,13 @@ class ReceiptWebService:
                 "tax_name": tc.tax_name,
                 "tax_rate": tc.tax_rate,
             }
-            for tc in db.query(TaxCode).filter(
+            for tc in db.query(TaxCode)
+            .filter(
                 TaxCode.organization_id == org_id,
                 TaxCode.is_active == True,
                 TaxCode.tax_type == TaxType.WITHHOLDING,
-            ).all()
+            )
+            .all()
         ]
 
         # Get bank accounts
@@ -376,8 +416,7 @@ class ReceiptWebService:
     ) -> dict:
         """Get context for receipt detail page."""
         logger.debug(
-            "receipt_detail_context: org=%s receipt_id=%s",
-            organization_id, receipt_id
+            "receipt_detail_context: org=%s receipt_id=%s", organization_id, receipt_id
         )
         org_id = coerce_uuid(organization_id)
         receipt = None
@@ -405,9 +444,7 @@ class ReceiptWebService:
         if allocations:
             invoice_ids = [allocation.invoice_id for allocation in allocations]
             invoices = (
-                db.query(Invoice)
-                .filter(Invoice.invoice_id.in_(invoice_ids))
-                .all()
+                db.query(Invoice).filter(Invoice.invoice_id.in_(invoice_ids)).all()
             )
             invoice_map = {invoice.invoice_id: invoice for invoice in invoices}
 
@@ -442,7 +479,9 @@ class ReceiptWebService:
             for att in attachments
         ]
 
-        logger.debug("receipt_detail_context: found %d allocations", len(allocations_view))
+        logger.debug(
+            "receipt_detail_context: found %d allocations", len(allocations_view)
+        )
 
         return {
             "receipt": receipt_detail_view(receipt, customer),
@@ -459,8 +498,7 @@ class ReceiptWebService:
     ) -> Optional[str]:
         """Delete a receipt. Returns error message or None on success."""
         logger.debug(
-            "delete_receipt: org=%s receipt_id=%s",
-            organization_id, receipt_id
+            "delete_receipt: org=%s receipt_id=%s", organization_id, receipt_id
         )
         org_id = coerce_uuid(organization_id)
         pay_id = coerce_uuid(receipt_id)
@@ -497,7 +535,9 @@ class ReceiptWebService:
         """Get context for AR aging report."""
         logger.debug(
             "aging_context: org=%s as_of_date=%s customer_id=%s",
-            organization_id, as_of_date, customer_id
+            organization_id,
+            as_of_date,
+            customer_id,
         )
         org_id = coerce_uuid(organization_id)
         ref_date = parse_date(as_of_date)
@@ -508,9 +548,7 @@ class ReceiptWebService:
             )
             aging_data = [summary]
         else:
-            aging_data = ar_aging_service.get_aging_by_customer(
-                db, org_id, ref_date
-            )
+            aging_data = ar_aging_service.get_aging_by_customer(db, org_id, ref_date)
 
         customers_list = [
             customer_option_view(customer)
@@ -579,7 +617,9 @@ class ReceiptWebService:
                 invoice_id=invoice_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ar/receipt_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/receipt_form.html", context
+        )
 
     def receipt_detail_response(
         self,
@@ -597,7 +637,9 @@ class ReceiptWebService:
                 receipt_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ar/receipt_detail.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/receipt_detail.html", context
+        )
 
     async def create_receipt_response(
         self,
@@ -648,7 +690,9 @@ class ReceiptWebService:
             context.update(self.receipt_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
             context["form_data"] = data
-            return templates.TemplateResponse(request, "finance/ar/receipt_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/receipt_form.html", context
+            )
 
     def delete_receipt_response(
         self,
@@ -670,7 +714,9 @@ class ReceiptWebService:
                 )
             )
             context["error"] = error
-            return templates.TemplateResponse(request, "finance/ar/receipt_detail.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/receipt_detail.html", context
+            )
 
         return RedirectResponse(url="/finance/ar/receipts", status_code=303)
 
@@ -690,7 +736,9 @@ class ReceiptWebService:
                 receipt_id=receipt_id,
             )
         )
-        return templates.TemplateResponse(request, "finance/ar/receipt_form.html", context)
+        return templates.TemplateResponse(
+            request, "finance/ar/receipt_form.html", context
+        )
 
     async def update_receipt_response(
         self,
@@ -749,7 +797,9 @@ class ReceiptWebService:
             )
             context["error"] = str(e)
             context["form_data"] = data
-            return templates.TemplateResponse(request, "finance/ar/receipt_form.html", context)
+            return templates.TemplateResponse(
+                request, "finance/ar/receipt_form.html", context
+            )
 
     def aging_report_response(
         self,

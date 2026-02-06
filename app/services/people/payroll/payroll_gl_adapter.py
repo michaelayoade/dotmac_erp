@@ -7,29 +7,30 @@ general ledger, integrating People payroll with Finance GL.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Optional, cast
 from uuid import UUID
-import uuid as uuid_lib
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.models.finance.gl.journal_entry import JournalType
+from app.models.people.hr.employee import Employee
 from app.models.people.payroll.salary_slip import (
     SalarySlip,
-    SalarySlipEarning,
     SalarySlipDeduction,
     SalarySlipStatus,
 )
-from app.models.people.payroll.salary_component import SalaryComponentType
-from app.models.people.hr.employee import Employee
 from app.services.common import coerce_uuid
-from app.services.finance.gl.journal import JournalService, JournalInput, JournalLineInput
+from app.services.finance.gl.journal import (
+    JournalInput,
+    JournalLineInput,
+    JournalService,
+)
 from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
-from app.models.finance.gl.journal_entry import JournalType
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +142,7 @@ class PayrollGLAdapter:
 
         # Get organization for payroll payable account
         from app.models.finance.core_org.organization import Organization
+
         org = db.get(Organization, org_id)
         if not org:
             return PayrollPostingResult(success=False, message="Organization not found")
@@ -148,7 +150,7 @@ class PayrollGLAdapter:
         # Get payroll payable account (from org settings or employee)
         payroll_payable_account_id = (
             employee.default_payroll_payable_account_id
-            or getattr(org, 'salary_payable_account_id', None)
+            or getattr(org, "salary_payable_account_id", None)
         )
 
         if not payroll_payable_account_id:
@@ -249,9 +251,7 @@ class PayrollGLAdapter:
         )
 
         try:
-            journal = JournalService.create_journal(
-                db, org_id, journal_input, user_id
-            )
+            journal = JournalService.create_journal(db, org_id, journal_input, user_id)
 
             # Submit and approve automatically for payroll posting
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
@@ -280,7 +280,9 @@ class PayrollGLAdapter:
         )
 
         try:
-            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+            posting_result = LedgerPostingService.post_journal_entry(
+                db, posting_request
+            )
 
             if not posting_result.success:
                 return PayrollPostingResult(
@@ -419,10 +421,9 @@ class PayrollGLAdapter:
             return PayrollPostingResult(success=False, message="Organization not found")
 
         # Get payroll payable account
-        payroll_payable_account_id = (
-            getattr(employee, 'default_payroll_payable_account_id', None)
-            or getattr(org, 'salary_payable_account_id', None)
-        )
+        payroll_payable_account_id = getattr(
+            employee, "default_payroll_payable_account_id", None
+        ) or getattr(org, "salary_payable_account_id", None)
 
         if not payroll_payable_account_id:
             return PayrollPostingResult(
@@ -432,17 +433,19 @@ class PayrollGLAdapter:
 
         # Build journal entry lines
         journal_lines: list[JournalLineInput] = []
-        exchange_rate = getattr(slip, 'exchange_rate', None) or Decimal("1.0")
+        exchange_rate = getattr(slip, "exchange_rate", None) or Decimal("1.0")
 
         # Debit lines: Expense accounts (earnings)
-        for earning in (slip.earnings or []):
-            if getattr(earning, 'statistical_component', False):
+        for earning in slip.earnings or []:
+            if getattr(earning, "statistical_component", False):
                 continue
-            if getattr(earning, 'do_not_include_in_total', False):
+            if getattr(earning, "do_not_include_in_total", False):
                 continue
 
-            component = getattr(earning, 'component', None)
-            expense_acc = getattr(component, 'expense_account_id', None) if component else None
+            component = getattr(earning, "component", None)
+            expense_acc = (
+                getattr(component, "expense_account_id", None) if component else None
+            )
             if not expense_acc:
                 continue
 
@@ -455,23 +458,24 @@ class PayrollGLAdapter:
                     debit_amount_functional=functional_amount,
                     credit_amount_functional=Decimal("0"),
                     description=f"Salary: {getattr(earning, 'component_name', 'Earning')} - {slip.employee_name}",
-                    cost_center_id=getattr(slip, 'cost_center_id', None) or getattr(employee, 'cost_center_id', None),
+                    cost_center_id=getattr(slip, "cost_center_id", None)
+                    or getattr(employee, "cost_center_id", None),
                 )
             )
 
         # Handle deductions (including employer pension as expense)
-        for deduction in (slip.deductions or []):
-            if getattr(deduction, 'statistical_component', False):
+        for deduction in slip.deductions or []:
+            if getattr(deduction, "statistical_component", False):
                 continue
 
-            component = getattr(deduction, 'component', None)
+            component = getattr(deduction, "component", None)
             if not component:
                 continue
 
-            liability_acc = getattr(component, 'liability_account_id', None)
-            expense_acc = getattr(component, 'expense_account_id', None)
-            comp_code = getattr(component, 'component_code', '')
-            do_not_include = getattr(deduction, 'do_not_include_in_total', False)
+            liability_acc = getattr(component, "liability_account_id", None)
+            expense_acc = getattr(component, "expense_account_id", None)
+            comp_code = getattr(component, "component_code", "")
+            do_not_include = getattr(deduction, "do_not_include_in_total", False)
 
             # Employer pension: debit expense, credit liability
             if comp_code == EMPLOYER_PENSION_COMPONENT_CODE:
@@ -525,22 +529,24 @@ class PayrollGLAdapter:
         # Create journal entry
         journal_input = JournalInput(
             journal_type=JournalType.STANDARD,
-            entry_date=getattr(slip, 'posting_date', posting_date),
+            entry_date=getattr(slip, "posting_date", posting_date),
             posting_date=posting_date,
             description=f"Salary Slip {slip.slip_number} - {slip.employee_name}",
             reference=slip.slip_number,
-            currency_code=getattr(slip, 'currency_code', 'NGN'),
+            currency_code=getattr(slip, "currency_code", "NGN"),
             exchange_rate=exchange_rate,
             lines=journal_lines,
             source_module="PAYROLL",
             source_document_type="SALARY_SLIP",
-            source_document_id=_safe_coerce_uuid(getattr(slip, 'slip_id', None)),
+            source_document_id=_safe_coerce_uuid(getattr(slip, "slip_id", None)),
         )
 
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
 
             # Post to ledger
             posting_request = PostingRequest(
@@ -552,7 +558,9 @@ class PayrollGLAdapter:
                 posted_by_user_id=user_id,
             )
 
-            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+            posting_result = LedgerPostingService.post_journal_entry(
+                db, posting_request
+            )
 
             if not posting_result.success:
                 return PayrollPostingResult(
@@ -606,8 +614,8 @@ class PayrollGLAdapter:
         if not org:
             return PayrollPostingResult(success=False, message="Organization not found")
 
-        expense_account_id = getattr(org, 'salaries_expense_account_id', None)
-        payable_account_id = getattr(org, 'salary_payable_account_id', None)
+        expense_account_id = getattr(org, "salaries_expense_account_id", None)
+        payable_account_id = getattr(org, "salary_payable_account_id", None)
 
         if not expense_account_id or not payable_account_id:
             return PayrollPostingResult(
@@ -616,26 +624,30 @@ class PayrollGLAdapter:
             )
 
         # Aggregate totals
-        total_gross = sum((getattr(s, 'gross_pay', Decimal("0")) for s in slips), Decimal("0"))
-        total_net = sum((getattr(s, 'net_pay', Decimal("0")) for s in slips), Decimal("0"))
+        total_gross = sum(
+            (getattr(s, "gross_pay", Decimal("0")) for s in slips), Decimal("0")
+        )
+        total_net = sum(
+            (getattr(s, "net_pay", Decimal("0")) for s in slips), Decimal("0")
+        )
 
         # Group deductions by liability account
         deductions_by_account: dict[UUID, tuple[str, Decimal, UUID | None]] = {}
 
         for slip in slips:
-            for ded in (getattr(slip, 'deductions', None) or []):
-                if getattr(ded, 'statistical_component', False):
+            for ded in getattr(slip, "deductions", None) or []:
+                if getattr(ded, "statistical_component", False):
                     continue
 
-                component = getattr(ded, 'component', None)
+                component = getattr(ded, "component", None)
                 if not component:
                     continue
 
-                liability_acc = getattr(component, 'liability_account_id', None)
-                expense_acc = getattr(component, 'expense_account_id', None)
-                comp_code = getattr(component, 'component_code', '')
-                comp_name = getattr(component, 'component_name', 'Deduction')
-                do_not_include = getattr(ded, 'do_not_include_in_total', False)
+                liability_acc = getattr(component, "liability_account_id", None)
+                expense_acc = getattr(component, "expense_account_id", None)
+                comp_code = getattr(component, "component_code", "")
+                comp_name = getattr(component, "component_name", "Deduction")
+                do_not_include = getattr(ded, "do_not_include_in_total", False)
 
                 if do_not_include and comp_code != EMPLOYER_PENSION_COMPONENT_CODE:
                     continue
@@ -644,14 +656,26 @@ class PayrollGLAdapter:
                     key = cast(UUID, liability_acc)
                     if key in deductions_by_account:
                         name, amt, exp = deductions_by_account[key]
-                        deductions_by_account[key] = (name, amt + ded.amount, exp or expense_acc)
+                        deductions_by_account[key] = (
+                            name,
+                            amt + ded.amount,
+                            exp or expense_acc,
+                        )
                     else:
-                        deductions_by_account[key] = (comp_name, ded.amount, expense_acc)
+                        deductions_by_account[key] = (
+                            comp_name,
+                            ded.amount,
+                            expense_acc,
+                        )
 
         # Build journal lines
         journal_lines: list[JournalLineInput] = []
-        currency_code = getattr(slips[0], 'currency_code', 'NGN') if slips else 'NGN'
-        exchange_rate = getattr(slips[0], 'exchange_rate', None) or Decimal("1.0") if slips else Decimal("1.0")
+        currency_code = getattr(slips[0], "currency_code", "NGN") if slips else "NGN"
+        exchange_rate = (
+            getattr(slips[0], "exchange_rate", None) or Decimal("1.0")
+            if slips
+            else Decimal("1.0")
+        )
 
         period_ref = f"{getattr(entry, 'payroll_month', 1)}/{getattr(entry, 'payroll_year', 2026)}"
 
@@ -709,10 +733,10 @@ class PayrollGLAdapter:
         )
 
         # Create journal
-        entry_number = getattr(entry, 'entry_number', 'PAY-UNKNOWN')
+        entry_number = getattr(entry, "entry_number", "PAY-UNKNOWN")
         journal_input = JournalInput(
             journal_type=JournalType.STANDARD,
-            entry_date=getattr(entry, 'posting_date', posting_date),
+            entry_date=getattr(entry, "posting_date", posting_date),
             posting_date=posting_date,
             description=f"Payroll Run {entry_number}",
             reference=entry_number,
@@ -721,13 +745,15 @@ class PayrollGLAdapter:
             lines=journal_lines,
             source_module="PAYROLL",
             source_document_type="PAYROLL_ENTRY",
-            source_document_id=_safe_coerce_uuid(getattr(entry, 'entry_id', None)),
+            source_document_id=_safe_coerce_uuid(getattr(entry, "entry_id", None)),
         )
 
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
 
             # Post to ledger
             posting_request = PostingRequest(
@@ -739,7 +765,9 @@ class PayrollGLAdapter:
                 posted_by_user_id=user_id,
             )
 
-            posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
+            posting_result = LedgerPostingService.post_journal_entry(
+                db, posting_request
+            )
 
             if not posting_result.success:
                 return PayrollPostingResult(
@@ -790,7 +818,10 @@ class PayrollGLAdapter:
         from sqlalchemy.orm import selectinload
 
         from app.models.finance.core_org.organization import Organization
-        from app.models.people.payroll.payroll_entry import PayrollEntry, PayrollEntryStatus
+        from app.models.people.payroll.payroll_entry import (
+            PayrollEntry,
+            PayrollEntryStatus,
+        )
 
         org_id = coerce_uuid(organization_id)
         e_id = coerce_uuid(entry_id)
@@ -799,7 +830,9 @@ class PayrollGLAdapter:
         # 1. Load and validate payroll entry
         entry = db.get(PayrollEntry, e_id)
         if not entry or entry.organization_id != org_id:
-            return PayrollPostingResult(success=False, message="Payroll entry not found")
+            return PayrollPostingResult(
+                success=False, message="Payroll entry not found"
+            )
 
         if entry.status != PayrollEntryStatus.APPROVED:
             return PayrollPostingResult(
@@ -835,7 +868,9 @@ class PayrollGLAdapter:
         slips = db.scalars(
             select(SalarySlip)
             .options(
-                selectinload(SalarySlip.deductions).selectinload(SalarySlipDeduction.component)
+                selectinload(SalarySlip.deductions).selectinload(
+                    SalarySlipDeduction.component
+                )
             )
             .where(
                 SalarySlip.payroll_entry_id == e_id,
@@ -904,7 +939,11 @@ class PayrollGLAdapter:
         )
 
         # Credits: Each deduction type
-        for comp_id, (comp_name, amount, liability_acc_id) in deductions_by_component.items():
+        for comp_id, (
+            comp_name,
+            amount,
+            liability_acc_id,
+        ) in deductions_by_component.items():
             if amount <= 0:
                 continue
             journal_lines.append(
@@ -948,7 +987,9 @@ class PayrollGLAdapter:
         try:
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
+            JournalService.approve_journal(
+                db, org_id, journal.journal_entry_id, user_id
+            )
         except HTTPException as e:
             return PayrollPostingResult(
                 success=False,

@@ -6,18 +6,21 @@ Manages report schedules and automated report generation.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.finance.rpt.report_schedule import ReportSchedule, ScheduleFrequency
 from app.models.finance.rpt.report_definition import ReportDefinition
+from app.models.finance.rpt.report_schedule import ReportSchedule, ScheduleFrequency
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -97,7 +100,10 @@ class ReportSchedulerService(ListResponseMixin):
             )
 
         # Validate output format
-        if definition.supported_formats and input.output_format not in definition.supported_formats:
+        if (
+            definition.supported_formats
+            and input.output_format not in definition.supported_formats
+        ):
             raise HTTPException(
                 status_code=400,
                 detail=f"Output format {input.output_format} not supported",
@@ -446,7 +452,9 @@ class ReportSchedulerService(ListResponseMixin):
             run_minute = int(parts[1]) if len(parts) > 1 else 0
 
         if frequency == ScheduleFrequency.DAILY:
-            next_run = now.replace(hour=run_hour, minute=run_minute, second=0, microsecond=0)
+            next_run = now.replace(
+                hour=run_hour, minute=run_minute, second=0, microsecond=0
+            )
             if next_run <= now:
                 next_run += timedelta(days=1)
             return next_run
@@ -457,7 +465,9 @@ class ReportSchedulerService(ListResponseMixin):
             if days_ahead <= 0:
                 days_ahead += 7
             next_run = now + timedelta(days=days_ahead)
-            next_run = next_run.replace(hour=run_hour, minute=run_minute, second=0, microsecond=0)
+            next_run = next_run.replace(
+                hour=run_hour, minute=run_minute, second=0, microsecond=0
+            )
             return next_run
 
         elif frequency == ScheduleFrequency.MONTHLY:

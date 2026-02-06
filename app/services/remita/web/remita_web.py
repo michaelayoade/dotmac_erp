@@ -167,7 +167,9 @@ class RemitaWebService:
             "source_options": self.source_options(),
         }
         if rrr.source_type and rrr.source_id:
-            context["source_link"] = self._source_link_for(rrr.source_type, rrr.source_id)
+            context["source_link"] = self._source_link_for(
+                rrr.source_type, rrr.source_id
+            )
         return context
 
     def generate_form_context(self) -> dict:
@@ -261,10 +263,10 @@ class RemitaWebService:
         ]
 
     def _resolve_source(self, organization_id: UUID, source_type: str, source_id: UUID):
+        from app.models.expense.expense_claim import ExpenseClaim
         from app.models.finance.ap.supplier_invoice import SupplierInvoice
         from app.models.finance.ap.supplier_payment import SupplierPayment
         from app.models.people.payroll.payroll_entry import PayrollEntry
-        from app.models.expense.expense_claim import ExpenseClaim
 
         type_map = {
             "ap_invoice": SupplierInvoice,
@@ -344,13 +346,15 @@ class RemitaWebService:
         recent: bool = False,
     ) -> list[dict[str, str]]:
         """Search source entities for linking."""
-        from sqlalchemy import select, or_
+        from datetime import date
+
+        from sqlalchemy import or_, select
+
+        from app.models.expense.expense_claim import ExpenseClaim
+        from app.models.finance.ap.supplier import Supplier
         from app.models.finance.ap.supplier_invoice import SupplierInvoice
         from app.models.finance.ap.supplier_payment import SupplierPayment
-        from app.models.finance.ap.supplier import Supplier
         from app.models.people.payroll.payroll_entry import PayrollEntry
-        from app.models.expense.expense_claim import ExpenseClaim
-        from datetime import date
 
         results: list[dict[str, str]] = []
         q = (query or "").strip()
@@ -386,8 +390,13 @@ class RemitaWebService:
                 )
             if status:
                 try:
-                    from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus
-                    stmt = stmt.where(SupplierInvoice.status == SupplierInvoiceStatus(status))
+                    from app.models.finance.ap.supplier_invoice import (
+                        SupplierInvoiceStatus,
+                    )
+
+                    stmt = stmt.where(
+                        SupplierInvoice.status == SupplierInvoiceStatus(status)
+                    )
                 except ValueError:
                     raise ValueError("Invalid invoice status filter")
             if date_from_val:
@@ -430,6 +439,7 @@ class RemitaWebService:
             if status:
                 try:
                     from app.models.finance.ap.supplier_payment import APPaymentStatus
+
                     stmt = stmt.where(SupplierPayment.status == APPaymentStatus(status))
                 except ValueError:
                     raise ValueError("Invalid payment status filter")
@@ -455,9 +465,8 @@ class RemitaWebService:
             return results
 
         if source_type == "payroll_run":
-            stmt = (
-                select(PayrollEntry)
-                .where(PayrollEntry.organization_id == organization_id)
+            stmt = select(PayrollEntry).where(
+                PayrollEntry.organization_id == organization_id
             )
             if not recent:
                 stmt = stmt.where(
@@ -483,9 +492,8 @@ class RemitaWebService:
             return results
 
         if source_type == "expense_claim":
-            stmt = (
-                select(ExpenseClaim)
-                .where(ExpenseClaim.organization_id == organization_id)
+            stmt = select(ExpenseClaim).where(
+                ExpenseClaim.organization_id == organization_id
             )
             if not recent:
                 stmt = stmt.where(ExpenseClaim.claim_number.ilike(q_like))

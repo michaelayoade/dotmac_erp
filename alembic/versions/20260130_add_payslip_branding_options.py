@@ -110,6 +110,5 @@ def downgrade() -> None:
     ]
     for col in columns_to_drop:
         op.execute(
-            f"ALTER TABLE core_org.organization_branding "
-            f"DROP COLUMN IF EXISTS {col}"
+            f"ALTER TABLE core_org.organization_branding DROP COLUMN IF EXISTS {col}"
         )

@@ -4,6 +4,7 @@ Fixed Assets Importer.
 Imports fixed assets from CSV data into the IFRS-based fixed asset system.
 """
 
+import logging
 from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
@@ -16,6 +17,8 @@ from app.models.fixed_assets.asset import Asset, AssetStatus
 from app.models.fixed_assets.asset_category import AssetCategory, DepreciationMethod
 
 from .base import BaseImporter, FieldMapping, ImportConfig
+
+logger = logging.getLogger(__name__)
 
 
 class AssetCategoryImporter(BaseImporter[AssetCategory]):
@@ -131,7 +134,9 @@ class AssetCategoryImporter(BaseImporter[AssetCategory]):
         """Ensure all required categories exist."""
         unique_categories = set()
         for row in rows:
-            cat_name = row.get("Asset Category") or row.get("Asset Class") or "General Assets"
+            cat_name = (
+                row.get("Asset Category") or row.get("Asset Class") or "General Assets"
+            )
             if cat_name:
                 unique_categories.add(cat_name.strip())
 
@@ -177,11 +182,12 @@ class AssetImporter(BaseImporter[Asset]):
         super().__init__(db, config)
         self._code_counter = 0
         self._category_importer = AssetCategoryImporter(
-            db, config,
+            db,
+            config,
             asset_account_id,
             accumulated_depreciation_account_id,
             depreciation_expense_account_id,
-            gain_loss_disposal_account_id
+            gain_loss_disposal_account_id,
         )
 
     def get_field_mappings(self) -> List[FieldMapping]:
@@ -200,36 +206,85 @@ class AssetImporter(BaseImporter[Asset]):
             FieldMapping("Asset Class", "asset_class_alt", required=False),
             FieldMapping("Category", "category_alt", required=False),
             # Acquisition
-            FieldMapping("Acquisition Date", "acquisition_date", required=False,
-                         transformer=self.parse_date),
-            FieldMapping("Purchase Date", "purchase_date_alt", required=False,
-                         transformer=self.parse_date),
-            FieldMapping("Date Acquired", "date_acquired_alt", required=False,
-                         transformer=self.parse_date),
-            FieldMapping("Acquisition Cost", "acquisition_cost", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Cost", "cost_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Purchase Price", "purchase_price_alt", required=False,
-                         transformer=self.parse_decimal),
+            FieldMapping(
+                "Acquisition Date",
+                "acquisition_date",
+                required=False,
+                transformer=self.parse_date,
+            ),
+            FieldMapping(
+                "Purchase Date",
+                "purchase_date_alt",
+                required=False,
+                transformer=self.parse_date,
+            ),
+            FieldMapping(
+                "Date Acquired",
+                "date_acquired_alt",
+                required=False,
+                transformer=self.parse_date,
+            ),
+            FieldMapping(
+                "Acquisition Cost",
+                "acquisition_cost",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Cost", "cost_alt", required=False, transformer=self.parse_decimal
+            ),
+            FieldMapping(
+                "Purchase Price",
+                "purchase_price_alt",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
             # Currency
-            FieldMapping("Currency Code", "currency_code", required=False, default="NGN"),
+            FieldMapping(
+                "Currency Code", "currency_code", required=False, default="NGN"
+            ),
             FieldMapping("Currency", "currency_alt", required=False),
             # Depreciation
-            FieldMapping("Useful Life", "useful_life_years", required=False,
-                         transformer=lambda v: int(float(v)) if v else None),
-            FieldMapping("Life (Years)", "life_years_alt", required=False,
-                         transformer=lambda v: int(float(v)) if v else None),
-            FieldMapping("Useful Life Months", "useful_life_months", required=False,
-                         transformer=lambda v: int(float(v)) if v else None),
-            FieldMapping("Residual Value", "residual_value", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Salvage Value", "salvage_value_alt", required=False,
-                         transformer=self.parse_decimal),
-            FieldMapping("Depreciation Method", "depreciation_method_str", required=False),
+            FieldMapping(
+                "Useful Life",
+                "useful_life_years",
+                required=False,
+                transformer=lambda v: int(float(v)) if v else None,
+            ),
+            FieldMapping(
+                "Life (Years)",
+                "life_years_alt",
+                required=False,
+                transformer=lambda v: int(float(v)) if v else None,
+            ),
+            FieldMapping(
+                "Useful Life Months",
+                "useful_life_months",
+                required=False,
+                transformer=lambda v: int(float(v)) if v else None,
+            ),
+            FieldMapping(
+                "Residual Value",
+                "residual_value",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Salvage Value",
+                "salvage_value_alt",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
+            FieldMapping(
+                "Depreciation Method", "depreciation_method_str", required=False
+            ),
             FieldMapping("Method", "method_alt", required=False),
-            FieldMapping("Accumulated Depreciation", "accumulated_depreciation", required=False,
-                         transformer=self.parse_decimal),
+            FieldMapping(
+                "Accumulated Depreciation",
+                "accumulated_depreciation",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
             # Physical
             FieldMapping("Serial Number", "serial_number", required=False),
             FieldMapping("Serial", "serial_alt", required=False),
@@ -239,13 +294,18 @@ class AssetImporter(BaseImporter[Asset]):
             FieldMapping("Location", "location", required=False),
             FieldMapping("Department", "department_alt", required=False),
             # Insurance
-            FieldMapping("Insured Value", "insured_value", required=False,
-                         transformer=self.parse_decimal),
+            FieldMapping(
+                "Insured Value",
+                "insured_value",
+                required=False,
+                transformer=self.parse_decimal,
+            ),
             FieldMapping("Insurance Policy", "insurance_policy_number", required=False),
             # Status
             FieldMapping("Status", "status_str", required=False),
-            FieldMapping("Is Active", "is_active", required=False,
-                         transformer=self.parse_boolean),
+            FieldMapping(
+                "Is Active", "is_active", required=False, transformer=self.parse_boolean
+            ),
             # Reference
             FieldMapping("Supplier", "supplier_name", required=False),
             FieldMapping("Invoice Reference", "invoice_reference", required=False),
@@ -254,8 +314,12 @@ class AssetImporter(BaseImporter[Asset]):
 
     def get_unique_key(self, row: Dict[str, Any]) -> str:
         """Unique key is asset number or code."""
-        code = (row.get("Asset Number") or row.get("Asset Code") or
-                row.get("Tag Number") or "").strip()
+        code = (
+            row.get("Asset Number")
+            or row.get("Asset Code")
+            or row.get("Tag Number")
+            or ""
+        ).strip()
         if code:
             return code
         # Fallback to name + date
@@ -280,28 +344,50 @@ class AssetImporter(BaseImporter[Asset]):
     def create_entity(self, row: Dict[str, Any]) -> Asset:
         """Create a new asset from transformed row data."""
         # Get asset name
-        asset_name = (row.get("asset_name") or row.get("name_alt") or
-                      row.get("description") or "Unknown Asset").strip()
+        asset_name = (
+            row.get("asset_name")
+            or row.get("name_alt")
+            or row.get("description")
+            or "Unknown Asset"
+        ).strip()
 
         # Get asset number
-        asset_number = (row.get("asset_number") or row.get("asset_code_alt") or
-                        row.get("tag_number_alt") or "").strip()
+        asset_number = (
+            row.get("asset_number")
+            or row.get("asset_code_alt")
+            or row.get("tag_number_alt")
+            or ""
+        ).strip()
         if not asset_number:
             self._code_counter += 1
             asset_number = f"FA{self._code_counter:06d}"
 
         # Get category
-        category_name = (row.get("category_name") or row.get("asset_class_alt") or
-                         row.get("category_alt") or "General Assets")
+        category_name = (
+            row.get("category_name")
+            or row.get("asset_class_alt")
+            or row.get("category_alt")
+            or "General Assets"
+        )
         category_id = self._category_importer.get_category_id(category_name)
 
         # Get acquisition details
-        acquisition_date = (row.get("acquisition_date") or row.get("purchase_date_alt") or
-                            row.get("date_acquired_alt") or date.today())
-        acquisition_cost = (row.get("acquisition_cost") or row.get("cost_alt") or
-                            row.get("purchase_price_alt") or Decimal("0"))
+        acquisition_date = (
+            row.get("acquisition_date")
+            or row.get("purchase_date_alt")
+            or row.get("date_acquired_alt")
+            or date.today()
+        )
+        acquisition_cost = (
+            row.get("acquisition_cost")
+            or row.get("cost_alt")
+            or row.get("purchase_price_alt")
+            or Decimal("0")
+        )
 
-        currency_code = (row.get("currency_code") or row.get("currency_alt") or "NGN")[:3]
+        currency_code = (row.get("currency_code") or row.get("currency_alt") or "NGN")[
+            :3
+        ]
 
         # Get depreciation parameters
         useful_life_months = row.get("useful_life_months")
@@ -312,17 +398,23 @@ class AssetImporter(BaseImporter[Asset]):
             else:
                 useful_life_months = 60  # Default 5 years
 
-        residual_value = (row.get("residual_value") or row.get("salvage_value_alt") or
-                          Decimal("0"))
+        residual_value = (
+            row.get("residual_value") or row.get("salvage_value_alt") or Decimal("0")
+        )
         accumulated_depreciation = row.get("accumulated_depreciation") or Decimal("0")
 
         # Parse depreciation method
-        method_str = (row.get("depreciation_method_str") or row.get("method_alt") or
-                      "STRAIGHT_LINE")
+        method_str = (
+            row.get("depreciation_method_str")
+            or row.get("method_alt")
+            or "STRAIGHT_LINE"
+        )
         depreciation_method = self._parse_depreciation_method(method_str)
 
         # Calculate net book value
-        if isinstance(acquisition_cost, Decimal) and isinstance(accumulated_depreciation, Decimal):
+        if isinstance(acquisition_cost, Decimal) and isinstance(
+            accumulated_depreciation, Decimal
+        ):
             net_book_value = acquisition_cost - accumulated_depreciation
         else:
             net_book_value = acquisition_cost or Decimal("0")
@@ -358,7 +450,8 @@ class AssetImporter(BaseImporter[Asset]):
             model=row.get("model"),
             insured_value=row.get("insured_value"),
             insurance_policy_number=row.get("insurance_policy_number"),
-            invoice_reference=row.get("invoice_reference") or row.get("invoice_number_alt"),
+            invoice_reference=row.get("invoice_reference")
+            or row.get("invoice_number_alt"),
             is_component_parent=False,
             created_by_user_id=self.config.user_id,
         )

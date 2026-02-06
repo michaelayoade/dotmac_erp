@@ -33,20 +33,27 @@ def upgrade() -> None:
     # --- Public Schema: Notification Email Queue ---
     # Partial index for background task that sends pending emails
     if inspector.has_table("notification", schema="public"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("notification", schema="public")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("notification", schema="public")
+        }
         if "idx_notification_email_queue" not in indexes:
             op.create_index(
                 "idx_notification_email_queue",
                 "notification",
                 ["organization_id", "created_at"],
                 schema="public",
-                postgresql_where=sa.text("email_sent = false AND channel IN ('EMAIL', 'BOTH')"),
+                postgresql_where=sa.text(
+                    "email_sent = false AND channel IN ('EMAIL', 'BOTH')"
+                ),
             )
 
     # --- GL Schema: Journal Entry Period Queries ---
     # Speeds up period close and GL reporting queries
     if inspector.has_table("journal_entry", schema="gl"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("journal_entry", schema="gl")}
+        indexes = {
+            idx["name"] for idx in inspector.get_indexes("journal_entry", schema="gl")
+        }
         if "idx_journal_entry_org_posting_date" not in indexes:
             op.create_index(
                 "idx_journal_entry_org_posting_date",
@@ -58,7 +65,9 @@ def upgrade() -> None:
     # --- AR Schema: Active Customer Lookup ---
     # Speeds up customer dropdowns and search
     if inspector.has_table("customer", schema="ar"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("customer", schema="ar")}
+        indexes = {
+            idx["name"] for idx in inspector.get_indexes("customer", schema="ar")
+        }
         if "idx_customer_org_active" not in indexes:
             op.create_index(
                 "idx_customer_org_active",
@@ -70,7 +79,9 @@ def upgrade() -> None:
     # --- AP Schema: Active Supplier Lookup ---
     # Speeds up supplier dropdowns and search
     if inspector.has_table("supplier", schema="ap"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("supplier", schema="ap")}
+        indexes = {
+            idx["name"] for idx in inspector.get_indexes("supplier", schema="ap")
+        }
         if "idx_supplier_org_active" not in indexes:
             op.create_index(
                 "idx_supplier_org_active",
@@ -82,7 +93,10 @@ def upgrade() -> None:
     # --- HR Schema: Disciplinary Case Employee Status ---
     # Speeds up employee discipline history lookups
     if inspector.has_table("disciplinary_case", schema="hr"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("disciplinary_case", schema="hr")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("disciplinary_case", schema="hr")
+        }
         if "idx_discipline_case_employee_status" not in indexes:
             op.create_index(
                 "idx_discipline_case_employee_status",
@@ -94,7 +108,9 @@ def upgrade() -> None:
     # --- Sync Schema: Sync History Monitoring ---
     # Speeds up sync dashboard and job status queries
     if inspector.has_table("sync_history", schema="sync"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("sync_history", schema="sync")}
+        indexes = {
+            idx["name"] for idx in inspector.get_indexes("sync_history", schema="sync")
+        }
         if "idx_sync_history_org_status_started" not in indexes:
             op.create_index(
                 "idx_sync_history_org_status_started",
@@ -106,7 +122,10 @@ def upgrade() -> None:
     # --- Inventory Schema: Stock Movement Analysis ---
     # Speeds up warehouse stock reports and inventory analysis
     if inspector.has_table("inventory_transaction", schema="inv"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("inventory_transaction", schema="inv")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("inventory_transaction", schema="inv")
+        }
         if "idx_inv_txn_org_warehouse_date" not in indexes:
             op.create_index(
                 "idx_inv_txn_org_warehouse_date",
@@ -118,7 +137,10 @@ def upgrade() -> None:
     # --- Expense Schema: Expense Claim Dashboard ---
     # Speeds up expense claim list with status filtering
     if inspector.has_table("expense_claim", schema="expense"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("expense_claim", schema="expense")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("expense_claim", schema="expense")
+        }
         if "idx_expense_claim_org_status_created" not in indexes:
             op.create_index(
                 "idx_expense_claim_org_status_created",
@@ -130,7 +152,9 @@ def upgrade() -> None:
     # --- Support Schema: Ticket Dashboard ---
     # Speeds up support ticket list with status and priority filtering
     if inspector.has_table("ticket", schema="support"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("ticket", schema="support")}
+        indexes = {
+            idx["name"] for idx in inspector.get_indexes("ticket", schema="support")
+        }
         if "idx_ticket_org_status_priority" not in indexes:
             op.create_index(
                 "idx_ticket_org_status_priority",
@@ -142,7 +166,10 @@ def upgrade() -> None:
     # --- Leave Schema: Leave Application Dashboard ---
     # Speeds up leave approval queue
     if inspector.has_table("leave_application", schema="leave"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("leave_application", schema="leave")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("leave_application", schema="leave")
+        }
         if "idx_leave_app_employee_status" not in indexes:
             op.create_index(
                 "idx_leave_app_employee_status",
@@ -158,60 +185,115 @@ def downgrade() -> None:
 
     # --- Drop Leave Schema Index ---
     if inspector.has_table("leave_application", schema="leave"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("leave_application", schema="leave")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("leave_application", schema="leave")
+        }
         if "idx_leave_app_employee_status" in indexes:
-            op.drop_index("idx_leave_app_employee_status", table_name="leave_application", schema="leave")
+            op.drop_index(
+                "idx_leave_app_employee_status",
+                table_name="leave_application",
+                schema="leave",
+            )
 
     # --- Drop Support Schema Index ---
     if inspector.has_table("ticket", schema="support"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("ticket", schema="support")}
+        indexes = {
+            idx["name"] for idx in inspector.get_indexes("ticket", schema="support")
+        }
         if "idx_ticket_org_status_priority" in indexes:
-            op.drop_index("idx_ticket_org_status_priority", table_name="ticket", schema="support")
+            op.drop_index(
+                "idx_ticket_org_status_priority", table_name="ticket", schema="support"
+            )
 
     # --- Drop Expense Schema Index ---
     if inspector.has_table("expense_claim", schema="expense"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("expense_claim", schema="expense")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("expense_claim", schema="expense")
+        }
         if "idx_expense_claim_org_status_created" in indexes:
-            op.drop_index("idx_expense_claim_org_status_created", table_name="expense_claim", schema="expense")
+            op.drop_index(
+                "idx_expense_claim_org_status_created",
+                table_name="expense_claim",
+                schema="expense",
+            )
 
     # --- Drop Inventory Schema Index ---
     if inspector.has_table("inventory_transaction", schema="inv"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("inventory_transaction", schema="inv")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("inventory_transaction", schema="inv")
+        }
         if "idx_inv_txn_org_warehouse_date" in indexes:
-            op.drop_index("idx_inv_txn_org_warehouse_date", table_name="inventory_transaction", schema="inv")
+            op.drop_index(
+                "idx_inv_txn_org_warehouse_date",
+                table_name="inventory_transaction",
+                schema="inv",
+            )
 
     # --- Drop Sync Schema Index ---
     if inspector.has_table("sync_history", schema="sync"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("sync_history", schema="sync")}
+        indexes = {
+            idx["name"] for idx in inspector.get_indexes("sync_history", schema="sync")
+        }
         if "idx_sync_history_org_status_started" in indexes:
-            op.drop_index("idx_sync_history_org_status_started", table_name="sync_history", schema="sync")
+            op.drop_index(
+                "idx_sync_history_org_status_started",
+                table_name="sync_history",
+                schema="sync",
+            )
 
     # --- Drop HR Schema Index ---
     if inspector.has_table("disciplinary_case", schema="hr"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("disciplinary_case", schema="hr")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("disciplinary_case", schema="hr")
+        }
         if "idx_discipline_case_employee_status" in indexes:
-            op.drop_index("idx_discipline_case_employee_status", table_name="disciplinary_case", schema="hr")
+            op.drop_index(
+                "idx_discipline_case_employee_status",
+                table_name="disciplinary_case",
+                schema="hr",
+            )
 
     # --- Drop AP Schema Index ---
     if inspector.has_table("supplier", schema="ap"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("supplier", schema="ap")}
+        indexes = {
+            idx["name"] for idx in inspector.get_indexes("supplier", schema="ap")
+        }
         if "idx_supplier_org_active" in indexes:
             op.drop_index("idx_supplier_org_active", table_name="supplier", schema="ap")
 
     # --- Drop AR Schema Index ---
     if inspector.has_table("customer", schema="ar"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("customer", schema="ar")}
+        indexes = {
+            idx["name"] for idx in inspector.get_indexes("customer", schema="ar")
+        }
         if "idx_customer_org_active" in indexes:
             op.drop_index("idx_customer_org_active", table_name="customer", schema="ar")
 
     # --- Drop GL Schema Index ---
     if inspector.has_table("journal_entry", schema="gl"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("journal_entry", schema="gl")}
+        indexes = {
+            idx["name"] for idx in inspector.get_indexes("journal_entry", schema="gl")
+        }
         if "idx_journal_entry_org_posting_date" in indexes:
-            op.drop_index("idx_journal_entry_org_posting_date", table_name="journal_entry", schema="gl")
+            op.drop_index(
+                "idx_journal_entry_org_posting_date",
+                table_name="journal_entry",
+                schema="gl",
+            )
 
     # --- Drop Public Schema Index ---
     if inspector.has_table("notification", schema="public"):
-        indexes = {idx["name"] for idx in inspector.get_indexes("notification", schema="public")}
+        indexes = {
+            idx["name"]
+            for idx in inspector.get_indexes("notification", schema="public")
+        }
         if "idx_notification_email_queue" in indexes:
-            op.drop_index("idx_notification_email_queue", table_name="notification", schema="public")
+            op.drop_index(
+                "idx_notification_email_queue",
+                table_name="notification",
+                schema="public",
+            )

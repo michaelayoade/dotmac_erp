@@ -10,31 +10,36 @@ Handles:
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models.expense import (
     ExpenseApproverLimit,
-    ExpenseClaim,
-    ExpenseClaimItem,
-    ExpenseClaimStatus,
     ExpenseCategory,
+    ExpenseClaim,
     ExpenseLimitRule,
     LimitActionType,
-    LimitScopeType,
 )
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.models.people.hr.employee import Employee
     from app.web.deps import WebAuthContext
 
-__all__ = ["ExpenseApprovalService", "ApprovalStep", "ApprovalChain", "ReceiptValidationResult"]
+__all__ = [
+    "ExpenseApprovalService",
+    "ApprovalStep",
+    "ApprovalChain",
+    "ReceiptValidationResult",
+]
 
 
 @dataclass
@@ -142,13 +147,15 @@ class ExpenseApprovalService:
         Returns:
             ApprovalChain with all required approval steps
         """
-        from app.models.people.hr.employee import Employee, EmployeeStatus
+        from app.models.people.hr.employee import Employee
 
         org_id = claim.organization_id
         claim_amount = claim.total_approved_amount or claim.total_claimed_amount
 
         # Get employee
-        employee = self.db.get(Employee, claim.employee_id) if claim.employee_id else None
+        employee = (
+            self.db.get(Employee, claim.employee_id) if claim.employee_id else None
+        )
         if not employee:
             # No employee - simple single approval
             return ApprovalChain(
@@ -179,13 +186,15 @@ class ExpenseApprovalService:
             if manager:
                 manager_limit = self._get_approver_max_amount(org_id, manager)
                 if manager_limit and manager_limit >= claim_amount:
-                    steps.append(ApprovalStep(
-                        step_number=1,
-                        approver_id=manager.employee_id,
-                        approver_name=f"{manager.first_name} {manager.last_name}",
-                        max_amount=manager_limit,
-                        is_escalation=False,
-                    ))
+                    steps.append(
+                        ApprovalStep(
+                            step_number=1,
+                            approver_id=manager.employee_id,
+                            approver_name=f"{manager.first_name} {manager.last_name}",
+                            max_amount=manager_limit,
+                            is_escalation=False,
+                        )
+                    )
                     seen_approvers.add(manager.employee_id)
 
         # Step 3: Check if escalation is needed (manager can't approve amount)
@@ -193,15 +202,19 @@ class ExpenseApprovalService:
             escalation_approvers = self._get_escalation_approvers(
                 org_id, employee, claim_amount, seen_approvers
             )
-            for idx, (approver, max_amt, is_esc) in enumerate(escalation_approvers, start=len(steps) + 1):
+            for idx, (approver, max_amt, is_esc) in enumerate(
+                escalation_approvers, start=len(steps) + 1
+            ):
                 if approver.employee_id not in seen_approvers:
-                    steps.append(ApprovalStep(
-                        step_number=idx,
-                        approver_id=approver.employee_id,
-                        approver_name=f"{approver.first_name} {approver.last_name}",
-                        max_amount=max_amt,
-                        is_escalation=is_esc,
-                    ))
+                    steps.append(
+                        ApprovalStep(
+                            step_number=idx,
+                            approver_id=approver.employee_id,
+                            approver_name=f"{approver.first_name} {approver.last_name}",
+                            max_amount=max_amt,
+                            is_escalation=is_esc,
+                        )
+                    )
                     seen_approvers.add(approver.employee_id)
 
         # Step 4: Handle multi-approval requirements
@@ -211,13 +224,15 @@ class ExpenseApprovalService:
                 org_id, employee, claim_amount, seen_approvers, needed=2 - len(steps)
             )
             for idx, (approver, max_amt) in enumerate(additional, start=len(steps) + 1):
-                steps.append(ApprovalStep(
-                    step_number=idx,
-                    approver_id=approver.employee_id,
-                    approver_name=f"{approver.first_name} {approver.last_name}",
-                    max_amount=max_amt,
-                    is_escalation=False,
-                ))
+                steps.append(
+                    ApprovalStep(
+                        step_number=idx,
+                        approver_id=approver.employee_id,
+                        approver_name=f"{approver.first_name} {approver.last_name}",
+                        max_amount=max_amt,
+                        is_escalation=False,
+                    )
+                )
 
         # Step 5: Apply rule-specific approvers
         for rule in rules:
@@ -226,13 +241,17 @@ class ExpenseApprovalService:
                 if specific_approver_id:
                     approver = self.db.get(Employee, specific_approver_id)
                     if approver and approver.employee_id not in seen_approvers:
-                        steps.append(ApprovalStep(
-                            step_number=len(steps) + 1,
-                            approver_id=approver.employee_id,
-                            approver_name=f"{approver.first_name} {approver.last_name}",
-                            max_amount=Decimal("999999999"),  # Rule-specified approvers have no limit
-                            is_escalation=False,
-                        ))
+                        steps.append(
+                            ApprovalStep(
+                                step_number=len(steps) + 1,
+                                approver_id=approver.employee_id,
+                                approver_name=f"{approver.first_name} {approver.last_name}",
+                                max_amount=Decimal(
+                                    "999999999"
+                                ),  # Rule-specified approvers have no limit
+                                is_escalation=False,
+                            )
+                        )
                         seen_approvers.add(approver.employee_id)
 
         # Ensure we have at least one approver
@@ -240,13 +259,15 @@ class ExpenseApprovalService:
             # Fall back to organization-wide approvers
             fallback = self._get_fallback_approvers(org_id, claim_amount)
             for idx, (approver, max_amt) in enumerate(fallback, start=1):
-                steps.append(ApprovalStep(
-                    step_number=idx,
-                    approver_id=approver.employee_id,
-                    approver_name=f"{approver.first_name} {approver.last_name}",
-                    max_amount=max_amt,
-                    is_escalation=False,
-                ))
+                steps.append(
+                    ApprovalStep(
+                        step_number=idx,
+                        approver_id=approver.employee_id,
+                        approver_name=f"{approver.first_name} {approver.last_name}",
+                        max_amount=max_amt,
+                        is_escalation=False,
+                    )
+                )
 
         return ApprovalChain(
             claim_id=claim.claim_id,
@@ -268,7 +289,7 @@ class ExpenseApprovalService:
 
         Returns True if the claim amount exceeds the approver's authority.
         """
-        from app.models.people.hr.employee import Employee, EmployeeStatus
+        from app.models.people.hr.employee import Employee
 
         approver = self.db.get(Employee, approver_id)
         if not approver:
@@ -328,6 +349,7 @@ class ExpenseApprovalService:
         # Fall back to grade-based escalation
         if approver_limit and approver_limit.escalate_to_grade_min_rank:
             from app.models.people.hr.grade import Grade
+
             min_rank = approver_limit.escalate_to_grade_min_rank
 
             higher_grade_employee = self.db.scalar(
@@ -401,7 +423,9 @@ class ExpenseApprovalService:
             chain.final_decision = "REJECTED"
         elif chain.requires_all_approvals:
             if chain.completed_steps >= chain.total_steps:
-                all_approved = all(s.decision == "APPROVED" for s in chain.steps if s.is_completed)
+                all_approved = all(
+                    s.decision == "APPROVED" for s in chain.steps if s.is_completed
+                )
                 chain.is_complete = True
                 chain.final_decision = "APPROVED" if all_approved else "REJECTED"
         else:
@@ -437,7 +461,11 @@ class ExpenseApprovalService:
 
         for item in claim.items:
             # Load category
-            category = self.db.get(ExpenseCategory, item.category_id) if item.category_id else None
+            category = (
+                self.db.get(ExpenseCategory, item.category_id)
+                if item.category_id
+                else None
+            )
 
             # Check if receipt is required
             if category and category.requires_receipt:
@@ -473,7 +501,9 @@ class ExpenseApprovalService:
         from app.services.expense.limit_service import ExpenseLimitService
 
         service = ExpenseLimitService(self.db, self.ctx)
-        rules = service.get_applicable_rules(claim.organization_id, employee, claim.claim_date)
+        rules = service.get_applicable_rules(
+            claim.organization_id, employee, claim.claim_date
+        )
 
         claim_amount = claim.total_approved_amount or claim.total_claimed_amount
 
@@ -539,7 +569,7 @@ class ExpenseApprovalService:
         exclude_ids: set,
     ) -> List[tuple]:
         """Get approvers through escalation chain."""
-        from app.models.people.hr.employee import Employee as EmployeeModel, EmployeeStatus
+        from app.models.people.hr.employee import Employee as EmployeeModel
 
         result = []
 
@@ -582,14 +612,18 @@ class ExpenseApprovalService:
         needed: int,
     ) -> List[tuple]:
         """Get additional approvers for multi-approval requirements."""
-        from app.models.people.hr.employee import Employee as EmployeeModel, EmployeeStatus
+        from app.models.people.hr.employee import Employee as EmployeeModel
+        from app.models.people.hr.employee import EmployeeStatus
 
         result = []
 
         # Find approvers with sufficient authority
         approvers = self.db.execute(
             select(ExpenseApproverLimit, EmployeeModel)
-            .join(EmployeeModel, ExpenseApproverLimit.scope_id == EmployeeModel.employee_id)
+            .join(
+                EmployeeModel,
+                ExpenseApproverLimit.scope_id == EmployeeModel.employee_id,
+            )
             .where(
                 ExpenseApproverLimit.organization_id == organization_id,
                 ExpenseApproverLimit.is_active == True,
@@ -614,14 +648,18 @@ class ExpenseApprovalService:
         amount: Decimal,
     ) -> List[tuple]:
         """Get fallback approvers when no specific chain is available."""
-        from app.models.people.hr.employee import Employee as EmployeeModel, EmployeeStatus
+        from app.models.people.hr.employee import Employee as EmployeeModel
+        from app.models.people.hr.employee import EmployeeStatus
 
         result = []
 
         # Find any approvers with sufficient authority
         approvers = self.db.execute(
             select(ExpenseApproverLimit, EmployeeModel)
-            .join(EmployeeModel, ExpenseApproverLimit.scope_id == EmployeeModel.employee_id)
+            .join(
+                EmployeeModel,
+                ExpenseApproverLimit.scope_id == EmployeeModel.employee_id,
+            )
             .where(
                 ExpenseApproverLimit.organization_id == organization_id,
                 ExpenseApproverLimit.is_active == True,
@@ -656,20 +694,22 @@ class ExpenseApprovalService:
         today = date.today()
 
         # Get all active rules for organization
-        all_rules = list(self.db.scalars(
-            select(ExpenseLimitRule).where(
-                ExpenseLimitRule.organization_id == organization_id,
-                ExpenseLimitRule.is_active == True,
-                ExpenseLimitRule.effective_from <= today,
-                or_(
-                    ExpenseLimitRule.effective_to.is_(None),
-                    ExpenseLimitRule.effective_to >= today,
-                ),
-            )
-        ).all())
+        all_rules = list(
+            self.db.scalars(
+                select(ExpenseLimitRule).where(
+                    ExpenseLimitRule.organization_id == organization_id,
+                    ExpenseLimitRule.is_active == True,
+                    ExpenseLimitRule.effective_from <= today,
+                    or_(
+                        ExpenseLimitRule.effective_to.is_(None),
+                        ExpenseLimitRule.effective_to >= today,
+                    ),
+                )
+            ).all()
+        )
 
         # Filter by employment type
-        employee_type = getattr(employee, 'employment_type', None)
+        employee_type = getattr(employee, "employment_type", None)
         filtered = []
 
         for rule in all_rules:

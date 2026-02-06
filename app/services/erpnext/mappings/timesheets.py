@@ -1,11 +1,15 @@
 """
 ERPNext Timesheet mapping for project time tracking sync.
 """
+
+import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, Optional
 
-from .base import DocTypeMapping, FieldMapping, parse_date, parse_decimal
+from .base import DocTypeMapping, FieldMapping, parse_decimal
+
+logger = logging.getLogger(__name__)
 
 
 def parse_date_from_datetime(value: Any) -> Optional[date]:
@@ -61,16 +65,20 @@ class TimesheetDetailMapping(DocTypeMapping):
     source_doctype: str = "Timesheet Detail"
     target_table: str = "pm.time_entry"
     unique_key: str = "name"
-    fields: list[FieldMapping] = field(default_factory=lambda: [
-        FieldMapping("parent", "erpnext_timesheet_id"),
-        FieldMapping("name", "erpnext_timesheet_detail_id"),
-        FieldMapping("project", "_project_source_name"),
-        FieldMapping("task", "_task_source_name"),
-        FieldMapping("from_time", "entry_date", transformer=parse_date_from_datetime),
-        FieldMapping("hours", "hours", transformer=parse_decimal),
-        FieldMapping("description", "description"),
-        FieldMapping("is_billable", "is_billable", default=False),
-    ])
+    fields: list[FieldMapping] = field(
+        default_factory=lambda: [
+            FieldMapping("parent", "erpnext_timesheet_id"),
+            FieldMapping("name", "erpnext_timesheet_detail_id"),
+            FieldMapping("project", "_project_source_name"),
+            FieldMapping("task", "_task_source_name"),
+            FieldMapping(
+                "from_time", "entry_date", transformer=parse_date_from_datetime
+            ),
+            FieldMapping("hours", "hours", transformer=parse_decimal),
+            FieldMapping("description", "description"),
+            FieldMapping("is_billable", "is_billable", default=False),
+        ]
+    )
 
     def transform_record(self, record: dict[str, Any]) -> dict[str, Any]:
         """Transform ERPNext Timesheet Detail to DotMac time_entry data."""

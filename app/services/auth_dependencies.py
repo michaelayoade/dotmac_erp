@@ -5,15 +5,15 @@ from typing import Optional, cast
 from uuid import UUID
 
 from fastapi import Cookie, Depends, Header, HTTPException, Request
-from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.config import settings as app_settings
 from app.db import SessionLocal, get_auth_db_session
-from app.models.auth import ApiKey, Session as AuthSession, SessionStatus
+from app.models.auth import ApiKey, SessionStatus
+from app.models.auth import Session as AuthSession
 from app.models.person import Person
-from app.models.rbac import Permission, PersonRole, RolePermission, Role
-from app.rls import set_current_organization_sync, enable_rls_bypass_sync
+from app.models.rbac import Permission, PersonRole, Role, RolePermission
+from app.rls import enable_rls_bypass_sync, set_current_organization_sync
 from app.services.auth import hash_api_key
 from app.services.auth_flow import decode_access_token, hash_session_token
 from app.services.cache import cache_service
@@ -155,10 +155,14 @@ def _validate_session_cached(
                             if expires_dt.tzinfo is None:
                                 expires_dt = expires_dt.replace(tzinfo=timezone.utc)
                             if expires_dt > now:
-                                logger.debug("Session %s validated from cache", session_id)
+                                logger.debug(
+                                    "Session %s validated from cache", session_id
+                                )
                                 # Query DB for full session object (needed for activity tracking)
                                 # but skip if we only need validation
-                                return _query_session(session_id, person_id, now, db, auth_db)
+                                return _query_session(
+                                    session_id, person_id, now, db, auth_db
+                                )
                         except ValueError:
                             pass
                 # Cache invalid, fall through to DB check
@@ -292,7 +296,9 @@ def get_current_user_id(
         if not session:
             raise HTTPException(status_code=401, detail="Unauthorized")
         if is_session_inactive(session, now):
-            raise HTTPException(status_code=401, detail="Session expired due to inactivity")
+            raise HTTPException(
+                status_code=401, detail="Session expired due to inactivity"
+            )
 
     finally:
         if auth_db:
@@ -335,7 +341,9 @@ def get_current_org_id(
         if not session:
             raise HTTPException(status_code=401, detail="Unauthorized")
         if is_session_inactive(session, now):
-            raise HTTPException(status_code=401, detail="Session expired due to inactivity")
+            raise HTTPException(
+                status_code=401, detail="Session expired due to inactivity"
+            )
 
     finally:
         if auth_db:
@@ -428,7 +436,9 @@ def require_audit_auth(
                     session_uuid = coerce_uuid(session_id)
                     person_uuid = coerce_uuid(person_id)
                     if auth_db:
-                        session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
+                        session = _validate_session_sso(
+                            session_uuid, person_uuid, now, auth_db
+                        )
                     else:
                         session = db.get(AuthSession, session_uuid)
 
@@ -535,7 +545,9 @@ def require_user_auth(
 
         # Check for activity timeout (session idle too long)
         if is_session_inactive(session, now):
-            raise HTTPException(status_code=401, detail="Session expired due to inactivity")
+            raise HTTPException(
+                status_code=401, detail="Session expired due to inactivity"
+            )
 
         # Update session activity in auth database
         if auth_db:
@@ -549,7 +561,9 @@ def require_user_auth(
     roles_value = payload.get("roles")
     scopes_value = payload.get("scopes")
     roles = [str(role) for role in roles_value] if isinstance(roles_value, list) else []
-    scopes = [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
+    scopes = (
+        [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
+    )
     actor_id = str(person_id)
     if request is not None:
         request.state.actor_id = actor_id
@@ -685,7 +699,9 @@ def require_tenant_auth(
 
         # Check for activity timeout (session idle too long)
         if is_session_inactive(session, now):
-            raise HTTPException(status_code=401, detail="Session expired due to inactivity")
+            raise HTTPException(
+                status_code=401, detail="Session expired due to inactivity"
+            )
 
         # Update session activity in auth database
         if auth_db:
@@ -716,7 +732,9 @@ def require_tenant_auth(
     roles_value = payload.get("roles")
     scopes_value = payload.get("scopes")
     roles = [str(role) for role in roles_value] if isinstance(roles_value, list) else []
-    scopes = [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
+    scopes = (
+        [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
+    )
     actor_id = str(person_id)
     if request is not None:
         request.state.actor_id = actor_id
@@ -735,6 +753,7 @@ def require_tenant_role(role_name: str):
 
     Combines require_tenant_auth with role checking.
     """
+
     def _require_tenant_role(
         auth=Depends(require_tenant_auth),
         db: Session = Depends(_get_db),
@@ -770,6 +789,7 @@ def require_tenant_permission(permission_key: str):
 
     Combines require_tenant_auth with permission checking.
     """
+
     def _require_tenant_permission(
         auth=Depends(require_tenant_auth),
         db: Session = Depends(_get_db),
@@ -855,7 +875,9 @@ def require_admin_bypass(
             raise HTTPException(status_code=401, detail="Unauthorized")
         # Check for activity timeout (session idle too long)
         if is_session_inactive(session, now):
-            raise HTTPException(status_code=401, detail="Session expired due to inactivity")
+            raise HTTPException(
+                status_code=401, detail="Session expired due to inactivity"
+            )
     finally:
         if auth_db:
             auth_db.close()
@@ -887,7 +909,9 @@ def require_admin_bypass(
     enable_rls_bypass_sync(db)
 
     scopes_value = payload.get("scopes")
-    scopes = [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
+    scopes = (
+        [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
+    )
     actor_id = str(person_id)
     if request is not None:
         request.state.actor_id = actor_id
@@ -1046,6 +1070,7 @@ def require_web_session(
 
 def _get_initials(person: Person) -> str:
     """Get user initials from person record."""
+
     def _clean_name(value: Optional[str]) -> str:
         cleaned = (value or "").strip()
         return "" if cleaned.lower() in {"none", "null"} else cleaned

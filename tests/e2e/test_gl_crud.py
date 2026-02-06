@@ -30,7 +30,9 @@ class TestAccountList:
         authenticated_page.goto(f"{base_url}/gl/accounts")
         authenticated_page.wait_for_load_state("networkidle")
 
-        search = authenticated_page.locator("input[type='search'], input[name='search'], input[placeholder*='Search']")
+        search = authenticated_page.locator(
+            "input[type='search'], input[name='search'], input[placeholder*='Search']"
+        )
         if search.count() > 0:
             search.first.fill("1000")
             authenticated_page.keyboard.press("Enter")
@@ -43,7 +45,9 @@ class TestAccountList:
         authenticated_page.goto(f"{base_url}/gl/accounts")
         authenticated_page.wait_for_load_state("networkidle")
 
-        category_filter = authenticated_page.locator("select[name='category'], #category")
+        category_filter = authenticated_page.locator(
+            "select[name='category'], #category"
+        )
         if category_filter.count() > 0:
             category_filter.select_option(index=1)
             authenticated_page.wait_for_load_state("networkidle")
@@ -55,7 +59,9 @@ class TestAccountList:
         authenticated_page.goto(f"{base_url}/gl/accounts")
         authenticated_page.wait_for_load_state("networkidle")
 
-        new_btn = authenticated_page.locator("a[href*='/gl/accounts/new'], button:has-text('New')")
+        new_btn = authenticated_page.locator(
+            "a[href*='/gl/accounts/new'], button:has-text('New')"
+        )
         expect(new_btn.first).to_be_visible()
 
     def test_account_list_shows_account_codes(self, authenticated_page, base_url):
@@ -99,7 +105,9 @@ class TestAccountCreate:
         authenticated_page.goto(f"{base_url}/gl/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("select[name='account_category'], select[name='category'], #account_category")
+        field = authenticated_page.locator(
+            "select[name='account_category'], select[name='category'], #account_category"
+        )
         expect(field.first).to_be_visible()
 
     def test_account_create_has_type_field(self, authenticated_page, base_url):
@@ -107,7 +115,9 @@ class TestAccountCreate:
         authenticated_page.goto(f"{base_url}/gl/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("select[name='account_type'], select[name='type'], #account_type")
+        field = authenticated_page.locator(
+            "select[name='account_type'], select[name='type'], #account_type"
+        )
         expect(field.first).to_be_visible()
 
     def test_account_create_has_checkboxes(self, authenticated_page, base_url):
@@ -127,16 +137,24 @@ class TestAccountCreate:
         uid = unique_id()
 
         # Fill required fields
-        authenticated_page.locator("#account_code, input[name='account_code']").fill(f"9{uid[:3]}")
-        authenticated_page.locator("#account_name, input[name='account_name']").fill(f"Test Account {uid}")
+        authenticated_page.locator("#account_code, input[name='account_code']").fill(
+            f"9{uid[:3]}"
+        )
+        authenticated_page.locator("#account_name, input[name='account_name']").fill(
+            f"Test Account {uid}"
+        )
 
         # Select category
-        category = authenticated_page.locator("select[name='account_category'], select[name='category']")
+        category = authenticated_page.locator(
+            "select[name='account_category'], select[name='category']"
+        )
         if category.count() > 0:
             category.first.select_option(index=1)
 
         # Select type
-        type_field = authenticated_page.locator("select[name='account_type'], select[name='type']")
+        type_field = authenticated_page.locator(
+            "select[name='account_type'], select[name='type']"
+        )
         if type_field.count() > 0:
             type_field.first.select_option(index=1)
 
@@ -158,7 +176,9 @@ class TestAccountEdit:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Click first account link
-        account_link = authenticated_page.locator("table tbody tr a, a[href*='/gl/accounts/']").first
+        account_link = authenticated_page.locator(
+            "table tbody tr a, a[href*='/gl/accounts/']"
+        ).first
         if account_link.count() > 0:
             account_link.click()
             authenticated_page.wait_for_load_state("networkidle")
@@ -170,12 +190,16 @@ class TestAccountEdit:
         authenticated_page.goto(f"{base_url}/gl/accounts")
         authenticated_page.wait_for_load_state("networkidle")
 
-        account_link = authenticated_page.locator("table tbody tr a, a[href*='/gl/accounts/']").first
+        account_link = authenticated_page.locator(
+            "table tbody tr a, a[href*='/gl/accounts/']"
+        ).first
         if account_link.count() > 0:
             account_link.click()
             authenticated_page.wait_for_load_state("networkidle")
 
-            edit_btn = authenticated_page.locator("a[href*='/edit'], button:has-text('Edit')")
+            edit_btn = authenticated_page.locator(
+                "a[href*='/edit'], button:has-text('Edit')"
+            )
             if edit_btn.count() > 0:
                 expect(edit_btn.first).to_be_visible()
 
@@ -196,7 +220,9 @@ class TestJournalEntryList:
         authenticated_page.goto(f"{base_url}/gl/journals")
         authenticated_page.wait_for_load_state("networkidle")
 
-        search = authenticated_page.locator("input[type='search'], input[name='search']")
+        search = authenticated_page.locator(
+            "input[type='search'], input[name='search']"
+        )
         if search.count() > 0:
             expect(search.first).to_be_visible()
 
@@ -223,7 +249,9 @@ class TestJournalEntryList:
         authenticated_page.goto(f"{base_url}/gl/journals")
         authenticated_page.wait_for_load_state("networkidle")
 
-        new_btn = authenticated_page.locator("a[href*='/gl/journals/new'], button:has-text('New')")
+        new_btn = authenticated_page.locator(
+            "a[href*='/gl/journals/new'], button:has-text('New')"
+        )
         expect(new_btn.first).to_be_visible()
 
 
@@ -243,7 +271,9 @@ class TestJournalEntryCreate:
         authenticated_page.goto(f"{base_url}/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("select[name='entry_type'], select[name='type'], #entry_type")
+        field = authenticated_page.locator(
+            "select[name='entry_type'], select[name='type'], #entry_type"
+        )
         if field.count() > 0:
             expect(field.first).to_be_visible()
 
@@ -252,7 +282,9 @@ class TestJournalEntryCreate:
         authenticated_page.goto(f"{base_url}/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("select[name='fiscal_period_id'], select[name='period']")
+        field = authenticated_page.locator(
+            "select[name='fiscal_period_id'], select[name='period']"
+        )
         if field.count() > 0:
             expect(field.first).to_be_visible()
 
@@ -269,7 +301,9 @@ class TestJournalEntryCreate:
         authenticated_page.goto(f"{base_url}/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator("#description, input[name='description'], textarea[name='description']")
+        field = authenticated_page.locator(
+            "#description, input[name='description'], textarea[name='description']"
+        )
         expect(field.first).to_be_visible()
 
     def test_journal_create_has_add_line_button(self, authenticated_page, base_url):
@@ -277,7 +311,9 @@ class TestJournalEntryCreate:
         authenticated_page.goto(f"{base_url}/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        add_btn = authenticated_page.locator("button:has-text('Add'), a:has-text('Add Line')")
+        add_btn = authenticated_page.locator(
+            "button:has-text('Add'), a:has-text('Add Line')"
+        )
         if add_btn.count() > 0:
             expect(add_btn.first).to_be_visible()
 
@@ -286,7 +322,9 @@ class TestJournalEntryCreate:
         authenticated_page.goto(f"{base_url}/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        balance = authenticated_page.locator("text=Debit, text=Credit, text=Balance, [class*='balance']")
+        balance = authenticated_page.locator(
+            "text=Debit, text=Credit, text=Balance, [class*='balance']"
+        )
         if balance.count() > 0:
             expect(balance.first).to_be_visible()
 
@@ -301,7 +339,9 @@ class TestJournalEntryDetail:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Click first journal link
-        journal_link = authenticated_page.locator("table tbody tr a, a[href*='/gl/journals/']").first
+        journal_link = authenticated_page.locator(
+            "table tbody tr a, a[href*='/gl/journals/']"
+        ).first
         if journal_link.count() > 0:
             journal_link.click()
             authenticated_page.wait_for_load_state("networkidle")
@@ -329,7 +369,9 @@ class TestFiscalPeriodList:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for status badges or indicators
-        status = authenticated_page.locator("text=Open, text=Closed, text=OPEN, text=CLOSED, [class*='status']")
+        status = authenticated_page.locator(
+            "text=Open, text=Closed, text=OPEN, text=CLOSED, [class*='status']"
+        )
         if status.count() > 0:
             expect(status.first).to_be_visible()
 
@@ -338,7 +380,9 @@ class TestFiscalPeriodList:
         authenticated_page.goto(f"{base_url}/gl/periods")
         authenticated_page.wait_for_load_state("networkidle")
 
-        new_btn = authenticated_page.locator("a[href*='/gl/periods/new'], button:has-text('New')")
+        new_btn = authenticated_page.locator(
+            "a[href*='/gl/periods/new'], button:has-text('New')"
+        )
         if new_btn.count() > 0:
             expect(new_btn.first).to_be_visible()
 
@@ -360,7 +404,9 @@ class TestPeriodClose:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for checklist items
-        checklist = authenticated_page.locator("input[type='checkbox'], [class*='checklist'], li, .check")
+        checklist = authenticated_page.locator(
+            "input[type='checkbox'], [class*='checklist'], li, .check"
+        )
         if checklist.count() > 0:
             expect(checklist.first).to_be_visible()
 
@@ -369,7 +415,9 @@ class TestPeriodClose:
         authenticated_page.goto(f"{base_url}/gl/period-close")
         authenticated_page.wait_for_load_state("networkidle")
 
-        close_btn = authenticated_page.locator("button:has-text('Close'), button:has-text('close')")
+        close_btn = authenticated_page.locator(
+            "button:has-text('Close'), button:has-text('close')"
+        )
         if close_btn.count() > 0:
             expect(close_btn.first).to_be_visible()
 
@@ -390,7 +438,9 @@ class TestTrialBalance:
         authenticated_page.goto(f"{base_url}/gl/trial-balance")
         authenticated_page.wait_for_load_state("networkidle")
 
-        date_filter = authenticated_page.locator("input[type='date'], input[name='as_of_date']")
+        date_filter = authenticated_page.locator(
+            "input[type='date'], input[name='as_of_date']"
+        )
         if date_filter.count() > 0:
             expect(date_filter.first).to_be_visible()
 
@@ -408,6 +458,8 @@ class TestTrialBalance:
         authenticated_page.goto(f"{base_url}/gl/trial-balance")
         authenticated_page.wait_for_load_state("networkidle")
 
-        print_btn = authenticated_page.locator("button:has-text('Print'), button:has-text('Export'), a:has-text('Print')")
+        print_btn = authenticated_page.locator(
+            "button:has-text('Print'), button:has-text('Export'), a:has-text('Print')"
+        )
         if print_btn.count() > 0:
             expect(print_btn.first).to_be_visible()

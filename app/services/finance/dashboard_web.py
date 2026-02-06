@@ -7,6 +7,7 @@ Provides view-focused data for the IFRS dashboard.
 from __future__ import annotations
 
 import json
+import logging
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
@@ -14,6 +15,8 @@ from sqlalchemy.orm import Session
 from app.services.finance.dashboard import dashboard_service
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.platform.org_context import org_context_service
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_currency_prefix(presentation_code: str, currency_context: dict) -> str:
@@ -29,6 +32,7 @@ def _resolve_currency_prefix(presentation_code: str, currency_context: dict) -> 
 def _format_currency(amount: Decimal, currency_prefix: str) -> str:
     return f"{currency_prefix}{amount:,.2f}"
 
+
 def _resolve_year_selection(
     year_param: str | None,
     available_years: list[int],
@@ -41,24 +45,38 @@ def _resolve_year_selection(
         year = int(year_param)
     except ValueError:
         return available_years[0] if available_years else None
-    return year if year in available_years else (available_years[0] if available_years else None)
+    return (
+        year
+        if year in available_years
+        else (available_years[0] if available_years else None)
+    )
 
 
 class DashboardWebService:
     """View service for IFRS dashboard web route."""
 
     @staticmethod
-    def dashboard_context(db: Session, organization_id, year: str | None = None) -> dict:
-        currency_settings = org_context_service.get_currency_settings(db, organization_id)
+    def dashboard_context(
+        db: Session, organization_id, year: str | None = None
+    ) -> dict:
+        currency_settings = org_context_service.get_currency_settings(
+            db, organization_id
+        )
         presentation_currency_code = currency_settings["presentation"]
         currency_context = get_currency_context(db, str(organization_id))
-        currency_prefix = _resolve_currency_prefix(presentation_currency_code, currency_context)
+        currency_prefix = _resolve_currency_prefix(
+            presentation_currency_code, currency_context
+        )
         currency_zero = f"{currency_prefix}0.00"
         available_years = dashboard_service.get_available_years(db, organization_id)
         selected_year = _resolve_year_selection(year, available_years)
         stats = dashboard_service.get_stats(db, organization_id, year=selected_year)
-        recent_journals = dashboard_service.get_recent_journals(db, organization_id, limit=10, year=selected_year)
-        fiscal_periods = dashboard_service.get_fiscal_periods(db, organization_id, limit=8, year=selected_year)
+        recent_journals = dashboard_service.get_recent_journals(
+            db, organization_id, limit=10, year=selected_year
+        )
+        fiscal_periods = dashboard_service.get_fiscal_periods(
+            db, organization_id, limit=8, year=selected_year
+        )
 
         # Chart data
         monthly_trend = dashboard_service.get_monthly_revenue_expenses(
@@ -67,9 +85,15 @@ class DashboardWebService:
         account_balances = dashboard_service.get_account_balances_by_ifrs_category(
             db, organization_id, year=selected_year
         )
-        top_customers = dashboard_service.get_top_customers(db, organization_id, limit=5, year=selected_year)
-        top_suppliers = dashboard_service.get_top_suppliers(db, organization_id, limit=5, year=selected_year)
-        cash_flow = dashboard_service.get_monthly_cash_flow(db, organization_id, months=6, year=selected_year)
+        top_customers = dashboard_service.get_top_customers(
+            db, organization_id, limit=5, year=selected_year
+        )
+        top_suppliers = dashboard_service.get_top_suppliers(
+            db, organization_id, limit=5, year=selected_year
+        )
+        cash_flow = dashboard_service.get_monthly_cash_flow(
+            db, organization_id, months=6, year=selected_year
+        )
         invoice_status = dashboard_service.get_invoice_status_breakdown(
             db, organization_id, year=selected_year
         )
@@ -83,8 +107,12 @@ class DashboardWebService:
             "net_income": _format_currency(stats.net_income, currency_prefix),
             "cogs_spend": _format_currency(stats.cogs_spend, currency_prefix),
             "opex_spend": _format_currency(stats.opex_spend, currency_prefix),
-            "ar_control_balance": _format_currency(stats.ar_control_balance, currency_prefix),
-            "ap_control_balance": _format_currency(stats.ap_control_balance, currency_prefix),
+            "ar_control_balance": _format_currency(
+                stats.ar_control_balance, currency_prefix
+            ),
+            "ap_control_balance": _format_currency(
+                stats.ap_control_balance, currency_prefix
+            ),
             "net_ar_ap": _format_currency(
                 stats.ar_control_balance - stats.ap_control_balance,
                 currency_prefix,

@@ -13,15 +13,14 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import timedelta
-from typing import Any, Callable, Optional, TypeVar, Union, cast
+from typing import Any, Callable, Optional, TypeVar, cast
 from uuid import UUID
 
 import redis
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 # Global Redis client (lazy initialization)
@@ -77,12 +76,12 @@ class CacheService:
     """
 
     # Default TTLs for different cache types
-    TTL_ORG_CONTEXT = 300       # 5 minutes
-    TTL_CURRENCY_SETTINGS = 300 # 5 minutes
-    TTL_DASHBOARD_STATS = 60    # 1 minute
-    TTL_DASHBOARD_BALANCES = 120 # 2 minutes
-    TTL_DASHBOARD_TREND = 300   # 5 minutes
-    TTL_DEFAULT = 300           # 5 minutes
+    TTL_ORG_CONTEXT = 300  # 5 minutes
+    TTL_CURRENCY_SETTINGS = 300  # 5 minutes
+    TTL_DASHBOARD_STATS = 60  # 1 minute
+    TTL_DASHBOARD_BALANCES = 120  # 2 minutes
+    TTL_DASHBOARD_TREND = 300  # 5 minutes
+    TTL_DEFAULT = 300  # 5 minutes
 
     def __init__(self, prefix: str = "dotmac"):
         """

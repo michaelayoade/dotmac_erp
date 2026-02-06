@@ -8,7 +8,7 @@ import logging
 import uuid
 from typing import List, Optional, Tuple
 
-from sqlalchemy import select, func, and_
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.support.team import SupportTeam, SupportTeamMember
@@ -265,16 +265,23 @@ class TeamService:
             Employee UUID or None if no available members
         """
         # Get available members ordered by (assigned_count / weight)
-        members = db.execute(
-            select(SupportTeamMember)
-            .where(
-                SupportTeamMember.team_id == team_id,
-                SupportTeamMember.is_available == True,  # noqa: E712
+        members = (
+            db.execute(
+                select(SupportTeamMember)
+                .where(
+                    SupportTeamMember.team_id == team_id,
+                    SupportTeamMember.is_available == True,  # noqa: E712
+                )
+                .order_by(
+                    (
+                        SupportTeamMember.assigned_count
+                        / SupportTeamMember.assignment_weight
+                    )
+                )
             )
-            .order_by(
-                (SupportTeamMember.assigned_count / SupportTeamMember.assignment_weight)
-            )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         if not members:
             return None
@@ -367,8 +374,10 @@ class TeamService:
             "member_count": len(team.members),
             "available_members": sum(1 for m in team.members if m.is_available),
             "open_tickets": status_counts.get("OPEN", 0),
-            "in_progress": status_counts.get("REPLIED", 0) + status_counts.get("ON_HOLD", 0),
-            "resolved": status_counts.get("RESOLVED", 0) + status_counts.get("CLOSED", 0),
+            "in_progress": status_counts.get("REPLIED", 0)
+            + status_counts.get("ON_HOLD", 0),
+            "resolved": status_counts.get("RESOLVED", 0)
+            + status_counts.get("CLOSED", 0),
             "total_tickets": sum(status_counts.values()),
         }
 

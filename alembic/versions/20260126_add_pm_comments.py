@@ -4,6 +4,7 @@ Revision ID: 20260126_add_pm_comments
 Revises: 20260126_add_payroll_entry_pending_status
 Create Date: 2026-01-26
 """
+
 from alembic import op
 from app.alembic_utils import ensure_enum
 

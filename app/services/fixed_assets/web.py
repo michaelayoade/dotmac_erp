@@ -6,9 +6,10 @@ Provides view-focused data for FA web routes.
 
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Optional
 from uuid import UUID
 
 from fastapi import Request, UploadFile
@@ -16,19 +17,30 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app.models.finance.core_config.numbering_sequence import NumberingSequence, SequenceType
+from app.models.finance.core_config.numbering_sequence import (
+    NumberingSequence,
+    SequenceType,
+)
+from app.models.finance.gl.account import Account
+from app.models.finance.gl.fiscal_period import FiscalPeriod
 from app.models.fixed_assets.asset import Asset, AssetStatus
 from app.models.fixed_assets.asset_category import AssetCategory, DepreciationMethod
 from app.models.fixed_assets.depreciation_run import DepreciationRun
-from app.models.finance.gl.account import Account
-from app.models.finance.gl.fiscal_period import FiscalPeriod
-from app.config import settings
 from app.services.common import coerce_uuid
-from app.services.fixed_assets.asset import asset_service, asset_category_service, AssetInput, AssetCategoryInput
 from app.services.finance.platform.currency_context import get_currency_context
+from app.services.formatters import format_currency as _format_currency
+from app.services.formatters import format_date as _format_date
 from app.services.finance.platform.org_context import org_context_service
+from app.services.fixed_assets.asset import (
+    AssetCategoryInput,
+    AssetInput,
+    asset_category_service,
+    asset_service,
+)
 from app.templates import templates
-from app.web.deps import base_context, WebAuthContext
+from app.web.deps import WebAuthContext, base_context
+
+logger = logging.getLogger(__name__)
 
 
 def _safe_form_text(value: object) -> str:
@@ -37,20 +49,6 @@ def _safe_form_text(value: object) -> str:
     if isinstance(value, str):
         return value
     return str(value)
-
-
-def _format_date(value: Optional[date]) -> str:
-    return value.strftime("%Y-%m-%d") if value else ""
-
-
-def _format_currency(
-    amount: Optional[Decimal],
-    currency: str = settings.default_presentation_currency_code,
-) -> str:
-    if amount is None:
-        return ""
-    value = Decimal(str(amount))
-    return f"{currency} {value:,.2f}"
 
 
 def _parse_status(value: Optional[str]) -> Optional[AssetStatus]:
@@ -197,12 +195,7 @@ class FixedAssetWebService:
             )
 
         total_count = query.with_entities(func.count(Asset.asset_id)).scalar() or 0
-        rows = (
-            query.order_by(Asset.asset_number)
-            .limit(limit)
-            .offset(offset)
-            .all()
-        )
+        rows = query.order_by(Asset.asset_number).limit(limit).offset(offset).all()
 
         assets_view = []
         for asset, category_row in rows:
@@ -257,7 +250,9 @@ class FixedAssetWebService:
     ) -> HTMLResponse:
         context = base_context(request, auth, "New Asset", "fa")
         context.update(self.asset_form_context(db, str(auth.organization_id)))
-        return templates.TemplateResponse(request, "fixed_assets/asset_form.html", context)
+        return templates.TemplateResponse(
+            request, "fixed_assets/asset_form.html", context
+        )
 
     def create_asset_response(
         self,
@@ -276,9 +271,12 @@ class FixedAssetWebService:
             user_id = auth.person_id
             assert org_id is not None
             assert user_id is not None
-            resolved_currency = currency_code or org_context_service.get_functional_currency(
-                db,
-                org_id,
+            resolved_currency = (
+                currency_code
+                or org_context_service.get_functional_currency(
+                    db,
+                    org_id,
+                )
             )
 
             input_data = AssetInput(
@@ -302,7 +300,9 @@ class FixedAssetWebService:
             context = base_context(request, auth, "New Asset", "fa")
             context.update(self.asset_form_context(db, str(auth.organization_id)))
             context["error"] = str(e)
-            return templates.TemplateResponse(request, "fixed_assets/asset_form.html", context)
+            return templates.TemplateResponse(
+                request, "fixed_assets/asset_form.html", context
+            )
 
     @staticmethod
     def list_categories_context(
@@ -317,9 +317,15 @@ class FixedAssetWebService:
 
         query = db.query(AssetCategory).filter(AssetCategory.organization_id == org_id)
         if is_active is not None:
-            query = query.filter(AssetCategory.is_active.is_(True) if is_active else AssetCategory.is_active.is_(False))
+            query = query.filter(
+                AssetCategory.is_active.is_(True)
+                if is_active
+                else AssetCategory.is_active.is_(False)
+            )
 
-        total_count = query.with_entities(func.count(AssetCategory.category_id)).scalar() or 0
+        total_count = (
+            query.with_entities(func.count(AssetCategory.category_id)).scalar() or 0
+        )
         rows = (
             query.order_by(AssetCategory.category_code)
             .limit(limit)
@@ -399,7 +405,9 @@ class FixedAssetWebService:
                 page=page,
             )
         )
-        return templates.TemplateResponse(request, "fixed_assets/categories.html", context)
+        return templates.TemplateResponse(
+            request, "fixed_assets/categories.html", context
+        )
 
     def new_category_form_response(
         self,
@@ -411,7 +419,9 @@ class FixedAssetWebService:
         context = base_context(request, auth, "New Asset Category", "fa")
         context.update(self.category_form_context(db, str(auth.organization_id)))
         context["error"] = error
-        return templates.TemplateResponse(request, "fixed_assets/category_form.html", context)
+        return templates.TemplateResponse(
+            request, "fixed_assets/category_form.html", context
+        )
 
     async def create_category_response(
         self,
@@ -427,7 +437,9 @@ class FixedAssetWebService:
             category_input = AssetCategoryInput(
                 category_code=_safe_form_text(form.get("category_code")).strip(),
                 category_name=_safe_form_text(form.get("category_name")).strip(),
-                asset_account_id=coerce_uuid(_safe_form_text(form.get("asset_account_id"))),
+                asset_account_id=coerce_uuid(
+                    _safe_form_text(form.get("asset_account_id"))
+                ),
                 accumulated_depreciation_account_id=coerce_uuid(
                     _safe_form_text(form.get("accumulated_depreciation_account_id"))
                 ),
@@ -437,16 +449,22 @@ class FixedAssetWebService:
                 gain_loss_disposal_account_id=coerce_uuid(
                     _safe_form_text(form.get("gain_loss_disposal_account_id"))
                 ),
-                useful_life_months=int(_safe_form_text(form.get("useful_life_months")) or 0),
+                useful_life_months=int(
+                    _safe_form_text(form.get("useful_life_months")) or 0
+                ),
                 depreciation_method=DepreciationMethod(
                     _safe_form_text(form.get("depreciation_method"))
                     or DepreciationMethod.STRAIGHT_LINE.value
                 ),
-                residual_value_percent=Decimal(_safe_form_text(form.get("residual_value_percent")) or "0"),
+                residual_value_percent=Decimal(
+                    _safe_form_text(form.get("residual_value_percent")) or "0"
+                ),
                 capitalization_threshold=Decimal(
                     _safe_form_text(form.get("capitalization_threshold")) or "0"
                 ),
-                revaluation_model_allowed=bool(_safe_form_text(form.get("revaluation_model_allowed"))),
+                revaluation_model_allowed=bool(
+                    _safe_form_text(form.get("revaluation_model_allowed"))
+                ),
                 revaluation_surplus_account_id=coerce_uuid(
                     _safe_form_text(form.get("revaluation_surplus_account_id"))
                 )
@@ -457,7 +475,9 @@ class FixedAssetWebService:
                 )
                 if _safe_form_text(form.get("impairment_loss_account_id"))
                 else None,
-                parent_category_id=coerce_uuid(_safe_form_text(form.get("parent_category_id")))
+                parent_category_id=coerce_uuid(
+                    _safe_form_text(form.get("parent_category_id"))
+                )
                 if _safe_form_text(form.get("parent_category_id"))
                 else None,
                 description=_safe_form_text(form.get("description")) or None,
@@ -481,9 +501,15 @@ class FixedAssetWebService:
             return RedirectResponse(url="/fixed-assets/categories", status_code=302)
 
         context = base_context(request, auth, "Edit Asset Category", "fa")
-        context.update(self.category_form_context(db, str(auth.organization_id), category_id=category_id))
+        context.update(
+            self.category_form_context(
+                db, str(auth.organization_id), category_id=category_id
+            )
+        )
         context["error"] = error
-        return templates.TemplateResponse(request, "fixed_assets/category_form.html", context)
+        return templates.TemplateResponse(
+            request, "fixed_assets/category_form.html", context
+        )
 
     async def update_category_response(
         self,
@@ -500,7 +526,9 @@ class FixedAssetWebService:
             category_input = AssetCategoryInput(
                 category_code=_safe_form_text(form.get("category_code")).strip(),
                 category_name=_safe_form_text(form.get("category_name")).strip(),
-                asset_account_id=coerce_uuid(_safe_form_text(form.get("asset_account_id"))),
+                asset_account_id=coerce_uuid(
+                    _safe_form_text(form.get("asset_account_id"))
+                ),
                 accumulated_depreciation_account_id=coerce_uuid(
                     _safe_form_text(form.get("accumulated_depreciation_account_id"))
                 ),
@@ -510,16 +538,22 @@ class FixedAssetWebService:
                 gain_loss_disposal_account_id=coerce_uuid(
                     _safe_form_text(form.get("gain_loss_disposal_account_id"))
                 ),
-                useful_life_months=int(_safe_form_text(form.get("useful_life_months")) or 0),
+                useful_life_months=int(
+                    _safe_form_text(form.get("useful_life_months")) or 0
+                ),
                 depreciation_method=DepreciationMethod(
                     _safe_form_text(form.get("depreciation_method"))
                     or DepreciationMethod.STRAIGHT_LINE.value
                 ),
-                residual_value_percent=Decimal(_safe_form_text(form.get("residual_value_percent")) or "0"),
+                residual_value_percent=Decimal(
+                    _safe_form_text(form.get("residual_value_percent")) or "0"
+                ),
                 capitalization_threshold=Decimal(
                     _safe_form_text(form.get("capitalization_threshold")) or "0"
                 ),
-                revaluation_model_allowed=bool(_safe_form_text(form.get("revaluation_model_allowed"))),
+                revaluation_model_allowed=bool(
+                    _safe_form_text(form.get("revaluation_model_allowed"))
+                ),
                 revaluation_surplus_account_id=coerce_uuid(
                     _safe_form_text(form.get("revaluation_surplus_account_id"))
                 )
@@ -530,17 +564,23 @@ class FixedAssetWebService:
                 )
                 if _safe_form_text(form.get("impairment_loss_account_id"))
                 else None,
-                parent_category_id=coerce_uuid(_safe_form_text(form.get("parent_category_id")))
+                parent_category_id=coerce_uuid(
+                    _safe_form_text(form.get("parent_category_id"))
+                )
                 if _safe_form_text(form.get("parent_category_id"))
                 else None,
                 description=_safe_form_text(form.get("description")) or None,
             )
 
             is_active = form.get("is_active") == "on"
-            asset_category_service.update_category(db, org_id, category_id, category_input, is_active=is_active)
+            asset_category_service.update_category(
+                db, org_id, category_id, category_input, is_active=is_active
+            )
             return RedirectResponse(url="/fixed-assets/categories", status_code=303)
         except Exception as e:
-            return self.edit_category_form_response(request, auth, category_id, db, error=str(e))
+            return self.edit_category_form_response(
+                request, auth, category_id, db, error=str(e)
+            )
 
     def toggle_category_response(
         self,
@@ -583,7 +623,9 @@ class FixedAssetWebService:
         if period_id:
             query = query.filter(DepreciationRun.fiscal_period_id == period_id)
 
-        total_count = query.with_entities(func.count(DepreciationRun.run_id)).scalar() or 0
+        total_count = (
+            query.with_entities(func.count(DepreciationRun.run_id)).scalar() or 0
+        )
         rows = (
             query.order_by(DepreciationRun.created_at.desc())
             .limit(limit)
@@ -604,7 +646,9 @@ class FixedAssetWebService:
                     "status": run.status.value,
                     "assets_processed": run.assets_processed,
                     "total_depreciation": _format_currency(run.total_depreciation),
-                    "created_at": _format_date(run.created_at.date() if run.created_at else None),
+                    "created_at": _format_date(
+                        run.created_at.date() if run.created_at else None
+                    ),
                 }
             )
 
@@ -637,30 +681,43 @@ class FixedAssetWebService:
             return RedirectResponse(url="/fixed-assets/assets", status_code=303)
 
         # Get category info
-        category = db.get(AssetCategory, asset.category_id) if asset.category_id else None
+        category = (
+            db.get(AssetCategory, asset.category_id) if asset.category_id else None
+        )
 
         context = base_context(request, auth, "Asset Details", "fa")
-        context.update({
-            "asset": {
-                "asset_id": asset.asset_id,
-                "asset_code": asset.asset_number,
-                "asset_name": asset.asset_name,
-                "description": asset.description,
-                "category_name": category.category_name if category else None,
-                "status": asset.status.value if asset.status else "ACTIVE",
-                "acquisition_date": _format_date(asset.acquisition_date),
-                "acquisition_cost": _format_currency(asset.acquisition_cost, asset.currency_code),
-                "accumulated_depreciation": _format_currency(asset.accumulated_depreciation, asset.currency_code),
-                "net_book_value": _format_currency(
-                    (asset.acquisition_cost or Decimal(0)) - (asset.accumulated_depreciation or Decimal(0)),
-                    asset.currency_code,
-                ),
-                "currency_code": asset.currency_code,
-                "useful_life_months": asset.useful_life_months,
-                "residual_value": _format_currency(asset.residual_value, asset.currency_code),
-            },
-        })
-        return templates.TemplateResponse(request, "fixed_assets/asset_detail.html", context)
+        context.update(
+            {
+                "asset": {
+                    "asset_id": asset.asset_id,
+                    "asset_code": asset.asset_number,
+                    "asset_name": asset.asset_name,
+                    "description": asset.description,
+                    "category_name": category.category_name if category else None,
+                    "status": asset.status.value if asset.status else "ACTIVE",
+                    "acquisition_date": _format_date(asset.acquisition_date),
+                    "acquisition_cost": _format_currency(
+                        asset.acquisition_cost, asset.currency_code
+                    ),
+                    "accumulated_depreciation": _format_currency(
+                        asset.accumulated_depreciation, asset.currency_code
+                    ),
+                    "net_book_value": _format_currency(
+                        (asset.acquisition_cost or Decimal(0))
+                        - (asset.accumulated_depreciation or Decimal(0)),
+                        asset.currency_code,
+                    ),
+                    "currency_code": asset.currency_code,
+                    "useful_life_months": asset.useful_life_months,
+                    "residual_value": _format_currency(
+                        asset.residual_value, asset.currency_code
+                    ),
+                },
+            }
+        )
+        return templates.TemplateResponse(
+            request, "fixed_assets/asset_detail.html", context
+        )
 
     def asset_edit_form_response(
         self,
@@ -686,7 +743,9 @@ class FixedAssetWebService:
         context = base_context(request, auth, "Edit Asset", "fa")
         context.update(self.asset_form_context(db, str(auth.organization_id)))
         context["asset"] = asset
-        return templates.TemplateResponse(request, "fixed_assets/asset_form.html", context)
+        return templates.TemplateResponse(
+            request, "fixed_assets/asset_form.html", context
+        )
 
     async def update_asset_response(
         self,
@@ -725,12 +784,18 @@ class FixedAssetWebService:
             assert user_id is not None
             disposal_date = _safe_form_text(form_data.get("disposal_date"))
             proceeds = _safe_form_text(form_data.get("proceeds")) or "0"
-            costs_of_disposal = _safe_form_text(form_data.get("costs_of_disposal")) or "0"
+            costs_of_disposal = (
+                _safe_form_text(form_data.get("costs_of_disposal")) or "0"
+            )
             disposal_type = _safe_form_text(form_data.get("disposal_type")) or "SALE"
             fiscal_period_id = _safe_form_text(form_data.get("fiscal_period_id"))
             reason = _safe_form_text(form_data.get("reason")) or None
 
-            from app.services.fixed_assets.disposal import asset_disposal_service, DisposalInput, DisposalType
+            from app.services.fixed_assets.disposal import (
+                DisposalInput,
+                DisposalType,
+                asset_disposal_service,
+            )
 
             input_data = DisposalInput(
                 asset_id=coerce_uuid(asset_id),
@@ -740,7 +805,9 @@ class FixedAssetWebService:
                 else date.today(),
                 disposal_type=DisposalType(disposal_type),
                 disposal_proceeds=Decimal(proceeds) if proceeds else Decimal("0"),
-                costs_of_disposal=Decimal(costs_of_disposal) if costs_of_disposal else Decimal("0"),
+                costs_of_disposal=Decimal(costs_of_disposal)
+                if costs_of_disposal
+                else Decimal("0"),
                 disposal_reason=reason,
             )
 
@@ -777,11 +844,16 @@ class FixedAssetWebService:
             assert user_id is not None
             revaluation_date = _safe_form_text(form_data.get("revaluation_date"))
             new_value = _safe_form_text(form_data.get("new_value")) or "0"
-            valuation_method = _safe_form_text(form_data.get("valuation_method")) or "MARKET"
+            valuation_method = (
+                _safe_form_text(form_data.get("valuation_method")) or "MARKET"
+            )
             fiscal_period_id = _safe_form_text(form_data.get("fiscal_period_id"))
             reason = _safe_form_text(form_data.get("reason")) or None
 
-            from app.services.fixed_assets.revaluation import asset_revaluation_service, RevaluationInput
+            from app.services.fixed_assets.revaluation import (
+                RevaluationInput,
+                asset_revaluation_service,
+            )
 
             input_data = RevaluationInput(
                 asset_id=coerce_uuid(asset_id),
