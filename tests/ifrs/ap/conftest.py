@@ -8,7 +8,7 @@ while still testing the service logic.
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -17,7 +17,10 @@ import pytest
 # ============ Mock Enums ============
 
 from app.models.finance.ap.supplier import SupplierType
-from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus, SupplierInvoiceType
+from app.models.finance.ap.supplier_invoice import (
+    SupplierInvoiceStatus,
+    SupplierInvoiceType,
+)
 from app.models.finance.ap.supplier_payment import APPaymentStatus, APPaymentMethod
 
 MockSupplierType = SupplierType

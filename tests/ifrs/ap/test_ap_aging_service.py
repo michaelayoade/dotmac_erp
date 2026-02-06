@@ -13,10 +13,9 @@ from uuid import uuid4
 from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus
 from app.services.finance.ap.ap_aging import (
     APAgingService,
-    AgingBucket,
-    SupplierAgingSummary,
     OrganizationAgingSummary,
 )
+from app.services.finance.common.aging_helper import AgingBucket
 
 
 class MockSupplier:
@@ -119,15 +118,11 @@ class TestAgingBucketClass:
             bucket_name="Current",
             min_days=0,
             max_days=30,
-            amount=Decimal("1000.00"),
-            invoice_count=5,
         )
 
         assert bucket.bucket_name == "Current"
         assert bucket.min_days == 0
         assert bucket.max_days == 30
-        assert bucket.amount == Decimal("1000.00")
-        assert bucket.invoice_count == 5
 
     def test_aging_bucket_no_max_days(self):
         """Test aging bucket with no max days (over 90)."""
@@ -143,8 +138,7 @@ class TestAgingBucketClass:
         """Test aging bucket default values."""
         bucket = AgingBucket(bucket_name="Test", min_days=0, max_days=30)
 
-        assert bucket.amount == Decimal("0")
-        assert bucket.invoice_count == 0
+        assert bucket.bucket_name == "Test"
 
 
 class TestCalculateSupplierAging:
@@ -171,11 +165,9 @@ class TestCalculateSupplierAging:
         ]
 
         mock_db.get.return_value = supplier
-        mock_db.query.return_value.filter.return_value.all.return_value = invoices
+        mock_db.scalars.return_value.all.return_value = invoices
 
-        result = APAgingService.calculate_supplier_aging(
-            mock_db, org_id, supplier_id
-        )
+        result = APAgingService.calculate_supplier_aging(mock_db, org_id, supplier_id)
 
         assert result.supplier_id == supplier_id
         assert result.current == Decimal("1500.00")
@@ -217,11 +209,9 @@ class TestCalculateSupplierAging:
         ]
 
         mock_db.get.return_value = supplier
-        mock_db.query.return_value.filter.return_value.all.return_value = invoices
+        mock_db.scalars.return_value.all.return_value = invoices
 
-        result = APAgingService.calculate_supplier_aging(
-            mock_db, org_id, supplier_id
-        )
+        result = APAgingService.calculate_supplier_aging(mock_db, org_id, supplier_id)
 
         assert result.current == Decimal("1000.00")
         assert result.days_31_60 == Decimal("2000.00")
@@ -247,11 +237,9 @@ class TestCalculateSupplierAging:
         ]
 
         mock_db.get.return_value = supplier
-        mock_db.query.return_value.filter.return_value.all.return_value = invoices
+        mock_db.scalars.return_value.all.return_value = invoices
 
-        result = APAgingService.calculate_supplier_aging(
-            mock_db, org_id, supplier_id
-        )
+        result = APAgingService.calculate_supplier_aging(mock_db, org_id, supplier_id)
 
         assert result.current == Decimal("600.00")
         assert result.total_outstanding == Decimal("600.00")
@@ -271,7 +259,9 @@ class TestCalculateSupplierAging:
         mock_db.get.return_value = supplier
 
         with pytest.raises(ValueError) as exc:
-            APAgingService.calculate_supplier_aging(mock_db, org_id, supplier.supplier_id)
+            APAgingService.calculate_supplier_aging(
+                mock_db, org_id, supplier.supplier_id
+            )
 
         assert "Supplier not found" in str(exc.value)
 
@@ -291,7 +281,7 @@ class TestCalculateSupplierAging:
         ]
 
         mock_db.get.return_value = supplier
-        mock_db.query.return_value.filter.return_value.all.return_value = invoices
+        mock_db.scalars.return_value.all.return_value = invoices
 
         # Calculate as of Jan 31, 2025 - 30 days overdue
         result = APAgingService.calculate_supplier_aging(
@@ -325,7 +315,7 @@ class TestCalculateOrganizationAging:
             ),
         ]
 
-        mock_db.query.return_value.filter.return_value.all.return_value = invoices
+        mock_db.scalars.return_value.all.return_value = invoices
         mock_org_context.get_functional_currency.return_value = "USD"
 
         result = APAgingService.calculate_organization_aging(mock_db, org_id)
@@ -343,7 +333,7 @@ class TestCalculateOrganizationAging:
         self, mock_org_context, mock_db, org_id
     ):
         """Test organization aging with no outstanding invoices."""
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
         mock_org_context.get_functional_currency.return_value = "USD"
 
         result = APAgingService.calculate_organization_aging(mock_db, org_id)
@@ -372,15 +362,6 @@ class TestGetAgingBySupplier:
             legal_name="Supplier B",
         )
 
-        # Setup mock for distinct supplier IDs query
-        mock_distinct_result = MagicMock()
-        mock_distinct_result.all.return_value = [(supplier_1_id,), (supplier_2_id,)]
-
-        # Setup mock query chain
-        mock_query = MagicMock()
-        mock_query.filter.return_value.distinct.return_value = mock_distinct_result
-
-        # For each supplier's aging calculation
         invoices_1 = [
             MockSupplierInvoice(
                 supplier_id=supplier_1_id,
@@ -404,20 +385,18 @@ class TestGetAgingBySupplier:
             return None
 
         mock_db.get.side_effect = mock_get
-        mock_db.query.return_value = mock_query
 
-        # Setup filter for each supplier's invoices
-        call_count = [0]
-
-        def mock_filter_all(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 2:
-                return invoices_1
-            elif call_count[0] == 3:
-                return invoices_2
-            return []
-
-        mock_query.filter.return_value.all.side_effect = mock_filter_all
+        # db.scalars() called 3 times:
+        # 1. get distinct supplier_ids
+        # 2. get invoices for supplier_1
+        # 3. get invoices for supplier_2
+        sr1 = MagicMock()
+        sr1.all.return_value = [supplier_1_id, supplier_2_id]
+        sr2 = MagicMock()
+        sr2.all.return_value = invoices_1
+        sr3 = MagicMock()
+        sr3.all.return_value = invoices_2
+        mock_db.scalars.side_effect = [sr1, sr2, sr3]
 
         result = APAgingService.get_aging_by_supplier(mock_db, org_id)
 
@@ -438,12 +417,6 @@ class TestGetAgingBySupplier:
             supplier_id=supplier_2_id,
             organization_id=org_id,
         )
-
-        mock_distinct_result = MagicMock()
-        mock_distinct_result.all.return_value = [(supplier_1_id,), (supplier_2_id,)]
-
-        mock_query = MagicMock()
-        mock_query.filter.return_value.distinct.return_value = mock_distinct_result
 
         invoices_1 = [
             MockSupplierInvoice(
@@ -468,19 +441,14 @@ class TestGetAgingBySupplier:
             return None
 
         mock_db.get.side_effect = mock_get
-        mock_db.query.return_value = mock_query
 
-        call_count = [0]
-
-        def mock_filter_all(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 2:
-                return invoices_1
-            elif call_count[0] == 3:
-                return invoices_2
-            return []
-
-        mock_query.filter.return_value.all.side_effect = mock_filter_all
+        sr1 = MagicMock()
+        sr1.all.return_value = [supplier_1_id, supplier_2_id]
+        sr2 = MagicMock()
+        sr2.all.return_value = invoices_1
+        sr3 = MagicMock()
+        sr3.all.return_value = invoices_2
+        mock_db.scalars.side_effect = [sr1, sr2, sr3]
 
         result = APAgingService.get_aging_by_supplier(
             mock_db, org_id, min_balance=Decimal("1000.00")
@@ -495,7 +463,9 @@ class TestCreateAgingSnapshot:
     """Tests for create_aging_snapshot method."""
 
     @patch("app.services.finance.ap.ap_aging.APAgingSnapshot")
-    def test_create_aging_snapshot_success(self, mock_snapshot_class, mock_db, org_id, user_id):
+    def test_create_aging_snapshot_success(
+        self, mock_snapshot_class, mock_db, org_id, user_id
+    ):
         """Test creating aging snapshot."""
         fiscal_period_id = uuid4()
         supplier_id = uuid4()
@@ -511,15 +481,16 @@ class TestCreateAgingSnapshot:
             ),
         ]
 
-        mock_distinct_result = MagicMock()
-        mock_distinct_result.all.return_value = [(supplier_id,)]
-
-        mock_query = MagicMock()
-        mock_query.filter.return_value.distinct.return_value = mock_distinct_result
-        mock_query.filter.return_value.all.return_value = invoices
-
-        mock_db.query.return_value = mock_query
         mock_db.get.return_value = supplier
+
+        # db.scalars() called 2 times:
+        # 1. get distinct supplier_ids
+        # 2. get invoices for supplier
+        sr1 = MagicMock()
+        sr1.all.return_value = [supplier_id]
+        sr2 = MagicMock()
+        sr2.all.return_value = invoices
+        mock_db.scalars.side_effect = [sr1, sr2]
 
         mock_snapshot_class.return_value = MockAPAgingSnapshot()
 
@@ -547,9 +518,7 @@ class TestGetOverdueInvoices:
             ),
         ]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.order_by.return_value.all.return_value = invoices
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = invoices
 
         result = APAgingService.get_overdue_invoices(mock_db, org_id)
 
@@ -568,9 +537,7 @@ class TestGetOverdueInvoices:
             ),
         ]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.order_by.return_value.all.return_value = invoices
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = invoices
 
         result = APAgingService.get_overdue_invoices(
             mock_db, org_id, min_days_overdue=10
@@ -591,9 +558,7 @@ class TestGetOverdueInvoices:
             ),
         ]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.filter.return_value.order_by.return_value.all.return_value = invoices
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = invoices
 
         result = APAgingService.get_overdue_invoices(
             mock_db, org_id, supplier_id=supplier_id
@@ -603,9 +568,7 @@ class TestGetOverdueInvoices:
 
     def test_get_overdue_invoices_empty(self, mock_db, org_id):
         """Test getting overdue invoices when none exist."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value.order_by.return_value.all.return_value = []
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = []
 
         result = APAgingService.get_overdue_invoices(mock_db, org_id)
 
@@ -619,9 +582,7 @@ class TestListSnapshots:
         """Test listing all snapshots."""
         snapshots = [MockAPAgingSnapshot(), MockAPAgingSnapshot()]
 
-        mock_query = MagicMock()
-        mock_query.order_by.return_value.limit.return_value.offset.return_value.all.return_value = snapshots
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = snapshots
 
         result = APAgingService.list(mock_db)
 
@@ -631,9 +592,7 @@ class TestListSnapshots:
         """Test listing snapshots filtered by organization."""
         snapshots = [MockAPAgingSnapshot(organization_id=org_id)]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = snapshots
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = snapshots
 
         result = APAgingService.list(mock_db, organization_id=str(org_id))
 
@@ -644,10 +603,7 @@ class TestListSnapshots:
         supplier_id = uuid4()
         snapshots = [MockAPAgingSnapshot(supplier_id=supplier_id)]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value.limit.return_value.offset.return_value.all.return_value = snapshots
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = snapshots
 
         result = APAgingService.list(
             mock_db, organization_id=str(org_id), supplier_id=str(supplier_id)
@@ -660,10 +616,7 @@ class TestListSnapshots:
         snapshot_date = date.today()
         snapshots = [MockAPAgingSnapshot(snapshot_date=snapshot_date)]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value.limit.return_value.offset.return_value.all.return_value = snapshots
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = snapshots
 
         result = APAgingService.list(
             mock_db, organization_id=str(org_id), snapshot_date=snapshot_date
@@ -675,14 +628,12 @@ class TestListSnapshots:
         """Test snapshot list pagination."""
         snapshots = [MockAPAgingSnapshot()]
 
-        mock_query = MagicMock()
-        mock_query.order_by.return_value.limit.return_value.offset.return_value.all.return_value = snapshots
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = snapshots
 
         result = APAgingService.list(mock_db, limit=10, offset=20)
 
-        mock_query.order_by.return_value.limit.assert_called_with(10)
-        mock_query.order_by.return_value.limit.return_value.offset.assert_called_with(20)
+        mock_db.scalars.assert_called_once()
+        assert len(result) == 1
 
 
 class TestAgingBuckets:

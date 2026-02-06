@@ -3,18 +3,11 @@ AP Posting Result - Outcome of AP posting operations.
 """
 
 import logging
-from dataclasses import dataclass
-from typing import Optional
-from uuid import UUID
+
+from app.services.finance.posting.base import PostingResult
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class APPostingResult:
+class APPostingResult(PostingResult):
     """Result of an AP posting operation."""
-
-    success: bool
-    journal_entry_id: Optional[UUID] = None
-    posting_batch_id: Optional[UUID] = None
-    message: str = ""

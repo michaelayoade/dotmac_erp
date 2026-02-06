@@ -14,6 +14,7 @@ from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.purchase_order import POStatus, PurchaseOrder
@@ -93,14 +94,12 @@ class PurchaseOrderService(ListResponseMixin):
         supplier_id = coerce_uuid(input.supplier_id)
 
         # Validate supplier exists
-        supplier = (
-            db.query(Supplier)
-            .filter(
+        supplier = db.scalars(
+            select(Supplier).where(
                 Supplier.supplier_id == supplier_id,
                 Supplier.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
         if not supplier:
             raise HTTPException(status_code=404, detail="Supplier not found")
 
@@ -201,14 +200,12 @@ class PurchaseOrderService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         po_id = coerce_uuid(po_id)
 
-        po = (
-            db.query(PurchaseOrder)
-            .filter(
+        po = db.scalars(
+            select(PurchaseOrder).where(
                 PurchaseOrder.po_id == po_id,
                 PurchaseOrder.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
@@ -269,14 +266,12 @@ class PurchaseOrderService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         po_id = coerce_uuid(po_id)
 
-        po = (
-            db.query(PurchaseOrder)
-            .filter(
+        po = db.scalars(
+            select(PurchaseOrder).where(
                 PurchaseOrder.po_id == po_id,
                 PurchaseOrder.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
@@ -344,14 +339,12 @@ class PurchaseOrderService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         po_id = coerce_uuid(po_id)
 
-        po = (
-            db.query(PurchaseOrder)
-            .filter(
+        po = db.scalars(
+            select(PurchaseOrder).where(
                 PurchaseOrder.po_id == po_id,
                 PurchaseOrder.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
@@ -410,14 +403,12 @@ class PurchaseOrderService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         po_id = coerce_uuid(po_id)
 
-        po = (
-            db.query(PurchaseOrder)
-            .filter(
+        po = db.scalars(
+            select(PurchaseOrder).where(
                 PurchaseOrder.po_id == po_id,
                 PurchaseOrder.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
@@ -452,14 +443,12 @@ class PurchaseOrderService(ListResponseMixin):
         """
         po_id = coerce_uuid(po_id)
 
-        query = db.query(PurchaseOrder).filter(
-            PurchaseOrder.po_id == po_id,
-        )
+        stmt = select(PurchaseOrder).where(PurchaseOrder.po_id == po_id)
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 PurchaseOrder.organization_id == coerce_uuid(organization_id),
             )
-        po = query.first()
+        po = db.scalars(stmt).first()
 
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
@@ -498,23 +487,22 @@ class PurchaseOrderService(ListResponseMixin):
         po_number: str,
     ) -> Optional[PurchaseOrder]:
         """Get a purchase order by number."""
-        return (
-            db.query(PurchaseOrder)
-            .filter(
+        return db.scalars(
+            select(PurchaseOrder).where(
                 PurchaseOrder.organization_id == coerce_uuid(organization_id),
                 PurchaseOrder.po_number == po_number,
             )
-            .first()
-        )
+        ).first()
 
     @staticmethod
     def get_po_lines(db: Session, po_id: str) -> List[PurchaseOrderLine]:
         """Get all lines for a purchase order."""
-        return (
-            db.query(PurchaseOrderLine)
-            .filter(PurchaseOrderLine.po_id == coerce_uuid(po_id))
-            .order_by(PurchaseOrderLine.line_number)
-            .all()
+        return list(
+            db.scalars(
+                select(PurchaseOrderLine)
+                .where(PurchaseOrderLine.po_id == coerce_uuid(po_id))
+                .order_by(PurchaseOrderLine.line_number)
+            ).all()
         )
 
     @staticmethod
@@ -544,30 +532,29 @@ class PurchaseOrderService(ListResponseMixin):
         Returns:
             List of PurchaseOrder objects
         """
-        query = db.query(PurchaseOrder)
+        stmt = select(PurchaseOrder)
 
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 PurchaseOrder.organization_id == coerce_uuid(organization_id)
             )
 
         if supplier_id:
-            query = query.filter(PurchaseOrder.supplier_id == coerce_uuid(supplier_id))
+            stmt = stmt.where(PurchaseOrder.supplier_id == coerce_uuid(supplier_id))
 
         if status:
-            query = query.filter(PurchaseOrder.status == status)
+            stmt = stmt.where(PurchaseOrder.status == status)
 
         if from_date:
-            query = query.filter(PurchaseOrder.po_date >= from_date)
+            stmt = stmt.where(PurchaseOrder.po_date >= from_date)
 
         if to_date:
-            query = query.filter(PurchaseOrder.po_date <= to_date)
+            stmt = stmt.where(PurchaseOrder.po_date <= to_date)
 
-        return (
-            query.order_by(PurchaseOrder.po_date.desc())
-            .offset(offset)
-            .limit(limit)
-            .all()
+        return list(
+            db.scalars(
+                stmt.order_by(PurchaseOrder.po_date.desc()).offset(offset).limit(limit)
+            ).all()
         )
 
 

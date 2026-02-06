@@ -13,7 +13,7 @@ from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -321,22 +321,21 @@ class SupplierService(ListResponseMixin):
         ]
 
         # Note: balance_due is a @property, so we compute it inline for SQL
-        outstanding_balance = (
-            db.query(
+        outstanding_balance = db.scalar(
+            select(
                 func.coalesce(
                     func.sum(
                         SupplierInvoice.total_amount - SupplierInvoice.amount_paid
                     ),
                     Decimal("0"),
                 )
-            )
-            .filter(
+            ).where(
                 and_(
                     SupplierInvoice.supplier_id == supplier.supplier_id,
+                    SupplierInvoice.organization_id == supplier.organization_id,
                     SupplierInvoice.status.in_(outstanding_statuses),
                 )
             )
-            .scalar()
         )
 
         if outstanding_balance > Decimal("0"):
@@ -454,16 +453,14 @@ class SupplierService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        return (
-            db.query(Supplier)
-            .filter(
+        return db.scalars(
+            select(Supplier).where(
                 and_(
                     Supplier.organization_id == org_id,
                     Supplier.supplier_code == supplier_code,
                 )
             )
-            .first()
-        )
+        ).first()
 
     @staticmethod
     def list(
@@ -556,15 +553,16 @@ class SupplierService(ListResponseMixin):
             SupplierInvoiceStatus.PARTIALLY_PAID,
         ]
 
-        invoices = (
-            db.query(SupplierInvoice)
-            .filter(
-                and_(
-                    SupplierInvoice.supplier_id == sup_id,
-                    SupplierInvoice.status.in_(outstanding_statuses),
+        invoices = list(
+            db.scalars(
+                select(SupplierInvoice).where(
+                    and_(
+                        SupplierInvoice.supplier_id == sup_id,
+                        SupplierInvoice.organization_id == coerce_uuid(organization_id),
+                        SupplierInvoice.status.in_(outstanding_statuses),
+                    )
                 )
-            )
-            .all()
+            ).all()
         )
 
         total_outstanding = sum((inv.balance_due for inv in invoices), Decimal("0"))

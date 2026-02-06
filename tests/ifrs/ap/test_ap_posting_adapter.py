@@ -10,13 +10,16 @@ Tests cover:
 """
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus, SupplierInvoiceType
+from app.models.finance.ap.supplier_invoice import (
+    SupplierInvoiceStatus,
+    SupplierInvoiceType,
+)
 from app.models.finance.ap.supplier_payment import APPaymentStatus
 from app.services.finance.ap.ap_posting_adapter import APPostingAdapter, APPostingResult
 from app.services.finance.ap.posting.helpers import create_tax_transactions
@@ -240,7 +243,7 @@ def mock_db():
     """Create a mock database session."""
     db = MagicMock()
     db.get = MagicMock(return_value=None)
-    db.query = MagicMock(return_value=db)
+    # db.query removed - using select() now
     db.filter = MagicMock(return_value=db)
     db.order_by = MagicMock(return_value=db)
     db.all = MagicMock(return_value=[])
@@ -366,9 +369,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = (
-            []
-        )
+        mock_db.scalars.return_value.all.return_value = []
 
         result = APPostingAdapter.post_invoice(
             db=mock_db,
@@ -400,9 +401,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
-            line
-        ]
+        mock_db.scalars.return_value.all.return_value = [line]
 
         result = APPostingAdapter.post_invoice(
             db=mock_db,
@@ -415,8 +414,8 @@ class TestPostInvoice:
         assert result.success is False
         assert "No expense account" in result.message
 
-    @patch("app.services.finance.ap.posting.invoice.JournalService")
-    @patch("app.services.finance.ap.posting.invoice.LedgerPostingService")
+    @patch("app.services.finance.posting.base.JournalService")
+    @patch("app.services.finance.posting.base.LedgerPostingService")
     def test_post_invoice_success(
         self,
         mock_ledger_service,
@@ -439,9 +438,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
-            mock_invoice_line
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_invoice_line]
 
         journal = MockJournal()
         mock_journal_service.create_journal.return_value = journal
@@ -463,8 +460,8 @@ class TestPostInvoice:
         assert result.journal_entry_id == journal.journal_entry_id
         assert "successfully" in result.message.lower()
 
-    @patch("app.services.finance.ap.posting.invoice.JournalService")
-    @patch("app.services.finance.ap.posting.invoice.LedgerPostingService")
+    @patch("app.services.finance.posting.base.JournalService")
+    @patch("app.services.finance.posting.base.LedgerPostingService")
     def test_post_credit_note(
         self,
         mock_ledger_service,
@@ -495,9 +492,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
-            line
-        ]
+        mock_db.scalars.return_value.all.return_value = [line]
 
         journal = MockJournal()
         mock_journal_service.create_journal.return_value = journal
@@ -520,8 +515,8 @@ class TestPostInvoice:
         # First line should have credit (not debit) for credit note expense
         assert journal_input.lines[0].credit_amount > Decimal("0")
 
-    @patch("app.services.finance.ap.posting.invoice.JournalService")
-    @patch("app.services.finance.ap.posting.invoice.LedgerPostingService")
+    @patch("app.services.finance.posting.base.JournalService")
+    @patch("app.services.finance.posting.base.LedgerPostingService")
     def test_post_multicurrency_invoice(
         self,
         mock_ledger_service,
@@ -553,9 +548,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
-            line
-        ]
+        mock_db.scalars.return_value.all.return_value = [line]
 
         journal = MockJournal()
         mock_journal_service.create_journal.return_value = journal
@@ -577,7 +570,7 @@ class TestPostInvoice:
         assert journal_input.currency_code == "EUR"
         assert journal_input.exchange_rate == Decimal("1.10")
 
-    @patch("app.services.finance.ap.posting.invoice.JournalService")
+    @patch("app.services.finance.posting.base.JournalService")
     def test_post_invoice_journal_creation_failure(
         self,
         mock_journal_service,
@@ -601,9 +594,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
-            mock_invoice_line
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_invoice_line]
 
         mock_journal_service.create_journal.side_effect = HTTPException(
             status_code=400, detail="Period closed"
@@ -620,8 +611,8 @@ class TestPostInvoice:
         assert result.success is False
         assert "Journal creation failed" in result.message
 
-    @patch("app.services.finance.ap.posting.invoice.JournalService")
-    @patch("app.services.finance.ap.posting.invoice.LedgerPostingService")
+    @patch("app.services.finance.posting.base.JournalService")
+    @patch("app.services.finance.posting.base.LedgerPostingService")
     def test_post_invoice_ledger_posting_failure(
         self,
         mock_ledger_service,
@@ -644,9 +635,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
-            mock_invoice_line
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_invoice_line]
 
         journal = MockJournal()
         mock_journal_service.create_journal.return_value = journal
@@ -668,8 +657,8 @@ class TestPostInvoice:
         assert "Ledger posting failed" in result.message
         assert result.journal_entry_id == journal.journal_entry_id
 
-    @patch("app.services.finance.ap.posting.invoice.JournalService")
-    @patch("app.services.finance.ap.posting.invoice.LedgerPostingService")
+    @patch("app.services.finance.posting.base.JournalService")
+    @patch("app.services.finance.posting.base.LedgerPostingService")
     def test_post_invoice_with_idempotency_key(
         self,
         mock_ledger_service,
@@ -692,9 +681,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
-            mock_invoice_line
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_invoice_line]
 
         journal = MockJournal()
         mock_journal_service.create_journal.return_value = journal
@@ -717,8 +704,8 @@ class TestPostInvoice:
         posting_request = call_args[0][1]
         assert posting_request.idempotency_key == custom_key
 
-    @patch("app.services.finance.ap.posting.invoice.JournalService")
-    @patch("app.services.finance.ap.posting.invoice.LedgerPostingService")
+    @patch("app.services.finance.posting.base.JournalService")
+    @patch("app.services.finance.posting.base.LedgerPostingService")
     def test_post_invoice_with_cost_centers(
         self,
         mock_ledger_service,
@@ -750,9 +737,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
-            line
-        ]
+        mock_db.scalars.return_value.all.return_value = [line]
 
         journal = MockJournal()
         mock_journal_service.create_journal.return_value = journal
@@ -776,8 +761,8 @@ class TestPostInvoice:
         assert expense_line.project_id == project_id
         assert expense_line.segment_id == segment_id
 
-    @patch("app.services.finance.ap.posting.invoice.JournalService")
-    @patch("app.services.finance.ap.posting.invoice.LedgerPostingService")
+    @patch("app.services.finance.posting.base.JournalService")
+    @patch("app.services.finance.posting.base.LedgerPostingService")
     def test_post_invoice_exception_handling(
         self,
         mock_ledger_service,
@@ -800,9 +785,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
-            mock_invoice_line
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_invoice_line]
 
         journal = MockJournal()
         mock_journal_service.create_journal.return_value = journal
@@ -820,11 +803,11 @@ class TestPostInvoice:
         )
 
         assert result.success is False
-        assert "Posting error" in result.message
+        assert "Ledger posting failed" in result.message
         assert result.journal_entry_id == journal.journal_entry_id
 
-    @patch("app.services.finance.ap.posting.invoice.JournalService")
-    @patch("app.services.finance.ap.posting.invoice.LedgerPostingService")
+    @patch("app.services.finance.posting.base.JournalService")
+    @patch("app.services.finance.posting.base.LedgerPostingService")
     def test_post_invoice_uses_asset_account(
         self,
         mock_ledger_service,
@@ -853,9 +836,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
-            line
-        ]
+        mock_db.scalars.return_value.all.return_value = [line]
 
         journal = MockJournal()
         mock_journal_service.create_journal.return_value = journal
@@ -957,8 +938,8 @@ class TestPostPayment:
         assert result.success is False
         assert "Supplier not found" in result.message
 
-    @patch("app.services.finance.ap.posting.payment.JournalService")
-    @patch("app.services.finance.ap.posting.payment.LedgerPostingService")
+    @patch("app.services.finance.posting.base.JournalService")
+    @patch("app.services.finance.posting.base.LedgerPostingService")
     def test_post_payment_success(
         self,
         mock_ledger_service,
@@ -1006,8 +987,8 @@ class TestPostPayment:
         assert journal_input.lines[0].debit_amount == mock_payment.payment_amount
         assert journal_input.lines[1].credit_amount == mock_payment.payment_amount
 
-    @patch("app.services.finance.ap.posting.payment.JournalService")
-    @patch("app.services.finance.ap.posting.payment.LedgerPostingService")
+    @patch("app.services.finance.posting.base.JournalService")
+    @patch("app.services.finance.posting.base.LedgerPostingService")
     def test_post_multicurrency_payment(
         self,
         mock_ledger_service,
@@ -1055,7 +1036,7 @@ class TestPostPayment:
         # Functional amount = 800 * 1.25 = 1000
         assert journal_input.lines[0].debit_amount_functional == Decimal("1000.00")
 
-    @patch("app.services.finance.ap.posting.payment.JournalService")
+    @patch("app.services.finance.posting.base.JournalService")
     def test_post_payment_journal_failure(
         self,
         mock_journal_service,
@@ -1094,8 +1075,8 @@ class TestPostPayment:
         assert result.success is False
         assert "Journal creation failed" in result.message
 
-    @patch("app.services.finance.ap.posting.payment.JournalService")
-    @patch("app.services.finance.ap.posting.payment.LedgerPostingService")
+    @patch("app.services.finance.posting.base.JournalService")
+    @patch("app.services.finance.posting.base.LedgerPostingService")
     def test_post_payment_ledger_failure(
         self,
         mock_ledger_service,
@@ -1135,8 +1116,8 @@ class TestPostPayment:
         assert result.success is False
         assert "Ledger posting failed" in result.message
 
-    @patch("app.services.finance.ap.posting.payment.JournalService")
-    @patch("app.services.finance.ap.posting.payment.LedgerPostingService")
+    @patch("app.services.finance.posting.base.JournalService")
+    @patch("app.services.finance.posting.base.LedgerPostingService")
     def test_post_payment_exception_handling(
         self,
         mock_ledger_service,
@@ -1175,7 +1156,7 @@ class TestPostPayment:
         )
 
         assert result.success is False
-        assert "Posting error" in result.message
+        assert "Ledger posting failed" in result.message
 
 
 # ============ Reverse Invoice Posting Tests ============
@@ -1338,7 +1319,9 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("0"),
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = fiscal_period
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            fiscal_period
+        )
 
         result = create_tax_transactions(
             db=mock_db,
@@ -1365,7 +1348,7 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("100.00"),
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = fiscal_period
+        mock_db.scalars.return_value.first.return_value = fiscal_period
 
         tax_txn_id = uuid.uuid4()
         mock_tax_txn = MagicMock()
@@ -1406,7 +1389,7 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("50.00"),
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = fiscal_period
+        mock_db.scalars.return_value.first.return_value = fiscal_period
 
         mock_tax_txn = MagicMock()
         mock_tax_txn.transaction_id = uuid.uuid4()
@@ -1439,7 +1422,7 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("100.00"),
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = fiscal_period
+        mock_db.scalars.return_value.first.return_value = fiscal_period
 
         mock_tax_service.create_from_invoice_line.side_effect = Exception(
             "Tax service error"

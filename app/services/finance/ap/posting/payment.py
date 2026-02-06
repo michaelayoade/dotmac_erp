@@ -12,7 +12,6 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.supplier import Supplier
@@ -23,9 +22,8 @@ from app.services.finance.ap.posting.result import APPostingResult
 from app.services.finance.gl.journal import (
     JournalInput,
     JournalLineInput,
-    JournalService,
 )
-from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
+from app.services.finance.posting.base import BasePostingAdapter
 
 
 def post_payment(
@@ -152,22 +150,24 @@ def post_payment(
         correlation_id=payment.correlation_id,
     )
 
-    try:
-        journal = JournalService.create_journal(db, org_id, journal_input, user_id)
-
-        JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-        JournalService.approve_journal(db, org_id, journal.journal_entry_id, user_id)
-
-    except HTTPException as e:
-        return APPostingResult(
-            success=False, message=f"Journal creation failed: {e.detail}"
-        )
+    journal, error = BasePostingAdapter.create_and_approve_journal(
+        db,
+        org_id,
+        journal_input,
+        user_id,
+        error_prefix="Journal creation failed",
+    )
+    if error:
+        return APPostingResult(success=False, message=error.message)
 
     # Post to ledger
     if not idempotency_key:
-        idempotency_key = f"{org_id}:AP:PAY:{pay_id}:post:v1"
+        idempotency_key = BasePostingAdapter.make_idempotency_key(
+            org_id, "AP:PAY", pay_id, action="post"
+        )
 
-    posting_request = PostingRequest(
+    posting_result = BasePostingAdapter.post_to_ledger(
+        db,
         organization_id=org_id,
         journal_entry_id=journal.journal_entry_id,
         posting_date=posting_date,
@@ -175,39 +175,29 @@ def post_payment(
         source_module="AP",
         correlation_id=payment.correlation_id,
         posted_by_user_id=user_id,
+        success_message="Payment posted successfully",
     )
-
-    try:
-        posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
-
-        if not posting_result.success:
-            return APPostingResult(
-                success=False,
-                journal_entry_id=journal.journal_entry_id,
-                message=f"Ledger posting failed: {posting_result.message}",
-            )
-
-        # Create WHT tax transaction for reporting
-        if wht_amount > Decimal("0") and payment.withholding_tax_code_id:
-            create_wht_transaction(
-                db=db,
-                organization_id=org_id,
-                payment=payment,
-                supplier=supplier,
-                wht_amount=wht_amount,
-                exchange_rate=exchange_rate,
-            )
-
-        return APPostingResult(
-            success=True,
-            journal_entry_id=journal.journal_entry_id,
-            posting_batch_id=posting_result.posting_batch_id,
-            message="Payment posted successfully",
-        )
-
-    except Exception as e:
+    if not posting_result.success:
         return APPostingResult(
             success=False,
             journal_entry_id=journal.journal_entry_id,
-            message=f"Posting error: {str(e)}",
+            message=posting_result.message,
         )
+
+    # Create WHT tax transaction for reporting
+    if wht_amount > Decimal("0") and payment.withholding_tax_code_id:
+        create_wht_transaction(
+            db=db,
+            organization_id=org_id,
+            payment=payment,
+            supplier=supplier,
+            wht_amount=wht_amount,
+            exchange_rate=exchange_rate,
+        )
+
+    return APPostingResult(
+        success=True,
+        journal_entry_id=journal.journal_entry_id,
+        posting_batch_id=posting_result.posting_batch_id,
+        message=posting_result.message,
+    )

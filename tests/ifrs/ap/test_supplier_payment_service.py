@@ -14,9 +14,6 @@ from tests.ifrs.ap.conftest import (
     MockSupplierInvoice,
     MockSupplierPayment,
     MockAPPaymentAllocation,
-    MockSupplierInvoiceStatus,
-    MockAPPaymentStatus,
-    MockAPPaymentMethod,
 )
 
 
@@ -90,16 +87,25 @@ class TestCreateSupplierPayment:
         )
 
         with patch("app.services.finance.ap.supplier_payment.Supplier"):
-            with patch("app.services.finance.ap.supplier_payment.SupplierPayment") as MockPay:
+            with patch(
+                "app.services.finance.ap.supplier_payment.SupplierPayment"
+            ) as MockPay:
                 mock_payment = MockSupplierPayment(
                     organization_id=org_id,
                     supplier_id=supplier.supplier_id,
                 )
                 MockPay.return_value = mock_payment
 
-                with patch("app.services.finance.ap.supplier_payment.APPaymentAllocation"):
-                    with patch("app.services.finance.ap.supplier_payment.SupplierInvoice"):
-                        with patch("app.services.finance.ap.supplier_payment.SequenceService.get_next_number", return_value="PAY-0001"):
+                with patch(
+                    "app.services.finance.ap.supplier_payment.APPaymentAllocation"
+                ):
+                    with patch(
+                        "app.services.finance.ap.supplier_payment.SupplierInvoice"
+                    ):
+                        with patch(
+                            "app.services.finance.ap.supplier_payment.SequenceService.get_next_number",
+                            return_value="PAY-0001",
+                        ):
                             result = SupplierPaymentService.create_payment(
                                 mock_db, org_id, payment_input, user_id
                             )
@@ -202,7 +208,9 @@ class TestPostSupplierPayment:
 
         # Mock the posting adapter to avoid deep integration
         with patch("app.services.finance.ap.supplier_payment.SupplierPayment"):
-            with patch("app.services.finance.ap.ap_posting_adapter.APPostingAdapter.post_payment") as mock_post:
+            with patch(
+                "app.services.finance.ap.ap_posting_adapter.APPostingAdapter.post_payment"
+            ) as mock_post:
                 mock_post.return_value = MagicMock()  # Return a mock journal
                 result = SupplierPaymentService.post_payment(
                     mock_db, org_id, payment.payment_id, user_id
@@ -293,20 +301,14 @@ class TestListSupplierPayments:
         from app.models.finance.ap.supplier_payment import APPaymentStatus
 
         payments = [MockSupplierPayment(organization_id=org_id)]
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = payments
-        mock_db.query.return_value = mock_query
+        # list() now uses db.scalars(select(...).where(...).order_by(...).limit().offset()).all()
+        mock_db.scalars.return_value.all.return_value = payments
 
-        with patch("app.services.finance.ap.supplier_payment.SupplierPayment"):
-            result = SupplierPaymentService.list(
-                mock_db,
-                organization_id=str(org_id),
-                status=APPaymentStatus.DRAFT,
-            )
+        result = SupplierPaymentService.list(
+            mock_db,
+            organization_id=str(org_id),
+            status=APPaymentStatus.DRAFT,
+        )
 
         assert result == payments
 
@@ -330,13 +332,11 @@ class TestGetPaymentAllocations:
 
         # Mock db.get to find the payment
         mock_db.get.return_value = payment
-        # Mock the query for allocations
-        mock_db.query.return_value.filter.return_value.all.return_value = allocations
+        # get_payment_allocations now uses db.scalars(select(...).where(...)).all()
+        mock_db.scalars.return_value.all.return_value = allocations
 
-        with patch("app.services.finance.ap.supplier_payment.SupplierPayment"):
-            with patch("app.services.finance.ap.supplier_payment.APPaymentAllocation"):
-                result = SupplierPaymentService.get_payment_allocations(
-                    mock_db, org_id, payment_id
-                )
+        result = SupplierPaymentService.get_payment_allocations(
+            mock_db, org_id, payment_id
+        )
 
         assert len(result) == 2

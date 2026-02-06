@@ -15,7 +15,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_
+from sqlalchemy import and_, delete, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.goods_receipt import GoodsReceipt
@@ -422,19 +422,22 @@ class SupplierInvoiceService(ListResponseMixin):
             )
 
         # Delete existing line tax and line records
-        line_ids = [
-            line_id
-            for (line_id,) in db.query(SupplierInvoiceLine.line_id)
-            .filter(SupplierInvoiceLine.invoice_id == inv_id)
-            .all()
-        ]
+        line_ids = list(
+            db.scalars(
+                select(SupplierInvoiceLine.line_id).where(
+                    SupplierInvoiceLine.invoice_id == inv_id
+                )
+            ).all()
+        )
         if line_ids:
-            db.query(SupplierInvoiceLineTax).filter(
-                SupplierInvoiceLineTax.line_id.in_(line_ids)
-            ).delete()
-        db.query(SupplierInvoiceLine).filter(
-            SupplierInvoiceLine.invoice_id == inv_id
-        ).delete()
+            db.execute(
+                delete(SupplierInvoiceLineTax).where(
+                    SupplierInvoiceLineTax.line_id.in_(line_ids)
+                )
+            )
+        db.execute(
+            delete(SupplierInvoiceLine).where(SupplierInvoiceLine.invoice_id == inv_id)
+        )
 
         # Recalculate totals
         subtotal = Decimal("0")
@@ -1112,11 +1115,12 @@ class SupplierInvoiceService(ListResponseMixin):
         if not invoice or invoice.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Invoice not found")
 
-        return (
-            db.query(SupplierInvoiceLine)
-            .filter(SupplierInvoiceLine.invoice_id == inv_id)
-            .order_by(SupplierInvoiceLine.line_number)
-            .all()
+        return list(
+            db.scalars(
+                select(SupplierInvoiceLine)
+                .where(SupplierInvoiceLine.invoice_id == inv_id)
+                .order_by(SupplierInvoiceLine.line_number)
+            ).all()
         )
 
     @staticmethod
@@ -1150,32 +1154,30 @@ class SupplierInvoiceService(ListResponseMixin):
         Returns:
             List of SupplierInvoice objects
         """
-        query = db.query(SupplierInvoice)
+        stmt = select(SupplierInvoice)
 
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 SupplierInvoice.organization_id == coerce_uuid(organization_id)
             )
 
         if supplier_id:
-            query = query.filter(
-                SupplierInvoice.supplier_id == coerce_uuid(supplier_id)
-            )
+            stmt = stmt.where(SupplierInvoice.supplier_id == coerce_uuid(supplier_id))
 
         if status:
-            query = query.filter(SupplierInvoice.status == status)
+            stmt = stmt.where(SupplierInvoice.status == status)
 
         if invoice_type:
-            query = query.filter(SupplierInvoice.invoice_type == invoice_type)
+            stmt = stmt.where(SupplierInvoice.invoice_type == invoice_type)
 
         if from_date:
-            query = query.filter(SupplierInvoice.invoice_date >= from_date)
+            stmt = stmt.where(SupplierInvoice.invoice_date >= from_date)
 
         if to_date:
-            query = query.filter(SupplierInvoice.invoice_date <= to_date)
+            stmt = stmt.where(SupplierInvoice.invoice_date <= to_date)
 
         if overdue_only:
-            query = query.filter(
+            stmt = stmt.where(
                 and_(
                     SupplierInvoice.due_date < date.today(),
                     SupplierInvoice.status.in_(
@@ -1187,8 +1189,8 @@ class SupplierInvoiceService(ListResponseMixin):
                 )
             )
 
-        query = query.order_by(SupplierInvoice.invoice_date.desc())
-        return query.limit(limit).offset(offset).all()
+        stmt = stmt.order_by(SupplierInvoice.invoice_date.desc())
+        return list(db.scalars(stmt.limit(limit).offset(offset)).all())
 
     @staticmethod
     def _update_item_costs_from_invoice(
@@ -1215,10 +1217,12 @@ class SupplierInvoiceService(ListResponseMixin):
             return
 
         # Load invoice lines
-        lines = (
-            db.query(SupplierInvoiceLine)
-            .filter(SupplierInvoiceLine.invoice_id == invoice.invoice_id)
-            .all()
+        lines = list(
+            db.scalars(
+                select(SupplierInvoiceLine).where(
+                    SupplierInvoiceLine.invoice_id == invoice.invoice_id
+                )
+            ).all()
         )
 
         for line in lines:
@@ -1252,13 +1256,13 @@ class SupplierInvoiceService(ListResponseMixin):
                 total_qty = Decimal("0")
                 from app.models.inventory.warehouse import Warehouse
 
-                warehouses = (
-                    db.query(Warehouse)
-                    .filter(
-                        Warehouse.organization_id == organization_id,
-                        Warehouse.is_active == True,
-                    )
-                    .all()
+                warehouses = list(
+                    db.scalars(
+                        select(Warehouse).where(
+                            Warehouse.organization_id == organization_id,
+                            Warehouse.is_active == True,
+                        )
+                    ).all()
                 )
 
                 for warehouse in warehouses:

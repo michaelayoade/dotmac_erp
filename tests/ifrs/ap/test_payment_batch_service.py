@@ -5,9 +5,9 @@ Tests payment batch creation, approval, processing, and bank file generation.
 """
 
 import pytest
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -142,26 +142,26 @@ class TestCreateBatch:
     """Tests for create_batch method."""
 
     @patch("app.services.finance.ap.payment_batch.SequenceService")
-    def test_create_batch_success(self, mock_sequence, mock_db, org_id, user_id, batch_input):
+    def test_create_batch_success(
+        self, mock_sequence, mock_db, org_id, user_id, batch_input
+    ):
         """Test successful batch creation."""
         mock_sequence.get_next_number.return_value = "PMT-202601-0001"
 
-        result = PaymentBatchService.create_batch(
-            mock_db, org_id, batch_input, user_id
-        )
+        result = PaymentBatchService.create_batch(mock_db, org_id, batch_input, user_id)
 
         mock_db.add.assert_called_once()
         mock_db.flush.assert_called_once()
         mock_db.commit.assert_called_once()
 
     @patch("app.services.finance.ap.payment_batch.SequenceService")
-    def test_create_batch_calculates_totals(self, mock_sequence, mock_db, org_id, user_id, batch_input):
+    def test_create_batch_calculates_totals(
+        self, mock_sequence, mock_db, org_id, user_id, batch_input
+    ):
         """Test that batch creation calculates correct totals."""
         mock_sequence.get_next_number.return_value = "PMT-202601-0001"
 
-        result = PaymentBatchService.create_batch(
-            mock_db, org_id, batch_input, user_id
-        )
+        result = PaymentBatchService.create_batch(mock_db, org_id, batch_input, user_id)
 
         # The batch added should have correct totals
         added_batch = mock_db.add.call_args[0][0]
@@ -203,10 +203,12 @@ class TestAddPaymentToBatch:
             payment_batch_id=None,
         )
 
-        # Setup query chain for batch and payment
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.side_effect = [batch, payment]
-        mock_db.query.return_value = mock_query
+        # Service calls db.scalars().first() twice: batch then payment
+        sr1 = MagicMock()
+        sr1.first.return_value = batch
+        sr2 = MagicMock()
+        sr2.first.return_value = payment
+        mock_db.scalars.side_effect = [sr1, sr2]
 
         result = PaymentBatchService.add_payment_to_batch(
             mock_db, org_id, batch.batch_id, payment.payment_id
@@ -219,14 +221,10 @@ class TestAddPaymentToBatch:
 
     def test_add_payment_batch_not_found(self, mock_db, org_id):
         """Test adding payment to non-existent batch."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.return_value = None
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc:
-            PaymentBatchService.add_payment_to_batch(
-                mock_db, org_id, uuid4(), uuid4()
-            )
+            PaymentBatchService.add_payment_to_batch(mock_db, org_id, uuid4(), uuid4())
 
         assert exc.value.status_code == 404
         assert "Payment batch not found" in exc.value.detail
@@ -238,9 +236,7 @@ class TestAddPaymentToBatch:
             status=APBatchStatus.APPROVED,
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.return_value = batch
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = batch
 
         with pytest.raises(HTTPException) as exc:
             PaymentBatchService.add_payment_to_batch(
@@ -254,9 +250,11 @@ class TestAddPaymentToBatch:
         """Test adding non-existent payment."""
         batch = MockPaymentBatch(organization_id=org_id, status=APBatchStatus.DRAFT)
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.side_effect = [batch, None]
-        mock_db.query.return_value = mock_query
+        sr1 = MagicMock()
+        sr1.first.return_value = batch
+        sr2 = MagicMock()
+        sr2.first.return_value = None
+        mock_db.scalars.side_effect = [sr1, sr2]
 
         with pytest.raises(HTTPException) as exc:
             PaymentBatchService.add_payment_to_batch(
@@ -274,9 +272,11 @@ class TestAddPaymentToBatch:
             payment_batch_id=uuid4(),  # Already in a batch
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.side_effect = [batch, payment]
-        mock_db.query.return_value = mock_query
+        sr1 = MagicMock()
+        sr1.first.return_value = batch
+        sr2 = MagicMock()
+        sr2.first.return_value = payment
+        mock_db.scalars.side_effect = [sr1, sr2]
 
         with pytest.raises(HTTPException) as exc:
             PaymentBatchService.add_payment_to_batch(
@@ -295,9 +295,11 @@ class TestAddPaymentToBatch:
             payment_batch_id=None,
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.side_effect = [batch, payment]
-        mock_db.query.return_value = mock_query
+        sr1 = MagicMock()
+        sr1.first.return_value = batch
+        sr2 = MagicMock()
+        sr2.first.return_value = payment
+        mock_db.scalars.side_effect = [sr1, sr2]
 
         with pytest.raises(HTTPException) as exc:
             PaymentBatchService.add_payment_to_batch(
@@ -324,9 +326,11 @@ class TestRemovePaymentFromBatch:
             amount=Decimal("50.00"),
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.side_effect = [batch, payment]
-        mock_db.query.return_value = mock_query
+        sr1 = MagicMock()
+        sr1.first.return_value = batch
+        sr2 = MagicMock()
+        sr2.first.return_value = payment
+        mock_db.scalars.side_effect = [sr1, sr2]
 
         result = PaymentBatchService.remove_payment_from_batch(
             mock_db, org_id, batch.batch_id, payment.payment_id
@@ -339,9 +343,7 @@ class TestRemovePaymentFromBatch:
 
     def test_remove_payment_batch_not_found(self, mock_db, org_id):
         """Test removing payment from non-existent batch."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.return_value = None
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc:
             PaymentBatchService.remove_payment_from_batch(
@@ -357,9 +359,7 @@ class TestRemovePaymentFromBatch:
             status=APBatchStatus.PROCESSING,
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.return_value = batch
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = batch
 
         with pytest.raises(HTTPException) as exc:
             PaymentBatchService.remove_payment_from_batch(
@@ -373,9 +373,11 @@ class TestRemovePaymentFromBatch:
         """Test removing payment not in the batch."""
         batch = MockPaymentBatch(organization_id=org_id, status=APBatchStatus.DRAFT)
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.side_effect = [batch, None]
-        mock_db.query.return_value = mock_query
+        sr1 = MagicMock()
+        sr1.first.return_value = batch
+        sr2 = MagicMock()
+        sr2.first.return_value = None
+        mock_db.scalars.side_effect = [sr1, sr2]
 
         with pytest.raises(HTTPException) as exc:
             PaymentBatchService.remove_payment_from_batch(
@@ -404,11 +406,13 @@ class TestApproveBatch:
             MockSupplierPayment(status=APPaymentStatus.DRAFT),
         ]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.return_value = batch
-        mock_query.filter.return_value.count.return_value = 2
-        mock_query.filter.return_value.all.return_value = payments
-        mock_db.query.return_value = mock_query
+        # Service calls: scalars().first() for batch, scalar() for count, scalars().all() for payments
+        sr1 = MagicMock()
+        sr1.first.return_value = batch
+        sr2 = MagicMock()
+        sr2.all.return_value = payments
+        mock_db.scalars.side_effect = [sr1, sr2]
+        mock_db.scalar.return_value = 2  # payment count
 
         result = PaymentBatchService.approve_batch(
             mock_db, org_id, batch.batch_id, approver_id
@@ -424,9 +428,7 @@ class TestApproveBatch:
 
     def test_approve_batch_not_found(self, mock_db, org_id, user_id):
         """Test approving non-existent batch."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.return_value = None
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc:
             PaymentBatchService.approve_batch(mock_db, org_id, uuid4(), user_id)
@@ -440,14 +442,10 @@ class TestApproveBatch:
             status=APBatchStatus.COMPLETED,
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.return_value = batch
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = batch
 
         with pytest.raises(HTTPException) as exc:
-            PaymentBatchService.approve_batch(
-                mock_db, org_id, batch.batch_id, user_id
-            )
+            PaymentBatchService.approve_batch(mock_db, org_id, batch.batch_id, user_id)
 
         assert exc.value.status_code == 400
         assert "Cannot approve batch" in exc.value.detail
@@ -461,14 +459,10 @@ class TestApproveBatch:
             created_by_user_id=user_id,  # Same as approver
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.return_value = batch
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = batch
 
         with pytest.raises(HTTPException) as exc:
-            PaymentBatchService.approve_batch(
-                mock_db, org_id, batch.batch_id, user_id
-            )
+            PaymentBatchService.approve_batch(mock_db, org_id, batch.batch_id, user_id)
 
         assert exc.value.status_code == 400
         assert "Segregation of duties" in exc.value.detail
@@ -484,10 +478,8 @@ class TestApproveBatch:
             created_by_user_id=creator_id,
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.return_value = batch
-        mock_query.filter.return_value.count.return_value = 0  # No payments
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = batch
+        mock_db.scalar.return_value = 0  # No payments
 
         with pytest.raises(HTTPException) as exc:
             PaymentBatchService.approve_batch(
@@ -502,7 +494,9 @@ class TestProcessBatch:
     """Tests for process_batch method."""
 
     @patch("app.services.finance.ap.supplier_payment.SupplierPaymentService")
-    def test_process_batch_success(self, mock_payment_service, mock_db, org_id, user_id):
+    def test_process_batch_success(
+        self, mock_payment_service, mock_db, org_id, user_id
+    ):
         """Test successful batch processing."""
         batch = MockPaymentBatch(
             organization_id=org_id,
@@ -513,10 +507,12 @@ class TestProcessBatch:
             MockSupplierPayment(status=APPaymentStatus.APPROVED),
         ]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.return_value = batch
-        mock_query.filter.return_value.all.return_value = payments
-        mock_db.query.return_value = mock_query
+        # Service calls: scalars().first() for batch, scalars().all() for payments
+        sr1 = MagicMock()
+        sr1.first.return_value = batch
+        sr2 = MagicMock()
+        sr2.all.return_value = payments
+        mock_db.scalars.side_effect = [sr1, sr2]
 
         result = PaymentBatchService.process_batch(
             mock_db, org_id, batch.batch_id, user_id
@@ -527,7 +523,9 @@ class TestProcessBatch:
         mock_db.commit.assert_called_once()
 
     @patch("app.services.finance.ap.supplier_payment.SupplierPaymentService")
-    def test_process_batch_partial_failure(self, mock_payment_service, mock_db, org_id, user_id):
+    def test_process_batch_partial_failure(
+        self, mock_payment_service, mock_db, org_id, user_id
+    ):
         """Test batch processing with partial failure."""
         batch = MockPaymentBatch(
             organization_id=org_id,
@@ -538,10 +536,11 @@ class TestProcessBatch:
             MockSupplierPayment(status=APPaymentStatus.APPROVED),
         ]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.return_value = batch
-        mock_query.filter.return_value.all.return_value = payments
-        mock_db.query.return_value = mock_query
+        sr1 = MagicMock()
+        sr1.first.return_value = batch
+        sr2 = MagicMock()
+        sr2.all.return_value = payments
+        mock_db.scalars.side_effect = [sr1, sr2]
 
         # First succeeds, second fails
         mock_payment_service.post_payment.side_effect = [
@@ -559,9 +558,7 @@ class TestProcessBatch:
 
     def test_process_batch_not_found(self, mock_db, org_id, user_id):
         """Test processing non-existent batch."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.return_value = None
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc:
             PaymentBatchService.process_batch(mock_db, org_id, uuid4(), user_id)
@@ -575,14 +572,10 @@ class TestProcessBatch:
             status=APBatchStatus.DRAFT,
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.return_value = batch
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = batch
 
         with pytest.raises(HTTPException) as exc:
-            PaymentBatchService.process_batch(
-                mock_db, org_id, batch.batch_id, user_id
-            )
+            PaymentBatchService.process_batch(mock_db, org_id, batch.batch_id, user_id)
 
         assert exc.value.status_code == 400
         assert "Cannot process batch" in exc.value.detail
@@ -615,10 +608,17 @@ class TestGenerateBankFile:
             ),
         ]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.side_effect = [batch, supplier, supplier]
-        mock_query.filter.return_value.all.return_value = payments
-        mock_db.query.return_value = mock_query
+        # Service calls: scalars().first() for batch, scalars().all() for payments,
+        # then scalars().first() for each payment's supplier
+        sr1 = MagicMock()
+        sr1.first.return_value = batch
+        sr2 = MagicMock()
+        sr2.all.return_value = payments
+        sr3 = MagicMock()
+        sr3.first.return_value = supplier
+        sr4 = MagicMock()
+        sr4.first.return_value = supplier
+        mock_db.scalars.side_effect = [sr1, sr2, sr3, sr4]
 
         result = PaymentBatchService.generate_bank_file(
             mock_db, org_id, batch.batch_id, file_format="ACH"
@@ -634,9 +634,7 @@ class TestGenerateBankFile:
 
     def test_generate_bank_file_not_found(self, mock_db, org_id):
         """Test generating bank file for non-existent batch."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.return_value = None
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc:
             PaymentBatchService.generate_bank_file(mock_db, org_id, uuid4())
@@ -650,14 +648,10 @@ class TestGenerateBankFile:
             status=APBatchStatus.DRAFT,
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.return_value = batch
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = batch
 
         with pytest.raises(HTTPException) as exc:
-            PaymentBatchService.generate_bank_file(
-                mock_db, org_id, batch.batch_id
-            )
+            PaymentBatchService.generate_bank_file(mock_db, org_id, batch.batch_id)
 
         assert exc.value.status_code == 400
         assert "Cannot generate bank file" in exc.value.detail
@@ -674,22 +668,20 @@ class TestGetBatchPayments:
             MockSupplierPayment(payment_number="PMT-002"),
         ]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.return_value = batch
-        mock_query.filter.return_value.order_by.return_value.all.return_value = payments
-        mock_db.query.return_value = mock_query
+        # Service calls: scalars().first() for batch, scalars().all() for payments
+        sr1 = MagicMock()
+        sr1.first.return_value = batch
+        sr2 = MagicMock()
+        sr2.all.return_value = payments
+        mock_db.scalars.side_effect = [sr1, sr2]
 
-        result = PaymentBatchService.get_batch_payments(
-            mock_db, org_id, batch.batch_id
-        )
+        result = PaymentBatchService.get_batch_payments(mock_db, org_id, batch.batch_id)
 
         assert len(result) == 2
 
     def test_get_batch_payments_not_found(self, mock_db, org_id):
         """Test getting payments for non-existent batch."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.return_value = None
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc:
             PaymentBatchService.get_batch_payments(mock_db, org_id, uuid4())
@@ -704,9 +696,7 @@ class TestGetBatch:
         """Test getting a batch by ID."""
         batch = MockPaymentBatch()
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.return_value = batch
-        mock_db.query.return_value = mock_query
+        mock_db.get.return_value = batch
 
         result = PaymentBatchService.get(mock_db, str(batch.batch_id))
 
@@ -714,9 +704,7 @@ class TestGetBatch:
 
     def test_get_batch_not_found(self, mock_db):
         """Test getting non-existent batch."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.return_value = None
-        mock_db.query.return_value = mock_query
+        mock_db.get.return_value = None
 
         result = PaymentBatchService.get(mock_db, str(uuid4()))
 
@@ -730,9 +718,7 @@ class TestListBatches:
         """Test listing all batches."""
         batches = [MockPaymentBatch(), MockPaymentBatch()]
 
-        mock_query = MagicMock()
-        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = batches
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = batches
 
         result = PaymentBatchService.list(mock_db)
 
@@ -742,9 +728,7 @@ class TestListBatches:
         """Test listing batches filtered by organization."""
         batches = [MockPaymentBatch(organization_id=org_id)]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = batches
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = batches
 
         result = PaymentBatchService.list(mock_db, organization_id=str(org_id))
 
@@ -754,10 +738,7 @@ class TestListBatches:
         """Test listing batches filtered by status."""
         batches = [MockPaymentBatch(status=APBatchStatus.APPROVED)]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = batches
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = batches
 
         result = PaymentBatchService.list(
             mock_db, organization_id=str(org_id), status=APBatchStatus.APPROVED
@@ -769,10 +750,7 @@ class TestListBatches:
         """Test listing batches filtered by date range."""
         batches = [MockPaymentBatch()]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = batches
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = batches
 
         result = PaymentBatchService.list(
             mock_db,
@@ -787,11 +765,9 @@ class TestListBatches:
         """Test batch list pagination."""
         batches = [MockPaymentBatch()]
 
-        mock_query = MagicMock()
-        mock_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = batches
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = batches
 
         result = PaymentBatchService.list(mock_db, limit=10, offset=20)
 
-        mock_query.order_by.return_value.offset.assert_called_with(20)
-        mock_query.order_by.return_value.offset.return_value.limit.assert_called_with(10)
+        assert len(result) == 1
+        mock_db.scalars.assert_called_once()

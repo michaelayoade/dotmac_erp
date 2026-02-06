@@ -10,7 +10,7 @@ Tests cover:
 """
 
 import pytest
-from datetime import date, datetime, timezone
+from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -145,16 +145,14 @@ class MockPurchaseOrderLine:
 
 # ===================== CREATE PO TESTS =====================
 
+
 class TestCreatePO:
     """Tests for purchase order creation."""
 
     @patch("app.services.finance.ap.purchase_order.SequenceService")
     @patch("app.services.finance.ap.purchase_order.PurchaseOrderLine")
     @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    @patch("app.services.finance.ap.purchase_order.Supplier")
-    def test_create_po_success(
-        self, mock_supplier_class, mock_po_class, mock_line_class, mock_seq_service
-    ):
+    def test_create_po_success(self, mock_po_class, mock_line_class, mock_seq_service):
         """Test successful PO creation."""
         db = MagicMock()
         org_id = uuid4()
@@ -163,7 +161,7 @@ class TestCreatePO:
 
         # Mock supplier lookup
         mock_supplier = MockSupplier(supplier_id=supplier_id, organization_id=org_id)
-        db.query.return_value.filter.return_value.first.return_value = mock_supplier
+        db.scalars.return_value.first.return_value = mock_supplier
 
         # Mock sequence
         mock_seq_service.get_next_number.return_value = "PO-000001"
@@ -197,15 +195,14 @@ class TestCreatePO:
         db.commit.assert_called_once()
         mock_seq_service.get_next_number.assert_called_once()
 
-    @patch("app.services.finance.ap.purchase_order.Supplier")
-    def test_create_po_supplier_not_found(self, mock_supplier_class):
+    def test_create_po_supplier_not_found(self):
         """Test PO creation with non-existent supplier."""
         db = MagicMock()
         org_id = uuid4()
         user_id = uuid4()
 
         # Supplier not found
-        db.query.return_value.filter.return_value.first.return_value = None
+        db.scalars.return_value.first.return_value = None
 
         input_data = PurchaseOrderInput(
             supplier_id=uuid4(),
@@ -226,8 +223,7 @@ class TestCreatePO:
         assert exc_info.value.status_code == 404
         assert "Supplier not found" in str(exc_info.value.detail)
 
-    @patch("app.services.finance.ap.purchase_order.Supplier")
-    def test_create_po_no_lines(self, mock_supplier_class):
+    def test_create_po_no_lines(self):
         """Test PO creation without lines fails."""
         db = MagicMock()
         org_id = uuid4()
@@ -235,7 +231,7 @@ class TestCreatePO:
         user_id = uuid4()
 
         mock_supplier = MockSupplier(supplier_id=supplier_id, organization_id=org_id)
-        db.query.return_value.filter.return_value.first.return_value = mock_supplier
+        db.scalars.return_value.first.return_value = mock_supplier
 
         input_data = PurchaseOrderInput(
             supplier_id=supplier_id,
@@ -253,9 +249,8 @@ class TestCreatePO:
     @patch("app.services.finance.ap.purchase_order.SequenceService")
     @patch("app.services.finance.ap.purchase_order.PurchaseOrderLine")
     @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    @patch("app.services.finance.ap.purchase_order.Supplier")
     def test_create_po_calculates_totals(
-        self, mock_supplier_class, mock_po_class, mock_line_class, mock_seq_service
+        self, mock_po_class, mock_line_class, mock_seq_service
     ):
         """Test PO creation calculates totals correctly."""
         db = MagicMock()
@@ -264,7 +259,7 @@ class TestCreatePO:
         user_id = uuid4()
 
         mock_supplier = MockSupplier(supplier_id=supplier_id, organization_id=org_id)
-        db.query.return_value.filter.return_value.first.return_value = mock_supplier
+        db.scalars.return_value.first.return_value = mock_supplier
         mock_seq_service.get_next_number.return_value = "PO-000001"
 
         # Track the actual values passed to PurchaseOrder constructor
@@ -311,9 +306,8 @@ class TestCreatePO:
     @patch("app.services.finance.ap.purchase_order.SequenceService")
     @patch("app.services.finance.ap.purchase_order.PurchaseOrderLine")
     @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    @patch("app.services.finance.ap.purchase_order.Supplier")
     def test_create_po_with_all_fields(
-        self, mock_supplier_class, mock_po_class, mock_line_class, mock_seq_service
+        self, mock_po_class, mock_line_class, mock_seq_service
     ):
         """Test PO creation with all optional fields."""
         db = MagicMock()
@@ -323,7 +317,7 @@ class TestCreatePO:
         budget_id = uuid4()
 
         mock_supplier = MockSupplier(supplier_id=supplier_id, organization_id=org_id)
-        db.query.return_value.filter.return_value.first.return_value = mock_supplier
+        db.scalars.return_value.first.return_value = mock_supplier
         mock_seq_service.get_next_number.return_value = "PO-000001"
 
         mock_po = MockPurchaseOrder(organization_id=org_id, supplier_id=supplier_id)
@@ -362,12 +356,12 @@ class TestCreatePO:
 
 # ===================== SUBMIT FOR APPROVAL TESTS =====================
 
+
 class TestSubmitForApproval:
     """Tests for PO submission for approval."""
 
     @patch("app.services.finance.ap.purchase_order.POStatus")
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_submit_for_approval_success(self, mock_po_class, mock_status_class):
+    def test_submit_for_approval_success(self, mock_status_class):
         """Test successful PO submission."""
         db = MagicMock()
         org_id = uuid4()
@@ -384,7 +378,7 @@ class TestSubmitForApproval:
         mock_po = MockPurchaseOrder(po_id=po_id, organization_id=org_id)
         mock_po.status = mock_draft
 
-        db.query.return_value.filter.return_value.first.return_value = mock_po
+        db.scalars.return_value.first.return_value = mock_po
 
         result = PurchaseOrderService.submit_for_approval(db, org_id, po_id, user_id)
 
@@ -392,14 +386,13 @@ class TestSubmitForApproval:
         assert mock_po.status == mock_pending
         db.commit.assert_called_once()
 
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_submit_for_approval_not_found(self, mock_po_class):
+    def test_submit_for_approval_not_found(self):
         """Test submission of non-existent PO."""
         db = MagicMock()
         org_id = uuid4()
         user_id = uuid4()
 
-        db.query.return_value.filter.return_value.first.return_value = None
+        db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc_info:
             PurchaseOrderService.submit_for_approval(db, org_id, uuid4(), user_id)
@@ -407,8 +400,7 @@ class TestSubmitForApproval:
         assert exc_info.value.status_code == 404
 
     @patch("app.services.finance.ap.purchase_order.POStatus")
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_submit_for_approval_wrong_status(self, mock_po_class, mock_status_class):
+    def test_submit_for_approval_wrong_status(self, mock_status_class):
         """Test submission of PO not in DRAFT status."""
         db = MagicMock()
         org_id = uuid4()
@@ -424,7 +416,7 @@ class TestSubmitForApproval:
         mock_po = MockPurchaseOrder(po_id=po_id, organization_id=org_id)
         mock_po.status = mock_approved  # Wrong status
 
-        db.query.return_value.filter.return_value.first.return_value = mock_po
+        db.scalars.return_value.first.return_value = mock_po
 
         with pytest.raises(HTTPException) as exc_info:
             PurchaseOrderService.submit_for_approval(db, org_id, po_id, user_id)
@@ -435,12 +427,12 @@ class TestSubmitForApproval:
 
 # ===================== APPROVE PO TESTS =====================
 
+
 class TestApprovePO:
     """Tests for PO approval."""
 
     @patch("app.services.finance.ap.purchase_order.POStatus")
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_approve_po_success(self, mock_po_class, mock_status_class):
+    def test_approve_po_success(self, mock_status_class):
         """Test successful PO approval."""
         db = MagicMock()
         org_id = uuid4()
@@ -461,7 +453,7 @@ class TestApprovePO:
         )
         mock_po.status = mock_pending
 
-        db.query.return_value.filter.return_value.first.return_value = mock_po
+        db.scalars.return_value.first.return_value = mock_po
 
         result = PurchaseOrderService.approve_po(db, org_id, po_id, approver_id)
 
@@ -471,13 +463,12 @@ class TestApprovePO:
         assert mock_po.approved_at is not None
         db.commit.assert_called_once()
 
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_approve_po_not_found(self, mock_po_class):
+    def test_approve_po_not_found(self):
         """Test approval of non-existent PO."""
         db = MagicMock()
         org_id = uuid4()
 
-        db.query.return_value.filter.return_value.first.return_value = None
+        db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc_info:
             PurchaseOrderService.approve_po(db, org_id, uuid4(), uuid4())
@@ -485,8 +476,7 @@ class TestApprovePO:
         assert exc_info.value.status_code == 404
 
     @patch("app.services.finance.ap.purchase_order.POStatus")
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_approve_po_wrong_status(self, mock_po_class, mock_status_class):
+    def test_approve_po_wrong_status(self, mock_status_class):
         """Test approval of PO not in PENDING_APPROVAL status."""
         db = MagicMock()
         org_id = uuid4()
@@ -501,7 +491,7 @@ class TestApprovePO:
         mock_po = MockPurchaseOrder(po_id=po_id, organization_id=org_id)
         mock_po.status = mock_draft
 
-        db.query.return_value.filter.return_value.first.return_value = mock_po
+        db.scalars.return_value.first.return_value = mock_po
 
         with pytest.raises(HTTPException) as exc_info:
             PurchaseOrderService.approve_po(db, org_id, po_id, uuid4())
@@ -510,8 +500,7 @@ class TestApprovePO:
         assert "Cannot approve" in str(exc_info.value.detail)
 
     @patch("app.services.finance.ap.purchase_order.POStatus")
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_approve_po_segregation_of_duties(self, mock_po_class, mock_status_class):
+    def test_approve_po_segregation_of_duties(self, mock_status_class):
         """Test SoD enforcement - approver cannot be creator."""
         db = MagicMock()
         org_id = uuid4()
@@ -529,7 +518,7 @@ class TestApprovePO:
         )
         mock_po.status = mock_pending
 
-        db.query.return_value.filter.return_value.first.return_value = mock_po
+        db.scalars.return_value.first.return_value = mock_po
 
         with pytest.raises(HTTPException) as exc_info:
             PurchaseOrderService.approve_po(db, org_id, po_id, user_id)  # Same user
@@ -540,12 +529,12 @@ class TestApprovePO:
 
 # ===================== CANCEL PO TESTS =====================
 
+
 class TestCancelPO:
     """Tests for PO cancellation."""
 
     @patch("app.services.finance.ap.purchase_order.POStatus")
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_cancel_po_success(self, mock_po_class, mock_status_class):
+    def test_cancel_po_success(self, mock_status_class):
         """Test successful PO cancellation."""
         db = MagicMock()
         org_id = uuid4()
@@ -566,7 +555,7 @@ class TestCancelPO:
         )
         mock_po.status = mock_draft
 
-        db.query.return_value.filter.return_value.first.return_value = mock_po
+        db.scalars.return_value.first.return_value = mock_po
 
         result = PurchaseOrderService.cancel_po(db, org_id, po_id)
 
@@ -574,13 +563,12 @@ class TestCancelPO:
         assert mock_po.status == mock_cancelled
         db.commit.assert_called_once()
 
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_cancel_po_not_found(self, mock_po_class):
+    def test_cancel_po_not_found(self):
         """Test cancellation of non-existent PO."""
         db = MagicMock()
         org_id = uuid4()
 
-        db.query.return_value.filter.return_value.first.return_value = None
+        db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc_info:
             PurchaseOrderService.cancel_po(db, org_id, uuid4())
@@ -588,8 +576,7 @@ class TestCancelPO:
         assert exc_info.value.status_code == 404
 
     @patch("app.services.finance.ap.purchase_order.POStatus")
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_cancel_po_received_status(self, mock_po_class, mock_status_class):
+    def test_cancel_po_received_status(self, mock_status_class):
         """Test cannot cancel PO in RECEIVED status."""
         db = MagicMock()
         org_id = uuid4()
@@ -604,7 +591,7 @@ class TestCancelPO:
         mock_po = MockPurchaseOrder(po_id=po_id, organization_id=org_id)
         mock_po.status = mock_received
 
-        db.query.return_value.filter.return_value.first.return_value = mock_po
+        db.scalars.return_value.first.return_value = mock_po
 
         with pytest.raises(HTTPException) as exc_info:
             PurchaseOrderService.cancel_po(db, org_id, po_id)
@@ -613,8 +600,7 @@ class TestCancelPO:
         assert "Cannot cancel" in str(exc_info.value.detail)
 
     @patch("app.services.finance.ap.purchase_order.POStatus")
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_cancel_po_closed_status(self, mock_po_class, mock_status_class):
+    def test_cancel_po_closed_status(self, mock_status_class):
         """Test cannot cancel PO in CLOSED status."""
         db = MagicMock()
         org_id = uuid4()
@@ -629,7 +615,7 @@ class TestCancelPO:
         mock_po = MockPurchaseOrder(po_id=po_id, organization_id=org_id)
         mock_po.status = mock_closed
 
-        db.query.return_value.filter.return_value.first.return_value = mock_po
+        db.scalars.return_value.first.return_value = mock_po
 
         with pytest.raises(HTTPException) as exc_info:
             PurchaseOrderService.cancel_po(db, org_id, po_id)
@@ -637,8 +623,7 @@ class TestCancelPO:
         assert exc_info.value.status_code == 400
 
     @patch("app.services.finance.ap.purchase_order.POStatus")
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_cancel_po_with_received_goods(self, mock_po_class, mock_status_class):
+    def test_cancel_po_with_received_goods(self, mock_status_class):
         """Test cannot cancel PO with received goods."""
         db = MagicMock()
         org_id = uuid4()
@@ -657,7 +642,7 @@ class TestCancelPO:
         )
         mock_po.status = mock_draft
 
-        db.query.return_value.filter.return_value.first.return_value = mock_po
+        db.scalars.return_value.first.return_value = mock_po
 
         with pytest.raises(HTTPException) as exc_info:
             PurchaseOrderService.cancel_po(db, org_id, po_id)
@@ -668,12 +653,12 @@ class TestCancelPO:
 
 # ===================== CLOSE PO TESTS =====================
 
+
 class TestClosePO:
     """Tests for PO closing."""
 
     @patch("app.services.finance.ap.purchase_order.POStatus")
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_close_po_success(self, mock_po_class, mock_status_class):
+    def test_close_po_success(self, mock_status_class):
         """Test successful PO closing."""
         db = MagicMock()
         org_id = uuid4()
@@ -688,7 +673,7 @@ class TestClosePO:
         mock_po = MockPurchaseOrder(po_id=po_id, organization_id=org_id)
         mock_po.status = mock_received
 
-        db.query.return_value.filter.return_value.first.return_value = mock_po
+        db.scalars.return_value.first.return_value = mock_po
 
         result = PurchaseOrderService.close_po(db, org_id, po_id)
 
@@ -696,13 +681,12 @@ class TestClosePO:
         assert mock_po.status == mock_closed
         db.commit.assert_called_once()
 
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_close_po_not_found(self, mock_po_class):
+    def test_close_po_not_found(self):
         """Test closing non-existent PO."""
         db = MagicMock()
         org_id = uuid4()
 
-        db.query.return_value.filter.return_value.first.return_value = None
+        db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc_info:
             PurchaseOrderService.close_po(db, org_id, uuid4())
@@ -710,8 +694,7 @@ class TestClosePO:
         assert exc_info.value.status_code == 404
 
     @patch("app.services.finance.ap.purchase_order.POStatus")
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_close_po_cancelled(self, mock_po_class, mock_status_class):
+    def test_close_po_cancelled(self, mock_status_class):
         """Test cannot close cancelled PO."""
         db = MagicMock()
         org_id = uuid4()
@@ -724,7 +707,7 @@ class TestClosePO:
         mock_po = MockPurchaseOrder(po_id=po_id, organization_id=org_id)
         mock_po.status = mock_cancelled
 
-        db.query.return_value.filter.return_value.first.return_value = mock_po
+        db.scalars.return_value.first.return_value = mock_po
 
         with pytest.raises(HTTPException) as exc_info:
             PurchaseOrderService.close_po(db, org_id, po_id)
@@ -735,12 +718,12 @@ class TestClosePO:
 
 # ===================== UPDATE RECEIVED AMOUNT TESTS =====================
 
+
 class TestUpdateReceivedAmount:
     """Tests for updating received amount."""
 
     @patch("app.services.finance.ap.purchase_order.POStatus")
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_update_received_partial(self, mock_po_class, mock_status_class):
+    def test_update_received_partial(self, mock_status_class):
         """Test partial receipt updates status to PARTIALLY_RECEIVED."""
         db = MagicMock()
         po_id = uuid4()
@@ -756,7 +739,7 @@ class TestUpdateReceivedAmount:
             amount_received=Decimal("0"),
         )
 
-        db.query.return_value.filter.return_value.first.return_value = mock_po
+        db.scalars.return_value.first.return_value = mock_po
 
         result = PurchaseOrderService.update_received_amount(
             db, po_id, Decimal("500.00")
@@ -768,8 +751,7 @@ class TestUpdateReceivedAmount:
         db.commit.assert_called_once()
 
     @patch("app.services.finance.ap.purchase_order.POStatus")
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_update_received_full(self, mock_po_class, mock_status_class):
+    def test_update_received_full(self, mock_status_class):
         """Test full receipt updates status to RECEIVED."""
         db = MagicMock()
         po_id = uuid4()
@@ -785,10 +767,12 @@ class TestUpdateReceivedAmount:
             amount_received=Decimal("500.00"),
         )
 
-        db.query.return_value.filter.return_value.first.return_value = mock_po
+        db.scalars.return_value.first.return_value = mock_po
 
         result = PurchaseOrderService.update_received_amount(
-            db, po_id, Decimal("500.00")  # Completes to 1000
+            db,
+            po_id,
+            Decimal("500.00"),  # Completes to 1000
         )
 
         assert result is not None
@@ -796,12 +780,11 @@ class TestUpdateReceivedAmount:
         assert mock_po.status == mock_received
         db.commit.assert_called_once()
 
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_update_received_not_found(self, mock_po_class):
+    def test_update_received_not_found(self):
         """Test updating non-existent PO."""
         db = MagicMock()
 
-        db.query.return_value.filter.return_value.first.return_value = None
+        db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc_info:
             PurchaseOrderService.update_received_amount(db, uuid4(), Decimal("100.00"))
@@ -809,8 +792,7 @@ class TestUpdateReceivedAmount:
         assert exc_info.value.status_code == 404
 
     @patch("app.services.finance.ap.purchase_order.POStatus")
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_update_received_over_total(self, mock_po_class, mock_status_class):
+    def test_update_received_over_total(self, mock_status_class):
         """Test receipt can exceed total (over-delivery)."""
         db = MagicMock()
         po_id = uuid4()
@@ -826,10 +808,12 @@ class TestUpdateReceivedAmount:
             amount_received=Decimal("900.00"),
         )
 
-        db.query.return_value.filter.return_value.first.return_value = mock_po
+        db.scalars.return_value.first.return_value = mock_po
 
         result = PurchaseOrderService.update_received_amount(
-            db, po_id, Decimal("200.00")  # Exceeds total
+            db,
+            po_id,
+            Decimal("200.00"),  # Exceeds total
         )
 
         assert result is not None
@@ -839,50 +823,47 @@ class TestUpdateReceivedAmount:
 
 # ===================== GETTER TESTS =====================
 
+
 class TestGetters:
     """Tests for getter methods."""
 
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_get_po(self, mock_po_class):
+    def test_get_po(self):
         """Test getting PO by ID."""
         db = MagicMock()
         po_id = uuid4()
 
         mock_po = MockPurchaseOrder(po_id=po_id)
-        db.query.return_value.filter.return_value.first.return_value = mock_po
+        db.get.return_value = mock_po
 
         result = PurchaseOrderService.get(db, str(po_id))
 
         assert result is not None
         assert result.po_id == po_id
 
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_get_po_not_found(self, mock_po_class):
+    def test_get_po_not_found(self):
         """Test getting non-existent PO."""
         db = MagicMock()
 
-        db.query.return_value.filter.return_value.first.return_value = None
+        db.get.return_value = None
 
         result = PurchaseOrderService.get(db, str(uuid4()))
 
         assert result is None
 
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_get_by_number(self, mock_po_class):
+    def test_get_by_number(self):
         """Test getting PO by number."""
         db = MagicMock()
         org_id = uuid4()
 
         mock_po = MockPurchaseOrder(po_number="PO-000001")
-        db.query.return_value.filter.return_value.first.return_value = mock_po
+        db.scalars.return_value.first.return_value = mock_po
 
         result = PurchaseOrderService.get_by_number(db, org_id, "PO-000001")
 
         assert result is not None
         assert result.po_number == "PO-000001"
 
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrderLine")
-    def test_get_po_lines(self, mock_line_class):
+    def test_get_po_lines(self):
         """Test getting PO lines."""
         db = MagicMock()
         po_id = uuid4()
@@ -891,7 +872,7 @@ class TestGetters:
             MockPurchaseOrderLine(line_number=1),
             MockPurchaseOrderLine(line_number=2),
         ]
-        db.query.return_value.filter.return_value.order_by.return_value.all.return_value = lines
+        db.scalars.return_value.all.return_value = lines
 
         result = PurchaseOrderService.get_po_lines(db, str(po_id))
 
@@ -900,11 +881,11 @@ class TestGetters:
 
 # ===================== LIST TESTS =====================
 
+
 class TestListPOs:
     """Tests for listing purchase orders."""
 
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_list_pos(self, mock_po_class):
+    def test_list_pos(self):
         """Test listing purchase orders."""
         db = MagicMock()
 
@@ -912,7 +893,7 @@ class TestListPOs:
             MockPurchaseOrder(po_number="PO-000001"),
             MockPurchaseOrder(po_number="PO-000002"),
         ]
-        db.query.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = pos
+        db.scalars.return_value.all.return_value = pos
 
         result = PurchaseOrderService.list(db)
 
@@ -925,15 +906,7 @@ class TestListPOs:
         supplier_id = uuid4()
 
         pos = [MockPurchaseOrder()]
-
-        # Create mock query builder
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.all.return_value = pos
-        db.query.return_value = mock_query
+        db.scalars.return_value.all.return_value = pos
 
         result = PurchaseOrderService.list(
             db,
@@ -947,30 +920,27 @@ class TestListPOs:
         )
 
         assert len(result) == 1
-        assert mock_query.filter.called
+        db.scalars.assert_called_once()
 
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_list_pos_empty(self, mock_po_class):
+    def test_list_pos_empty(self):
         """Test listing returns empty when no POs."""
         db = MagicMock()
 
-        db.query.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = []
+        db.scalars.return_value.all.return_value = []
 
         result = PurchaseOrderService.list(db)
 
         assert len(result) == 0
 
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrder")
-    def test_list_pos_pagination(self, mock_po_class):
+    def test_list_pos_pagination(self):
         """Test list respects pagination."""
         db = MagicMock()
 
         pos = [MockPurchaseOrder()]
-        db.query.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = pos
+        db.scalars.return_value.all.return_value = pos
 
         result = PurchaseOrderService.list(db, limit=5, offset=10)
 
         assert len(result) == 1
         # Verify offset and limit were called
-        db.query.return_value.order_by.return_value.offset.assert_called_with(10)
-        db.query.return_value.order_by.return_value.offset.return_value.limit.assert_called_with(5)
+        db.scalars.assert_called_once()

@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import and_
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.ap_aging_snapshot import APAgingSnapshot
@@ -23,21 +23,15 @@ from app.models.finance.ap.supplier_invoice import (
     SupplierInvoiceStatus,
 )
 from app.services.common import coerce_uuid
+from app.services.finance.common.aging_helper import (
+    AGING_BUCKETS,
+    BUCKET_ATTRS,
+    compute_aging_totals,
+)
 from app.services.finance.platform.org_context import org_context_service
 from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class AgingBucket:
-    """Represents an aging bucket."""
-
-    bucket_name: str
-    min_days: int
-    max_days: Optional[int]  # None for 90+ bucket
-    amount: Decimal = Decimal("0")
-    invoice_count: int = 0
 
 
 @dataclass
@@ -79,13 +73,7 @@ class APAgingService(ListResponseMixin):
     point-in-time snapshots for historical reporting.
     """
 
-    # Standard aging buckets
-    AGING_BUCKETS = [
-        AgingBucket("Current", 0, 30),
-        AgingBucket("31-60 Days", 31, 60),
-        AgingBucket("61-90 Days", 61, 90),
-        AgingBucket("Over 90 Days", 91, None),
-    ]
+    AGING_BUCKETS = AGING_BUCKETS
 
     @staticmethod
     def calculate_supplier_aging(
@@ -120,35 +108,24 @@ class APAgingService(ListResponseMixin):
             SupplierInvoiceStatus.PARTIALLY_PAID,
         ]
 
-        invoices = (
-            db.query(SupplierInvoice)
-            .filter(
-                and_(
-                    SupplierInvoice.supplier_id == sup_id,
-                    SupplierInvoice.organization_id == org_id,
-                    SupplierInvoice.status.in_(outstanding_statuses),
+        invoices = list(
+            db.scalars(
+                select(SupplierInvoice).where(
+                    and_(
+                        SupplierInvoice.supplier_id == sup_id,
+                        SupplierInvoice.organization_id == org_id,
+                        SupplierInvoice.status.in_(outstanding_statuses),
+                    )
                 )
-            )
-            .all()
+            ).all()
         )
 
-        current = Decimal("0")
-        days_31_60 = Decimal("0")
-        days_61_90 = Decimal("0")
-        over_90 = Decimal("0")
-
-        for inv in invoices:
-            days_overdue = (ref_date - inv.due_date).days
-            balance = inv.balance_due
-
-            if days_overdue <= 30:
-                current += balance
-            elif days_overdue <= 60:
-                days_31_60 += balance
-            elif days_overdue <= 90:
-                days_61_90 += balance
-            else:
-                over_90 += balance
+        current, days_31_60, days_61_90, over_90 = compute_aging_totals(
+            invoices,
+            ref_date,
+            due_date=lambda inv: inv.due_date,
+            balance=lambda inv: inv.balance_due,
+        )
 
         return SupplierAgingSummary(
             supplier_id=supplier.supplier_id,
@@ -188,36 +165,24 @@ class APAgingService(ListResponseMixin):
             SupplierInvoiceStatus.PARTIALLY_PAID,
         ]
 
-        invoices = (
-            db.query(SupplierInvoice)
-            .filter(
-                and_(
-                    SupplierInvoice.organization_id == org_id,
-                    SupplierInvoice.status.in_(outstanding_statuses),
+        invoices = list(
+            db.scalars(
+                select(SupplierInvoice).where(
+                    and_(
+                        SupplierInvoice.organization_id == org_id,
+                        SupplierInvoice.status.in_(outstanding_statuses),
+                    )
                 )
-            )
-            .all()
+            ).all()
         )
 
-        current = Decimal("0")
-        days_31_60 = Decimal("0")
-        days_61_90 = Decimal("0")
-        over_90 = Decimal("0")
-        supplier_ids = set()
-
-        for inv in invoices:
-            days_overdue = (ref_date - inv.due_date).days
-            balance = inv.balance_due
-            supplier_ids.add(inv.supplier_id)
-
-            if days_overdue <= 30:
-                current += balance
-            elif days_overdue <= 60:
-                days_31_60 += balance
-            elif days_overdue <= 90:
-                days_61_90 += balance
-            else:
-                over_90 += balance
+        supplier_ids = {inv.supplier_id for inv in invoices}
+        current, days_31_60, days_61_90, over_90 = compute_aging_totals(
+            invoices,
+            ref_date,
+            due_date=lambda inv: inv.due_date,
+            balance=lambda inv: inv.balance_due,
+        )
 
         # Get organization's functional currency
         functional_currency = org_context_service.get_functional_currency(db, org_id)
@@ -262,20 +227,21 @@ class APAgingService(ListResponseMixin):
             SupplierInvoiceStatus.PARTIALLY_PAID,
         ]
 
-        supplier_ids = (
-            db.query(SupplierInvoice.supplier_id)
-            .filter(
-                and_(
-                    SupplierInvoice.organization_id == org_id,
-                    SupplierInvoice.status.in_(outstanding_statuses),
+        supplier_ids = list(
+            db.scalars(
+                select(SupplierInvoice.supplier_id)
+                .where(
+                    and_(
+                        SupplierInvoice.organization_id == org_id,
+                        SupplierInvoice.status.in_(outstanding_statuses),
+                    )
                 )
-            )
-            .distinct()
-            .all()
+                .distinct()
+            ).all()
         )
 
         results = []
-        for (sup_id,) in supplier_ids:
+        for sup_id in supplier_ids:
             try:
                 summary = APAgingService.calculate_supplier_aging(
                     db, org_id, sup_id, ref_date
@@ -318,12 +284,7 @@ class APAgingService(ListResponseMixin):
         supplier_aging = APAgingService.get_aging_by_supplier(db, org_id, ref_date)
 
         snapshots = []
-        bucket_mapping = [
-            ("Current", "current"),
-            ("31-60 Days", "days_31_60"),
-            ("61-90 Days", "days_61_90"),
-            ("Over 90 Days", "over_90"),
-        ]
+        bucket_mapping = BUCKET_ATTRS
 
         for aging in supplier_aging:
             # Create one snapshot record per aging bucket per supplier
@@ -379,7 +340,7 @@ class APAgingService(ListResponseMixin):
             SupplierInvoiceStatus.PARTIALLY_PAID,
         ]
 
-        query = db.query(SupplierInvoice).filter(
+        stmt = select(SupplierInvoice).where(
             and_(
                 SupplierInvoice.organization_id == org_id,
                 SupplierInvoice.status.in_(outstanding_statuses),
@@ -388,11 +349,9 @@ class APAgingService(ListResponseMixin):
         )
 
         if supplier_id:
-            query = query.filter(
-                SupplierInvoice.supplier_id == coerce_uuid(supplier_id)
-            )
+            stmt = stmt.where(SupplierInvoice.supplier_id == coerce_uuid(supplier_id))
 
-        invoices = query.order_by(SupplierInvoice.due_date).all()
+        invoices = list(db.scalars(stmt.order_by(SupplierInvoice.due_date)).all())
 
         # Filter by min days overdue
         result = []
@@ -426,23 +385,21 @@ class APAgingService(ListResponseMixin):
         Returns:
             List of APAgingSnapshot objects
         """
-        query = db.query(APAgingSnapshot)
+        stmt = select(APAgingSnapshot)
 
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 APAgingSnapshot.organization_id == coerce_uuid(organization_id)
             )
 
         if supplier_id:
-            query = query.filter(
-                APAgingSnapshot.supplier_id == coerce_uuid(supplier_id)
-            )
+            stmt = stmt.where(APAgingSnapshot.supplier_id == coerce_uuid(supplier_id))
 
         if snapshot_date:
-            query = query.filter(APAgingSnapshot.snapshot_date == snapshot_date)
+            stmt = stmt.where(APAgingSnapshot.snapshot_date == snapshot_date)
 
-        query = query.order_by(APAgingSnapshot.snapshot_date.desc())
-        return query.limit(limit).offset(offset).all()
+        stmt = stmt.order_by(APAgingSnapshot.snapshot_date.desc())
+        return list(db.scalars(stmt.limit(limit).offset(offset)).all())
 
 
 # Module-level singleton instance

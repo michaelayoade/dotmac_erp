@@ -14,6 +14,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.goods_receipt import GoodsReceipt, ReceiptStatus
@@ -98,14 +99,12 @@ class GoodsReceiptService(ListResponseMixin):
         po_id = coerce_uuid(input.po_id)
 
         # Validate PO exists and is in receivable status
-        po = (
-            db.query(PurchaseOrder)
-            .filter(
+        po = db.scalars(
+            select(PurchaseOrder).where(
                 PurchaseOrder.po_id == po_id,
                 PurchaseOrder.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
@@ -156,11 +155,9 @@ class GoodsReceiptService(ListResponseMixin):
             po_line_id = coerce_uuid(line_input.po_line_id)
 
             # Get the PO line
-            po_line = (
-                db.query(PurchaseOrderLine)
-                .filter(PurchaseOrderLine.line_id == po_line_id)
-                .first()
-            )
+            po_line = db.scalars(
+                select(PurchaseOrderLine).where(PurchaseOrderLine.line_id == po_line_id)
+            ).first()
             if not po_line:
                 raise HTTPException(
                     status_code=404,
@@ -219,14 +216,12 @@ class GoodsReceiptService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         receipt_id = coerce_uuid(receipt_id)
 
-        receipt = (
-            db.query(GoodsReceipt)
-            .filter(
+        receipt = db.scalars(
+            select(GoodsReceipt).where(
                 GoodsReceipt.receipt_id == receipt_id,
                 GoodsReceipt.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not receipt:
             raise HTTPException(status_code=404, detail="Goods receipt not found")
@@ -265,14 +260,12 @@ class GoodsReceiptService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         receipt_id = coerce_uuid(receipt_id)
 
-        receipt = (
-            db.query(GoodsReceipt)
-            .filter(
+        receipt = db.scalars(
+            select(GoodsReceipt).where(
                 GoodsReceipt.receipt_id == receipt_id,
                 GoodsReceipt.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not receipt:
             raise HTTPException(status_code=404, detail="Goods receipt not found")
@@ -291,14 +284,12 @@ class GoodsReceiptService(ListResponseMixin):
         total_rejected = Decimal("0")
 
         for result in inspection_results:
-            line = (
-                db.query(GoodsReceiptLine)
-                .filter(
+            line = db.scalars(
+                select(GoodsReceiptLine).where(
                     GoodsReceiptLine.line_id == coerce_uuid(result.line_id),
                     GoodsReceiptLine.receipt_id == receipt_id,
                 )
-                .first()
-            )
+            ).first()
 
             if not line:
                 raise HTTPException(
@@ -378,14 +369,12 @@ class GoodsReceiptService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         receipt_id = coerce_uuid(receipt_id)
 
-        receipt = (
-            db.query(GoodsReceipt)
-            .filter(
+        receipt = db.scalars(
+            select(GoodsReceipt).where(
                 GoodsReceipt.receipt_id == receipt_id,
                 GoodsReceipt.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not receipt:
             raise HTTPException(status_code=404, detail="Goods receipt not found")
@@ -447,15 +436,13 @@ class GoodsReceiptService(ListResponseMixin):
         transaction_ids: List[UUID] = []
 
         # Get fiscal period for the receipt date
-        fiscal_period = (
-            db.query(FiscalPeriod)
-            .filter(
+        fiscal_period = db.scalars(
+            select(FiscalPeriod).where(
                 FiscalPeriod.organization_id == organization_id,
                 FiscalPeriod.start_date <= receipt.receipt_date,
                 FiscalPeriod.end_date >= receipt.receipt_date,
             )
-            .first()
-        )
+        ).first()
 
         if not fiscal_period:
             # No fiscal period - skip inventory transactions
@@ -467,11 +454,11 @@ class GoodsReceiptService(ListResponseMixin):
                 continue
 
             # Get the PO line to check for item_id
-            po_line = (
-                db.query(PurchaseOrderLine)
-                .filter(PurchaseOrderLine.line_id == line.po_line_id)
-                .first()
-            )
+            po_line = db.scalars(
+                select(PurchaseOrderLine).where(
+                    PurchaseOrderLine.line_id == line.po_line_id
+                )
+            ).first()
 
             if not po_line or not po_line.item_id:
                 # Skip non-inventory lines
@@ -553,29 +540,34 @@ class GoodsReceiptService(ListResponseMixin):
     def _reverse_po_quantities(db: Session, receipt: GoodsReceipt) -> None:
         """Reverse PO line quantities for a rejected receipt."""
         for line in receipt.lines:
-            po_line = (
-                db.query(PurchaseOrderLine)
-                .filter(PurchaseOrderLine.line_id == line.po_line_id)
-                .first()
-            )
+            po_line = db.scalars(
+                select(PurchaseOrderLine).where(
+                    PurchaseOrderLine.line_id == line.po_line_id
+                )
+            ).first()
             if po_line:
                 po_line.quantity_received -= line.quantity_received
 
         # Recalculate PO status
-        po = (
-            db.query(PurchaseOrder).filter(PurchaseOrder.po_id == receipt.po_id).first()
-        )
+        po = db.scalars(
+            select(PurchaseOrder).where(PurchaseOrder.po_id == receipt.po_id)
+        ).first()
         if po:
             GoodsReceiptService._update_po_status(db, po)
 
     @staticmethod
-    def get(db: Session, receipt_id: str) -> Optional[GoodsReceipt]:
-        """Get a goods receipt by ID."""
-        return (
-            db.query(GoodsReceipt)
-            .filter(GoodsReceipt.receipt_id == coerce_uuid(receipt_id))
-            .first()
-        )
+    def get(
+        db: Session,
+        receipt_id: str,
+        organization_id: Optional[UUID] = None,
+    ) -> Optional[GoodsReceipt]:
+        """Get a goods receipt by ID with optional org_id isolation."""
+        receipt = db.get(GoodsReceipt, coerce_uuid(receipt_id))
+        if receipt is None:
+            return None
+        if organization_id is not None and receipt.organization_id != organization_id:
+            return None
+        return receipt
 
     @staticmethod
     def get_by_number(
@@ -584,23 +576,22 @@ class GoodsReceiptService(ListResponseMixin):
         receipt_number: str,
     ) -> Optional[GoodsReceipt]:
         """Get a goods receipt by number."""
-        return (
-            db.query(GoodsReceipt)
-            .filter(
+        return db.scalars(
+            select(GoodsReceipt).where(
                 GoodsReceipt.organization_id == coerce_uuid(organization_id),
                 GoodsReceipt.receipt_number == receipt_number,
             )
-            .first()
-        )
+        ).first()
 
     @staticmethod
     def get_receipt_lines(db: Session, receipt_id: str) -> List[GoodsReceiptLine]:
         """Get all lines for a goods receipt."""
-        return (
-            db.query(GoodsReceiptLine)
-            .filter(GoodsReceiptLine.receipt_id == coerce_uuid(receipt_id))
-            .order_by(GoodsReceiptLine.line_number)
-            .all()
+        return list(
+            db.scalars(
+                select(GoodsReceiptLine)
+                .where(GoodsReceiptLine.receipt_id == coerce_uuid(receipt_id))
+                .order_by(GoodsReceiptLine.line_number)
+            ).all()
         )
 
     @staticmethod
@@ -610,14 +601,15 @@ class GoodsReceiptService(ListResponseMixin):
         po_id: UUID,
     ) -> List[GoodsReceipt]:
         """List all goods receipts for a purchase order."""
-        return (
-            db.query(GoodsReceipt)
-            .filter(
-                GoodsReceipt.organization_id == coerce_uuid(organization_id),
-                GoodsReceipt.po_id == coerce_uuid(po_id),
-            )
-            .order_by(GoodsReceipt.receipt_date.desc())
-            .all()
+        return list(
+            db.scalars(
+                select(GoodsReceipt)
+                .where(
+                    GoodsReceipt.organization_id == coerce_uuid(organization_id),
+                    GoodsReceipt.po_id == coerce_uuid(po_id),
+                )
+                .order_by(GoodsReceipt.receipt_date.desc())
+            ).all()
         )
 
     @staticmethod
@@ -648,33 +640,34 @@ class GoodsReceiptService(ListResponseMixin):
         Returns:
             List of GoodsReceipt objects
         """
-        query = db.query(GoodsReceipt)
+        stmt = select(GoodsReceipt)
 
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 GoodsReceipt.organization_id == coerce_uuid(organization_id)
             )
 
         if supplier_id:
-            query = query.filter(GoodsReceipt.supplier_id == coerce_uuid(supplier_id))
+            stmt = stmt.where(GoodsReceipt.supplier_id == coerce_uuid(supplier_id))
 
         if po_id:
-            query = query.filter(GoodsReceipt.po_id == coerce_uuid(po_id))
+            stmt = stmt.where(GoodsReceipt.po_id == coerce_uuid(po_id))
 
         if status:
-            query = query.filter(GoodsReceipt.status == status)
+            stmt = stmt.where(GoodsReceipt.status == status)
 
         if from_date:
-            query = query.filter(GoodsReceipt.receipt_date >= from_date)
+            stmt = stmt.where(GoodsReceipt.receipt_date >= from_date)
 
         if to_date:
-            query = query.filter(GoodsReceipt.receipt_date <= to_date)
+            stmt = stmt.where(GoodsReceipt.receipt_date <= to_date)
 
-        return (
-            query.order_by(GoodsReceipt.receipt_date.desc())
-            .offset(offset)
-            .limit(limit)
-            .all()
+        return list(
+            db.scalars(
+                stmt.order_by(GoodsReceipt.receipt_date.desc())
+                .offset(offset)
+                .limit(limit)
+            ).all()
         )
 
 

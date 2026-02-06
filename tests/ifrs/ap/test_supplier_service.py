@@ -14,7 +14,6 @@ from app.services.finance.ap.supplier import (
 )
 from tests.ifrs.ap.conftest import (
     MockSupplier,
-    MockSupplierType,
     MockSupplierInvoice,
     MockSupplierInvoiceStatus,
 )
@@ -81,7 +80,9 @@ class TestCreateSupplier:
             mock_db.commit.assert_called_once()
             mock_db.refresh.assert_called_once()
 
-    def test_create_duplicate_supplier_code_fails(self, mock_db, org_id, sample_supplier_input):
+    def test_create_duplicate_supplier_code_fails(
+        self, mock_db, org_id, sample_supplier_input
+    ):
         """Test that duplicate supplier code fails."""
         from fastapi import HTTPException
 
@@ -134,7 +135,9 @@ class TestUpdateSupplier:
         mock_db.commit.assert_called()
         assert result.supplier_code == sample_supplier_input.supplier_code
 
-    def test_update_nonexistent_supplier_fails(self, mock_db, org_id, sample_supplier_input):
+    def test_update_nonexistent_supplier_fails(
+        self, mock_db, org_id, sample_supplier_input
+    ):
         """Test updating non-existent supplier fails."""
         from fastapi import HTTPException
 
@@ -148,7 +151,9 @@ class TestUpdateSupplier:
 
         assert exc.value.status_code == 404
 
-    def test_update_wrong_organization_fails(self, mock_db, org_id, sample_supplier_input):
+    def test_update_wrong_organization_fails(
+        self, mock_db, org_id, sample_supplier_input
+    ):
         """Test updating supplier from wrong organization fails."""
         from fastapi import HTTPException
 
@@ -174,13 +179,12 @@ class TestDeactivateSupplier:
         """Test successful supplier deactivation."""
         supplier = MockSupplier(organization_id=org_id, is_active=True)
         mock_db.get.return_value = supplier
-        # Mock the query chain for outstanding balance check
-        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal("0")
+        # Mock db.scalar for the outstanding balance check (uses select() now)
+        mock_db.scalar.return_value = Decimal("0")
 
-        with patch("app.services.finance.ap.supplier.Supplier"):
-            result = SupplierService.deactivate_supplier(
-                mock_db, org_id, supplier.supplier_id
-            )
+        result = SupplierService.deactivate_supplier(
+            mock_db, org_id, supplier.supplier_id
+        )
 
         assert result.is_active is False
         mock_db.commit.assert_called()
@@ -250,25 +254,18 @@ class TestGetSupplierByCode:
             organization_id=org_id,
             supplier_code="SUP-001",
         )
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = supplier
-        mock_db.query.return_value = mock_query
+        # get_by_code now uses db.scalars(select(...)).first()
+        mock_db.scalars.return_value.first.return_value = supplier
 
-        with patch("app.services.finance.ap.supplier.Supplier"):
-            result = SupplierService.get_by_code(mock_db, org_id, "SUP-001")
+        result = SupplierService.get_by_code(mock_db, org_id, "SUP-001")
 
         assert result == supplier
 
     def test_get_supplier_by_code_not_found(self, mock_db, org_id):
         """Test getting non-existent supplier by code returns None."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = None
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = None
 
-        with patch("app.services.finance.ap.supplier.Supplier"):
-            result = SupplierService.get_by_code(mock_db, org_id, "NOTFOUND")
+        result = SupplierService.get_by_code(mock_db, org_id, "NOTFOUND")
 
         assert result is None
 
@@ -345,15 +342,12 @@ class TestGetSupplierSummary:
             status=MockSupplierInvoiceStatus.PARTIALLY_PAID,
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.all.return_value = [invoice1, invoice2]
-        mock_db.query.return_value = mock_query
+        # get_supplier_summary now uses db.scalars(select(...)).all()
+        mock_db.scalars.return_value.all.return_value = [invoice1, invoice2]
 
-        with patch("app.services.finance.ap.supplier.Supplier"):
-            result = SupplierService.get_supplier_summary(
-                mock_db, org_id, supplier.supplier_id
-            )
+        result = SupplierService.get_supplier_summary(
+            mock_db, org_id, supplier.supplier_id
+        )
 
         assert result["supplier_id"] == supplier.supplier_id
         assert result["outstanding_invoice_count"] == 2
