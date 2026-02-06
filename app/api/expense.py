@@ -8,6 +8,7 @@ Independent expense module API endpoints for:
 - Corporate Cards
 - Card Transactions
 """
+
 from datetime import date
 from decimal import Decimal
 from typing import Optional
@@ -16,9 +17,16 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Header, Request
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
+from app.api.deps import (
+    require_organization_id,
+    require_tenant_permission,
+)
 from app.db import SessionLocal
-from app.models.expense import CashAdvanceStatus, CardTransactionStatus, ExpenseClaimStatus
+from app.models.expense import (
+    CashAdvanceStatus,
+    CardTransactionStatus,
+    ExpenseClaimStatus,
+)
 from app.schemas.expense import (
     # Expense Category
     ExpenseCategoryCreate,
@@ -72,7 +80,7 @@ from app.api.idempotency import (
 router = APIRouter(
     prefix="/expenses",
     tags=["expenses"],
-    dependencies=[Depends(require_tenant_auth)],
+    dependencies=[Depends(require_tenant_permission("expense:access"))],
 )
 
 
@@ -90,7 +98,9 @@ def parse_enum(value: Optional[str], enum_type, field_name: str):
     try:
         return enum_type(value)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid {field_name}: {value}") from exc
+        raise HTTPException(
+            status_code=400, detail=f"Invalid {field_name}: {value}"
+        ) from exc
 
 
 # =============================================================================
@@ -101,6 +111,7 @@ def parse_enum(value: Optional[str], enum_type, field_name: str):
 @router.get("/categories", response_model=ExpenseCategoryListResponse)
 def list_expense_categories(
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:categories:read")),
     search: Optional[str] = None,
     is_active: Optional[bool] = None,
     offset: int = Query(0, ge=0),
@@ -123,10 +134,15 @@ def list_expense_categories(
     )
 
 
-@router.post("/categories", response_model=ExpenseCategoryRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/categories",
+    response_model=ExpenseCategoryRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_expense_category(
     payload: ExpenseCategoryCreate,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:categories:manage")),
     db: Session = Depends(get_db),
 ):
     """Create an expense category."""
@@ -149,11 +165,14 @@ def create_expense_category(
 def get_expense_category(
     category_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:categories:read")),
     db: Session = Depends(get_db),
 ):
     """Get an expense category by ID."""
     svc = ExpenseService(db)
-    return ExpenseCategoryRead.model_validate(svc.get_category(organization_id, category_id))
+    return ExpenseCategoryRead.model_validate(
+        svc.get_category(organization_id, category_id)
+    )
 
 
 @router.patch("/categories/{category_id}", response_model=ExpenseCategoryRead)
@@ -161,6 +180,7 @@ def update_expense_category(
     category_id: UUID,
     payload: ExpenseCategoryUpdate,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:categories:manage")),
     db: Session = Depends(get_db),
 ):
     """Update an expense category."""
@@ -175,6 +195,7 @@ def update_expense_category(
 def delete_expense_category(
     category_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:categories:manage")),
     db: Session = Depends(get_db),
 ):
     """Delete an expense category."""
@@ -191,6 +212,7 @@ def delete_expense_category(
 @router.get("/claims", response_model=ExpenseClaimListResponse)
 def list_expense_claims(
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:claims:read")),
     employee_id: Optional[UUID] = None,
     status: Optional[str] = None,
     from_date: Optional[date] = None,
@@ -220,11 +242,14 @@ def list_expense_claims(
     )
 
 
-@router.post("/claims", response_model=ExpenseClaimRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/claims", response_model=ExpenseClaimRead, status_code=status.HTTP_201_CREATED
+)
 def create_expense_claim(
     payload: ExpenseClaimCreate,
     request: Request,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:claims:create")),
     db: Session = Depends(get_db),
     idempotency_key: str = Header(None, alias="Idempotency-Key"),
 ):
@@ -304,6 +329,7 @@ def create_expense_claim(
 def get_expense_claim(
     claim_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:claims:read")),
     db: Session = Depends(get_db),
 ):
     """Get an expense claim by ID."""
@@ -316,6 +342,7 @@ def update_expense_claim(
     claim_id: UUID,
     payload: ExpenseClaimUpdate,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:claims:update")),
     db: Session = Depends(get_db),
 ):
     """Update an expense claim (only in draft status)."""
@@ -330,6 +357,7 @@ def update_expense_claim(
 def delete_expense_claim(
     claim_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:claims:delete")),
     db: Session = Depends(get_db),
 ):
     """Delete an expense claim (only in draft status)."""
@@ -339,11 +367,16 @@ def delete_expense_claim(
 
 
 # Claim items
-@router.post("/claims/{claim_id}/items", response_model=ExpenseClaimItemRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/claims/{claim_id}/items",
+    response_model=ExpenseClaimItemRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def add_claim_item(
     claim_id: UUID,
     payload: ExpenseClaimItemCreate,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:claims:update")),
     db: Session = Depends(get_db),
 ):
     """Add an item to an expense claim."""
@@ -357,11 +390,14 @@ def add_claim_item(
     return ExpenseClaimItemRead.model_validate(item)
 
 
-@router.delete("/claims/{claim_id}/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/claims/{claim_id}/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 def remove_claim_item(
     claim_id: UUID,
     item_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:claims:update")),
     db: Session = Depends(get_db),
 ):
     """Remove an item from an expense claim."""
@@ -380,6 +416,7 @@ def submit_claim(
     claim_id: UUID,
     request: Request,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:claims:submit")),
     db: Session = Depends(get_db),
     idempotency_key: str = Header(None, alias="Idempotency-Key"),
 ):
@@ -444,6 +481,7 @@ def approve_claim(
     payload: ExpenseClaimApprovalRequest,
     request: Request,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:claims:approve:tier1")),
     db: Session = Depends(get_db),
     idempotency_key: str = Header(None, alias="Idempotency-Key"),
 ):
@@ -518,6 +556,7 @@ def reject_claim(
     payload: ExpenseClaimRejectRequest,
     request: Request,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:claims:reject")),
     db: Session = Depends(get_db),
     idempotency_key: str = Header(None, alias="Idempotency-Key"),
 ):
@@ -586,6 +625,7 @@ def mark_claim_paid(
     payload: MarkPaidRequest,
     request: Request,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:claims:reimburse")),
     db: Session = Depends(get_db),
     idempotency_key: str = Header(None, alias="Idempotency-Key"),
 ):
@@ -654,6 +694,7 @@ def link_advance_to_claim(
     payload: LinkAdvanceRequest,
     request: Request,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:claims:update")),
     db: Session = Depends(get_db),
     idempotency_key: str = Header(None, alias="Idempotency-Key"),
 ):
@@ -724,6 +765,7 @@ def link_advance_to_claim(
 @router.get("/advances", response_model=CashAdvanceListResponse)
 def list_cash_advances(
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:advances:read")),
     employee_id: Optional[UUID] = None,
     status: Optional[str] = None,
     from_date: Optional[date] = None,
@@ -751,10 +793,13 @@ def list_cash_advances(
     )
 
 
-@router.post("/advances", response_model=CashAdvanceRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/advances", response_model=CashAdvanceRead, status_code=status.HTTP_201_CREATED
+)
 def create_cash_advance(
     payload: CashAdvanceCreate,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:advances:create")),
     db: Session = Depends(get_db),
 ):
     """Create a cash advance request."""
@@ -779,6 +824,7 @@ def create_cash_advance(
 def get_cash_advance(
     advance_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:advances:read")),
     db: Session = Depends(get_db),
 ):
     """Get a cash advance by ID."""
@@ -791,6 +837,7 @@ def update_cash_advance(
     advance_id: UUID,
     payload: CashAdvanceUpdate,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:advances:create")),
     db: Session = Depends(get_db),
 ):
     """Update a cash advance (only in draft status)."""
@@ -805,6 +852,7 @@ def update_cash_advance(
 def delete_cash_advance(
     advance_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:advances:create")),
     db: Session = Depends(get_db),
 ):
     """Delete a cash advance (only in draft status)."""
@@ -818,6 +866,7 @@ def delete_cash_advance(
 def submit_advance(
     advance_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:advances:create")),
     db: Session = Depends(get_db),
 ):
     """Submit a cash advance for approval."""
@@ -831,13 +880,16 @@ def submit_advance(
 def approve_advance(
     advance_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:advances:approve:tier1")),
     approver_id: Optional[UUID] = None,
     approved_amount: Optional[Decimal] = None,
     db: Session = Depends(get_db),
 ):
     """Approve a cash advance."""
     if approver_id is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="approver_id required")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="approver_id required"
+        )
     svc = ExpenseService(db)
     advance = svc.approve_advance(
         org_id=organization_id,
@@ -853,6 +905,7 @@ def approve_advance(
 def reject_advance(
     advance_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:advances:approve:tier1")),
     approver_id: Optional[UUID] = None,
     reason: str = Query(...),
     db: Session = Depends(get_db),
@@ -874,6 +927,7 @@ def disburse_advance(
     advance_id: UUID,
     payload: CashAdvanceDisburseRequest,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:advances:disburse")),
     db: Session = Depends(get_db),
 ):
     """Disburse a cash advance."""
@@ -894,6 +948,7 @@ def settle_advance(
     advance_id: UUID,
     payload: CashAdvanceSettleRequest,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:advances:settle")),
     db: Session = Depends(get_db),
 ):
     """Settle a cash advance."""
@@ -917,6 +972,7 @@ def settle_advance(
 @router.get("/cards", response_model=CorporateCardListResponse)
 def list_corporate_cards(
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:cards:read")),
     employee_id: Optional[UUID] = None,
     is_active: Optional[bool] = None,
     offset: int = Query(0, ge=0),
@@ -939,10 +995,13 @@ def list_corporate_cards(
     )
 
 
-@router.post("/cards", response_model=CorporateCardRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/cards", response_model=CorporateCardRead, status_code=status.HTTP_201_CREATED
+)
 def create_corporate_card(
     payload: CorporateCardCreate,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:cards:manage")),
     db: Session = Depends(get_db),
 ):
     """Create a corporate card record."""
@@ -970,6 +1029,7 @@ def create_corporate_card(
 def get_corporate_card(
     card_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:cards:read")),
     db: Session = Depends(get_db),
 ):
     """Get a corporate card by ID."""
@@ -982,6 +1042,7 @@ def update_corporate_card(
     card_id: UUID,
     payload: CorporateCardUpdate,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:cards:manage")),
     db: Session = Depends(get_db),
 ):
     """Update a corporate card."""
@@ -997,6 +1058,7 @@ def deactivate_corporate_card(
     card_id: UUID,
     payload: DeactivateCardRequest,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:cards:manage")),
     db: Session = Depends(get_db),
 ):
     """Deactivate a corporate card."""
@@ -1013,6 +1075,7 @@ def deactivate_corporate_card(
 @router.get("/transactions", response_model=CardTransactionListResponse)
 def list_card_transactions(
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:cards:transactions:read")),
     card_id: Optional[UUID] = None,
     status: Optional[str] = None,
     from_date: Optional[date] = None,
@@ -1042,10 +1105,17 @@ def list_card_transactions(
     )
 
 
-@router.post("/transactions", response_model=CardTransactionRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/transactions",
+    response_model=CardTransactionRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_card_transaction(
     payload: CardTransactionCreate,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(
+        require_tenant_permission("expense:cards:transactions:reconcile")
+    ),
     db: Session = Depends(get_db),
 ):
     """Create a card transaction record (typically from bank feed import)."""
@@ -1073,11 +1143,14 @@ def create_card_transaction(
 def get_card_transaction(
     transaction_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:cards:transactions:read")),
     db: Session = Depends(get_db),
 ):
     """Get a card transaction by ID."""
     svc = ExpenseService(db)
-    return CardTransactionRead.model_validate(svc.get_transaction(organization_id, transaction_id))
+    return CardTransactionRead.model_validate(
+        svc.get_transaction(organization_id, transaction_id)
+    )
 
 
 @router.patch("/transactions/{transaction_id}", response_model=CardTransactionRead)
@@ -1085,6 +1158,9 @@ def update_card_transaction(
     transaction_id: UUID,
     payload: CardTransactionUpdate,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(
+        require_tenant_permission("expense:cards:transactions:reconcile")
+    ),
     db: Session = Depends(get_db),
 ):
     """Update a card transaction."""
@@ -1100,6 +1176,9 @@ def match_transaction(
     transaction_id: UUID,
     payload: MatchTransactionRequest,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(
+        require_tenant_permission("expense:cards:transactions:reconcile")
+    ),
     db: Session = Depends(get_db),
 ):
     """Match a card transaction to an expense claim."""
@@ -1121,6 +1200,7 @@ def match_transaction(
 @router.get("/stats", response_model=ExpenseStats)
 def get_expense_stats(
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:reports:read")),
     db: Session = Depends(get_db),
 ):
     """Get overall expense statistics for the organization."""
@@ -1132,6 +1212,7 @@ def get_expense_stats(
 def get_employee_expense_summary(
     employee_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:reports:read")),
     year: Optional[int] = None,
     month: Optional[int] = None,
     db: Session = Depends(get_db),

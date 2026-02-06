@@ -7,6 +7,7 @@ HTML template routes for expense limit management:
 - Usage dashboard
 - Evaluation audit trail
 """
+
 from typing import Optional
 from uuid import UUID
 
@@ -15,8 +16,14 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.expense.limit_web import expense_limit_web_service
-from app.web.deps import WebAuthContext, get_db, require_expense_access
+from app.web.deps import (
+    WebAuthContext,
+    get_db,
+    require_expense_access,
+    require_web_permission,
+)
 
+_require_policies_manage = require_web_permission("expense:policies:manage")
 
 router = APIRouter(tags=["expense-limits-web"])
 
@@ -66,7 +73,7 @@ def new_limit_rule(
 @router.post("/limits/rules/new", response_class=HTMLResponse)
 async def create_limit_rule(
     request: Request,
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_policies_manage),
     db: Session = Depends(get_db),
 ):
     """Create new expense limit rule."""
@@ -97,7 +104,7 @@ def edit_limit_rule(
 async def update_limit_rule(
     request: Request,
     rule_id: UUID,
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_policies_manage),
     db: Session = Depends(get_db),
 ):
     """Update expense limit rule."""
@@ -113,7 +120,7 @@ async def update_limit_rule(
 async def delete_limit_rule(
     request: Request,
     rule_id: UUID,
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_policies_manage),
     db: Session = Depends(get_db),
 ):
     """Delete expense limit rule."""
@@ -166,7 +173,7 @@ def new_approver_limit(
 @router.post("/limits/approvers/new", response_class=HTMLResponse)
 async def create_approver_limit(
     request: Request,
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_policies_manage),
     db: Session = Depends(get_db),
 ):
     """Create new expense approver limit."""
@@ -177,11 +184,13 @@ async def create_approver_limit(
     )
 
 
-@router.post("/limits/approvers/{approver_limit_id}/delete", response_class=HTMLResponse)
+@router.post(
+    "/limits/approvers/{approver_limit_id}/delete", response_class=HTMLResponse
+)
 async def delete_approver_limit(
     request: Request,
     approver_limit_id: UUID,
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_policies_manage),
     db: Session = Depends(get_db),
 ):
     """Delete expense approver limit."""

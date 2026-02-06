@@ -3,6 +3,7 @@ Expense Web Routes.
 
 HTML template routes for expense management.
 """
+
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -15,9 +16,24 @@ from app.services.expense.dashboard_web import expense_dashboard_service
 from app.services.finance.exp.expense import expense_service
 from app.services.finance.exp.web import expense_web_service
 from app.templates import templates
-from app.web.deps import get_db, require_expense_access, WebAuthContext, base_context
+from app.web.deps import (
+    get_db,
+    require_expense_access,
+    require_web_permission,
+    WebAuthContext,
+    base_context,
+)
 from app.web.finance.exp_limits import router as limits_router
 
+# Permission dependencies for action-specific routes
+_require_claim_approve = require_web_permission("expense:claims:approve:tier1")
+_require_claim_reject = require_web_permission("expense:claims:reject")
+_require_claim_submit = require_web_permission("expense:claims:submit")
+_require_claim_post = require_web_permission("expense:claims:post")
+_require_claim_reimburse = require_web_permission("expense:claims:reimburse")
+_require_category_manage = require_web_permission("expense:categories:manage")
+_require_advance_disburse = require_web_permission("expense:advances:disburse")
+_require_advance_settle = require_web_permission("expense:advances:settle")
 
 router = APIRouter(tags=["expense-web"])
 
@@ -26,7 +42,9 @@ router.include_router(limits_router)
 
 
 def _safe_return_to(request: Request, fallback: str = "/expense") -> str:
-    candidate = request.query_params.get("return_to") or request.query_params.get("next")
+    candidate = request.query_params.get("return_to") or request.query_params.get(
+        "next"
+    )
     if not candidate:
         candidate = request.headers.get("referer") or request.headers.get("referrer")
     if not candidate:
@@ -46,6 +64,7 @@ def _safe_return_to(request: Request, fallback: str = "/expense") -> str:
 # Dashboard
 # =============================================================================
 
+
 @router.get("", response_class=HTMLResponse)
 @router.get("/dashboard", response_class=HTMLResponse)
 def expense_dashboard(
@@ -61,6 +80,7 @@ def expense_dashboard(
 # =============================================================================
 # Expense List
 # =============================================================================
+
 
 @router.get("/list", response_class=HTMLResponse)
 def expense_list(
@@ -93,7 +113,9 @@ def expense_claims_dashboard(
     db: Session = Depends(get_db),
 ):
     """Expense claims dashboard with charts."""
-    return expense_dashboard_service.claims_dashboard_response(request, auth, db, period)
+    return expense_dashboard_service.claims_dashboard_response(
+        request, auth, db, period
+    )
 
 
 @router.get("/claims/new")
@@ -144,7 +166,7 @@ def expense_claim_detail(
 @router.post("/claims/{claim_id}/submit")
 def submit_expense_claim(
     claim_id: str,
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_claim_submit),
     db: Session = Depends(get_db),
 ):
     """Submit an expense claim for approval."""
@@ -158,7 +180,7 @@ def submit_expense_claim(
 @router.post("/claims/{claim_id}/approve")
 def approve_expense_claim(
     claim_id: str,
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_claim_approve),
     db: Session = Depends(get_db),
 ):
     """Approve an expense claim."""
@@ -173,7 +195,7 @@ def approve_expense_claim(
 def reject_expense_claim(
     claim_id: str,
     reason: Optional[str] = Form(None),
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_claim_reject),
     db: Session = Depends(get_db),
 ):
     """Reject an expense claim."""
@@ -268,7 +290,7 @@ def new_expense_category_form(
 @router.post("/categories/new", response_class=HTMLResponse)
 async def create_expense_category(
     request: Request,
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_category_manage),
     db: Session = Depends(get_db),
 ):
     """Create new expense category."""
@@ -299,7 +321,7 @@ def edit_expense_category_form(
 async def update_expense_category(
     request: Request,
     category_id: str,
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_category_manage),
     db: Session = Depends(get_db),
 ):
     """Update expense category."""
@@ -315,7 +337,7 @@ async def update_expense_category(
 def delete_expense_category(
     request: Request,
     category_id: str,
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_category_manage),
     db: Session = Depends(get_db),
 ):
     """Soft delete (deactivate) an expense category."""
@@ -329,6 +351,7 @@ def delete_expense_category(
 # =============================================================================
 # New Expense
 # =============================================================================
+
 
 @router.get("/new", response_class=HTMLResponse)
 def new_expense_form(
@@ -397,9 +420,7 @@ def create_expense(
     except Exception as e:
         db.rollback()
         context = base_context(request, auth, "New Expense", "expenses")
-        context.update(
-            expense_web_service.form_context(db, str(auth.organization_id))
-        )
+        context.update(expense_web_service.form_context(db, str(auth.organization_id)))
         context["return_to"] = return_to or _safe_return_to(request)
         context["error"] = str(e)
         return templates.TemplateResponse(request, "expense/form.html", context)
@@ -408,6 +429,7 @@ def create_expense(
 # =============================================================================
 # Expense Detail
 # =============================================================================
+
 
 @router.get("/{expense_id}", response_class=HTMLResponse)
 def expense_detail(
@@ -431,6 +453,7 @@ def expense_detail(
 # =============================================================================
 # Edit Expense
 # =============================================================================
+
 
 @router.get("/{expense_id}/edit", response_class=HTMLResponse)
 def edit_expense_form(
@@ -456,18 +479,21 @@ def edit_expense_form(
 # Expense Actions
 # =============================================================================
 
+
 @router.post("/{expense_id}/submit", response_class=HTMLResponse)
 def submit_expense(
     request: Request,
     expense_id: str,
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_claim_submit),
     db: Session = Depends(get_db),
 ):
     """Submit expense for approval."""
     try:
-        expense_service.submit(db, str(auth.organization_id), expense_id, str(auth.user_id))
+        expense_service.submit(
+            db, str(auth.organization_id), expense_id, str(auth.user_id)
+        )
         db.commit()
-    except Exception as e:
+    except Exception:
         db.rollback()
     return RedirectResponse(f"/expense/{expense_id}", status_code=303)
 
@@ -476,14 +502,16 @@ def submit_expense(
 def approve_expense(
     request: Request,
     expense_id: str,
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_claim_approve),
     db: Session = Depends(get_db),
 ):
     """Approve expense."""
     try:
-        expense_service.approve(db, str(auth.organization_id), expense_id, str(auth.user_id))
+        expense_service.approve(
+            db, str(auth.organization_id), expense_id, str(auth.user_id)
+        )
         db.commit()
-    except Exception as e:
+    except Exception:
         db.rollback()
     return RedirectResponse(f"/expense/{expense_id}", status_code=303)
 
@@ -492,14 +520,16 @@ def approve_expense(
 def reject_expense(
     request: Request,
     expense_id: str,
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_claim_reject),
     db: Session = Depends(get_db),
 ):
     """Reject expense."""
     try:
-        expense_service.reject(db, str(auth.organization_id), expense_id, str(auth.user_id))
+        expense_service.reject(
+            db, str(auth.organization_id), expense_id, str(auth.user_id)
+        )
         db.commit()
-    except Exception as e:
+    except Exception:
         db.rollback()
     return RedirectResponse(f"/expense/{expense_id}", status_code=303)
 
@@ -509,14 +539,20 @@ def post_expense(
     request: Request,
     expense_id: str,
     fiscal_period_id: str = Form(...),
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_claim_post),
     db: Session = Depends(get_db),
 ):
     """Post expense to GL."""
     try:
-        expense_service.post(db, str(auth.organization_id), expense_id, str(auth.user_id), fiscal_period_id)
+        expense_service.post(
+            db,
+            str(auth.organization_id),
+            expense_id,
+            str(auth.user_id),
+            fiscal_period_id,
+        )
         db.commit()
-    except Exception as e:
+    except Exception:
         db.rollback()
     return RedirectResponse(f"/expense/{expense_id}", status_code=303)
 
@@ -525,14 +561,14 @@ def post_expense(
 def void_expense(
     request: Request,
     expense_id: str,
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_claim_post),
     db: Session = Depends(get_db),
 ):
     """Void expense."""
     try:
         expense_service.void(db, expense_id, str(auth.user_id))
         db.commit()
-    except Exception as e:
+    except Exception:
         db.rollback()
     return RedirectResponse(f"/expense/{expense_id}", status_code=303)
 
@@ -618,6 +654,7 @@ def expense_trends_report(
 # Cash Advance Management
 # =============================================================================
 
+
 @router.get("/advances/list", response_class=HTMLResponse)
 def cash_advances_list(
     request: Request,
@@ -659,7 +696,7 @@ def disburse_cash_advance(
     bank_account_id: str = Form(...),
     payment_mode: str = Form("BANK_TRANSFER"),
     payment_reference: Optional[str] = Form(None),
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_advance_disburse),
     db: Session = Depends(get_db),
 ):
     """Disburse cash advance with GL posting."""
@@ -679,7 +716,7 @@ def settle_cash_advance(
     advance_id: str,
     claim_id: str = Form(...),
     settlement_amount: Optional[str] = Form(None),
-    auth: WebAuthContext = Depends(require_expense_access),
+    auth: WebAuthContext = Depends(_require_advance_settle),
     db: Session = Depends(get_db),
 ):
     """Settle cash advance against expense claim."""

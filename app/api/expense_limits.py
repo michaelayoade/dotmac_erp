@@ -7,15 +7,15 @@ API endpoints for:
 - Limit Evaluations (audit trail)
 - Period Usage (usage tracking)
 """
+
 from datetime import date
-from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
+from app.api.deps import require_organization_id, require_tenant_permission
 from app.db import SessionLocal
 from app.models.expense import (
     LimitActionType,
@@ -39,9 +39,6 @@ from app.schemas.expense import (
     ExpenseLimitEvaluationRead,
     ExpenseLimitEvaluationListResponse,
     # Usage
-    ExpensePeriodUsageRead,
-    ExpensePeriodUsageListResponse,
-    # Evaluation
     EvaluateLimitRequest,
     EvaluateLimitResponse,
     EligibleApprover,
@@ -53,7 +50,7 @@ from app.services.common import PaginationParams
 router = APIRouter(
     prefix="/expense-limits",
     tags=["expense-limits"],
-    dependencies=[Depends(require_tenant_auth)],
+    dependencies=[Depends(require_tenant_permission("expense:access"))],
 )
 
 
@@ -117,6 +114,7 @@ def list_limit_rules(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     org_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:policies:read")),
     db: Session = Depends(get_db),
 ):
     """List expense limit rules."""
@@ -140,6 +138,7 @@ def list_limit_rules(
 def get_limit_rule(
     rule_id: UUID,
     org_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:policies:read")),
     db: Session = Depends(get_db),
 ):
     """Get an expense limit rule by ID."""
@@ -151,10 +150,13 @@ def get_limit_rule(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.post("/rules", response_model=ExpenseLimitRuleRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/rules", response_model=ExpenseLimitRuleRead, status_code=status.HTTP_201_CREATED
+)
 def create_limit_rule(
     data: ExpenseLimitRuleCreate,
     org_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:policies:manage")),
     db: Session = Depends(get_db),
 ):
     """Create a new expense limit rule."""
@@ -177,8 +179,12 @@ def create_limit_rule(
             limit_amount=data.limit_amount,
             currency_code=data.currency_code,
             action_type=action_type,
-            dimension_filters=data.dimension_filters.model_dump() if data.dimension_filters else None,
-            action_config=data.action_config.model_dump() if data.action_config else None,
+            dimension_filters=data.dimension_filters.model_dump()
+            if data.dimension_filters
+            else None,
+            action_config=data.action_config.model_dump()
+            if data.action_config
+            else None,
             priority=data.priority,
             effective_from=data.effective_from,
             effective_to=data.effective_to,
@@ -199,6 +205,7 @@ def update_limit_rule(
     rule_id: UUID,
     data: ExpenseLimitRuleUpdate,
     org_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:policies:manage")),
     db: Session = Depends(get_db),
 ):
     """Update an expense limit rule."""
@@ -208,11 +215,15 @@ def update_limit_rule(
 
         # Parse action_type if provided
         if "action_type" in update_data and update_data["action_type"]:
-            update_data["action_type"] = LimitActionType(update_data["action_type"].upper())
+            update_data["action_type"] = LimitActionType(
+                update_data["action_type"].upper()
+            )
 
         # Handle nested models
         if "dimension_filters" in update_data and update_data["dimension_filters"]:
-            update_data["dimension_filters"] = update_data["dimension_filters"].model_dump()
+            update_data["dimension_filters"] = update_data[
+                "dimension_filters"
+            ].model_dump()
         if "action_config" in update_data and update_data["action_config"]:
             update_data["action_config"] = update_data["action_config"].model_dump()
 
@@ -228,6 +239,7 @@ def update_limit_rule(
 def delete_limit_rule(
     rule_id: UUID,
     org_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:policies:manage")),
     db: Session = Depends(get_db),
 ):
     """Delete an expense limit rule."""
@@ -252,6 +264,7 @@ def list_approver_limits(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     org_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:policies:read")),
     db: Session = Depends(get_db),
 ):
     """List expense approver limits."""
@@ -274,6 +287,7 @@ def list_approver_limits(
 def get_approver_limit(
     approver_limit_id: UUID,
     org_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:policies:read")),
     db: Session = Depends(get_db),
 ):
     """Get an expense approver limit by ID."""
@@ -285,10 +299,15 @@ def get_approver_limit(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.post("/approvers", response_model=ExpenseApproverLimitRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/approvers",
+    response_model=ExpenseApproverLimitRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_approver_limit(
     data: ExpenseApproverLimitCreate,
     org_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:policies:manage")),
     db: Session = Depends(get_db),
 ):
     """Create a new expense approver limit."""
@@ -300,7 +319,9 @@ def create_approver_limit(
             scope_id=data.scope_id,
             max_approval_amount=data.max_approval_amount,
             currency_code=data.currency_code,
-            dimension_filters=data.dimension_filters.model_dump() if data.dimension_filters else None,
+            dimension_filters=data.dimension_filters.model_dump()
+            if data.dimension_filters
+            else None,
             escalate_to_employee_id=data.escalate_to_employee_id,
             escalate_to_grade_min_rank=data.escalate_to_grade_min_rank,
             can_approve_own_expenses=data.can_approve_own_expenses,
@@ -318,6 +339,7 @@ def update_approver_limit(
     approver_limit_id: UUID,
     data: ExpenseApproverLimitUpdate,
     org_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:policies:manage")),
     db: Session = Depends(get_db),
 ):
     """Update an expense approver limit."""
@@ -327,7 +349,9 @@ def update_approver_limit(
 
         # Handle nested models
         if "dimension_filters" in update_data and update_data["dimension_filters"]:
-            update_data["dimension_filters"] = update_data["dimension_filters"].model_dump()
+            update_data["dimension_filters"] = update_data[
+                "dimension_filters"
+            ].model_dump()
 
         limit = service.update_approver_limit(org_id, approver_limit_id, **update_data)
         db.commit()
@@ -341,6 +365,7 @@ def update_approver_limit(
 def delete_approver_limit(
     approver_limit_id: UUID,
     org_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:policies:manage")),
     db: Session = Depends(get_db),
 ):
     """Delete an expense approver limit."""
@@ -368,6 +393,7 @@ def list_evaluations(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     org_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:policies:read")),
     db: Session = Depends(get_db),
 ):
     """List expense limit evaluations."""
@@ -400,6 +426,7 @@ def list_evaluations(
 def evaluate_claim_limits(
     data: EvaluateLimitRequest,
     org_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:policies:read")),
     db: Session = Depends(get_db),
 ):
     """
@@ -453,6 +480,7 @@ def evaluate_claim_limits(
 def get_eligible_approvers(
     claim_id: UUID,
     org_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:claims:read")),
     db: Session = Depends(get_db),
 ):
     """
@@ -474,7 +502,9 @@ def get_eligible_approvers(
 
         employee = db.get(Employee, claim.employee_id)
         if not employee:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found"
+            )
 
         approvers = limit_service.get_eligible_approvers(
             org_id, employee, claim.total_claimed_amount
@@ -509,6 +539,7 @@ def get_eligible_approvers(
 def get_employee_usage(
     employee_id: UUID,
     org_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:policies:read")),
     db: Session = Depends(get_db),
 ):
     """
@@ -520,7 +551,9 @@ def get_employee_usage(
     try:
         summary = service.get_employee_usage_summary(org_id, employee_id)
         if not summary:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found"
+            )
         return summary
     except HTTPException:
         raise
