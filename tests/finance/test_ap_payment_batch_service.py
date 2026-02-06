@@ -159,12 +159,8 @@ def test_generate_bank_file_and_get_batch_payments():
     )
     supplier = SimpleNamespace(trading_name="Supplier", legal_name=None)
 
-    db.query.return_value.filter.return_value.first.side_effect = [
-        batch,
-        supplier,
-        batch,
-    ]
-    db.query.return_value.filter.return_value.all.return_value = [payment]
+    db.scalars.return_value.first.side_effect = [batch, supplier, batch]
+    db.scalars.return_value.all.side_effect = [[payment], [payment]]
 
     with patch("app.services.finance.ap.payment_batch.datetime") as dt:
         dt.now.return_value = datetime(2024, 1, 1, 10, 0, 0)
@@ -177,9 +173,7 @@ def test_generate_bank_file_and_get_batch_payments():
     assert "HEADER" in result["content"]
     assert "TRAILER" in result["content"]
 
-    db.query.return_value.filter.return_value.first.return_value = batch
-    db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
-        payment
-    ]
+    db.scalars.return_value.first.return_value = batch
+    db.scalars.return_value.all.return_value = [payment]
     payments = PaymentBatchService.get_batch_payments(db, org_id, batch.batch_id)
     assert payments == [payment]

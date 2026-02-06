@@ -175,7 +175,7 @@ def test_post_payment_applies_allocations_and_void():
         return None
 
     db.get.side_effect = _get
-    db.query.return_value.filter.return_value.all.return_value = [allocation]
+    db.scalars.return_value.all.return_value = [allocation]
 
     with patch(
         "app.services.finance.ap.ap_posting_adapter.APPostingAdapter.post_payment"
