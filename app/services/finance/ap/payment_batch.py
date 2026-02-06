@@ -47,7 +47,7 @@ class PaymentBatchInput:
     batch_date: date
     payment_method: str
     bank_account_id: UUID
-    currency_code: str
+    currency_code: Optional[str] = None
     payments: list[BatchPaymentItem] = field(default_factory=list)
 
 
@@ -84,18 +84,28 @@ class PaymentBatchService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         user_id = coerce_uuid(created_by_user_id)
 
-        if not input.payments:
-            raise HTTPException(
-                status_code=400, detail="Payment batch must have at least one payment"
-            )
-
         # Generate batch number
         batch_number = SequenceService.get_next_number(db, org_id, SequenceType.PAYMENT)
         batch_number = f"BATCH-{batch_number}"
 
         # Calculate totals
-        total_amount = sum(p.amount for p in input.payments)
-        total_payments = len(input.payments)
+        total_amount = (
+            sum(p.amount for p in input.payments) if input.payments else Decimal("0")
+        )
+        total_payments = len(input.payments) if input.payments else 0
+
+        # Resolve currency from bank account if not provided
+        currency_code = input.currency_code
+        if not currency_code and input.bank_account_id:
+            from app.models.finance.banking.bank_account import BankAccount
+
+            bank_account = db.get(BankAccount, input.bank_account_id)
+            if bank_account and bank_account.organization_id == org_id:
+                currency_code = bank_account.currency_code
+        if not currency_code:
+            from app.config import settings
+
+            currency_code = settings.default_functional_currency_code
 
         # Create batch
         batch = APPaymentBatch(
@@ -104,7 +114,7 @@ class PaymentBatchService(ListResponseMixin):
             batch_date=input.batch_date,
             payment_method=input.payment_method,
             bank_account_id=input.bank_account_id,
-            currency_code=input.currency_code,
+            currency_code=currency_code,
             total_payments=total_payments,
             total_amount=total_amount,
             status=APBatchStatus.DRAFT,
@@ -546,13 +556,18 @@ class PaymentBatchService(ListResponseMixin):
         )
 
     @staticmethod
-    def get(db: Session, batch_id: str) -> Optional[APPaymentBatch]:
-        """Get a payment batch by ID."""
-        return (
-            db.query(APPaymentBatch)
-            .filter(APPaymentBatch.batch_id == coerce_uuid(batch_id))
-            .first()
-        )
+    def get(
+        db: Session,
+        batch_id: str,
+        organization_id: Optional[UUID] = None,
+    ) -> Optional[APPaymentBatch]:
+        """Get a payment batch by ID with optional org_id isolation."""
+        batch = db.get(APPaymentBatch, coerce_uuid(batch_id))
+        if batch is None:
+            return None
+        if organization_id is not None and batch.organization_id != organization_id:
+            return None
+        return batch
 
     @staticmethod
     def list(

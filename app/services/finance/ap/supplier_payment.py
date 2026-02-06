@@ -15,6 +15,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
@@ -309,8 +310,12 @@ class SupplierPaymentService(ListResponseMixin):
                 new_values={"status": "APPROVED"},
                 user_id=user_id,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(
+                "Workflow event failed for payment %s approval: %s",
+                payment.payment_id,
+                e,
+            )
 
         db.commit()
         db.refresh(payment)
@@ -386,10 +391,12 @@ class SupplierPaymentService(ListResponseMixin):
         payment.posting_batch_id = result.posting_batch_id
 
         # Apply allocations to invoices
-        allocations = (
-            db.query(APPaymentAllocation)
-            .filter(APPaymentAllocation.payment_id == pay_id)
-            .all()
+        allocations = list(
+            db.scalars(
+                select(APPaymentAllocation).where(
+                    APPaymentAllocation.payment_id == pay_id
+                )
+            ).all()
         )
 
         for alloc in allocations:
@@ -416,8 +423,10 @@ class SupplierPaymentService(ListResponseMixin):
                 new_values={"status": "SENT"},
                 user_id=user_id,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(
+                "Workflow event failed for payment %s post: %s", payment.payment_id, e
+            )
 
         db.commit()
         db.refresh(payment)
@@ -460,10 +469,12 @@ class SupplierPaymentService(ListResponseMixin):
 
         # If payment was posted, reverse the allocations
         if payment.status == APPaymentStatus.SENT:
-            allocations = (
-                db.query(APPaymentAllocation)
-                .filter(APPaymentAllocation.payment_id == pay_id)
-                .all()
+            allocations = list(
+                db.scalars(
+                    select(APPaymentAllocation).where(
+                        APPaymentAllocation.payment_id == pay_id
+                    )
+                ).all()
             )
 
             for alloc in allocations:
@@ -538,6 +549,7 @@ class SupplierPaymentService(ListResponseMixin):
     def get(
         db: Session,
         payment_id: str,
+        organization_id: Optional[UUID] = None,
     ) -> SupplierPayment:
         """
         Get a payment by ID.
@@ -545,15 +557,18 @@ class SupplierPaymentService(ListResponseMixin):
         Args:
             db: Database session
             payment_id: Payment ID
+            organization_id: Organization scope for multi-tenant isolation
 
         Returns:
             SupplierPayment
 
         Raises:
-            HTTPException(404): If not found
+            HTTPException(404): If not found or not in organization
         """
         payment = db.get(SupplierPayment, coerce_uuid(payment_id))
         if not payment:
+            raise HTTPException(status_code=404, detail="Payment not found")
+        if organization_id is not None and payment.organization_id != organization_id:
             raise HTTPException(status_code=404, detail="Payment not found")
         return payment
 
@@ -581,10 +596,12 @@ class SupplierPaymentService(ListResponseMixin):
         if not payment or payment.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Payment not found")
 
-        return (
-            db.query(APPaymentAllocation)
-            .filter(APPaymentAllocation.payment_id == pay_id)
-            .all()
+        return list(
+            db.scalars(
+                select(APPaymentAllocation).where(
+                    APPaymentAllocation.payment_id == pay_id
+                )
+            ).all()
         )
 
     @staticmethod
@@ -616,32 +633,30 @@ class SupplierPaymentService(ListResponseMixin):
         Returns:
             List of SupplierPayment objects
         """
-        query = db.query(SupplierPayment)
+        stmt = select(SupplierPayment)
 
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 SupplierPayment.organization_id == coerce_uuid(organization_id)
             )
 
         if supplier_id:
-            query = query.filter(
-                SupplierPayment.supplier_id == coerce_uuid(supplier_id)
-            )
+            stmt = stmt.where(SupplierPayment.supplier_id == coerce_uuid(supplier_id))
 
         if status:
-            query = query.filter(SupplierPayment.status == status)
+            stmt = stmt.where(SupplierPayment.status == status)
 
         if payment_method:
-            query = query.filter(SupplierPayment.payment_method == payment_method)
+            stmt = stmt.where(SupplierPayment.payment_method == payment_method)
 
         if from_date:
-            query = query.filter(SupplierPayment.payment_date >= from_date)
+            stmt = stmt.where(SupplierPayment.payment_date >= from_date)
 
         if to_date:
-            query = query.filter(SupplierPayment.payment_date <= to_date)
+            stmt = stmt.where(SupplierPayment.payment_date <= to_date)
 
-        query = query.order_by(SupplierPayment.payment_date.desc())
-        return query.limit(limit).offset(offset).all()
+        stmt = stmt.order_by(SupplierPayment.payment_date.desc())
+        return list(db.scalars(stmt.limit(limit).offset(offset)).all())
 
 
 # Module-level singleton instance

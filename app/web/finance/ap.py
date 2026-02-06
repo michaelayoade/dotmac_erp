@@ -13,6 +13,10 @@ from sqlalchemy.orm import Session
 from app.services.finance.ap.web import ap_web_service
 from app.web.deps import get_db, require_finance_access, WebAuthContext
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/ap", tags=["ap-web"])
 
 
@@ -182,7 +186,9 @@ def new_invoice_form(
     db: Session = Depends(get_db),
 ):
     """New AP invoice form page."""
-    return ap_web_service.invoice_new_form_response(request, auth, supplier_id, po_id, db)
+    return ap_web_service.invoice_new_form_response(
+        request, auth, supplier_id, po_id, db
+    )
 
 
 @router.post("/invoices/new")
@@ -690,7 +696,9 @@ def aging_report(
     db: Session = Depends(get_db),
 ):
     """AP aging report page."""
-    return ap_web_service.aging_report_response(request, auth, as_of_date, supplier_id, db)
+    return ap_web_service.aging_report_response(
+        request, auth, as_of_date, supplier_id, db
+    )
 
 
 @router.post("/invoices/{invoice_id}/attachments")

@@ -5,6 +5,7 @@ Accounts Payable API endpoints for suppliers, invoices, and payments.
 """
 
 from datetime import date
+from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
@@ -24,10 +25,20 @@ from app.schemas.finance.ap import (
     APPaymentCreate,
     APPaymentRead,
     APAgingReportRead,
+    POCreate,
+    PORead,
+    GRCreate,
+    GRRead,
+    PaymentBatchCreate,
+    PaymentBatchRead,
+    BankFileResultRead,
 )
 from app.schemas.finance.common import ListResponse, PostingResultSchema
 from app.models.finance.ap.supplier import SupplierType
-from app.models.finance.ap.supplier_invoice import SupplierInvoiceType, SupplierInvoiceStatus
+from app.models.finance.ap.supplier_invoice import (
+    SupplierInvoiceType,
+    SupplierInvoiceStatus,
+)
 from app.models.finance.ap.purchase_order import POStatus
 from app.models.finance.ap.supplier_payment import APPaymentMethod, APPaymentStatus
 from app.services.finance.ap import (
@@ -42,6 +53,10 @@ from app.services.finance.ap import (
     SupplierPaymentInput,
     PaymentAllocationInput,
 )
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(
@@ -63,7 +78,10 @@ def get_db():
 # Suppliers
 # =============================================================================
 
-@router.post("/suppliers", response_model=SupplierRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/suppliers", response_model=SupplierRead, status_code=status.HTTP_201_CREATED
+)
 def create_supplier(
     payload: SupplierCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -75,7 +93,8 @@ def create_supplier(
     # Service handles field mapping internally
     input_data = SupplierInput(
         supplier_code=payload.supplier_code,
-        supplier_type=parse_enum(SupplierType, payload.supplier_type) or SupplierType.VENDOR,
+        supplier_type=parse_enum(SupplierType, payload.supplier_type)
+        or SupplierType.VENDOR,
         supplier_name=payload.supplier_name,  # Template-friendly name
         trading_name=payload.trading_name,
         tax_id=payload.tax_id,  # Template-friendly name
@@ -146,7 +165,10 @@ def update_supplier(
 # AP Invoices
 # =============================================================================
 
-@router.post("/invoices", response_model=APInvoiceRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/invoices", response_model=APInvoiceRead, status_code=status.HTTP_201_CREATED
+)
 def create_ap_invoice(
     payload: APInvoiceCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -170,7 +192,8 @@ def create_ap_invoice(
 
     input_data = SupplierInvoiceInput(
         supplier_id=payload.supplier_id,
-        invoice_type=parse_enum(SupplierInvoiceType, payload.invoice_type) or SupplierInvoiceType.STANDARD,
+        invoice_type=parse_enum(SupplierInvoiceType, payload.invoice_type)
+        or SupplierInvoiceType.STANDARD,
         supplier_invoice_number=payload.invoice_number,
         invoice_date=payload.invoice_date,
         received_date=payload.received_date or payload.invoice_date,
@@ -190,11 +213,12 @@ def create_ap_invoice(
 @router.get("/invoices/{invoice_id}", response_model=APInvoiceRead)
 def get_ap_invoice(
     invoice_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:invoices:read")),
     db: Session = Depends(get_db),
 ):
     """Get an AP invoice by ID."""
-    return supplier_invoice_service.get(db, str(invoice_id))
+    return supplier_invoice_service.get(db, str(invoice_id), organization_id)
 
 
 @router.get("/invoices", response_model=ListResponse[APInvoiceRead])
@@ -297,7 +321,10 @@ def post_ap_invoice(
 # AP Payments
 # =============================================================================
 
-@router.post("/payments", response_model=APPaymentRead, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/payments", response_model=APPaymentRead, status_code=status.HTTP_201_CREATED
+)
 def create_ap_payment(
     payload: APPaymentCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -342,11 +369,12 @@ def create_ap_payment(
 @router.get("/payments/{payment_id}", response_model=APPaymentRead)
 def get_ap_payment(
     payment_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:payments:read")),
     db: Session = Depends(get_db),
 ):
     """Get an AP payment by ID."""
-    return supplier_payment_service.get(db, str(payment_id))
+    return supplier_payment_service.get(db, str(payment_id), organization_id)
 
 
 @router.get("/payments", response_model=ListResponse[APPaymentRead])
@@ -415,6 +443,7 @@ def post_ap_payment(
 # AP Aging
 # =============================================================================
 
+
 @router.get("/aging", response_model=APAgingReportRead)
 def get_ap_aging(
     organization_id: UUID = Depends(require_organization_id),
@@ -452,7 +481,7 @@ def get_ap_aging(
             "supplier_code": summary.supplier_code,
             "supplier_name": summary.supplier_name,
             "current": summary.current,
-            "days_1_30": summary.current,
+            "days_1_30": summary.days_1_30,
             "days_31_60": summary.days_31_60,
             "days_61_90": summary.days_61_90,
             "over_90": summary.over_90,
@@ -466,7 +495,7 @@ def get_ap_aging(
         "supplier_code": "TOTAL",
         "supplier_name": "Total",
         "current": org_summary.current,
-        "days_1_30": org_summary.current,
+        "days_1_30": org_summary.days_1_30,
         "days_31_60": org_summary.days_31_60,
         "days_61_90": org_summary.days_61_90,
         "over_90": org_summary.over_90,
@@ -485,44 +514,16 @@ def get_ap_aging(
 # Purchase Orders
 # =============================================================================
 
-from pydantic import BaseModel, ConfigDict, Field
-from decimal import Decimal
-from app.services.finance.ap import purchase_order_service, PurchaseOrderInput, POLineInput
+from app.services.finance.ap import (
+    purchase_order_service,
+    PurchaseOrderInput,
+    POLineInput,
+)
 
 
-class POLineCreate(BaseModel):
-    """PO line input."""
-    item_id: Optional[UUID] = None
-    description: str
-    quantity: Decimal
-    unit_price: Decimal
-    expense_account_id: Optional[UUID] = None
-
-
-class POCreate(BaseModel):
-    """Create PO request."""
-    supplier_id: UUID
-    po_date: date
-    expected_delivery_date: Optional[date] = None
-    currency_code: str = Field(max_length=3)
-    description: Optional[str] = None
-    lines: list[POLineCreate]
-
-
-class PORead(BaseModel):
-    """PO response."""
-    model_config = ConfigDict(from_attributes=True)
-    po_id: UUID
-    organization_id: UUID
-    supplier_id: UUID
-    po_number: str
-    po_date: date
-    status: str
-    currency_code: str
-    total_amount: Decimal
-
-
-@router.post("/purchase-orders", response_model=PORead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/purchase-orders", response_model=PORead, status_code=status.HTTP_201_CREATED
+)
 def create_purchase_order(
     payload: POCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -549,13 +550,20 @@ def create_purchase_order(
         terms_and_conditions=payload.description,
         lines=lines,
     )
-    return purchase_order_service.create_po(db, organization_id, input_data, created_by_user_id)
+    return purchase_order_service.create_po(
+        db, organization_id, input_data, created_by_user_id
+    )
 
 
 @router.get("/purchase-orders/{po_id}", response_model=PORead)
-def get_purchase_order(po_id: UUID, auth: dict = Depends(require_tenant_permission("ap:purchase_orders:read")), db: Session = Depends(get_db)):
+def get_purchase_order(
+    po_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_permission("ap:purchase_orders:read")),
+    db: Session = Depends(get_db),
+):
     """Get a purchase order by ID."""
-    return purchase_order_service.get(db, str(po_id))
+    return purchase_order_service.get(db, str(po_id), organization_id)
 
 
 @router.get("/purchase-orders", response_model=ListResponse[PORead])
@@ -595,7 +603,9 @@ def submit_po_for_approval(
     db: Session = Depends(get_db),
 ):
     """Submit PO for approval."""
-    return purchase_order_service.submit_for_approval(db, organization_id, po_id, submitted_by_user_id)
+    return purchase_order_service.submit_for_approval(
+        db, organization_id, po_id, submitted_by_user_id
+    )
 
 
 @router.post("/purchase-orders/{po_id}/approve", response_model=PORead)
@@ -607,7 +617,9 @@ def approve_purchase_order(
     db: Session = Depends(get_db),
 ):
     """Approve a purchase order."""
-    return purchase_order_service.approve_po(db, organization_id, po_id, approved_by_user_id)
+    return purchase_order_service.approve_po(
+        db, organization_id, po_id, approved_by_user_id
+    )
 
 
 @router.post("/purchase-orders/{po_id}/cancel", response_model=PORead)
@@ -625,43 +637,18 @@ def cancel_purchase_order(
 # Goods Receipts
 # =============================================================================
 
-from app.config import settings
 from app.models.finance.ap.goods_receipt import ReceiptStatus
 from app.models.finance.ap.payment_batch import APBatchStatus
-from app.models.finance.banking.bank_account import BankAccount
-from app.services.finance.ap import goods_receipt_service, GoodsReceiptInput, GRLineInput
+from app.services.finance.ap import (
+    goods_receipt_service,
+    GoodsReceiptInput,
+    GRLineInput,
+)
 
 
-class GRLineCreate(BaseModel):
-    """Goods receipt line input."""
-    po_line_id: Optional[UUID] = None
-    item_id: UUID
-    quantity_received: Decimal
-    unit_cost: Decimal
-    warehouse_id: Optional[UUID] = None
-
-
-class GRCreate(BaseModel):
-    """Create goods receipt request."""
-    po_id: UUID
-    receipt_date: date
-    notes: Optional[str] = None
-    lines: list[GRLineCreate]
-
-
-class GRRead(BaseModel):
-    """Goods receipt response."""
-    model_config = ConfigDict(from_attributes=True)
-    receipt_id: UUID
-    organization_id: UUID
-    po_id: UUID
-    receipt_number: str
-    receipt_date: date
-    status: str
-    total_amount: Decimal
-
-
-@router.post("/goods-receipts", response_model=GRRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/goods-receipts", response_model=GRRead, status_code=status.HTTP_201_CREATED
+)
 def create_goods_receipt(
     payload: GRCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -673,7 +660,9 @@ def create_goods_receipt(
     lines: list[GRLineInput] = []
     for line in payload.lines:
         if not line.po_line_id:
-            raise HTTPException(status_code=400, detail="po_line_id required for each line")
+            raise HTTPException(
+                status_code=400, detail="po_line_id required for each line"
+            )
         lines.append(
             GRLineInput(
                 po_line_id=line.po_line_id,
@@ -687,13 +676,20 @@ def create_goods_receipt(
         notes=payload.notes,
         lines=lines,
     )
-    return goods_receipt_service.create_receipt(db, organization_id, input_data, received_by_user_id)
+    return goods_receipt_service.create_receipt(
+        db, organization_id, input_data, received_by_user_id
+    )
 
 
 @router.get("/goods-receipts/{receipt_id}", response_model=GRRead)
-def get_goods_receipt(receipt_id: UUID, auth: dict = Depends(require_tenant_permission("ap:goods_receipts:read")), db: Session = Depends(get_db)):
+def get_goods_receipt(
+    receipt_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_permission("ap:goods_receipts:read")),
+    db: Session = Depends(get_db),
+):
     """Get a goods receipt by ID."""
-    return goods_receipt_service.get(db, str(receipt_id))
+    return goods_receipt_service.get(db, str(receipt_id), organization_id)
 
 
 @router.get("/goods-receipts", response_model=ListResponse[GRRead])
@@ -753,38 +749,11 @@ def accept_goods_receipt(
 from app.services.finance.ap import payment_batch_service, PaymentBatchInput
 
 
-class PaymentBatchCreate(BaseModel):
-    """Create payment batch request."""
-    batch_name: str = Field(max_length=100)
-    payment_date: date
-    bank_account_id: UUID
-    payment_method: str = "EFT"
-    description: Optional[str] = None
-
-
-class PaymentBatchRead(BaseModel):
-    """Payment batch response."""
-    model_config = ConfigDict(from_attributes=True)
-    batch_id: UUID
-    organization_id: UUID
-    batch_number: str
-    batch_name: str
-    payment_date: date
-    status: str
-    total_amount: Decimal
-    payment_count: int
-
-
-class BankFileResultRead(BaseModel):
-    """Bank file generation result."""
-    success: bool
-    file_format: str
-    file_content: Optional[str] = None
-    payment_count: int
-    total_amount: str
-
-
-@router.post("/payment-batches", response_model=PaymentBatchRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/payment-batches",
+    response_model=PaymentBatchRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_payment_batch(
     payload: PaymentBatchCreate,
     organization_id: UUID = Depends(require_organization_id),
@@ -793,26 +762,27 @@ def create_payment_batch(
     db: Session = Depends(get_db),
 ):
     """Create a new payment batch."""
-    bank_account = db.get(BankAccount, payload.bank_account_id)
-    currency_code = (
-        bank_account.currency_code
-        if bank_account
-        else settings.default_functional_currency_code
-    )
     input_data = PaymentBatchInput(
         batch_date=payload.payment_date,
         bank_account_id=payload.bank_account_id,
         payment_method=payload.payment_method,
-        currency_code=currency_code,
+        currency_code=None,  # Resolved by service from bank account
         payments=[],
     )
-    return payment_batch_service.create_batch(db, organization_id, input_data, created_by_user_id)
+    return payment_batch_service.create_batch(
+        db, organization_id, input_data, created_by_user_id
+    )
 
 
 @router.get("/payment-batches/{batch_id}", response_model=PaymentBatchRead)
-def get_payment_batch(batch_id: UUID, auth: dict = Depends(require_tenant_permission("ap:payment_batches:read")), db: Session = Depends(get_db)):
+def get_payment_batch(
+    batch_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_permission("ap:payment_batches:read")),
+    db: Session = Depends(get_db),
+):
     """Get a payment batch by ID."""
-    return payment_batch_service.get(db, str(batch_id))
+    return payment_batch_service.get(db, str(batch_id), organization_id)
 
 
 @router.get("/payment-batches", response_model=ListResponse[PaymentBatchRead])
@@ -841,7 +811,10 @@ def list_payment_batches(
     return ListResponse(items=batches, count=len(batches), limit=limit, offset=offset)
 
 
-@router.post("/payment-batches/{batch_id}/add-payment/{payment_id}", response_model=PaymentBatchRead)
+@router.post(
+    "/payment-batches/{batch_id}/add-payment/{payment_id}",
+    response_model=PaymentBatchRead,
+)
 def add_payment_to_batch(
     batch_id: UUID,
     payment_id: UUID,
@@ -850,7 +823,9 @@ def add_payment_to_batch(
     db: Session = Depends(get_db),
 ):
     """Add a payment to a batch."""
-    return payment_batch_service.add_payment_to_batch(db, organization_id, batch_id, payment_id)
+    return payment_batch_service.add_payment_to_batch(
+        db, organization_id, batch_id, payment_id
+    )
 
 
 @router.post("/payment-batches/{batch_id}/approve", response_model=PaymentBatchRead)
@@ -862,7 +837,9 @@ def approve_payment_batch(
     db: Session = Depends(get_db),
 ):
     """Approve a payment batch."""
-    return payment_batch_service.approve_batch(db, organization_id, batch_id, approved_by_user_id)
+    return payment_batch_service.approve_batch(
+        db, organization_id, batch_id, approved_by_user_id
+    )
 
 
 @router.post("/payment-batches/{batch_id}/process", response_model=PaymentBatchRead)
@@ -874,10 +851,14 @@ def process_payment_batch(
     db: Session = Depends(get_db),
 ):
     """Process an approved payment batch."""
-    return payment_batch_service.process_batch(db, organization_id, batch_id, processed_by_user_id)
+    return payment_batch_service.process_batch(
+        db, organization_id, batch_id, processed_by_user_id
+    )
 
 
-@router.post("/payment-batches/{batch_id}/generate-bank-file", response_model=BankFileResultRead)
+@router.post(
+    "/payment-batches/{batch_id}/generate-bank-file", response_model=BankFileResultRead
+)
 def generate_bank_file(
     batch_id: UUID,
     file_format: str = Query(default="NACHA"),
@@ -886,4 +867,6 @@ def generate_bank_file(
     db: Session = Depends(get_db),
 ):
     """Generate bank file for a payment batch."""
-    return payment_batch_service.generate_bank_file(db, organization_id, batch_id, file_format)
+    return payment_batch_service.generate_bank_file(
+        db, organization_id, batch_id, file_format
+    )

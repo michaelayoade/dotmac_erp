@@ -658,8 +658,10 @@ class SupplierInvoiceService(ListResponseMixin):
                 new_values={"status": "SUBMITTED"},
                 user_id=user_id,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(
+                "Workflow event failed for invoice %s submit: %s", inv_id, e
+            )
 
         fire_audit_event(
             db=db,
@@ -744,8 +746,10 @@ class SupplierInvoiceService(ListResponseMixin):
                 new_values={"status": "APPROVED"},
                 user_id=user_id,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(
+                "Workflow event failed for invoice %s approval: %s", inv_id, e
+            )
 
         fire_audit_event(
             db=db,
@@ -843,8 +847,8 @@ class SupplierInvoiceService(ListResponseMixin):
                 new_values={"status": "POSTED"},
                 user_id=user_id,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception("Workflow event failed for invoice %s post: %s", inv_id, e)
 
         fire_audit_event(
             db=db,
@@ -1061,6 +1065,7 @@ class SupplierInvoiceService(ListResponseMixin):
     def get(
         db: Session,
         invoice_id: str,
+        organization_id: Optional[UUID] = None,
     ) -> SupplierInvoice:
         """
         Get an invoice by ID.
@@ -1068,15 +1073,18 @@ class SupplierInvoiceService(ListResponseMixin):
         Args:
             db: Database session
             invoice_id: Invoice ID
+            organization_id: Organization scope for multi-tenant isolation
 
         Returns:
             SupplierInvoice
 
         Raises:
-            HTTPException(404): If not found
+            HTTPException(404): If not found or not in organization
         """
         invoice = db.get(SupplierInvoice, coerce_uuid(invoice_id))
         if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        if organization_id is not None and invoice.organization_id != organization_id:
             raise HTTPException(status_code=404, detail="Invoice not found")
         return invoice
 

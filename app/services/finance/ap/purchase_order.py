@@ -235,8 +235,8 @@ class PurchaseOrderService(ListResponseMixin):
                 new_values={"status": "PENDING_APPROVAL"},
                 user_id=coerce_uuid(submitted_by_user_id),
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception("Workflow event failed for PO %s submit: %s", po_id, e)
 
         db.commit()
         db.refresh(po)
@@ -312,8 +312,8 @@ class PurchaseOrderService(ListResponseMixin):
                 new_values={"status": "APPROVED"},
                 user_id=coerce_uuid(approved_by_user_id),
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception("Workflow event failed for PO %s approval: %s", po_id, e)
 
         db.commit()
         db.refresh(po)
@@ -382,8 +382,8 @@ class PurchaseOrderService(ListResponseMixin):
                 old_values={},
                 new_values={"status": "CANCELLED"},
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception("Workflow event failed for PO %s cancel: %s", po_id, e)
 
         db.commit()
         db.refresh(po)
@@ -436,6 +436,7 @@ class PurchaseOrderService(ListResponseMixin):
         db: Session,
         po_id: UUID,
         amount_received: Decimal,
+        organization_id: Optional[UUID] = None,
     ) -> PurchaseOrder:
         """
         Update the received amount on a PO (called by GoodsReceiptService).
@@ -444,19 +445,21 @@ class PurchaseOrderService(ListResponseMixin):
             db: Database session
             po_id: Purchase order ID
             amount_received: Amount received to add
+            organization_id: Organization scope for multi-tenancy check
 
         Returns:
             Updated PurchaseOrder
         """
         po_id = coerce_uuid(po_id)
 
-        po = (
-            db.query(PurchaseOrder)
-            .filter(
-                PurchaseOrder.po_id == po_id,
-            )
-            .first()
+        query = db.query(PurchaseOrder).filter(
+            PurchaseOrder.po_id == po_id,
         )
+        if organization_id:
+            query = query.filter(
+                PurchaseOrder.organization_id == coerce_uuid(organization_id),
+            )
+        po = query.first()
 
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
@@ -475,13 +478,18 @@ class PurchaseOrderService(ListResponseMixin):
         return po
 
     @staticmethod
-    def get(db: Session, po_id: str) -> Optional[PurchaseOrder]:
-        """Get a purchase order by ID."""
-        return (
-            db.query(PurchaseOrder)
-            .filter(PurchaseOrder.po_id == coerce_uuid(po_id))
-            .first()
-        )
+    def get(
+        db: Session,
+        po_id: str,
+        organization_id: Optional[UUID] = None,
+    ) -> Optional[PurchaseOrder]:
+        """Get a purchase order by ID with optional org_id isolation."""
+        po = db.get(PurchaseOrder, coerce_uuid(po_id))
+        if po is None:
+            return None
+        if organization_id is not None and po.organization_id != organization_id:
+            return None
+        return po
 
     @staticmethod
     def get_by_number(
