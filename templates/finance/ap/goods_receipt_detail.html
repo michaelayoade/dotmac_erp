@@ -1,9 +1,10 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import status_badge, empty_state %}
 
 {% block page_title %}{{ receipt.receipt_number if receipt else "Receipt Not Found" }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -12,7 +13,7 @@
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="font-medium text-slate-900 dark:text-white">{{ receipt.receipt_number if receipt else "Not Found" }}</span>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ receipt.receipt_number if receipt else "Not Found" }}</span>
 </nav>
 {% endblock %}
 
@@ -30,17 +31,7 @@
             <div>
                 <div class="flex items-center gap-3">
                     <h1 class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ receipt.receipt_number }}</h1>
-                    {% if receipt.status == 'RECEIVED' %}
-                    <span class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Received</span>
-                    {% elif receipt.status == 'INSPECTING' %}
-                    <span class="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Inspecting</span>
-                    {% elif receipt.status == 'ACCEPTED' %}
-                    <span class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Accepted</span>
-                    {% elif receipt.status == 'REJECTED' %}
-                    <span class="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">Rejected</span>
-                    {% elif receipt.status == 'PARTIAL' %}
-                    <span class="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">Partial</span>
-                    {% endif %}
+                    {{ status_badge(receipt.status | default('received'), 'sm') }}
                 </div>
                 <p class="mt-1 text-lg text-slate-500 dark:text-slate-400">{{ receipt.supplier_name }}</p>
             </div>
@@ -102,11 +93,11 @@
 
     <!-- Quick Stats -->
     <div class="grid grid-cols-2 gap-4 sm:grid-cols-4 stagger-in" style="animation-delay: 50ms;">
-        <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+        <div class="card p-4">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Receipt Date</p>
             <p class="mt-1 text-lg font-semibold text-slate-900 dark:text-white">{{ receipt.receipt_date }}</p>
         </div>
-        <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+        <div class="card p-4">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">PO Number</p>
             <p class="mt-1 text-lg font-semibold text-slate-900 dark:text-white">
                 <a href="/finance/ap/purchase-orders/{{ receipt.po_id }}" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">
@@ -114,11 +105,11 @@
                 </a>
             </p>
         </div>
-        <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+        <div class="card p-4">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Lines</p>
             <p class="mt-1 text-lg font-semibold text-slate-900 dark:text-white">{{ lines | length }}</p>
         </div>
-        <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+        <div class="card p-4">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Created</p>
             <p class="mt-1 text-lg font-semibold text-slate-900 dark:text-white">{{ receipt.created_at.strftime('%Y-%m-%d') if receipt.created_at else '-' }}</p>
         </div>
@@ -141,32 +132,32 @@
                         </div>
                     </div>
                 </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full">
+                <div class="table-container">
+                    <table class="table">
                         <thead>
-                            <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                                <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">#</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Description</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Ordered</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Received</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Accepted</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Rejected</th>
+                            <tr class="bg-slate-50 dark:bg-slate-800/50">
+                                <th scope="col">#</th>
+                                <th scope="col">Description</th>
+                                <th scope="col" class="text-right">Ordered</th>
+                                <th scope="col" class="text-right">Received</th>
+                                <th scope="col" class="text-right">Accepted</th>
+                                <th scope="col" class="text-right">Rejected</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                        <tbody>
                             {% for line in lines %}
-                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                                <td class="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{{ line.line_number }}</td>
-                                <td class="px-6 py-4">
+                            <tr>
+                                <td class="text-sm text-slate-500 dark:text-slate-400">{{ line.line_number }}</td>
+                                <td>
                                     <p class="text-sm font-medium text-slate-900 dark:text-white">{{ line.description }}</p>
                                     {% if line.lot_number %}
                                     <p class="text-xs text-slate-500 dark:text-slate-400">Lot: {{ line.lot_number }}</p>
                                     {% endif %}
                                 </td>
-                                <td class="px-6 py-4 text-right text-sm text-slate-600 dark:text-slate-400">{{ line.quantity_ordered }}</td>
-                                <td class="px-6 py-4 text-right text-sm text-blue-600 dark:text-blue-400 font-medium">{{ line.quantity_received }}</td>
-                                <td class="px-6 py-4 text-right text-sm text-green-600 dark:text-green-400 font-medium">{{ line.quantity_accepted or 0 }}</td>
-                                <td class="px-6 py-4 text-right text-sm {{ 'text-red-600 dark:text-red-400 font-medium' if line.quantity_rejected and line.quantity_rejected > 0 else 'text-slate-400 dark:text-slate-500' }}">
+                                <td class="table-cell-amount text-slate-600 dark:text-slate-400">{{ line.quantity_ordered }}</td>
+                                <td class="table-cell-amount text-blue-600 dark:text-blue-400 font-medium">{{ line.quantity_received }}</td>
+                                <td class="table-cell-amount text-emerald-600 dark:text-emerald-400 font-medium">{{ line.quantity_accepted or 0 }}</td>
+                                <td class="table-cell-amount {{ 'text-rose-600 dark:text-rose-400 font-medium' if line.quantity_rejected and line.quantity_rejected > 0 else 'text-slate-400 dark:text-slate-500' }}">
                                     {{ line.quantity_rejected or 0 }}
                                     {% if line.rejection_reason %}
                                     <span class="block text-xs text-slate-500">{{ line.rejection_reason }}</span>
@@ -175,7 +166,7 @@
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="6" class="px-6 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                                <td colspan="6" class="py-12 text-center text-sm text-slate-500 dark:text-slate-400">
                                     No lines on this goods receipt
                                 </td>
                             </tr>
@@ -290,15 +281,7 @@
                         <div>
                             <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">PO Status</dt>
                             <dd class="mt-1">
-                                {% if order.status == 'APPROVED' %}
-                                <span class="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Approved</span>
-                                {% elif order.status == 'PARTIALLY_RECEIVED' %}
-                                <span class="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Partially Received</span>
-                                {% elif order.status == 'RECEIVED' %}
-                                <span class="inline-flex rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-400">Received</span>
-                                {% else %}
-                                <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">{{ order.status | replace('_', ' ') | title }}</span>
-                                {% endif %}
+                                {{ status_badge(order.status | default('draft'), 'sm') }}
                             </dd>
                         </div>
                         <div>
@@ -317,17 +300,8 @@
 
 {% else %}
 <!-- Receipt Not Found -->
-<div class="flex flex-col items-center justify-center py-16">
-    <div class="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
-        <svg class="h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-    </div>
-    <h2 class="mt-4 text-lg font-semibold text-slate-900 dark:text-white">Goods Receipt Not Found</h2>
-    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">The goods receipt you're looking for doesn't exist or has been removed.</p>
-    <a href="/finance/ap/goods-receipts" class="mt-6 btn btn-primary">
-        Back to Goods Receipts
-    </a>
+<div class="py-12">
+    {{ empty_state('Goods receipt not found', "The goods receipt you're looking for doesn't exist or has been removed.", 'document', 'Back to Goods Receipts', '/finance/ap/goods-receipts') }}
 </div>
 {% endif %}
 {% endblock %}

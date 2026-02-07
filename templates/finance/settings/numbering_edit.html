@@ -3,7 +3,7 @@
 {% block page_title %}Edit {{ label }} sequence{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/finance/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -16,7 +16,7 @@
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="font-medium text-slate-900 dark:text-white">{{ label }}</span>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ label }}</span>
 </nav>
 {% endblock %}
 
@@ -199,12 +199,13 @@
     <div x-show="showResetModal"
          x-cloak
          class="fixed inset-0 z-50 overflow-y-auto"
-         @keydown.escape.window="showResetModal = false">
+         @keydown.escape.window="showResetModal = false"
+         role="dialog" aria-modal="true" aria-labelledby="reset-counter-modal-title">
         <div class="flex min-h-screen items-center justify-center p-4">
             <div class="fixed inset-0 bg-slate-900/50 transition-opacity" @click="showResetModal = false"></div>
 
             <div class="relative w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-slate-800">
-                <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Reset counter</h3>
+                <h3 id="reset-counter-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white">Reset counter</h3>
                 <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
                     Set the counter to a new value. The next document will use this value + 1.
                 </p>

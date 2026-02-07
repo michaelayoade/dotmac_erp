@@ -3,7 +3,7 @@
 {% block page_title %}Expense Claim{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
     <a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expense</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -12,7 +12,7 @@
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="text-slate-700 dark:text-slate-300">{{ claim.claim_number }}</span>
+    <span class="text-slate-700 dark:text-slate-300" aria-current="page">{{ claim.claim_number }}</span>
 </nav>
 {% endblock %}
 
@@ -95,11 +95,11 @@
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Date</th>
-                        <th>Category</th>
-                        <th>Description</th>
-                        <th class="text-right">Amount</th>
-                        <th>Receipt</th>
+                        <th scope="col">Date</th>
+                        <th scope="col">Category</th>
+                        <th scope="col">Description</th>
+                        <th scope="col" class="text-right">Amount</th>
+                        <th scope="col">Receipt</th>
                     </tr>
                 </thead>
                 <tbody>

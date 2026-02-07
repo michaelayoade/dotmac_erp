@@ -1,15 +1,15 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import search_autosuggest, pagination, status_badge, empty_state, stats_card, action_buttons %}
+{% from "components/macros.html" import live_search, pagination, status_badge, empty_state, stats_card, action_buttons %}
 
 {% block page_title %}Bank Accounts{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="font-medium text-slate-900 dark:text-white">Bank Accounts</span>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Bank Accounts</span>
 </nav>
 {% endblock %}
 
@@ -33,7 +33,7 @@
     </div>
 
     {# Search with Auto-suggest and Filters #}
-    {{ search_autosuggest(
+    {{ live_search(
         search=search,
         entity_type="bank_accounts",
         filters=[
@@ -52,20 +52,21 @@
         placeholder="Search bank accounts by name or number..."
     ) }}
 
+    <div id="results-container">
     {# Bank Accounts Table #}
     <div class="card">
         <div class="table-container">
             <table class="table" data-testid="bank-accounts-table">
                 <thead>
                     <tr>
-                        <th>Bank</th>
-                        <th>Account</th>
-                        <th>Type</th>
-                        <th>Currency</th>
-                        <th class="text-right">Last Statement</th>
-                        <th>Last Reconciled</th>
-                        <th class="text-center">Status</th>
-                        <th class="text-right">Actions</th>
+                        <th scope="col">Bank</th>
+                        <th scope="col">Account</th>
+                        <th scope="col">Type</th>
+                        <th scope="col">Currency</th>
+                        <th scope="col" class="text-right">Last Statement</th>
+                        <th scope="col">Last Reconciled</th>
+                        <th scope="col" class="text-center">Status</th>
+                        <th scope="col" class="text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -104,7 +105,7 @@
                                 </a>
                                 <a href="/finance/banking/accounts/{{ account.bank_account_id }}"
                                    class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
-                                   title="View details">
+                                   title="View details" aria-label="View details">
                                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
@@ -112,7 +113,7 @@
                                 </a>
                                 <a href="/finance/banking/accounts/{{ account.bank_account_id }}/edit"
                                    class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
-                                   title="Edit account">
+                                   title="Edit account" aria-label="Edit account">
                                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                                     </svg>
@@ -147,5 +148,6 @@
             filters={"status": status}
         ) }}
     </div>
+    </div>{# /results-container #}
 </div>
 {% endblock %}

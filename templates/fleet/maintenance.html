@@ -4,7 +4,7 @@
 {% block page_title %}Maintenance{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -13,7 +13,7 @@
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="font-medium text-slate-900 dark:text-white">Maintenance</span>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Maintenance</span>
 </nav>
 {% endblock %}
 
@@ -119,13 +119,13 @@
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Vehicle</th>
-                        <th>Type</th>
-                        <th>Description</th>
-                        <th>Scheduled</th>
-                        <th class="text-right">Cost</th>
-                        <th>Status</th>
-                        <th class="text-right">Actions</th>
+                        <th scope="col">Vehicle</th>
+                        <th scope="col">Type</th>
+                        <th scope="col">Description</th>
+                        <th scope="col">Scheduled</th>
+                        <th scope="col" class="text-right">Cost</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody>

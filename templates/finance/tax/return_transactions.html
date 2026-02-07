@@ -1,25 +1,32 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import pagination, empty_state %}
 
 {% block page_title %}Return Transactions{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400">
-    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/finance/tax/returns" class="hover:text-primary-600 dark:hover:text-primary-400">Tax Returns</a>
-    <span class="mx-2">/</span>
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/finance/tax/returns" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Tax Returns</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
     {% if tax_return %}
-    <a href="/finance/tax/returns/{{ tax_return.return_id }}" class="hover:text-primary-600 dark:hover:text-primary-400">{{ tax_return.return_reference }}</a>
-    <span class="mx-2">/</span>
+    <a href="/finance/tax/returns/{{ tax_return.return_id }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ tax_return.return_reference }}</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
     {% endif %}
-    <span class="text-slate-900 dark:text-white">Transactions</span>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Transactions</span>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 {% if tax_return %}
 <a href="/finance/tax/returns/{{ tax_return.return_id }}" data-testid="back-to-return"
-   class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+   class="btn btn-secondary">
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
     </svg>
@@ -31,7 +38,7 @@
 {% block content %}
 {% if tax_return %}
 <!-- Return Summary -->
-<div class="mb-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
+<div class="card p-4 mb-6">
     <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
             <h3 class="text-lg font-semibold text-slate-900 dark:text-white">{{ tax_return.return_reference }}</h3>
@@ -55,28 +62,28 @@
 </div>
 
 <!-- Transactions Table -->
-<div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+<div class="card">
     <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
         <h3 class="font-medium text-slate-900 dark:text-white">Included Transactions</h3>
         <p class="text-sm text-slate-500 dark:text-slate-400">{{ total_count }} tax transactions in this return</p>
     </div>
-    <div class="overflow-x-auto">
-        <table class="w-full" data-testid="return-transactions-table">
+    <div class="table-container">
+        <table class="table" data-testid="return-transactions-table">
             <thead>
-                <tr class="border-b border-slate-200 dark:border-slate-700">
-                    <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Date</th>
-                    <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Type</th>
-                    <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Reference</th>
-                    <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Counterparty</th>
-                    <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Base Amount</th>
-                    <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Tax Amount</th>
+                <tr>
+                    <th scope="col">Date</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Reference</th>
+                    <th scope="col">Counterparty</th>
+                    <th scope="col" class="text-right">Base Amount</th>
+                    <th scope="col" class="text-right">Tax Amount</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+            <tbody>
                 {% for txn in transactions %}
-                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ txn.transaction_date }}</td>
-                    <td class="px-6 py-4">
+                <tr>
+                    <td>{{ txn.transaction_date }}</td>
+                    <td>
                         <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium
                             {% if txn.transaction_type == 'OUTPUT' %}bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400
                             {% elif txn.transaction_type == 'INPUT' %}bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400
@@ -85,46 +92,33 @@
                             {{ txn.transaction_type }}
                         </span>
                     </td>
-                    <td class="px-6 py-4">
-                        <a href="/finance/tax/transactions/{{ txn.transaction_id }}" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                    <td>
+                        <a href="/finance/tax/transactions/{{ txn.transaction_id }}" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">
                             {{ txn.source_document_reference or txn.transaction_id[:8] }}
                         </a>
                     </td>
-                    <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ txn.counterparty_name or '-' }}</td>
-                    <td class="px-6 py-4 text-right text-sm text-slate-600 dark:text-slate-400">{{ txn.base_amount }}</td>
-                    <td class="px-6 py-4 text-right text-sm font-medium text-slate-900 dark:text-white">{{ txn.tax_amount }}</td>
+                    <td>{{ txn.counterparty_name or '-' }}</td>
+                    <td class="table-cell-amount">{{ txn.base_amount }}</td>
+                    <td class="table-cell-amount">{{ txn.tax_amount }}</td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="6" class="px-6 py-12 text-center text-sm text-slate-500">No transactions found for this return</td>
+                    <td colspan="6" class="py-12">
+                        {{ empty_state('No transactions found', 'This return has no transactions yet.', 'document') }}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 
-    <!-- Pagination -->
-    {% if total_pages > 1 %}
-    <div class="flex items-center justify-between border-t border-slate-200 px-6 py-4 dark:border-slate-700">
-        <div class="text-sm text-slate-500 dark:text-slate-400">
-            Showing page {{ page }} of {{ total_pages }}
-        </div>
-        <div class="flex gap-2">
-            {% if has_previous %}
-            <a href="?page={{ page - 1 }}"
-               class="rounded-lg border border-slate-200 px-3 py-1 text-sm hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
-                Previous
-            </a>
-            {% endif %}
-            {% if has_next %}
-            <a href="?page={{ page + 1 }}"
-               class="rounded-lg border border-slate-200 px-3 py-1 text-sm hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
-                Next
-            </a>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
+    {{ pagination(
+        page=page | default(1),
+        total_pages=total_pages | default(1),
+        total_count=total_count | default(0),
+        limit=limit | default(50),
+        show_size_selector=false
+    ) }}
 </div>
 {% else %}
 <div class="rounded-xl border border-slate-200 bg-white p-12 text-center dark:border-slate-800 dark:bg-slate-800/50">

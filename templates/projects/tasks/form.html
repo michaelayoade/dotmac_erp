@@ -234,7 +234,7 @@ function addDependency() {
     const depType = typeSelect.value;
 
     if (!taskId) {
-        alert('Please select a task');
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Please select a task', type: 'error' } }));
         return;
     }
 

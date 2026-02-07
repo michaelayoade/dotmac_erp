@@ -1,15 +1,15 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import search_autosuggest, pagination, status_badge, empty_state, stats_card %}
+{% from "components/macros.html" import live_search, pagination, status_badge, empty_state, stats_card %}
 
 {% block page_title %}Tax Codes{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="font-medium text-slate-900 dark:text-white">Tax Codes</span>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Tax Codes</span>
 </nav>
 {% endblock %}
 
@@ -33,7 +33,7 @@
     </div>
 
     {# Search with Auto-suggest and Filters #}
-    {{ search_autosuggest(
+    {{ live_search(
         search=search,
         entity_type="tax_codes",
         filters=[
@@ -57,19 +57,20 @@
         placeholder="Search tax codes by code or name..."
     ) }}
 
+    <div id="results-container">
     {# Tax Codes Table #}
     <div class="card">
         <div class="table-container">
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Code</th>
-                        <th>Name</th>
-                        <th>Type</th>
-                        <th class="text-right">Rate</th>
-                        <th>Applies To</th>
-                        <th class="text-center">Status</th>
-                        <th class="text-right">Actions</th>
+                        <th scope="col">Code</th>
+                        <th scope="col">Name</th>
+                        <th scope="col">Type</th>
+                        <th scope="col" class="text-right">Rate</th>
+                        <th scope="col">Applies To</th>
+                        <th scope="col" class="text-center">Status</th>
+                        <th scope="col" class="text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -115,7 +116,7 @@
                             <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <a href="/finance/tax/codes/{{ code.tax_code_id }}/edit"
                                    class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
-                                   title="Edit tax code">
+                                   title="Edit tax code" aria-label="Edit tax code">
                                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                                     </svg>
@@ -165,5 +166,6 @@
             filters={"tax_type": tax_type, "jurisdiction_id": jurisdiction_id, "is_active": is_active}
         ) }}
     </div>
+    </div>{# /results-container #}
 </div>
 {% endblock %}

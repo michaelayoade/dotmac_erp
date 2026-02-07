@@ -3,14 +3,14 @@
 {% block page_title %}Reimburse Expense{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/finance/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
     <span class="mx-2">/</span>
     <a href="/expense/claims" class="hover:text-primary-600 dark:hover:text-primary-400">Expense Claims</a>
     <span class="mx-2">/</span>
     <a href="/expense/claims/{{ expense_claim.claim_id }}" class="hover:text-primary-600 dark:hover:text-primary-400">{{ expense_claim.claim_number }}</a>
     <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white">Reimburse</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Reimburse</span>
 </nav>
 {% endblock %}
 
@@ -121,6 +121,18 @@
         {% else %}
         <!-- Bank Account Form -->
         <form id="reimbursementForm" class="space-y-4">
+            <div>
+                <label for="beneficiary_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Beneficiary Name</label>
+                <input type="text" id="beneficiary_name" name="beneficiary_name" readonly
+                       value="{{ claim_recipient_name }}"
+                       class="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-4 py-2.5 text-sm text-slate-700 shadow-sm dark:border-slate-600 dark:bg-slate-700/60 dark:text-slate-200">
+            </div>
+            <div>
+                <label for="bank_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Bank Name</label>
+                <input type="text" id="bank_name" name="bank_name" readonly
+                       value="{{ claim_bank_name }}"
+                       class="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-4 py-2.5 text-sm text-slate-700 shadow-sm dark:border-slate-600 dark:bg-slate-700/60 dark:text-slate-200">
+            </div>
             <div>
                 <label for="bank_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Bank</label>
                 <select id="bank_code" name="bank_code" required disabled
@@ -303,7 +315,7 @@ async function resolveAccount() {
 
 async function initiateTransfer() {
     if (!accountVerified) {
-        alert('Please verify the account first');
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Please verify the account first', type: 'error' } }));
         return;
     }
 
@@ -358,7 +370,7 @@ async function initiateTransfer() {
             btnText.textContent = 'Payment Complete!';
             btn.classList.remove('from-violet-600', 'to-purple-600');
             btn.classList.add('bg-emerald-600');
-            alert(`✓ ${result.message}\n\nTransfer Code: ${result.transfer_code}\nClaim Status: ${result.claim_status}`);
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: `✓ ${result.message}\n\nTransfer Code: ${result.transfer_code}\nClaim Status: ${result.claim_status}`, type: 'success' } }));
             // Redirect to the claim detail page to show updated status
             window.location.href = '/expense/claims/{{ expense_claim.claim_id }}';
         } else if (result.status === 'FAILED') {
@@ -366,13 +378,13 @@ async function initiateTransfer() {
             throw new Error(result.message || 'Transfer failed');
         } else {
             // Transfer is processing - redirect to transfers page
-            alert(`${result.message}\n\nTransfer Code: ${result.transfer_code}\nStatus: ${result.status}`);
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: `${result.message}\n\nTransfer Code: ${result.transfer_code}\nStatus: ${result.status}`, type: 'info' } }));
             window.location.href = '/finance/payments/transfers';
         }
 
     } catch (error) {
         console.error('Transfer error:', error);
-        alert('Transfer failed: ' + error.message);
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Transfer failed: ' + error.message, type: 'error' } }));
         btn.disabled = false;
         btnText.textContent = 'Initiate Transfer';
     }

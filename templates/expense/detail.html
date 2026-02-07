@@ -3,7 +3,7 @@
 {% block page_title %}Expense {{ expense.expense_number }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
     <a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expense</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -12,7 +12,7 @@
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="text-slate-700 dark:text-slate-300">{{ expense.expense_number }}</span>
+    <span class="text-slate-700 dark:text-slate-300" aria-current="page">{{ expense.expense_number }}</span>
 </nav>
 {% endblock %}
 
@@ -293,11 +293,11 @@
                 </button>
 
                 <!-- Post Modal -->
-                <div x-show="showModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showModal = false">
+                <div x-show="showModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showModal = false" role="dialog" aria-modal="true" aria-labelledby="post-gl-modal-title">
                     <div class="flex min-h-screen items-center justify-center p-4">
                         <div class="fixed inset-0 bg-black/50" @click="showModal = false"></div>
                         <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6">
-                            <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Post Expense to GL</h3>
+                            <h3 id="post-gl-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Post Expense to GL</h3>
                             <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Select the fiscal period to post this expense.</p>
                             <div class="mb-4">
                                 <label class="form-label">Fiscal Period</label>

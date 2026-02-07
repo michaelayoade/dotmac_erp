@@ -4,12 +4,12 @@
 {% block page_title %}Cash Advances{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
     <a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expense</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="text-slate-700 dark:text-slate-300">Cash Advances</span>
+    <span class="text-slate-700 dark:text-slate-300" aria-current="page">Cash Advances</span>
 </nav>
 {% endblock %}
 
@@ -59,14 +59,14 @@
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Advance #</th>
-                        <th>Employee</th>
-                        <th>Purpose</th>
-                        <th class="text-right">Requested</th>
-                        <th class="text-right">Approved</th>
-                        <th class="text-right">Outstanding</th>
-                        <th>Status</th>
-                        <th class="text-right">Actions</th>
+                        <th scope="col">Advance #</th>
+                        <th scope="col">Employee</th>
+                        <th scope="col">Purpose</th>
+                        <th scope="col" class="text-right">Requested</th>
+                        <th scope="col" class="text-right">Approved</th>
+                        <th scope="col" class="text-right">Outstanding</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody>

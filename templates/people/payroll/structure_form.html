@@ -88,7 +88,7 @@
                             <input type="text" x-model="earning.formula" name="earning_formula[]"
                                 placeholder="Formula or amount"
                                 class="form-input w-40 text-sm font-mono">
-                            <button type="button" @click="removeEarning(index)" class="p-1.5 text-slate-400 hover:text-red-500 transition-colors">
+                            <button type="button" @click="removeEarning(index)" class="p-1.5 text-slate-400 hover:text-red-500 transition-colors" aria-label="Close">
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                                 </svg>
@@ -130,7 +130,7 @@
                             <input type="text" x-model="deduction.formula" name="deduction_formula[]"
                                 placeholder="Formula or amount"
                                 class="form-input w-40 text-sm font-mono">
-                            <button type="button" @click="removeDeduction(index)" class="p-1.5 text-slate-400 hover:text-red-500 transition-colors">
+                            <button type="button" @click="removeDeduction(index)" class="p-1.5 text-slate-400 hover:text-red-500 transition-colors" aria-label="Close">
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                                 </svg>

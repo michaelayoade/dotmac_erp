@@ -3,12 +3,12 @@
 {% block page_title %}Import {{ entity_name }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
     <span class="mx-2">/</span>
     <a href="/import" class="hover:text-primary-600 dark:hover:text-primary-400">Data Import</a>
     <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white">{{ entity_name }}</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{{ entity_name }}</span>
 </nav>
 {% endblock %}
 
@@ -85,7 +85,7 @@
                         </svg>
                         <span id="file-name" class="text-sm font-medium text-slate-700 dark:text-slate-300"></span>
                     </div>
-                    <button type="button" id="remove-file" class="text-slate-400 hover:text-red-500">
+                    <button type="button" id="remove-file" class="text-slate-400 hover:text-red-500" aria-label="Close">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                         </svg>
@@ -269,7 +269,7 @@ importForm.addEventListener('submit', async function(e) {
 
     const file = fileInput.files[0];
     if (!file) {
-        alert('Please select a file first');
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Please select a file first', type: 'error' } }));
         return;
     }
 
@@ -294,10 +294,10 @@ importForm.addEventListener('submit', async function(e) {
         if (response.ok) {
             showResults(result);
         } else {
-            alert('Import failed: ' + (result.detail || 'Unknown error'));
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Import failed: ' + (result.detail || 'Unknown error'), type: 'error' } }));
         }
     } catch (error) {
-        alert('Import failed: ' + error.message);
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Import failed: ' + error.message, type: 'error' } }));
     } finally {
         importBtn.disabled = false;
         importBtn.textContent = 'Import Data';
@@ -307,7 +307,7 @@ importForm.addEventListener('submit', async function(e) {
 previewBtn.addEventListener('click', async function() {
     const file = fileInput.files[0];
     if (!file) {
-        alert('Please select a file first');
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Please select a file first', type: 'error' } }));
         return;
     }
 
@@ -329,10 +329,10 @@ previewBtn.addEventListener('click', async function() {
         if (response.ok) {
             showVisualPreview(result);
         } else {
-            alert('Preview failed: ' + (result.detail || 'Unknown error'));
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Preview failed: ' + (result.detail || 'Unknown error'), type: 'error' } }));
         }
     } catch (error) {
-        alert('Preview failed: ' + error.message);
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Preview failed: ' + error.message, type: 'error' } }));
     } finally {
         previewBtn.disabled = false;
         previewBtn.textContent = 'Preview';

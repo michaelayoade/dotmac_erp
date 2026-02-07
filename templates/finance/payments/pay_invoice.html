@@ -3,14 +3,14 @@
 {% block page_title %}Pay Invoice{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/finance/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
     <span class="mx-2">/</span>
     <a href="/finance/ar/invoices" class="hover:text-primary-600 dark:hover:text-primary-400">AR Invoices</a>
     <span class="mx-2">/</span>
     <a href="/finance/ar/invoices/{{ invoice.invoice_id }}" class="hover:text-primary-600 dark:hover:text-primary-400">{{ invoice.invoice_number }}</a>
     <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white">Pay</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Pay</span>
 </nav>
 {% endblock %}
 
@@ -168,7 +168,7 @@ async function initializePayment() {
         }
     } catch (error) {
         console.error('Payment initialization error:', error);
-        alert('Payment initialization failed: ' + error.message);
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Payment initialization failed: ' + error.message, type: 'error' } }));
         btn.disabled = false;
         btnText.textContent = 'Pay with Paystack';
     }

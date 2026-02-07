@@ -1,14 +1,15 @@
 {% extends "modules/base_modules.html" %}
+{% from "components/macros.html" import live_search %}
 
 {% block page_title %}Support Tickets{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/support/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="font-medium text-slate-900 dark:text-white">Support Tickets</span>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Support Tickets</span>
 </nav>
 {% endblock %}
 
@@ -151,100 +152,48 @@
     </div>
 
     {# Search and Filters #}
-    <div class="card">
-        <form method="get" class="p-4">
-            {# First Row: Search + Basic Filters #}
-            <div class="flex flex-wrap gap-4 items-end mb-4">
-                <div class="flex-1 min-w-[240px]">
-                    <label for="search" class="form-label">Search</label>
-                    <div class="relative">
-                        <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                        </svg>
-                        <input type="text" name="search" id="search" value="{{ search | default('', true) }}"
-                            placeholder="Search by ticket number, subject, or email..."
-                            class="form-input w-full pl-10">
-                    </div>
-                </div>
-                <div class="w-32">
-                    <label for="status" class="form-label">Status</label>
-                    <select name="status" id="status" class="form-select w-full">
-                        <option value="">All</option>
-                        {% for s in statuses %}
-                        <option value="{{ s.value }}" {{ 'selected' if selected_status == s.value }}>{{ s.label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="w-32">
-                    <label for="priority" class="form-label">Priority</label>
-                    <select name="priority" id="priority" class="form-select w-full">
-                        <option value="">All</option>
-                        {% for p in priorities %}
-                        <option value="{{ p.value }}" {{ 'selected' if selected_priority == p.value }}>{{ p.label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="w-44">
-                    <label for="assigned_to" class="form-label">Assigned To</label>
-                    <select name="assigned_to" id="assigned_to" class="form-select w-full">
-                        <option value="">All Assignees</option>
-                        {% for emp in employees %}
-                        <option value="{{ emp.employee_id }}" {{ 'selected' if selected_assigned_to == emp.employee_id }}>
-                            {{ emp.full_name }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
+    {% call(search_attrs) live_search(
+        search=search,
+        base_url="/support/tickets",
+        placeholder="Search by ticket number, subject, or email..."
+    ) %}
+        <select name="status" class="form-select" {{ search_attrs }}>
+            <option value="">All Status</option>
+            {% for s in statuses %}
+            <option value="{{ s.value }}" {{ 'selected' if selected_status == s.value }}>{{ s.label }}</option>
+            {% endfor %}
+        </select>
+        <select name="priority" class="form-select" {{ search_attrs }}>
+            <option value="">All Priority</option>
+            {% for p in priorities %}
+            <option value="{{ p.value }}" {{ 'selected' if selected_priority == p.value }}>{{ p.label }}</option>
+            {% endfor %}
+        </select>
+        <select name="assigned_to" class="form-select" {{ search_attrs }}>
+            <option value="">All Assignees</option>
+            {% for emp in employees %}
+            <option value="{{ emp.employee_id }}" {{ 'selected' if selected_assigned_to == emp.employee_id }}>{{ emp.full_name }}</option>
+            {% endfor %}
+        </select>
+        <select name="category" class="form-select" {{ search_attrs }}>
+            <option value="">All Categories</option>
+            {% for c in categories %}
+            <option value="{{ c.value }}" {{ 'selected' if selected_category == c.value }}>{{ c.label }}</option>
+            {% endfor %}
+        </select>
+        <select name="team" class="form-select" {{ search_attrs }}>
+            <option value="">All Teams</option>
+            {% for t in teams %}
+            <option value="{{ t.value }}" {{ 'selected' if selected_team == t.value }}>{{ t.label }}</option>
+            {% endfor %}
+        </select>
+        <input type="date" name="date_from" value="{{ selected_date_from if selected_date_from else '' }}"
+               class="form-input" placeholder="From date" {{ search_attrs }}>
+        <input type="date" name="date_to" value="{{ selected_date_to if selected_date_to else '' }}"
+               class="form-input" placeholder="To date" {{ search_attrs }}>
+    {% endcall %}
 
-            {# Second Row: Category, Team, Date Range #}
-            <div class="flex flex-wrap gap-4 items-end">
-                <div class="w-40">
-                    <label for="category" class="form-label">Category</label>
-                    <select name="category" id="category" class="form-select w-full">
-                        <option value="">All Categories</option>
-                        {% for c in categories %}
-                        <option value="{{ c.value }}" {{ 'selected' if selected_category == c.value }}>{{ c.label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="w-40">
-                    <label for="team" class="form-label">Team</label>
-                    <select name="team" id="team" class="form-select w-full">
-                        <option value="">All Teams</option>
-                        {% for t in teams %}
-                        <option value="{{ t.value }}" {{ 'selected' if selected_team == t.value }}>{{ t.label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="w-36">
-                    <label for="date_from" class="form-label">From Date</label>
-                    <input type="date" name="date_from" id="date_from" value="{{ selected_date_from | default('', true) }}" class="form-input w-full">
-                </div>
-                <div class="w-36">
-                    <label for="date_to" class="form-label">To Date</label>
-                    <input type="date" name="date_to" id="date_to" value="{{ selected_date_to | default('', true) }}" class="form-input w-full">
-                </div>
-                <div class="flex gap-2">
-                    <button type="submit" class="btn btn-primary h-10">
-                        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                        </svg>
-                        Filter
-                    </button>
-                    {% if search or selected_status or selected_priority or selected_assigned_to or selected_category or selected_team or selected_date_from or selected_date_to %}
-                    <a href="/support/tickets" class="btn btn-secondary h-10">
-                        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                        Clear
-                    </a>
-                    {% endif %}
-                </div>
-            </div>
-        </form>
-    </div>
-
+    <div id="results-container" class="space-y-6">
     {# Bulk Actions Toolbar (shows when tickets selected) #}
     <div x-show="selectedTickets.length > 0"
          x-cloak
@@ -362,20 +311,20 @@
             <table class="w-full">
                 <thead>
                     <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
-                        <th class="px-4 py-3 w-10">
+                        <th scope="col" class="px-4 py-3 w-10">
                             <input type="checkbox"
                                    id="select-all-checkbox"
                                    @change="toggleAll($event)"
                                    class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700"
                                    title="Select all tickets on this page">
                         </th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Ticket</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Subject</th>
-                        <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Priority</th>
-                        <th class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Assigned To</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Opened</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Ticket</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Subject</th>
+                        <th scope="col" class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Priority</th>
+                        <th scope="col" class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Assigned To</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Opened</th>
+                        <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -433,7 +382,7 @@
                             <div class="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                                 <a href="{{ ticket.ticket_url }}"
                                    class="p-2 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:text-amber-400 dark:hover:bg-amber-900/30 transition-colors"
-                                   title="View details">
+                                   title="View details" aria-label="View details">
                                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
@@ -441,7 +390,7 @@
                                 </a>
                                 <a href="{{ ticket.ticket_edit_url }}"
                                    class="p-2 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 dark:hover:text-sky-400 dark:hover:bg-sky-900/30 transition-colors"
-                                   title="Edit ticket">
+                                   title="Edit ticket" aria-label="Edit ticket">
                                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                                     </svg>
@@ -517,6 +466,7 @@
         </div>
         {% endif %}
     </div>
+    </div>{# /results-container #}
 </div>
 
 <script>

@@ -1,14 +1,19 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import empty_state, status_badge %}
 
 {% block page_title %}AP Invoice{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400">
-    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/finance/ap/invoices" class="hover:text-primary-600 dark:hover:text-primary-400">AP Invoices</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white">{{ invoice.invoice_number if invoice else "Invoice" }}</span>
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/finance/ap/invoices" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">AP Invoices</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ invoice.invoice_number if invoice else "Invoice" }}</span>
 </nav>
 {% endblock %}
 
@@ -16,7 +21,7 @@
 {% if invoice %}
 <div class="flex flex-wrap items-center gap-2">
     <a href="/finance/remita/generate?source_type=ap_invoice&source_id={{ invoice.invoice_id }}&amount={{ invoice.balance_raw }}&description={{ ('Remita payment for ' ~ invoice.invoice_number) | urlencode }}"
-       class="inline-flex items-center gap-2 rounded-lg border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 dark:border-emerald-600 dark:text-emerald-300 dark:hover:bg-emerald-900/20">
+       class="btn btn-secondary">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
         </svg>
@@ -214,25 +219,9 @@
                 <div class="flex flex-col items-end gap-2">
                     {# Status Badge #}
                     {% if invoice.is_overdue %}
-                    <span class="badge-overdue">Overdue</span>
-                    {% elif invoice.status == 'DRAFT' %}
-                    <span class="badge-draft">Draft</span>
-                    {% elif invoice.status == 'SUBMITTED' %}
-                    <span class="badge-pending">Pending Approval</span>
-                    {% elif invoice.status == 'APPROVED' %}
-                    <span class="badge-approved">Approved</span>
-                    {% elif invoice.status == 'POSTED' %}
-                    <span class="badge-posted">Posted</span>
-                    {% elif invoice.status == 'PARTIALLY_PAID' %}
-                    <span class="badge-partial">Partially Paid</span>
-                    {% elif invoice.status == 'PAID' %}
-                    <span class="badge-paid">Paid</span>
-                    {% elif invoice.status == 'VOIDED' %}
-                    <span class="badge-cancelled">Voided</span>
-                    {% elif invoice.status == 'CANCELLED' %}
-                    <span class="badge-cancelled">Cancelled</span>
+                    {{ status_badge('OVERDUE', 'sm') }}
                     {% else %}
-                    <span class="badge-draft">{{ invoice.status }}</span>
+                    {{ status_badge(invoice.status | default('draft'), 'sm') }}
                     {% endif %}
                 </div>
             </div>
@@ -249,7 +238,7 @@
                 </div>
                 <div>
                     <div class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Due Date</div>
-                    <div class="mt-1 font-medium {% if invoice.is_overdue %}text-red-600 dark:text-red-400{% else %}text-slate-900 dark:text-white{% endif %}">
+                    <div class="mt-1 font-medium {% if invoice.is_overdue %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %}">
                         {{ invoice.due_date }}
                         {% if invoice.is_overdue %}
                         <span class="ml-1 text-xs">(Overdue)</span>
@@ -306,38 +295,35 @@
             {# Invoice Lines Section #}
             <div class="document-section">
                 <div class="document-section-title">Invoice Lines</div>
-                <div class="overflow-x-auto -mx-4 sm:mx-0">
-                    <table class="w-full min-w-[500px]">
+                <div class="table-container -mx-4 sm:mx-0">
+                    <table class="table min-w-[500px]">
                         <thead>
-                            <tr class="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                                <th class="px-4 py-3 sm:pl-0">Description</th>
-                                <th class="px-4 py-3 text-right font-mono">Qty</th>
-                                <th class="px-4 py-3 text-right font-mono">Unit Price</th>
-                                <th class="px-4 py-3 text-right font-mono">Tax</th>
-                                <th class="px-4 py-3 text-right font-mono sm:pr-0">Amount</th>
+                            <tr>
+                                <th scope="col">Description</th>
+                                <th scope="col" class="text-right">Qty</th>
+                                <th scope="col" class="text-right">Unit Price</th>
+                                <th scope="col" class="text-right">Tax</th>
+                                <th scope="col" class="text-right">Amount</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                        <tbody>
                             {% for line in lines %}
                             <tr>
-                                <td class="px-4 py-3 text-sm text-slate-900 dark:text-white sm:pl-0">
+                                <td class="text-sm text-slate-900 dark:text-white">
                                     <div class="font-medium">{{ line.description }}</div>
                                     {% if line.account_code %}
                                     <div class="text-xs text-slate-500">GL: {{ line.account_code }}</div>
                                     {% endif %}
                                 </td>
-                                <td class="px-4 py-3 text-right text-sm font-mono text-slate-600 dark:text-slate-400">{{ line.quantity }}</td>
-                                <td class="px-4 py-3 text-right text-sm font-mono text-slate-600 dark:text-slate-400">{{ line.unit_price }}</td>
-                                <td class="px-4 py-3 text-right text-sm font-mono text-slate-600 dark:text-slate-400">{{ line.tax_amount | default("0.00") }}</td>
-                                <td class="px-4 py-3 text-right text-sm font-mono font-medium text-slate-900 dark:text-white sm:pr-0">{{ line.line_amount }}</td>
+                                <td class="table-cell-amount text-slate-600 dark:text-slate-400">{{ line.quantity }}</td>
+                                <td class="table-cell-amount text-slate-600 dark:text-slate-400">{{ line.unit_price }}</td>
+                                <td class="table-cell-amount text-slate-600 dark:text-slate-400">{{ line.tax_amount | default("0.00") }}</td>
+                                <td class="table-cell-amount font-medium text-slate-900 dark:text-white">{{ line.line_amount }}</td>
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="5" class="px-4 py-8 text-center text-sm text-slate-500">
-                                    <svg class="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                    </svg>
-                                    <p class="mt-2">No invoice lines</p>
+                                <td colspan="5" class="py-12">
+                                    {{ empty_state('No invoice lines', 'This invoice has no line items yet.', 'document') }}
                                 </td>
                             </tr>
                             {% endfor %}
@@ -356,7 +342,7 @@
                     {% if invoice.discount_amount and invoice.discount_amount != 0 %}
                     <div class="document-row">
                         <span class="document-row-label">Discount</span>
-                        <span class="document-row-value font-mono text-red-600 dark:text-red-400">-{{ invoice.discount_amount }}</span>
+                        <span class="document-row-value font-mono text-rose-600 dark:text-rose-400">-{{ invoice.discount_amount }}</span>
                     </div>
                     {% endif %}
                     <div class="document-row">
@@ -387,7 +373,7 @@
         <div class="document-footer">
             <div class="flex items-center justify-between">
                 <span class="document-total-label">Balance Due</span>
-                <span class="document-total-value document-total-value-large font-mono {% if invoice.is_overdue %}text-red-600 dark:text-red-400{% endif %}">
+                <span class="document-total-value document-total-value-large font-mono {% if invoice.is_overdue %}text-rose-600 dark:text-rose-400{% endif %}">
                     {{ invoice.balance | default(invoice.total_amount) | default("0.00") }}
                 </span>
             </div>
@@ -439,27 +425,27 @@
             </svg>
             Payment History
         </h3>
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
+        <div class="table-container">
+            <table class="table">
                 <thead>
-                    <tr class="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500 dark:border-slate-700">
-                        <th class="py-2 pr-4">Date</th>
-                        <th class="py-2 pr-4">Reference</th>
-                        <th class="py-2 pr-4">Method</th>
-                        <th class="py-2 text-right font-mono">Amount</th>
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Reference</th>
+                        <th scope="col">Method</th>
+                        <th scope="col" class="text-right">Amount</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody>
                     {% for payment in payments %}
                     <tr>
-                        <td class="py-2 pr-4 text-slate-600 dark:text-slate-400">{{ payment.payment_date }}</td>
-                        <td class="py-2 pr-4">
+                        <td class="text-slate-600 dark:text-slate-400">{{ payment.payment_date }}</td>
+                        <td>
                             <a href="/finance/ap/payments/{{ payment.payment_id }}" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">
                                 {{ payment.payment_number }}
                             </a>
                         </td>
-                        <td class="py-2 pr-4 text-slate-600 dark:text-slate-400">{{ payment.payment_method | default("-") }}</td>
-                        <td class="py-2 text-right font-mono font-medium text-emerald-600 dark:text-emerald-400">{{ payment.amount }}</td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ payment.payment_method | default("-") }}</td>
+                        <td class="table-cell-amount text-emerald-600 dark:text-emerald-400">{{ payment.amount }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -548,7 +534,7 @@
                 <div class="flex items-center gap-1">
                     <a href="{{ att.download_url }}"
                        class="rounded p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
-                       title="Download">
+                       title="Download" aria-label="Download">
                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                         </svg>
@@ -557,7 +543,7 @@
                           onsubmit="return confirm('Delete this attachment?');">
                         <button type="submit"
                                 class="rounded p-2 text-slate-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400"
-                                title="Delete">
+                                title="Delete" aria-label="Delete">
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                             </svg>
@@ -568,16 +554,9 @@
             {% endfor %}
         </div>
         {% else %}
-        <div class="empty-state py-8">
-            <svg class="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
-            </svg>
-            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No attachments yet</p>
-            <button type="button" @click="showUpload = true"
-                    class="mt-3 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
-                <svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                </svg>
+        <div class="py-8 text-center">
+            {{ empty_state('No attachments yet', 'Upload your first file to keep supporting documents together.', 'document') }}
+            <button type="button" @click="showUpload = true" class="btn btn-secondary btn-sm mt-4">
                 Upload your first file
             </button>
         </div>
@@ -684,17 +663,8 @@
 
 {% else %}
 {# Invoice not found state #}
-<div class="empty-state">
-    <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-    </svg>
-    <p class="mt-2 text-sm text-slate-500">Invoice not found</p>
-    <a href="/finance/ap/invoices" class="mt-4 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
-        <svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-        </svg>
-        Back to AP Invoices
-    </a>
+<div class="py-12">
+    {{ empty_state('Invoice not found', 'The invoice you are looking for is unavailable.', 'document', 'Back to AP Invoices', '/finance/ap/invoices') }}
 </div>
 {% endif %}
 {% endblock %}

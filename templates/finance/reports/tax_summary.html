@@ -3,7 +3,7 @@
 {% block page_title %}Tax summary{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -12,7 +12,7 @@
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="text-slate-700 dark:text-slate-300">Tax summary</span>
+    <span class="text-slate-700 dark:text-slate-300" aria-current="page">Tax summary</span>
 </nav>
 {% endblock %}
 
@@ -115,10 +115,10 @@
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="border-b border-slate-200 dark:border-slate-700">
-                            <th class="text-left py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Tax Type</th>
-                            <th class="text-right py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Output</th>
-                            <th class="text-right py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Input</th>
-                            <th class="text-right py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Net</th>
+                            <th scope="col" class="text-left py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Tax Type</th>
+                            <th scope="col" class="text-right py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Output</th>
+                            <th scope="col" class="text-right py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Input</th>
+                            <th scope="col" class="text-right py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Net</th>
                         </tr>
                     </thead>
                     <tbody>

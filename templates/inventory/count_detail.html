@@ -4,7 +4,7 @@
 {% block page_title %}Count {{ count.count_number }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -13,7 +13,7 @@
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="font-medium text-slate-900 dark:text-white">{{ count.count_number }}</span>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ count.count_number }}</span>
 </nav>
 {% endblock %}
 
@@ -121,15 +121,15 @@
             <table class="table-ledger">
                 <thead>
                     <tr>
-                        <th>Item Code</th>
-                        <th>Item Name</th>
-                        <th>Warehouse</th>
-                        <th class="text-right">System Qty</th>
-                        <th class="text-right">Counted Qty</th>
-                        <th class="text-right">Variance</th>
-                        <th class="text-right">Variance Value</th>
+                        <th scope="col">Item Code</th>
+                        <th scope="col">Item Name</th>
+                        <th scope="col">Warehouse</th>
+                        <th scope="col" class="text-right">System Qty</th>
+                        <th scope="col" class="text-right">Counted Qty</th>
+                        <th scope="col" class="text-right">Variance</th>
+                        <th scope="col" class="text-right">Variance Value</th>
                         {% if count.status.value == 'IN_PROGRESS' %}
-                        <th class="w-24">Action</th>
+                        <th scope="col" class="w-24">Action</th>
                         {% endif %}
                     </tr>
                 </thead>

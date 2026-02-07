@@ -1,14 +1,19 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import empty_state, status_badge %}
 
 {% block page_title %}Bank Reconciliation{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400">
-    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/finance/banking/reconciliations" class="hover:text-primary-600 dark:hover:text-primary-400">Reconciliations</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white">{{ reconciliation.reconciliation_date if reconciliation else "Detail" }}</span>
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/finance/banking/reconciliations" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Reconciliations</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ reconciliation.reconciliation_date if reconciliation else "Detail" }}</span>
 </nav>
 {% endblock %}
 
@@ -18,7 +23,7 @@
     <button hx-post="/api/v1/banking/reconciliations/{{ reconciliation.reconciliation_id }}/auto-match"
             hx-swap="none"
             hx-on::after-request="location.reload()"
-            class="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800">
+            class="btn btn-secondary">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
         </svg>
@@ -27,7 +32,7 @@
     <button hx-post="/api/v1/banking/reconciliations/{{ reconciliation.reconciliation_id }}/submit"
             hx-swap="none"
             hx-on::after-request="location.reload()"
-            class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25 btn-hover">
+            class="btn btn-primary">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
@@ -40,13 +45,13 @@
             hx-vals='{"notes": "Rejected via UI"}'
             hx-swap="none"
             hx-on::after-request="location.reload()"
-            class="inline-flex items-center gap-2 rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-600 dark:text-red-400">
+            class="btn btn-danger">
         Reject
     </button>
     <button hx-post="/api/v1/banking/reconciliations/{{ reconciliation.reconciliation_id }}/approve"
             hx-swap="none"
             hx-on::after-request="location.reload()"
-            class="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
+            class="btn btn-primary">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
         </svg>
@@ -55,7 +60,7 @@
 </div>
 {% elif reconciliation and reconciliation.status == 'approved' %}
 <a href="/finance/banking/reconciliations/{{ reconciliation.reconciliation_id }}/report"
-   class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25 btn-hover">
+   class="btn btn-primary">
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
     </svg>
@@ -69,59 +74,51 @@
 <div x-data="{ selectedStatement: null, selectedGL: null }" class="space-y-6">
     <!-- Summary Cards -->
     <div class="grid gap-4 sm:grid-cols-5">
-        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+        <div class="card p-4">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Statement Balance</p>
             <p class="mt-1 text-xl font-bold text-slate-900 dark:text-white">{{ reconciliation.statement_closing_balance }}</p>
         </div>
-        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+        <div class="card p-4">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">GL Balance</p>
             <p class="mt-1 text-xl font-bold text-slate-900 dark:text-white">{{ reconciliation.gl_closing_balance }}</p>
         </div>
-        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+        <div class="card p-4">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Matched</p>
-            <p class="mt-1 text-xl font-bold text-green-600 dark:text-green-400">{{ reconciliation.total_matched }}</p>
+            <p class="mt-1 text-xl font-bold text-emerald-600 dark:text-emerald-400">{{ reconciliation.total_matched }}</p>
         </div>
-        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+        <div class="card p-4">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Adjustments</p>
             <p class="mt-1 text-xl font-bold text-yellow-600 dark:text-yellow-400">{{ reconciliation.total_adjustments }}</p>
         </div>
-        <div class="rounded-lg border {{ 'border-green-500 bg-green-50 dark:bg-green-900/20' if reconciliation.reconciliation_difference == 0 else 'border-red-500 bg-red-50 dark:bg-red-900/20' }} p-4">
+        <div class="card p-4 {{ 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' if reconciliation.reconciliation_difference == 0 else 'border-rose-500 bg-rose-50 dark:bg-rose-900/20' }}">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Difference</p>
-            <p class="mt-1 text-xl font-bold {{ 'text-green-600 dark:text-green-400' if reconciliation.reconciliation_difference == 0 else 'text-red-600 dark:text-red-400' }}">{{ reconciliation.reconciliation_difference }}</p>
+            <p class="mt-1 text-xl font-bold {{ 'text-emerald-600 dark:text-emerald-400' if reconciliation.reconciliation_difference == 0 else 'text-rose-600 dark:text-rose-400' }}">{{ reconciliation.reconciliation_difference }}</p>
         </div>
     </div>
 
     <!-- Status Badge -->
-    <div class="flex items-center gap-4">
+    <div class="flex flex-wrap items-center gap-4">
         <span class="text-sm text-slate-500 dark:text-slate-400">Status:</span>
-        {% if reconciliation.status == 'approved' %}
-        <span class="inline-flex rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Approved</span>
-        {% elif reconciliation.status == 'pending_review' %}
-        <span class="inline-flex rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Pending Review</span>
-        {% elif reconciliation.status == 'rejected' %}
-        <span class="inline-flex rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">Rejected</span>
-        {% else %}
-        <span class="inline-flex rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Draft</span>
-        {% endif %}
+        {{ status_badge(reconciliation.status | default('draft'), 'sm') }}
         <span class="text-sm text-slate-500 dark:text-slate-400">Period: {{ reconciliation.period_start }} to {{ reconciliation.period_end }}</span>
     </div>
 
     <!-- Matching Workspace -->
     <div class="grid gap-6 lg:grid-cols-2">
         <!-- Unmatched Statement Lines -->
-        <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="card">
             <div class="border-b border-slate-200 px-4 py-3 dark:border-slate-700">
                 <h3 class="font-medium text-slate-900 dark:text-white">Unmatched Statement Lines</h3>
                 <p class="text-xs text-slate-500">{{ unmatched_statement_lines | length }} items</p>
             </div>
             <div class="max-h-96 overflow-y-auto">
-                <table class="w-full">
-                    <thead class="sticky top-0 bg-slate-50 dark:bg-slate-800">
+                <table class="table">
+                    <thead>
                         <tr>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-slate-500">Date</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-slate-500">Description</th>
-                            <th class="px-3 py-2 text-right text-xs font-medium text-slate-500">Amount</th>
-                            <th class="px-3 py-2"></th>
+                            <th scope="col">Date</th>
+                            <th scope="col">Description</th>
+                            <th scope="col" class="text-right">Amount</th>
+                            <th scope="col"></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
@@ -129,22 +126,22 @@
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer"
                             :class="{ 'bg-primary-50 dark:bg-primary-900/30': selectedStatement === '{{ line.line_id }}' }"
                             @click="selectedStatement = selectedStatement === '{{ line.line_id }}' ? null : '{{ line.line_id }}'">
-                            <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-400">{{ line.transaction_date }}</td>
-                            <td class="px-3 py-2">
-                                <p class="text-xs font-medium text-slate-900 dark:text-white truncate max-w-[150px]">{{ line.description | default(line.payee_payer) | default("-") }}</p>
-                                <p class="text-xs text-slate-500">{{ line.reference | default("") }}</p>
+                            <td class="text-slate-600 dark:text-slate-400">{{ line.transaction_date }}</td>
+                            <td>
+                                <p class="font-medium text-slate-900 dark:text-white truncate max-w-[150px]">{{ line.description | default(line.payee_payer) | default("-") }}</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">{{ line.reference | default("") }}</p>
                             </td>
-                            <td class="px-3 py-2 text-right text-xs font-medium {{ 'text-green-600' if line.transaction_type == 'credit' else 'text-red-600' }}">
+                            <td class="text-right font-medium {{ 'text-emerald-600 dark:text-emerald-400' if line.transaction_type == 'credit' else 'text-rose-600 dark:text-rose-400' }}">
                                 {{ "+" if line.transaction_type == 'credit' else "-" }}{{ line.amount }}
                             </td>
-                            <td class="px-3 py-2">
+                            <td>
                                 <input type="radio" name="statement_line" :checked="selectedStatement === '{{ line.line_id }}'"
                                        class="h-3 w-3 text-primary-600">
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="4" class="px-3 py-8 text-center text-sm text-slate-500">No unmatched lines</td>
+                            <td colspan="4" class="py-8 text-center text-sm text-slate-500">No unmatched lines</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -153,19 +150,19 @@
         </div>
 
         <!-- Unmatched GL Lines -->
-        <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="card">
             <div class="border-b border-slate-200 px-4 py-3 dark:border-slate-700">
                 <h3 class="font-medium text-slate-900 dark:text-white">Unmatched GL Entries</h3>
                 <p class="text-xs text-slate-500">{{ unmatched_gl_lines | length }} items</p>
             </div>
             <div class="max-h-96 overflow-y-auto">
-                <table class="w-full">
-                    <thead class="sticky top-0 bg-slate-50 dark:bg-slate-800">
+                <table class="table">
+                    <thead>
                         <tr>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-slate-500">Date</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-slate-500">Description</th>
-                            <th class="px-3 py-2 text-right text-xs font-medium text-slate-500">Amount</th>
-                            <th class="px-3 py-2"></th>
+                            <th scope="col">Date</th>
+                            <th scope="col">Description</th>
+                            <th scope="col" class="text-right">Amount</th>
+                            <th scope="col"></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
@@ -173,22 +170,22 @@
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer"
                             :class="{ 'bg-primary-50 dark:bg-primary-900/30': selectedGL === '{{ line.line_id }}' }"
                             @click="selectedGL = selectedGL === '{{ line.line_id }}' ? null : '{{ line.line_id }}'">
-                            <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-400">{{ line.entry_date }}</td>
-                            <td class="px-3 py-2">
-                                <p class="text-xs font-medium text-slate-900 dark:text-white truncate max-w-[150px]">{{ line.description | default("-") }}</p>
-                                <p class="text-xs text-slate-500">{{ line.reference | default("") }}</p>
+                            <td class="text-slate-600 dark:text-slate-400">{{ line.entry_date }}</td>
+                            <td>
+                                <p class="font-medium text-slate-900 dark:text-white truncate max-w-[150px]">{{ line.description | default("-") }}</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">{{ line.reference | default("") }}</p>
                             </td>
-                            <td class="px-3 py-2 text-right text-xs font-medium {{ 'text-green-600' if line.debit_amount else 'text-red-600' }}">
+                            <td class="text-right font-medium {{ 'text-emerald-600 dark:text-emerald-400' if line.debit_amount else 'text-rose-600 dark:text-rose-400' }}">
                                 {{ "+" if line.debit_amount else "-" }}{{ line.debit_amount or line.credit_amount }}
                             </td>
-                            <td class="px-3 py-2">
+                            <td>
                                 <input type="radio" name="gl_line" :checked="selectedGL === '{{ line.line_id }}'"
                                        class="h-3 w-3 text-primary-600">
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="4" class="px-3 py-8 text-center text-sm text-slate-500">No unmatched entries</td>
+                            <td colspan="4" class="py-8 text-center text-sm text-slate-500">No unmatched entries</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -212,7 +209,7 @@
                         })
                     }).then(() => location.reload())
                 "
-                class="inline-flex items-center gap-2 rounded-lg bg-green-600 px-6 py-3 text-sm font-medium text-white hover:bg-green-700">
+                class="btn btn-primary">
             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
             </svg>
@@ -222,42 +219,44 @@
     {% endif %}
 
     <!-- Matched Items -->
-    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+    <div class="card">
         <div class="border-b border-slate-200 px-4 py-3 dark:border-slate-700">
             <h3 class="font-medium text-slate-900 dark:text-white">Matched Items</h3>
             <p class="text-xs text-slate-500">{{ lines | selectattr('match_type', 'ne', 'adjustment') | selectattr('match_type', 'ne', 'outstanding') | list | length }} matches</p>
         </div>
-        <div class="overflow-x-auto">
-            <table class="w-full">
+        <div class="table-container">
+            <table class="table">
                 <thead>
-                    <tr class="border-b border-slate-200 dark:border-slate-700">
-                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500">Date</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500">Description</th>
-                        <th class="px-4 py-3 text-right text-xs font-medium text-slate-500">Statement</th>
-                        <th class="px-4 py-3 text-right text-xs font-medium text-slate-500">GL</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500">Match Type</th>
-                        <th class="px-4 py-3 text-right text-xs font-medium text-slate-500">Difference</th>
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Description</th>
+                        <th scope="col" class="text-right">Statement</th>
+                        <th scope="col" class="text-right">GL</th>
+                        <th scope="col">Match Type</th>
+                        <th scope="col" class="text-right">Difference</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                <tbody>
                     {% for line in lines %}
                     {% if not line.is_adjustment and not line.is_outstanding %}
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ line.transaction_date }}</td>
-                        <td class="px-4 py-3 text-sm text-slate-900 dark:text-white">{{ line.description | default("-") }}</td>
-                        <td class="px-4 py-3 text-right text-sm font-medium text-slate-900 dark:text-white">{{ line.statement_amount | default("-") }}</td>
-                        <td class="px-4 py-3 text-right text-sm font-medium text-slate-900 dark:text-white">{{ line.gl_amount | default("-") }}</td>
-                        <td class="px-4 py-3">
+                        <td class="text-slate-600 dark:text-slate-400">{{ line.transaction_date }}</td>
+                        <td class="text-slate-900 dark:text-white">{{ line.description | default("-") }}</td>
+                        <td class="table-cell-amount text-slate-900 dark:text-white">{{ line.statement_amount | default("-") }}</td>
+                        <td class="table-cell-amount text-slate-900 dark:text-white">{{ line.gl_amount | default("-") }}</td>
+                        <td>
                             <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium {{ 'bg-blue-100 text-blue-700' if line.match_type == 'auto' else 'bg-purple-100 text-purple-700' }}">
                                 {{ line.match_type | title }}
                             </span>
                         </td>
-                        <td class="px-4 py-3 text-right text-sm font-medium {{ 'text-green-600' if line.difference == 0 else 'text-red-600' }}">{{ line.difference | default(0) }}</td>
+                        <td class="table-cell-amount {{ 'text-emerald-600 dark:text-emerald-400' if line.difference == 0 else 'text-rose-600 dark:text-rose-400' }}">{{ line.difference | default(0) }}</td>
                     </tr>
                     {% endif %}
                     {% else %}
                     <tr>
-                        <td colspan="6" class="px-4 py-8 text-center text-sm text-slate-500">No matched items yet</td>
+                        <td colspan="6" class="py-12">
+                            {{ empty_state('No matched items', 'Match statement lines and GL entries to reconcile.', 'link') }}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -267,24 +266,26 @@
 
     <!-- Outstanding Items -->
     <div class="grid gap-6 lg:grid-cols-2">
-        <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="card">
             <div class="border-b border-slate-200 px-4 py-3 dark:border-slate-700">
                 <h3 class="font-medium text-slate-900 dark:text-white">Outstanding Deposits</h3>
             </div>
-            <div class="p-4">
-                <table class="w-full">
-                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+            <div class="table-container">
+                <table class="table">
+                    <tbody>
                         {% for line in lines %}
                         {% if line.is_outstanding and line.outstanding_type == 'deposit' %}
                         <tr>
-                            <td class="py-2 text-sm text-slate-600">{{ line.transaction_date }}</td>
-                            <td class="py-2 text-sm text-slate-900 dark:text-white">{{ line.description }}</td>
-                            <td class="py-2 text-right text-sm font-medium text-green-600">+{{ line.statement_amount or line.gl_amount }}</td>
+                            <td class="text-slate-600 dark:text-slate-400">{{ line.transaction_date }}</td>
+                            <td class="text-slate-900 dark:text-white">{{ line.description }}</td>
+                            <td class="table-cell-amount text-emerald-600 dark:text-emerald-400">+{{ line.statement_amount or line.gl_amount }}</td>
                         </tr>
                         {% endif %}
                         {% else %}
                         <tr>
-                            <td colspan="3" class="py-4 text-center text-sm text-slate-500">No outstanding deposits</td>
+                            <td colspan="3" class="py-12">
+                                {{ empty_state('No outstanding deposits', 'All deposits are cleared for this period.', 'inbox') }}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -292,24 +293,26 @@
             </div>
         </div>
 
-        <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="card">
             <div class="border-b border-slate-200 px-4 py-3 dark:border-slate-700">
                 <h3 class="font-medium text-slate-900 dark:text-white">Outstanding Payments</h3>
             </div>
-            <div class="p-4">
-                <table class="w-full">
-                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+            <div class="table-container">
+                <table class="table">
+                    <tbody>
                         {% for line in lines %}
                         {% if line.is_outstanding and line.outstanding_type == 'payment' %}
                         <tr>
-                            <td class="py-2 text-sm text-slate-600">{{ line.transaction_date }}</td>
-                            <td class="py-2 text-sm text-slate-900 dark:text-white">{{ line.description }}</td>
-                            <td class="py-2 text-right text-sm font-medium text-red-600">-{{ line.statement_amount or line.gl_amount }}</td>
+                            <td class="text-slate-600 dark:text-slate-400">{{ line.transaction_date }}</td>
+                            <td class="text-slate-900 dark:text-white">{{ line.description }}</td>
+                            <td class="table-cell-amount text-rose-600 dark:text-rose-400">-{{ line.statement_amount or line.gl_amount }}</td>
                         </tr>
                         {% endif %}
                         {% else %}
                         <tr>
-                            <td colspan="3" class="py-4 text-center text-sm text-slate-500">No outstanding payments</td>
+                            <td colspan="3" class="py-12">
+                                {{ empty_state('No outstanding payments', 'All payments are cleared for this period.', 'inbox') }}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -319,14 +322,8 @@
     </div>
 </div>
 {% else %}
-<div class="py-12 text-center">
-    <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-    </svg>
-    <p class="mt-2 text-sm text-slate-500">Reconciliation not found</p>
-    <a href="/finance/banking/reconciliations" class="mt-4 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700">
-        Back to Reconciliations
-    </a>
+<div class="py-12">
+    {{ empty_state('Reconciliation not found', 'The reconciliation you are looking for is unavailable.', 'document', 'Back to Reconciliations', '/finance/banking/reconciliations') }}
 </div>
 {% endif %}
 {% endblock %}

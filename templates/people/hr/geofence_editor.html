@@ -34,14 +34,14 @@
 {% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
     <span class="mx-2">/</span>
     <a href="/people/hr/locations" class="hover:text-primary-600 dark:hover:text-primary-400">Branches</a>
     <span class="mx-2">/</span>
     <a href="/people/hr/locations/{{ location.location_id }}/edit" class="hover:text-primary-600 dark:hover:text-primary-400">{{ location.location_name }}</a>
     <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white">Geofence</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Geofence</span>
 </nav>
 {% endblock %}
 
@@ -407,12 +407,12 @@ function geofenceEditor() {
                 const result = await response.json();
 
                 if (result.success) {
-                    alert('Geofence saved successfully!');
+                    window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Geofence saved successfully!', type: 'success' } }));
                 } else {
-                    alert('Error: ' + (result.error || 'Failed to save geofence'));
+                    window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Error: ' + (result.error || 'Failed to save geofence'), type: 'error' } }));
                 }
             } catch (error) {
-                alert('Error saving geofence: ' + error.message);
+                window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Error saving geofence: ' + error.message, type: 'error' } }));
             } finally {
                 btn.classList.remove('htmx-request');
             }
@@ -420,7 +420,7 @@ function geofenceEditor() {
 
         useCurrentLocation() {
             if (!navigator.geolocation) {
-                alert('Geolocation is not supported by your browser');
+                window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Geolocation is not supported by your browser', type: 'warning' } }));
                 return;
             }
 
@@ -430,14 +430,14 @@ function geofenceEditor() {
                     this.testLng = position.coords.longitude.toFixed(6);
                 },
                 (error) => {
-                    alert('Unable to get your location: ' + error.message);
+                    window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Unable to get your location: ' + error.message, type: 'error' } }));
                 }
             );
         },
 
         async testLocation() {
             if (!this.testLat || !this.testLng) {
-                alert('Please enter latitude and longitude');
+                window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Please enter latitude and longitude', type: 'error' } }));
                 return;
             }
 

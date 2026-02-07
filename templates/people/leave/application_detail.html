@@ -1,4 +1,5 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import status_badge %}
 
 {% block page_title %}Leave Application{% endblock %}
 
@@ -212,17 +213,7 @@
                 <div>
                     <dt class="text-sm text-slate-500 dark:text-slate-400">Status</dt>
                     <dd class="mt-1">
-                        {% if application.status.value == 'APPROVED' %}
-                        <span class="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Approved</span>
-                        {% elif application.status.value == 'SUBMITTED' %}
-                        <span class="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Pending</span>
-                        {% elif application.status.value == 'REJECTED' %}
-                        <span class="inline-flex rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">Rejected</span>
-                        {% elif application.status.value == 'CANCELLED' %}
-                        <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">Cancelled</span>
-                        {% else %}
-                        <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">{{ application.status.value }}</span>
-                        {% endif %}
+                        {{ status_badge(application.status.value, 'sm') }}
                     </dd>
                 </div>
             </dl>
@@ -269,7 +260,7 @@ function promptRejection(form) {
         return false;
     }
     if (reason.trim() === '') {
-        alert('Rejection reason is required');
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Rejection reason is required', type: 'error' } }));
         return false;
     }
     document.getElementById('rejection_reason').value = reason;

@@ -1,9 +1,10 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import empty_state %}
 
 {% block page_title %}New Goods Receipt{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -12,7 +13,7 @@
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="font-medium text-slate-900 dark:text-white">New</span>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">New</span>
 </nav>
 {% endblock %}
 
@@ -120,30 +121,30 @@
                 </div>
             </div>
 
-            <div class="overflow-x-auto">
-                <table class="w-full">
+            <div class="table-container">
+                <table class="table">
                     <thead>
-                        <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">#</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Description</th>
-                            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 w-28">Ordered</th>
-                            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 w-28">Previously Received</th>
-                            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 w-28">Remaining</th>
-                            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 w-32">Receive Now</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 w-32">Lot Number</th>
+                        <tr class="bg-slate-50 dark:bg-slate-800/50">
+                            <th scope="col">#</th>
+                            <th scope="col">Description</th>
+                            <th scope="col" class="text-right w-28">Ordered</th>
+                            <th scope="col" class="text-right w-28">Previously Received</th>
+                            <th scope="col" class="text-right w-28">Remaining</th>
+                            <th scope="col" class="text-right w-32">Receive Now</th>
+                            <th scope="col" class="w-32">Lot Number</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    <tbody>
                         <template x-for="(line, index) in lines" :key="index">
-                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                                <td class="px-4 py-3 text-sm text-slate-500 dark:text-slate-400" x-text="line.line_number"></td>
-                                <td class="px-4 py-3">
+                            <tr>
+                                <td class="text-sm text-slate-500 dark:text-slate-400" x-text="line.line_number"></td>
+                                <td>
                                     <p class="text-sm font-medium text-slate-900 dark:text-white" x-text="line.description"></p>
                                 </td>
-                                <td class="px-4 py-3 text-right text-sm text-slate-600 dark:text-slate-400" x-text="line.quantity_ordered"></td>
-                                <td class="px-4 py-3 text-right text-sm text-slate-600 dark:text-slate-400" x-text="line.quantity_received"></td>
-                                <td class="px-4 py-3 text-right text-sm font-medium text-blue-600 dark:text-blue-400" x-text="line.quantity_remaining"></td>
-                                <td class="px-4 py-3">
+                                <td class="table-cell-amount text-slate-600 dark:text-slate-400" x-text="line.quantity_ordered"></td>
+                                <td class="table-cell-amount text-slate-600 dark:text-slate-400" x-text="line.quantity_received"></td>
+                                <td class="table-cell-amount text-blue-600 dark:text-blue-400" x-text="line.quantity_remaining"></td>
+                                <td>
                                     <input type="number"
                                            x-model.number="line.quantity_to_receive"
                                            :max="line.quantity_remaining"
@@ -151,7 +152,7 @@
                                            step="0.01"
                                            class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-right focus:border-primary-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                                 </td>
-                                <td class="px-4 py-3">
+                                <td>
                                     <input type="text"
                                            x-model="line.lot_number"
                                            placeholder="Optional"
@@ -162,8 +163,8 @@
                     </tbody>
                     <tfoot class="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
                         <tr>
-                            <td colspan="5" class="px-4 py-3 text-right text-sm font-bold text-slate-900 dark:text-white">Total to Receive</td>
-                            <td class="px-4 py-3 text-right text-sm font-bold text-teal-600 dark:text-teal-400" x-text="calculateTotalToReceive()"></td>
+                            <td colspan="5" class="text-right text-sm font-bold text-slate-900 dark:text-white">Total to Receive</td>
+                            <td class="text-right text-sm font-bold text-teal-600 dark:text-teal-400" x-text="calculateTotalToReceive()"></td>
                             <td></td>
                         </tr>
                     </tfoot>
@@ -174,10 +175,7 @@
         <!-- No PO Selected -->
         <div class="card stagger-in" style="animation-delay: 100ms;" x-show="lines.length === 0 && !formData.po_id" x-transition>
             <div class="p-12 text-center">
-                <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                </svg>
-                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Select a purchase order to view receivable lines</p>
+                {{ empty_state('Select a purchase order', 'Choose a PO to view receivable lines.', 'clipboard') }}
             </div>
         </div>
 
@@ -276,19 +274,19 @@ function goodsReceiptForm() {
         async submitForm() {
             // Validate
             if (!this.formData.po_id) {
-                alert('Please select a purchase order');
+                window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Please select a purchase order', type: 'error' } }));
                 return;
             }
 
             const linesToReceive = this.lines.filter(l => l.quantity_to_receive > 0);
             if (linesToReceive.length === 0) {
-                alert('Please enter quantities to receive');
+                window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Please enter quantities to receive', type: 'error' } }));
                 return;
             }
 
             // Validate warehouse is selected for inventory tracking
             if (!this.formData.warehouse_id) {
-                alert('Please select a warehouse. This is required for inventory tracking.');
+                window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Please select a warehouse. This is required for inventory tracking.', type: 'error' } }));
                 return;
             }
 
@@ -322,12 +320,12 @@ function goodsReceiptForm() {
                     }
                 } else {
                     const errorData = await response.json();
-                    alert(errorData.detail || 'Failed to record goods receipt');
+                    window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: errorData.detail || 'Failed to record goods receipt', type: 'error' } }));
                     this.submitting = false;
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('An error occurred while saving');
+                window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'An error occurred while saving', type: 'error' } }));
                 this.submitting = false;
             }
         }

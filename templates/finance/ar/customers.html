@@ -1,13 +1,15 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import search_autosuggest, pagination, status_badge, empty_state, action_buttons, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, bulk_icon_activate, bulk_icon_deactivate %}
+{% from "components/macros.html" import live_search, pagination, status_badge, empty_state, action_buttons, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, bulk_icon_activate, bulk_icon_deactivate %}
 
 {% block page_title %}Customers{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white">Customers</span>
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Customers</span>
 </nav>
 {% endblock %}
 
@@ -23,7 +25,7 @@
 {% block content %}
 <div class="space-y-6">
     {# Search with Auto-suggest and Filters #}
-    {{ search_autosuggest(
+    {{ live_search(
         search=search,
         entity_type="customers",
         filters=[
@@ -41,9 +43,10 @@
         placeholder="Search customers by name, code, or tax ID..."
     ) }}
 
+    <div id="results-container">
     {# Stats Summary #}
     {% if total_count > 0 %}
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div class="card p-4">
             <p class="text-sm text-slate-500 dark:text-slate-400">Total Customers</p>
             <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ total_count }}</p>
@@ -59,15 +62,15 @@
                     <thead>
                         <tr>
                             {{ bulk_select_header() }}
-                            <th>Customer Code</th>
-                            <th>Customer Name</th>
-                            <th>Tax ID</th>
-                            <th>Payment Terms</th>
-                            <th class="text-right">Credit Limit</th>
-                            <th class="text-right">Balance</th>
-                            <th class="text-center">Status</th>
-                            <th>Created</th>
-                            <th class="text-right">Actions</th>
+                            <th scope="col">Customer Code</th>
+                            <th scope="col">Customer Name</th>
+                            <th scope="col">Tax ID</th>
+                            <th scope="col">Payment Terms</th>
+                            <th scope="col" class="text-right">Credit Limit</th>
+                            <th scope="col" class="text-right">Balance</th>
+                            <th scope="col" class="text-center">Status</th>
+                            <th scope="col">Created</th>
+                            <th scope="col" class="text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -81,6 +84,9 @@
                                 <a href="/finance/ar/customers/{{ customer.customer_id }}" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">
                                     {{ customer.customer_name }}
                                 </a>
+                                {% if customer.trading_name and customer.legal_name and customer.trading_name != customer.legal_name %}
+                                <div class="text-xs text-slate-500 dark:text-slate-400">{{ customer.legal_name }}</div>
+                                {% endif %}
                             </td>
                             <td class="text-slate-600 dark:text-slate-400">{{ customer.tax_id | default("—") }}</td>
                             <td class="text-slate-600 dark:text-slate-400">Net {{ customer.payment_terms_days | default(30) }}</td>
@@ -170,5 +176,6 @@
             entity_name="customers"
         ) }}
     </div>
+    </div>{# /results-container #}
 </div>
 {% endblock %}

@@ -1,15 +1,15 @@
 {% extends "inventory/base_inventory.html" %}
-{% from "components/macros.html" import pagination, empty_state %}
+{% from "components/macros.html" import pagination, empty_state, live_search %}
 
 {% block page_title %}Bill of Materials{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="font-medium text-slate-900 dark:text-white">Bill of Materials</span>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Bill of Materials</span>
 </nav>
 {% endblock %}
 
@@ -80,33 +80,35 @@
         </div>
     </div>
 
-    <!-- Search & Filters -->
-    <div class="card p-4">
-        <form method="get" action="/inventory/boms" class="flex flex-wrap items-center gap-4">
-            <div class="relative flex-1 min-w-[200px]">
-                <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                </svg>
-                <input type="text" name="search" value="{{ search | default('', true) }}"
-                       placeholder="Search by BOM name or item..."
-                       class="form-input pl-10 w-full">
-            </div>
-            <select name="bom_type" class="form-select">
-                <option value="">All Types</option>
-                <option value="ASSEMBLY" {{ 'selected' if bom_type == 'ASSEMBLY' else '' }}>Assembly</option>
-                <option value="DISASSEMBLY" {{ 'selected' if bom_type == 'DISASSEMBLY' else '' }}>Disassembly</option>
-                <option value="KIT" {{ 'selected' if bom_type == 'KIT' else '' }}>Kit</option>
-            </select>
-            <select name="status" class="form-select">
-                <option value="">All Status</option>
-                <option value="active" {{ 'selected' if status == 'active' else '' }}>Active</option>
-                <option value="inactive" {{ 'selected' if status == 'inactive' else '' }}>Inactive</option>
-            </select>
-            <button type="submit" class="btn btn-secondary">Filter</button>
-            <a href="/inventory/boms" class="btn btn-ghost">Clear</a>
-        </form>
-    </div>
+    {# Search & Filters #}
+    {{ live_search(
+        search=search,
+        filters=[
+            {
+                "name": "bom_type",
+                "label": "All Types",
+                "value": bom_type,
+                "options": [
+                    {"value": "ASSEMBLY", "label": "Assembly"},
+                    {"value": "DISASSEMBLY", "label": "Disassembly"},
+                    {"value": "KIT", "label": "Kit"}
+                ]
+            },
+            {
+                "name": "status",
+                "label": "All Status",
+                "value": status,
+                "options": [
+                    {"value": "active", "label": "Active"},
+                    {"value": "inactive", "label": "Inactive"}
+                ]
+            }
+        ],
+        base_url="/inventory/boms",
+        placeholder="Search by BOM name or item..."
+    ) }}
 
+    <div id="results-container">
     <!-- BOMs Table -->
     <div class="card overflow-hidden">
         {% if boms | default([]) | length > 0 %}
@@ -114,14 +116,14 @@
             <table class="table-ledger">
                 <thead>
                     <tr>
-                        <th>BOM Name</th>
-                        <th>Finished Item</th>
-                        <th>Type</th>
-                        <th class="text-right">Qty</th>
-                        <th class="text-right">Components</th>
-                        <th class="text-right">Est. Cost</th>
-                        <th>Status</th>
-                        <th class="w-12"></th>
+                        <th scope="col">BOM Name</th>
+                        <th scope="col">Finished Item</th>
+                        <th scope="col">Type</th>
+                        <th scope="col" class="text-right">Qty</th>
+                        <th scope="col" class="text-right">Components</th>
+                        <th scope="col" class="text-right">Est. Cost</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="w-12"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -184,5 +186,6 @@
     {% if boms | default([]) | length > 0 %}
     {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=50, search=search, filters={"status": status}) }}
     {% endif %}
+    </div>{# /results-container #}
 </div>
 {% endblock %}

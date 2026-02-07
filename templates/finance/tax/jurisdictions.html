@@ -1,43 +1,52 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import status_badge, empty_state %}
 
 {% block page_title %}Tax Jurisdictions{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400">
-    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white">Tax Jurisdictions</span>
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Tax Jurisdictions</span>
 </nav>
 {% endblock %}
 
 {% block content %}
 <div class="space-y-6">
-    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
-        <div class="overflow-x-auto">
-            <table class="w-full">
+    <div class="card">
+        <div class="table-container">
+            <table class="table">
                 <thead>
-                    <tr class="border-b border-slate-200 dark:border-slate-700">
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Code</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Name</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Country</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Level</th>
-                        <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Rate</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Status</th>
+                    <tr>
+                        <th scope="col">Code</th>
+                        <th scope="col">Name</th>
+                        <th scope="col">Country</th>
+                        <th scope="col">Level</th>
+                        <th scope="col" class="text-right">Rate</th>
+                        <th scope="col">Status</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                <tbody>
                     {% for jurisdiction in jurisdictions %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                        <td class="px-6 py-4 text-sm text-slate-900 dark:text-white">{{ jurisdiction.jurisdiction_code }}</td>
-                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ jurisdiction.jurisdiction_name }}</td>
-                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ jurisdiction.country_code }}</td>
-                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ jurisdiction.jurisdiction_level }}</td>
-                        <td class="px-6 py-4 text-right text-sm text-slate-600 dark:text-slate-400">{{ jurisdiction.current_tax_rate }}</td>
-                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ "Active" if jurisdiction.is_active else "Inactive" }}</td>
+                    <tr>
+                        <td class="table-cell-mono">{{ jurisdiction.jurisdiction_code }}</td>
+                        <td>{{ jurisdiction.jurisdiction_name }}</td>
+                        <td>{{ jurisdiction.country_code }}</td>
+                        <td>{{ jurisdiction.jurisdiction_level }}</td>
+                        <td class="table-cell-amount">{{ jurisdiction.current_tax_rate }}</td>
+                        <td>{{ status_badge('active' if jurisdiction.is_active else 'inactive', 'sm') }}</td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="6" class="px-6 py-12 text-center text-sm text-slate-500">No jurisdictions found</td>
+                        <td colspan="6" class="py-12">
+                            {{ empty_state(
+                                'No jurisdictions found',
+                                'Create a jurisdiction to configure tax rules and returns.',
+                                'map'
+                            ) }}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

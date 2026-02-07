@@ -67,7 +67,7 @@
         function copyApiKey() {
             const key = document.getElementById('new-api-key').textContent;
             navigator.clipboard.writeText(key).then(() => {
-                alert('API key copied to clipboard!');
+                window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'API key copied to clipboard!', type: 'success' } }));
             });
         }
     </script>

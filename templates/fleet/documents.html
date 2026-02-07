@@ -4,7 +4,7 @@
 {% block page_title %}Documents{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -13,7 +13,7 @@
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="font-medium text-slate-900 dark:text-white">Documents</span>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Documents</span>
 </nav>
 {% endblock %}
 
@@ -120,13 +120,13 @@
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Vehicle</th>
-                        <th>Type</th>
-                        <th>Document Number</th>
-                        <th>Issue Date</th>
-                        <th>Expiry Date</th>
-                        <th>Status</th>
-                        <th class="text-right">Actions</th>
+                        <th scope="col">Vehicle</th>
+                        <th scope="col">Type</th>
+                        <th scope="col">Document Number</th>
+                        <th scope="col">Issue Date</th>
+                        <th scope="col">Expiry Date</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -159,11 +159,11 @@
                         </td>
                         <td>
                             {% if doc.is_expired %}
-                            <span class="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">Expired</span>
+                            {{ status_badge('EXPIRED', 'sm') }}
                             {% elif doc.days_until_expiry and doc.days_until_expiry <= 30 %}
-                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Expiring Soon</span>
+                            {{ status_badge('EXPIRING_SOON', 'sm') }}
                             {% else %}
-                            <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">Valid</span>
+                            {{ status_badge('VALID', 'sm') }}
                             {% endif %}
                         </td>
                         <td class="text-right">

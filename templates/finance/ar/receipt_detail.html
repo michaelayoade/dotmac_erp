@@ -1,14 +1,19 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import empty_state %}
 
 {% block page_title %}AR Receipt{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400">
-    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/finance/ar/receipts" class="hover:text-primary-600 dark:hover:text-primary-400">AR Receipts</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white">{{ receipt.receipt_number if receipt else "Receipt" }}</span>
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/finance/ar/receipts" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">AR Receipts</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ receipt.receipt_number if receipt else "Receipt" }}</span>
 </nav>
 {% endblock %}
 
@@ -128,37 +133,39 @@
     </div>
     {% endif %}
 
-    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+    <div class="card p-6">
         <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Allocations</h3>
-        <div class="overflow-x-auto">
-            <table class="w-full">
+        <div class="table-container">
+            <table class="table">
                 <thead>
-                    <tr class="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500 dark:border-slate-700">
-                        <th class="px-4 py-3">Invoice</th>
-                        <th class="px-4 py-3 text-right">Allocated</th>
-                        <th class="px-4 py-3 text-right">Discount</th>
-                        <th class="px-4 py-3 text-right">Write-off</th>
-                        <th class="px-4 py-3 text-right">FX Diff</th>
-                        <th class="px-4 py-3">Date</th>
+                    <tr>
+                        <th scope="col">Invoice</th>
+                        <th scope="col" class="text-right">Allocated</th>
+                        <th scope="col" class="text-right">Discount</th>
+                        <th scope="col" class="text-right">Write-off</th>
+                        <th scope="col" class="text-right">FX Diff</th>
+                        <th scope="col">Date</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                <tbody>
                     {% for allocation in allocations %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                        <td class="px-4 py-3">
-                            <a href="/finance/ar/invoices/{{ allocation.invoice_id }}" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                    <tr>
+                        <td>
+                            <a href="/finance/ar/invoices/{{ allocation.invoice_id }}" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">
                                 {{ allocation.invoice_number | default("Invoice") }}
                             </a>
                         </td>
-                        <td class="px-4 py-3 text-right text-sm text-slate-600 dark:text-slate-400">{{ allocation.allocated_amount }}</td>
-                        <td class="px-4 py-3 text-right text-sm text-slate-600 dark:text-slate-400">{{ allocation.discount_taken }}</td>
-                        <td class="px-4 py-3 text-right text-sm text-slate-600 dark:text-slate-400">{{ allocation.write_off_amount }}</td>
-                        <td class="px-4 py-3 text-right text-sm text-slate-600 dark:text-slate-400">{{ allocation.exchange_difference }}</td>
-                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ allocation.allocation_date }}</td>
+                        <td class="table-cell-amount">{{ allocation.allocated_amount }}</td>
+                        <td class="table-cell-amount">{{ allocation.discount_taken }}</td>
+                        <td class="table-cell-amount">{{ allocation.write_off_amount }}</td>
+                        <td class="table-cell-amount">{{ allocation.exchange_difference }}</td>
+                        <td>{{ allocation.allocation_date }}</td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="6" class="px-4 py-8 text-center text-sm text-slate-500">No allocations</td>
+                        <td colspan="6" class="py-12">
+                            {{ empty_state('No allocations', 'This receipt has no allocations yet.', 'document') }}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -172,14 +179,8 @@
     {% include "finance/partials/_attachments.html" %}
 </div>
 {% else %}
-<div class="py-12 text-center">
-    <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-    </svg>
-    <p class="mt-2 text-sm text-slate-500">Receipt not found</p>
-    <a href="/finance/ar/receipts" class="mt-4 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700">
-        Back to AR Receipts
-    </a>
+<div class="py-12">
+    {{ empty_state('Receipt not found', 'The receipt you are looking for is unavailable.', 'document', 'Back to AR Receipts', '/finance/ar/receipts') }}
 </div>
 {% endif %}
 {% endblock %}

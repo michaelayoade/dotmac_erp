@@ -3,14 +3,14 @@
 {% block page_title %}Bid Evaluation - {{ rfq.rfq_number }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
     <a href="/procurement/rfqs" class="hover:text-amber-600 transition-colors">RFQs</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
     <a href="/procurement/rfqs/{{ rfq.rfq_id }}" class="hover:text-amber-600 transition-colors">{{ rfq.rfq_number }}</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-    <span class="font-medium text-slate-900 dark:text-white">Evaluation</span>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Evaluation</span>
 </nav>
 {% endblock %}
 
@@ -63,9 +63,9 @@
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 dark:bg-slate-800/50">
                     <tr>
-                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Criterion</th>
-                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Weight (%)</th>
-                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Max Score</th>
+                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Criterion</th>
+                        <th scope="col" class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Weight (%)</th>
+                        <th scope="col" class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Max Score</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
@@ -92,9 +92,9 @@
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 dark:bg-slate-800/50">
                     <tr>
-                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Criterion</th>
+                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Criterion</th>
                         {% for resp in responses %}
-                        <th class="px-4 py-3 text-center font-medium text-slate-600 dark:text-slate-400">{{ resp.vendor_name }}</th>
+                        <th scope="col" class="px-4 py-3 text-center font-medium text-slate-600 dark:text-slate-400">{{ resp.vendor_name }}</th>
                         {% endfor %}
                     </tr>
                 </thead>

@@ -3,12 +3,12 @@
 {% block page_title %}Expenses{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="text-slate-700 dark:text-slate-300">Expenses</span>
+    <span class="text-slate-700 dark:text-slate-300" aria-current="page">Expenses</span>
 </nav>
 {% endblock %}
 
@@ -87,15 +87,15 @@
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Number</th>
-                        <th>Date</th>
-                        <th>Description</th>
-                        <th>Payee</th>
-                        <th>Account</th>
-                        <th class="text-right">Amount</th>
-                        <th>Method</th>
-                        <th>Status</th>
-                        <th></th>
+                        <th scope="col">Number</th>
+                        <th scope="col">Date</th>
+                        <th scope="col">Description</th>
+                        <th scope="col">Payee</th>
+                        <th scope="col">Account</th>
+                        <th scope="col" class="text-right">Amount</th>
+                        <th scope="col">Method</th>
+                        <th scope="col">Status</th>
+                        <th scope="col"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -129,7 +129,7 @@
                         </td>
                         <td>
                             <div class="table-actions">
-                                <a href="/expense/{{ exp.expense_id }}" class="table-action-btn" title="View">
+                                <a href="/expense/{{ exp.expense_id }}" class="table-action-btn" title="View" aria-label="View">
                                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>

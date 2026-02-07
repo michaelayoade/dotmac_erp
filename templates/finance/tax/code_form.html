@@ -457,12 +457,12 @@
 {% endblock %}
 
 {% block breadcrumbs %}
-<nav class="breadcrumb flex items-center gap-2">
+<nav class="breadcrumb flex items-center gap-2" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-emerald-600">Dashboard</a>
     <span>/</span>
     <a href="/finance/tax/codes" class="hover:text-emerald-600">Tax Codes</a>
     <span>/</span>
-    <span class="current">{{ "Edit" if tax_code else "New Tax Code" }}</span>
+    <span class="current" aria-current="page">{{ "Edit" if tax_code else "New Tax Code" }}</span>
 </nav>
 {% endblock %}
 

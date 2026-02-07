@@ -501,12 +501,12 @@
 {% endblock %}
 
 {% block breadcrumbs %}
-<nav class="breadcrumb flex items-center gap-2">
+<nav class="breadcrumb flex items-center gap-2" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-emerald-600">Dashboard</a>
     <span>/</span>
     <a href="/finance/ar/invoices" class="hover:text-emerald-600">AR Invoices</a>
     <span>/</span>
-    <span class="current">{{ "Edit" if invoice else "New Invoice" }}</span>
+    <span class="current" aria-current="page">{{ "Edit" if invoice else "New Invoice" }}</span>
 </nav>
 {% endblock %}
 
@@ -658,25 +658,36 @@
                 <table class="lines-table min-w-[900px]">
                     <thead>
                         <tr>
-                            <th style="width: 20%">Revenue Account</th>
-                            <th style="width: 22%">Description</th>
-                            <th class="text-right" style="width: 8%">Qty</th>
-                            <th class="text-right" style="width: 12%">Unit Price</th>
-                            <th style="width: 14%">Tax Code</th>
-                            <th class="text-right" style="width: 14%">Amount</th>
-                            <th class="text-right" style="width: 10%"></th>
+                            <th scope="col" style="width: 20%">Item</th>
+                            <th scope="col" style="width: 20%">Revenue Account</th>
+                            <th scope="col" style="width: 22%">Description</th>
+                            <th scope="col" class="text-right" style="width: 8%">Qty</th>
+                            <th scope="col" class="text-right" style="width: 12%">Unit Price</th>
+                            <th scope="col" style="width: 14%">Tax Code</th>
+                            <th scope="col" class="text-right" style="width: 14%">Amount</th>
+                            <th scope="col" class="text-right" style="width: 10%"></th>
                         </tr>
                     </thead>
                     <tbody>
                         <template x-for="(line, index) in form.lines" :key="index">
                             <tr>
                                 <td>
+                                    <select x-model="line.item_id"
+                                            @change="applyItemDefaults(index)"
+                                            class="table-input">
+                                        <option value="">Select item</option>
+                                        {% for item in items %}
+                                        <option value="{{ item.item_id }}">{{ item.item_code }} - {{ item.item_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td>
                                     <select x-model="line.revenue_account_id"
                                             required
                                             class="table-input">
                                         <option value="">Select account</option>
                                         {% for account in revenue_accounts %}
-                                        <option value="{{ account.account_id }}">{{ account.account_code }} - {{ account.account_name }}</option>
+                                        <option value="{{ account.account_id }}">{{ account.account_name }} ({{ account.account_code }})</option>
                                         {% endfor %}
                                     </select>
                                 </td>
@@ -711,7 +722,7 @@
                                         <button type="button"
                                                 @click="taxOpen = !taxOpen"
                                                 class="table-input text-left flex items-center justify-between gap-2">
-                                            <span x-text="getTaxLabels(line.tax_code_ids)" class="truncate">No Tax</span>
+                                            <span x-text="getTaxLabels(line.tax_code_ids)" class="truncate">Select tax code</span>
                                             <svg class="w-4 h-4 flex-shrink-0 transition-transform" :class="{ 'rotate-180': taxOpen }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                                             </svg>
@@ -720,13 +731,6 @@
                                              @click.away="taxOpen = false"
                                              x-cloak
                                              class="absolute z-50 mt-1 w-64 bg-white dark:bg-[var(--ink)] border border-gray-200 dark:border-white/10 rounded-lg shadow-lg py-2 max-h-48 overflow-y-auto">
-                                            <label class="flex items-center px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer">
-                                                <input type="checkbox"
-                                                       :checked="!line.tax_code_ids || line.tax_code_ids.length === 0"
-                                                       @change="if($event.target.checked) { line.tax_code_ids = []; calculateLineTaxes(index); }"
-                                                       class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
-                                                <span class="ml-2 text-sm text-[var(--ink)] dark:text-white">No Tax</span>
-                                            </label>
                                             {% for tax in tax_codes %}
                                             <label class="flex items-center px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer">
                                                 <input type="checkbox"
@@ -883,6 +887,19 @@ const taxCodeData = {
     {% endfor %}
 };
 
+// Item lookup data
+const itemData = {
+    {% for item in items %}
+    '{{ item.item_id }}': {
+        code: '{{ item.item_code }}',
+        name: '{{ item.item_name }}',
+        list_price: {{ item.list_price if item.list_price is not none else 'null' }},
+        revenue_account_id: '{{ item.revenue_account_id or "" }}',
+        tax_code_id: '{{ item.tax_code_id or "" }}'
+    },
+    {% endfor %}
+};
+
 function invoiceForm() {
     return {
         form: {
@@ -897,7 +914,7 @@ function invoiceForm() {
             terms: '{{ invoice.terms if invoice else "" }}',
             notes: '{{ invoice.notes if invoice else "" }}',
             lines: [
-                { revenue_account_id: '', description: '', quantity: 1, unit_price: 0, amount: 0, tax_code_ids: [], tax_amount: 0, tax_details: [] }
+                { item_id: '', revenue_account_id: '', description: '', quantity: 1, unit_price: 0, amount: 0, tax_code_ids: [], tax_amount: 0, tax_details: [] }
             ]
         },
         paymentTermsDays: 30,
@@ -916,6 +933,7 @@ function invoiceForm() {
             this.form.lines = [
                 {% for line in invoice.lines %}
                 {
+                    item_id: '{{ line.item_id or "" }}',
                     revenue_account_id: '{{ line.revenue_account_id }}',
                     description: '{{ line.description }}',
                     quantity: {{ line.quantity }},
@@ -946,7 +964,7 @@ function invoiceForm() {
 
         formatCurrency(amount) {
             const currency = this.form.currency_code || '{{ default_currency_code }}';
-            return new Intl.NumberFormat('en-US', {
+            return new Intl.NumberFormat('en-NG', {
                 style: 'currency',
                 currency: currency
             }).format(amount || 0);
@@ -995,6 +1013,7 @@ function invoiceForm() {
 
         addLine() {
             this.form.lines.push({
+                item_id: '',
                 revenue_account_id: '',
                 description: '',
                 quantity: 1,
@@ -1014,10 +1033,33 @@ function invoiceForm() {
             }
         },
 
+        applyItemDefaults(index) {
+            const line = this.form.lines[index];
+            if (!line.item_id || !itemData[line.item_id]) {
+                return;
+            }
+            const item = itemData[line.item_id];
+            if (!line.description) {
+                line.description = item.name || '';
+            }
+            if (!line.unit_price || line.unit_price === 0) {
+                if (item.list_price !== null && item.list_price !== undefined) {
+                    line.unit_price = item.list_price;
+                }
+            }
+            if (!line.revenue_account_id && item.revenue_account_id) {
+                line.revenue_account_id = item.revenue_account_id;
+            }
+            if ((!line.tax_code_ids || line.tax_code_ids.length === 0) && item.tax_code_id) {
+                line.tax_code_ids = [item.tax_code_id];
+            }
+            this.calculateLineTaxes(index);
+        },
+
         // Get display labels for selected tax codes
         getTaxLabels(taxCodeIds) {
             if (!taxCodeIds || taxCodeIds.length === 0) {
-                return 'No Tax';
+                return 'Select tax code';
             }
             return taxCodeIds.map(id => taxCodeData[id]?.code || id).join(', ');
         },
@@ -1157,6 +1199,13 @@ function invoiceForm() {
             if (this.form.lines.length === 0 || this.form.lines.every(l => !l.revenue_account_id)) {
                 window.dispatchEvent(new CustomEvent('show-toast', {
                     detail: { message: 'Please add at least one invoice line', type: 'error' }
+                }));
+                return;
+            }
+            const missingTax = this.form.lines.some(l => !l.tax_code_ids || l.tax_code_ids.length === 0);
+            if (missingTax) {
+                window.dispatchEvent(new CustomEvent('show-toast', {
+                    detail: { message: 'Please select a tax code for each line', type: 'error' }
                 }));
                 return;
             }

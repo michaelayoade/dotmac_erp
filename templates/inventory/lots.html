@@ -1,15 +1,15 @@
 {% extends "inventory/base_inventory.html" %}
-{% from "components/macros.html" import pagination, empty_state, status_badge %}
+{% from "components/macros.html" import pagination, empty_state, status_badge, live_search %}
 
 {% block page_title %}Lots & Serial Numbers{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="font-medium text-slate-900 dark:text-white">Lots & Serial Numbers</span>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Lots & Serial Numbers</span>
 </nav>
 {% endblock %}
 
@@ -86,37 +86,36 @@
     </div>
     {% endif %}
 
-    <!-- Search & Filters -->
-    <div class="card p-4">
-        <form method="get" action="/inventory/lots" class="flex flex-wrap items-center gap-4">
-            <div class="relative flex-1 min-w-[200px]">
-                <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                </svg>
-                <input type="text" name="search" value="{{ search | default('', true) }}"
-                       placeholder="Search by lot number or item..."
-                       class="form-input pl-10 w-full">
-            </div>
-            <select name="status" class="form-select">
-                <option value="">All Status</option>
-                <option value="available" {{ 'selected' if status == 'available' else '' }}>Available</option>
-                <option value="quarantine" {{ 'selected' if status == 'quarantine' else '' }}>Quarantined</option>
-                <option value="expired" {{ 'selected' if status == 'expired' else '' }}>Expired</option>
-                <option value="depleted" {{ 'selected' if status == 'depleted' else '' }}>Depleted</option>
-            </select>
-            <select name="warehouse" class="form-select">
-                <option value="">All Warehouses</option>
-                {% for wh in warehouses | default([]) %}
-                <option value="{{ wh.warehouse_id }}" {{ 'selected' if warehouse == wh.warehouse_id|string else '' }}>
-                    {{ wh.warehouse_name }}
-                </option>
-                {% endfor %}
-            </select>
-            <button type="submit" class="btn btn-secondary">Filter</button>
-            <a href="/inventory/lots" class="btn btn-ghost">Clear</a>
-        </form>
-    </div>
+    {# Search & Filters #}
+    {% call(search_attrs) live_search(
+        search=search,
+        filters=[
+            {
+                "name": "status",
+                "label": "All Status",
+                "value": status,
+                "options": [
+                    {"value": "available", "label": "Available"},
+                    {"value": "quarantine", "label": "Quarantined"},
+                    {"value": "expired", "label": "Expired"},
+                    {"value": "depleted", "label": "Depleted"}
+                ]
+            }
+        ],
+        base_url="/inventory/lots",
+        placeholder="Search by lot number or item..."
+    ) %}
+        <select name="warehouse" class="form-select" {{ search_attrs }}>
+            <option value="">All Warehouses</option>
+            {% for wh in warehouses | default([]) %}
+            <option value="{{ wh.warehouse_id }}" {{ 'selected' if warehouse == wh.warehouse_id|string else '' }}>
+                {{ wh.warehouse_name }}
+            </option>
+            {% endfor %}
+        </select>
+    {% endcall %}
 
+    <div id="results-container">
     <!-- Lots Table -->
     <div class="card overflow-hidden">
         {% if lots | default([]) | length > 0 %}
@@ -124,14 +123,14 @@
             <table class="table-ledger">
                 <thead>
                     <tr>
-                        <th>Lot Number</th>
-                        <th>Item</th>
-                        <th>Warehouse</th>
-                        <th class="text-right">Initial Qty</th>
-                        <th class="text-right">Remaining</th>
-                        <th>Expiry Date</th>
-                        <th>Status</th>
-                        <th class="w-12"></th>
+                        <th scope="col">Lot Number</th>
+                        <th scope="col">Item</th>
+                        <th scope="col">Warehouse</th>
+                        <th scope="col" class="text-right">Initial Qty</th>
+                        <th scope="col" class="text-right">Remaining</th>
+                        <th scope="col">Expiry Date</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="w-12"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -189,5 +188,6 @@
     {% if lots | default([]) | length > 0 %}
     {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=50, search=search, filters={"status": status}) }}
     {% endif %}
+    </div>{# /results-container #}
 </div>
 {% endblock %}

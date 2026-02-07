@@ -3,12 +3,12 @@
 {% block page_title %}Virements{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
     <span class="mx-2">/</span>
     <a href="/finance" class="hover:text-primary-600 dark:hover:text-primary-400">Finance</a>
     <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white">Virements</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Virements</span>
 </nav>
 {% endblock %}
 
@@ -50,12 +50,12 @@
             <table class="w-full text-sm">
                 <thead>
                     <tr class="border-b border-slate-200 dark:border-slate-700">
-                        <th class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Number</th>
-                        <th class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Description</th>
-                        <th class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Status</th>
-                        <th class="px-6 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Amount</th>
-                        <th class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Created</th>
-                        <th class="px-6 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Actions</th>
+                        <th scope="col" class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Number</th>
+                        <th scope="col" class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Description</th>
+                        <th scope="col" class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Status</th>
+                        <th scope="col" class="px-6 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Amount</th>
+                        <th scope="col" class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Created</th>
+                        <th scope="col" class="px-6 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">

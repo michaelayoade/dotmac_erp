@@ -3,12 +3,12 @@
 {% block page_title %}Vendor Prequalification - {{ vendor.supplier_name }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
     <a href="/procurement/vendors" class="hover:text-amber-600 transition-colors">Vendors</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-    <span class="font-medium text-slate-900 dark:text-white">{{ vendor.supplier_name }}</span>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ vendor.supplier_name }}</span>
 </nav>
 {% endblock %}
 
@@ -114,10 +114,10 @@
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 dark:bg-slate-800/50">
                     <tr>
-                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Category</th>
-                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Weight (%)</th>
-                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Score</th>
-                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Weighted</th>
+                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Category</th>
+                        <th scope="col" class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Weight (%)</th>
+                        <th scope="col" class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Score</th>
+                        <th scope="col" class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Weighted</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
@@ -153,10 +153,10 @@
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 dark:bg-slate-800/50">
                     <tr>
-                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Contract</th>
-                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Value</th>
-                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Period</th>
-                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Rating</th>
+                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Contract</th>
+                        <th scope="col" class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Value</th>
+                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Period</th>
+                        <th scope="col" class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Rating</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">

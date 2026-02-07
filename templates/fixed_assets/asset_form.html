@@ -3,7 +3,7 @@
 {% block page_title %}New Asset{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -12,7 +12,7 @@
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="font-medium text-slate-900 dark:text-white">New</span>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">New</span>
 </nav>
 {% endblock %}
 
@@ -162,8 +162,8 @@
         </div>
 
         <div class="flex items-center justify-end gap-3">
-            <a href="/fixed-assets/assets" class="btn-outline">Cancel</a>
-            <button type="submit" class="btn-primary">Create Asset</button>
+            <a href="/fixed-assets/assets" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Create Asset</button>
         </div>
     </form>
 </div>

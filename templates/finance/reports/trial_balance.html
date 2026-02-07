@@ -3,7 +3,7 @@
 {% block page_title %}Trial balance{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -12,7 +12,7 @@
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="text-slate-700 dark:text-slate-300">Trial balance</span>
+    <span class="text-slate-700 dark:text-slate-300" aria-current="page">Trial balance</span>
 </nav>
 {% endblock %}
 
@@ -78,10 +78,10 @@
             <table class="w-full text-sm">
                 <thead>
                     <tr class="border-b-2 border-slate-300 dark:border-slate-600">
-                        <th class="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-300">Account Code</th>
-                        <th class="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-300">Account Name</th>
-                        <th class="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-300">Debit</th>
-                        <th class="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-300">Credit</th>
+                        <th scope="col" class="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-300">Account Code</th>
+                        <th scope="col" class="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-300">Account Name</th>
+                        <th scope="col" class="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-300">Debit</th>
+                        <th scope="col" class="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-300">Credit</th>
                     </tr>
                 </thead>
                 <tbody>

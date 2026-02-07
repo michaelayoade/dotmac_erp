@@ -3,12 +3,12 @@
 {% block page_title %}RRR {{ rrr.rrr if rrr else 'Detail' }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/finance/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
     <span class="mx-2">/</span>
     <a href="/finance/remita" class="hover:text-primary-600 dark:hover:text-primary-400">Remita RRRs</a>
     <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white">{{ rrr.rrr if rrr else 'Not Found' }}</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">{{ rrr.rrr if rrr else 'Not Found' }}</span>
 </nav>
 {% endblock %}
 
@@ -265,7 +265,7 @@
                        class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 <div class="mt-2 grid gap-2 sm:grid-cols-3">
                     <div>
-                        <label for="source_status" class="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
+                        <label for="source_status" class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
                             Status
                         </label>
                         <select id="source_status"
@@ -274,14 +274,14 @@
                         </select>
                     </div>
                     <div>
-                        <label for="source_date_from" class="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
+                        <label for="source_date_from" class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
                             Date From
                         </label>
                         <input type="date" id="source_date_from"
                                class="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
                     <div>
-                        <label for="source_date_to" class="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
+                        <label for="source_date_to" class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
                             Date To
                         </label>
                         <input type="date" id="source_date_to"

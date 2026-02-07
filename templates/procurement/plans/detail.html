@@ -3,12 +3,12 @@
 {% block page_title %}{{ plan.title }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
     <a href="/procurement/plans" class="hover:text-amber-600 transition-colors">Plans</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-    <span class="font-medium text-slate-900 dark:text-white">{{ plan.plan_number }}</span>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ plan.plan_number }}</span>
 </nav>
 {% endblock %}
 
@@ -38,12 +38,12 @@
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 dark:bg-slate-800/50">
                     <tr>
-                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">#</th>
-                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Description</th>
-                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Method</th>
-                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Quarter</th>
-                        <th class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Est. Value</th>
-                        <th class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Status</th>
+                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">#</th>
+                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Description</th>
+                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Method</th>
+                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Quarter</th>
+                        <th scope="col" class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Est. Value</th>
+                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Status</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">

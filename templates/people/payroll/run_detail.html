@@ -1,4 +1,5 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import status_badge %}
 
 {% block page_title %}Payroll Run {{ entry.entry_number }}{% endblock %}
 
@@ -31,19 +32,7 @@
         <div>
             <div class="flex items-center gap-3">
                 <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ entry.entry_number }}</h1>
-                {% if entry.status.value == "DRAFT" %}
-                <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">Draft</span>
-                {% elif entry.status.value == "SLIPS_CREATED" %}
-                <span class="inline-flex rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">Slips Created</span>
-                {% elif entry.status.value == "SUBMITTED" %}
-                <span class="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Submitted</span>
-                {% elif entry.status.value == "APPROVED" %}
-                <span class="inline-flex rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">Approved</span>
-                {% elif entry.status.value == "POSTED" %}
-                <span class="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Posted</span>
-                {% elif entry.status.value == "CANCELLED" %}
-                <span class="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">Cancelled</span>
-                {% endif %}
+                {{ status_badge(entry.status.value, 'sm') }}
             </div>
             <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
                 {{ entry.start_date.strftime('%d %b %Y') if entry.start_date else '' }} - {{ entry.end_date.strftime('%d %b %Y') if entry.end_date else '' }}
@@ -273,13 +262,13 @@
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Employee</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Slip Number</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Gross Pay</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Deductions</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Net Pay</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Actions</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Employee</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Slip Number</th>
+                        <th scope="col" class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Gross Pay</th>
+                        <th scope="col" class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Deductions</th>
+                        <th scope="col" class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Net Pay</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
+                        <th scope="col" class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">

@@ -58,7 +58,7 @@
                 </label>
                 <div id="file-info" class="hidden mt-2 flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/30 rounded-lg">
                     <span id="file-name" class="text-sm text-green-700 dark:text-green-300"></span>
-                    <button type="button" id="remove-file" class="text-green-600 hover:text-green-800">
+                    <button type="button" id="remove-file" class="text-green-600 hover:text-green-800" aria-label="Close">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                         </svg>
@@ -178,12 +178,12 @@
                 <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                     <thead class="bg-slate-50 dark:bg-slate-700">
                         <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Account</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Type</th>
-                            <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Debit</th>
-                            <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Credit</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Matched To</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Account</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Type</th>
+                            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Debit</th>
+                            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Credit</th>
+                            <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Matched To</th>
                         </tr>
                     </thead>
                     <tbody id="lines-table-body" class="divide-y divide-slate-200 dark:divide-slate-700"></tbody>
@@ -255,11 +255,11 @@ previewBtn.addEventListener('click', async function() {
     const entryDate = document.getElementById('entry_date').value;
 
     if (!file) {
-        alert('Please select a file first');
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Please select a file first', type: 'error' } }));
         return;
     }
     if (!entryDate) {
-        alert('Please select an opening balance date');
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Please select an opening balance date', type: 'error' } }));
         return;
     }
 
@@ -281,10 +281,10 @@ previewBtn.addEventListener('click', async function() {
         if (response.ok) {
             showPreview(result);
         } else {
-            alert('Preview failed: ' + (result.detail || 'Unknown error'));
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Preview failed: ' + (result.detail || 'Unknown error'), type: 'error' } }));
         }
     } catch (error) {
-        alert('Preview failed: ' + error.message);
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Preview failed: ' + error.message, type: 'error' } }));
     } finally {
         previewBtn.disabled = false;
         previewBtn.textContent = 'Preview';
@@ -367,11 +367,11 @@ uploadForm.addEventListener('submit', async function(e) {
     const description = document.getElementById('description').value;
 
     if (!file) {
-        alert('Please select a file first');
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Please select a file first', type: 'error' } }));
         return;
     }
     if (!entryDate) {
-        alert('Please select an opening balance date');
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Please select an opening balance date', type: 'error' } }));
         return;
     }
 
@@ -395,10 +395,10 @@ uploadForm.addEventListener('submit', async function(e) {
             showResult(result);
         } else {
             const errors = result.errors || [result.detail?.message || result.detail || 'Unknown error'];
-            alert('Import failed:\n' + errors.join('\n'));
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Import failed:\n' + errors.join('\n'), type: 'error' } }));
         }
     } catch (error) {
-        alert('Import failed: ' + error.message);
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Import failed: ' + error.message, type: 'error' } }));
     } finally {
         importBtn.disabled = false;
         importBtn.textContent = 'Import Opening Balance';

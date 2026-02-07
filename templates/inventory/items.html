@@ -1,15 +1,15 @@
 {% extends "inventory/base_inventory.html" %}
-{% from "components/macros.html" import status_badge, search_filter_bar, pagination, action_buttons, empty_state, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, bulk_icon_activate, bulk_icon_deactivate %}
+{% from "components/macros.html" import status_badge, live_search, pagination, action_buttons, empty_state, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, bulk_icon_activate, bulk_icon_deactivate %}
 
 {% block page_title %}Inventory Items{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="font-medium text-slate-900 dark:text-white">Inventory Items</span>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Inventory Items</span>
 </nav>
 {% endblock %}
 
@@ -80,45 +80,37 @@
         </div>
     </div>
 
-    <!-- Search & Filters -->
-    <div class="card p-4">
-        <form method="get" action="/inventory/items" class="flex flex-wrap items-center gap-4">
-            <div class="relative flex-1 min-w-[200px]">
-                <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                </svg>
-                <input type="text" name="search" value="{{ search }}"
-                       placeholder="Search by code, name, or barcode..."
-                       class="form-input pl-10 w-full">
-            </div>
-            <select name="category" class="form-select">
-                <option value="">All Categories</option>
-                {% for cat in categories %}
-                <option value="{{ cat.category_id }}" {{ 'selected' if category == cat.category_id|string else '' }}>
-                    {{ cat.category_code }} - {{ cat.category_name }}
-                </option>
-                {% endfor %}
-            </select>
-            <select name="status" class="form-select">
-                <option value="">All Status</option>
-                <option value="active" {{ 'selected' if status == 'active' else '' }}>Active</option>
-                <option value="inactive" {{ 'selected' if status == 'inactive' else '' }}>Inactive</option>
-            </select>
-            <button type="submit" class="btn btn-secondary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                </svg>
-                Filter
-            </button>
-            {% if search or category or status %}
-            <a href="/inventory/items" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
-                Clear filters
-            </a>
-            {% endif %}
-        </form>
-    </div>
+    {# Search and Filters #}
+    {% call(search_attrs) live_search(
+        search=search,
+        entity_type="items",
+        filters=[
+            {
+                "name": "status",
+                "label": "All Status",
+                "value": status,
+                "options": [
+                    {"value": "active", "label": "Active"},
+                    {"value": "inactive", "label": "Inactive"},
+                    {"value": "discontinued", "label": "Discontinued"}
+                ]
+            }
+        ],
+        base_url="/inventory/items",
+        placeholder="Search by code, name, or barcode..."
+    ) %}
+        <select name="category" class="form-select" {{ search_attrs }}>
+            <option value="">All Categories</option>
+            {% for cat in categories %}
+            <option value="{{ cat.category_id }}" {{ 'selected' if category == cat.category_id|string else '' }}>
+                {{ cat.category_code }} - {{ cat.category_name }}
+            </option>
+            {% endfor %}
+        </select>
+    {% endcall %}
 
-    <!-- Items Table with Bulk Selection -->
+    <div id="results-container">
+    {# Items Table with Bulk Selection #}
     <div x-data="bulkActions({ entityName: 'items' })">
         <div class="card">
             <div class="table-container">
@@ -126,15 +118,15 @@
                     <thead>
                         <tr>
                             {{ bulk_select_header() }}
-                            <th>Item Code</th>
-                            <th>Item Name</th>
-                            <th>Category</th>
-                            <th>Type</th>
-                            <th class="text-right">List Price</th>
-                            <th class="text-right">On Hand</th>
-                            <th class="text-right">Available</th>
-                            <th>Status</th>
-                            <th class="text-right">Actions</th>
+                            <th scope="col">Item Code</th>
+                            <th scope="col">Item Name</th>
+                            <th scope="col">Category</th>
+                            <th scope="col">Type</th>
+                            <th scope="col" class="text-right">List Price</th>
+                            <th scope="col" class="text-right">On Hand</th>
+                            <th scope="col" class="text-right">Available</th>
+                            <th scope="col">Status</th>
+                            <th scope="col" class="text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -272,5 +264,6 @@
             entity_name="items"
         ) }}
     </div>
+    </div>{# /results-container #}
 </div>
 {% endblock %}

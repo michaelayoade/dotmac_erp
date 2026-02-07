@@ -366,12 +366,12 @@
 {% endblock %}
 
 {% block breadcrumbs %}
-<nav class="breadcrumb flex items-center gap-2">
+<nav class="breadcrumb flex items-center gap-2" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-emerald-600">Dashboard</a>
     <span>/</span>
     <a href="/finance/ar/customers" class="hover:text-emerald-600">Customers</a>
     <span>/</span>
-    <span class="current">{{ "Edit" if customer else "New Customer" }}</span>
+    <span class="current" aria-current="page">{{ "Edit" if customer else "New Customer" }}</span>
 </nav>
 {% endblock %}
 
@@ -426,17 +426,16 @@
                 <!-- Customer Code -->
                 <div>
                     <label for="customer_code" class="form-label">
-                        Customer Code <span class="required">*</span>
+                        Customer Code (Auto)
                     </label>
                     <input type="text"
                            id="customer_code"
                            name="customer_code"
                            value="{{ customer.customer_code if customer else '' }}"
-                           required
                            maxlength="30"
-                           placeholder="e.g., CUST-001"
+                           placeholder="Leave blank to auto-generate"
                            class="form-input">
-                    <p class="form-help">Unique identifier for this customer</p>
+                    <p class="form-help">Leave blank to auto-generate a unique code</p>
                 </div>
 
                 <!-- Customer Name -->
@@ -466,6 +465,21 @@
                            maxlength="50"
                            placeholder="e.g., 12-3456789"
                            class="form-input">
+                </div>
+
+                <!-- VAT Category -->
+                <div>
+                    <label for="vat_category" class="form-label">
+                        VAT Category
+                    </label>
+                    {% set selected_vat = customer.vat_category if customer and customer.vat_category else 'STANDARD' %}
+                    <select id="vat_category" name="vat_category" class="form-input form-select">
+                        <option value="STANDARD" {{ 'selected' if selected_vat == 'STANDARD' else '' }}>Standard Rated</option>
+                        <option value="ZERO_RATED" {{ 'selected' if selected_vat == 'ZERO_RATED' else '' }}>Zero Rated</option>
+                        <option value="EXEMPT" {{ 'selected' if selected_vat == 'EXEMPT' else '' }}>Exempt</option>
+                        <option value="OUT_OF_SCOPE" {{ 'selected' if selected_vat == 'OUT_OF_SCOPE' else '' }}>Out of Scope</option>
+                    </select>
+                    <p class="form-help">Used to determine VAT treatment on sales</p>
                 </div>
 
                 <!-- Currency -->
@@ -516,7 +530,7 @@
                         Credit Limit
                     </label>
                     <div class="relative">
-                        <span class="input-prefix">$</span>
+                        <span class="input-prefix">{{ presentation_currency_code or default_currency_code }}</span>
                         <input type="number"
                                id="credit_limit"
                                name="credit_limit"
@@ -563,7 +577,7 @@
                         <option value="">Select account</option>
                         {% for account in revenue_accounts %}
                         <option value="{{ account.account_id }}" {{ 'selected' if customer and customer.default_revenue_account_id == account.account_id else '' }}>
-                            {{ account.account_code }} - {{ account.account_name }}
+                            {{ account.account_name }} ({{ account.account_code }})
                         </option>
                         {% endfor %}
                     </select>
@@ -580,7 +594,7 @@
                         <option value="">Select account</option>
                         {% for account in receivable_accounts %}
                         <option value="{{ account.account_id }}" {{ 'selected' if customer and customer.default_receivable_account_id == account.account_id else '' }}>
-                            {{ account.account_code }} - {{ account.account_name }}
+                            {{ account.account_name }} ({{ account.account_code }})
                         </option>
                         {% endfor %}
                     </select>

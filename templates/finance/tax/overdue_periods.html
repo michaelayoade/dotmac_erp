@@ -1,55 +1,57 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import status_badge, empty_state %}
 
 {% block page_title %}Overdue Tax Periods{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400">
-    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white">Overdue Tax Periods</span>
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Overdue Tax Periods</span>
 </nav>
 {% endblock %}
 
 {% block content %}
 <div class="space-y-6">
-    <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
+    <div class="card p-4">
         <form method="get" class="flex flex-wrap items-center gap-4">
-            <div>
-                <label class="text-sm text-slate-500">As of</label>
+            <div class="flex items-center gap-2">
+                <label class="text-sm text-slate-500 dark:text-slate-400">As of</label>
                 <input type="date" name="as_of_date" value="{{ as_of_date | default('', true) }}" data-testid="tax-overdue-date"
-                       class="ml-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                       class="form-input">
             </div>
-            <button type="submit"
-                    class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
-                Refresh
-            </button>
+            <button type="submit" class="btn btn-secondary">Refresh</button>
         </form>
     </div>
 
-    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
-        <div class="overflow-x-auto">
-            <table class="w-full" data-testid="tax-overdue-table">
+    <div class="card">
+        <div class="table-container">
+            <table class="table" data-testid="tax-overdue-table">
                 <thead>
-                    <tr class="border-b border-slate-200 dark:border-slate-700">
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Period</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Start</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">End</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Due</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                    <tr>
+                        <th scope="col">Period</th>
+                        <th scope="col">Start</th>
+                        <th scope="col">End</th>
+                        <th scope="col">Due</th>
+                        <th scope="col">Status</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                <tbody>
                     {% for period in overdue_periods %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                        <td class="px-6 py-4 text-sm text-slate-900 dark:text-white">{{ period.period_name }}</td>
-                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ period.start_date }}</td>
-                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ period.end_date }}</td>
-                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ period.due_date }}</td>
-                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ period.status | replace('_', ' ') | title }}</td>
+                    <tr>
+                        <td>{{ period.period_name }}</td>
+                        <td>{{ period.start_date }}</td>
+                        <td>{{ period.end_date }}</td>
+                        <td>{{ period.due_date }}</td>
+                        <td>{{ status_badge(period.status, 'sm') }}</td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" class="px-6 py-12 text-center text-sm text-slate-500">No overdue periods</td>
+                        <td colspan="5" class="py-12">
+                            {{ empty_state('No overdue periods', 'All tax periods are currently up to date.', 'check-circle') }}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

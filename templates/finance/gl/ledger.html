@@ -3,12 +3,12 @@
 {% block page_title %}General Ledger{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
     <span class="mx-2">/</span>
     <a href="/finance/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Finance</a>
     <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white">General Ledger</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">General Ledger</span>
 </nav>
 {% endblock %}
 
@@ -107,17 +107,17 @@
             <table class="w-full table-ledger">
                 <thead>
                     <tr class="border-b border-slate-200 dark:border-slate-700">
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Date</th>
+                        <th scope="col" class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Date</th>
                         {% if not selected_account %}
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Account</th>
+                        <th scope="col" class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Account</th>
                         {% endif %}
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Journal #</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Description</th>
-                        <th class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Reference</th>
-                        <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 table-cell-debit">Debit</th>
-                        <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 table-cell-credit">Credit</th>
+                        <th scope="col" class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Journal #</th>
+                        <th scope="col" class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Description</th>
+                        <th scope="col" class="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Reference</th>
+                        <th scope="col" class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 table-cell-debit">Debit</th>
+                        <th scope="col" class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 table-cell-credit">Credit</th>
                         {% if show_balance_column %}
-                        <th class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Balance</th>
+                        <th scope="col" class="px-6 py-4 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Balance</th>
                         {% endif %}
                     </tr>
                 </thead>

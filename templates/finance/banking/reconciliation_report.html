@@ -1,20 +1,25 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import empty_state %}
 
 {% block page_title %}Reconciliation Report{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400">
-    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/finance/banking/reconciliations" class="hover:text-primary-600 dark:hover:text-primary-400">Reconciliations</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white">Report</span>
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/finance/banking/reconciliations" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Reconciliations</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Report</span>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <button onclick="window.print()"
-        class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25 btn-hover print:hidden">
+        class="btn btn-primary print:hidden">
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
     </svg>
@@ -26,7 +31,7 @@
 {% if report %}
 <div class="space-y-6 print:space-y-4">
     <!-- Report Header -->
-    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50 print:border-0 print:p-0">
+    <div class="card p-6 print:border-0 print:p-0">
         {% include "partials/_document_header.html" with {
             "doc_title": "Bank Reconciliation Report",
             "doc_number": report.reconciliation.reconciliation_date
@@ -50,25 +55,25 @@
     </div>
 
     <!-- Summary Section -->
-    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50 print:border print:border-slate-300">
+    <div class="card p-6 print:border print:border-slate-300">
         <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Reconciliation Summary</h2>
 
         <div class="grid gap-4 sm:grid-cols-2 print:grid-cols-2">
             <!-- Statement Side -->
             <div class="border-r border-slate-200 pr-4 dark:border-slate-700">
                 <h3 class="text-sm font-medium text-slate-500 mb-3">Per Bank Statement</h3>
-                <table class="w-full text-sm">
+                <table class="table">
                     <tr>
                         <td class="py-1 text-slate-600">Statement Closing Balance</td>
                         <td class="py-1 text-right font-medium text-slate-900 dark:text-white">{{ report.summary.statement_balance }}</td>
                     </tr>
                     <tr class="border-t border-slate-100">
                         <td class="py-1 text-slate-600">Less: Outstanding Payments</td>
-                        <td class="py-1 text-right font-medium text-red-600">-{{ report.outstanding_payments.total }}</td>
+                        <td class="py-1 text-right font-medium text-rose-600">-{{ report.outstanding_payments.total }}</td>
                     </tr>
                     <tr class="border-t border-slate-100">
                         <td class="py-1 text-slate-600">Add: Outstanding Deposits</td>
-                        <td class="py-1 text-right font-medium text-green-600">+{{ report.outstanding_deposits.total }}</td>
+                        <td class="py-1 text-right font-medium text-emerald-600">+{{ report.outstanding_deposits.total }}</td>
                     </tr>
                     <tr class="border-t-2 border-slate-200">
                         <td class="py-2 font-medium text-slate-900 dark:text-white">Adjusted Bank Balance</td>
@@ -80,7 +85,7 @@
             <!-- GL Side -->
             <div class="pl-4">
                 <h3 class="text-sm font-medium text-slate-500 mb-3">Per General Ledger</h3>
-                <table class="w-full text-sm">
+                <table class="table">
                     <tr>
                         <td class="py-1 text-slate-600">GL Closing Balance</td>
                         <td class="py-1 text-right font-medium text-slate-900 dark:text-white">{{ report.summary.gl_balance }}</td>
@@ -101,7 +106,7 @@
         <div class="mt-6 pt-4 border-t-2 border-slate-200 dark:border-slate-700">
             <div class="flex justify-between items-center">
                 <span class="text-lg font-medium text-slate-900 dark:text-white">Reconciliation Difference</span>
-                <span class="text-xl font-bold {{ 'text-green-600' if report.summary.is_reconciled else 'text-red-600' }}">
+                <span class="text-xl font-bold {{ 'text-emerald-600' if report.summary.is_reconciled else 'text-rose-600' }}">
                     {{ report.summary.difference }}
                     {% if report.summary.is_reconciled %}
                     <svg class="inline-block ml-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -111,42 +116,44 @@
                 </span>
             </div>
             {% if report.summary.is_reconciled %}
-            <p class="mt-2 text-sm text-green-600">The bank account is fully reconciled.</p>
+            <p class="mt-2 text-sm text-emerald-600">The bank account is fully reconciled.</p>
             {% else %}
-            <p class="mt-2 text-sm text-red-600">There is an unreconciled difference that needs to be investigated.</p>
+            <p class="mt-2 text-sm text-rose-600">There is an unreconciled difference that needs to be investigated.</p>
             {% endif %}
         </div>
     </div>
 
     <!-- Matched Items -->
-    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50 print:border print:border-slate-300 print:break-inside-avoid">
+    <div class="card print:border print:border-slate-300 print:break-inside-avoid">
         <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Matched Items ({{ report.matched_items.count }})</h2>
             <p class="text-sm text-slate-500">Total: {{ report.matched_items.total }}</p>
         </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
+        <div class="table-container">
+            <table class="table">
                 <thead>
-                    <tr class="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
-                        <th class="px-4 py-2 text-left font-medium text-slate-500">Date</th>
-                        <th class="px-4 py-2 text-left font-medium text-slate-500">Description</th>
-                        <th class="px-4 py-2 text-right font-medium text-slate-500">Statement</th>
-                        <th class="px-4 py-2 text-right font-medium text-slate-500">GL</th>
-                        <th class="px-4 py-2 text-left font-medium text-slate-500">Type</th>
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Description</th>
+                        <th scope="col" class="text-right">Statement</th>
+                        <th scope="col" class="text-right">GL</th>
+                        <th scope="col">Type</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                <tbody>
                     {% for item in report.matched_items.items %}
                     <tr>
-                        <td class="px-4 py-2 text-slate-600">{{ item.transaction_date }}</td>
-                        <td class="px-4 py-2 text-slate-900 dark:text-white">{{ item.description | default("-") }}</td>
-                        <td class="px-4 py-2 text-right text-slate-900 dark:text-white">{{ item.statement_amount | default("-") }}</td>
-                        <td class="px-4 py-2 text-right text-slate-900 dark:text-white">{{ item.gl_amount | default("-") }}</td>
-                        <td class="px-4 py-2 text-slate-600">{{ item.match_type | title }}</td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ item.transaction_date }}</td>
+                        <td class="text-slate-900 dark:text-white">{{ item.description | default("-") }}</td>
+                        <td class="table-cell-amount text-slate-900 dark:text-white">{{ item.statement_amount | default("-") }}</td>
+                        <td class="table-cell-amount text-slate-900 dark:text-white">{{ item.gl_amount | default("-") }}</td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ item.match_type | title }}</td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" class="px-4 py-4 text-center text-slate-500">No matched items</td>
+                        <td colspan="5" class="py-12">
+                            {{ empty_state('No matched items', 'There are no matched transactions for this report.', 'link') }}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -155,32 +162,34 @@
     </div>
 
     <!-- Outstanding Deposits -->
-    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50 print:border print:border-slate-300 print:break-inside-avoid">
+    <div class="card print:border print:border-slate-300 print:break-inside-avoid">
         <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Outstanding Deposits ({{ report.outstanding_deposits.count }})</h2>
-            <p class="text-sm text-green-600">Total: +{{ report.outstanding_deposits.total }}</p>
+            <p class="text-sm text-emerald-600">Total: +{{ report.outstanding_deposits.total }}</p>
         </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
+        <div class="table-container">
+            <table class="table">
                 <thead>
-                    <tr class="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
-                        <th class="px-4 py-2 text-left font-medium text-slate-500">Date</th>
-                        <th class="px-4 py-2 text-left font-medium text-slate-500">Description</th>
-                        <th class="px-4 py-2 text-left font-medium text-slate-500">Reference</th>
-                        <th class="px-4 py-2 text-right font-medium text-slate-500">Amount</th>
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Description</th>
+                        <th scope="col">Reference</th>
+                        <th scope="col" class="text-right">Amount</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                <tbody>
                     {% for item in report.outstanding_deposits.items %}
                     <tr>
-                        <td class="px-4 py-2 text-slate-600">{{ item.transaction_date }}</td>
-                        <td class="px-4 py-2 text-slate-900 dark:text-white">{{ item.description | default("-") }}</td>
-                        <td class="px-4 py-2 text-slate-600">{{ item.reference | default("-") }}</td>
-                        <td class="px-4 py-2 text-right font-medium text-green-600">+{{ item.statement_amount or item.gl_amount }}</td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ item.transaction_date }}</td>
+                        <td class="text-slate-900 dark:text-white">{{ item.description | default("-") }}</td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ item.reference | default("-") }}</td>
+                        <td class="table-cell-amount text-emerald-600 dark:text-emerald-400">+{{ item.statement_amount or item.gl_amount }}</td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="4" class="px-4 py-4 text-center text-slate-500">No outstanding deposits</td>
+                        <td colspan="4" class="py-12">
+                            {{ empty_state('No outstanding deposits', 'There are no outstanding deposits.', 'inbox') }}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -189,32 +198,34 @@
     </div>
 
     <!-- Outstanding Payments -->
-    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50 print:border print:border-slate-300 print:break-inside-avoid">
+    <div class="card print:border print:border-slate-300 print:break-inside-avoid">
         <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Outstanding Payments ({{ report.outstanding_payments.count }})</h2>
-            <p class="text-sm text-red-600">Total: -{{ report.outstanding_payments.total }}</p>
+            <p class="text-sm text-rose-600">Total: -{{ report.outstanding_payments.total }}</p>
         </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
+        <div class="table-container">
+            <table class="table">
                 <thead>
-                    <tr class="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
-                        <th class="px-4 py-2 text-left font-medium text-slate-500">Date</th>
-                        <th class="px-4 py-2 text-left font-medium text-slate-500">Description</th>
-                        <th class="px-4 py-2 text-left font-medium text-slate-500">Reference</th>
-                        <th class="px-4 py-2 text-right font-medium text-slate-500">Amount</th>
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Description</th>
+                        <th scope="col">Reference</th>
+                        <th scope="col" class="text-right">Amount</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                <tbody>
                     {% for item in report.outstanding_payments.items %}
                     <tr>
-                        <td class="px-4 py-2 text-slate-600">{{ item.transaction_date }}</td>
-                        <td class="px-4 py-2 text-slate-900 dark:text-white">{{ item.description | default("-") }}</td>
-                        <td class="px-4 py-2 text-slate-600">{{ item.reference | default("-") }}</td>
-                        <td class="px-4 py-2 text-right font-medium text-red-600">-{{ item.statement_amount or item.gl_amount }}</td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ item.transaction_date }}</td>
+                        <td class="text-slate-900 dark:text-white">{{ item.description | default("-") }}</td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ item.reference | default("-") }}</td>
+                        <td class="table-cell-amount text-rose-600 dark:text-rose-400">-{{ item.statement_amount or item.gl_amount }}</td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="4" class="px-4 py-4 text-center text-slate-500">No outstanding payments</td>
+                        <td colspan="4" class="py-12">
+                            {{ empty_state('No outstanding payments', 'There are no outstanding payments.', 'inbox') }}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -224,28 +235,28 @@
 
     <!-- Adjustments -->
     {% if report.adjustments.count > 0 %}
-    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50 print:border print:border-slate-300 print:break-inside-avoid">
+    <div class="card print:border print:border-slate-300 print:break-inside-avoid">
         <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Adjustments ({{ report.adjustments.count }})</h2>
             <p class="text-sm text-slate-500">Total: {{ report.adjustments.total }}</p>
         </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
+        <div class="table-container">
+            <table class="table">
                 <thead>
-                    <tr class="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
-                        <th class="px-4 py-2 text-left font-medium text-slate-500">Date</th>
-                        <th class="px-4 py-2 text-left font-medium text-slate-500">Description</th>
-                        <th class="px-4 py-2 text-left font-medium text-slate-500">Type</th>
-                        <th class="px-4 py-2 text-right font-medium text-slate-500">Amount</th>
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Description</th>
+                        <th scope="col">Type</th>
+                        <th scope="col" class="text-right">Amount</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                <tbody>
                     {% for item in report.adjustments.items %}
                     <tr>
-                        <td class="px-4 py-2 text-slate-600">{{ item.transaction_date }}</td>
-                        <td class="px-4 py-2 text-slate-900 dark:text-white">{{ item.description | default("-") }}</td>
-                        <td class="px-4 py-2 text-slate-600">{{ item.adjustment_type | default("-") }}</td>
-                        <td class="px-4 py-2 text-right font-medium text-slate-900 dark:text-white">{{ item.statement_amount or item.gl_amount }}</td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ item.transaction_date }}</td>
+                        <td class="text-slate-900 dark:text-white">{{ item.description | default("-") }}</td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ item.adjustment_type | default("-") }}</td>
+                        <td class="table-cell-amount text-slate-900 dark:text-white">{{ item.statement_amount or item.gl_amount }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -255,7 +266,7 @@
     {% endif %}
 
     <!-- Approval Section -->
-    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50 print:border print:border-slate-300">
+    <div class="card p-6 print:border print:border-slate-300">
         <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Approvals</h2>
 
         <div class="grid gap-6 sm:grid-cols-3 print:grid-cols-3">
@@ -293,14 +304,8 @@
     </div>
 </div>
 {% else %}
-<div class="py-12 text-center">
-    <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-    </svg>
-    <p class="mt-2 text-sm text-slate-500">Report not found</p>
-    <a href="/finance/banking/reconciliations" class="mt-4 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700">
-        Back to Reconciliations
-    </a>
+<div class="py-12">
+    {{ empty_state('Report not found', 'We could not find this reconciliation report.', 'document', 'Back to Reconciliations', '/finance/banking/reconciliations') }}
 </div>
 {% endif %}
 {% endblock %}

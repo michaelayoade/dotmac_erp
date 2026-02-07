@@ -3,12 +3,12 @@
 {% block page_title %}Tax summary by type{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400">
+<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
     <span class="mx-2">/</span>
     <a href="/finance/reports" class="hover:text-primary-600 dark:hover:text-primary-400">Reports</a>
     <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white">Tax summary</span>
+    <span class="text-slate-900 dark:text-white" aria-current="page">Tax summary</span>
 </nav>
 {% endblock %}
 
@@ -72,13 +72,13 @@
             <table class="w-full">
                 <thead>
                     <tr class="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500 dark:border-slate-700">
-                        <th class="px-6 py-3">Tax Type</th>
-                        <th class="px-6 py-3 text-right">Output Tax</th>
-                        <th class="px-6 py-3 text-right">Input Tax</th>
-                        <th class="px-6 py-3 text-right">WHT Collected</th>
-                        <th class="px-6 py-3 text-right">WHT Deducted</th>
-                        <th class="px-6 py-3 text-right">Net Position</th>
-                        <th class="px-6 py-3 text-right">Transactions</th>
+                        <th scope="col" class="px-6 py-3">Tax Type</th>
+                        <th scope="col" class="px-6 py-3 text-right">Output Tax</th>
+                        <th scope="col" class="px-6 py-3 text-right">Input Tax</th>
+                        <th scope="col" class="px-6 py-3 text-right">WHT Collected</th>
+                        <th scope="col" class="px-6 py-3 text-right">WHT Deducted</th>
+                        <th scope="col" class="px-6 py-3 text-right">Net Position</th>
+                        <th scope="col" class="px-6 py-3 text-right">Transactions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">

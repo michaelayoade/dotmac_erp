@@ -1,14 +1,19 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import empty_state, status_badge %}
 
 {% block page_title %}Bank Statement{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400">
-    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/finance/banking/statements" class="hover:text-primary-600 dark:hover:text-primary-400">Statements</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white">{{ statement.statement_number if statement else "Detail" }}</span>
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/finance/banking/statements" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Statements</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ statement.statement_number if statement else "Detail" }}</span>
 </nav>
 {% endblock %}
 
@@ -16,20 +21,14 @@
 {% if statement %}
 <div class="space-y-6">
     <!-- Statement Header -->
-    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+    <div class="card p-6">
         <div class="flex items-start justify-between">
             <div>
                 <h2 class="text-xl font-semibold text-slate-900 dark:text-white">Statement #{{ statement.statement_number }}</h2>
                 <p class="mt-1 text-sm text-slate-500">{{ statement.statement_date }}</p>
             </div>
             <div class="text-right">
-                {% if statement.status == 'reconciled' %}
-                <span class="inline-flex rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Reconciled</span>
-                {% elif statement.status == 'in_progress' %}
-                <span class="inline-flex rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">In Progress</span>
-                {% else %}
-                <span class="inline-flex rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Imported</span>
-                {% endif %}
+                {{ status_badge(statement.status | default('imported'), 'sm') }}
             </div>
         </div>
 
@@ -50,7 +49,7 @@
                 <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Match Rate</p>
                 <div class="mt-1 flex items-center gap-2">
                     <div class="flex-1 h-2 rounded-full bg-slate-200 dark:bg-slate-700">
-                        <div class="h-2 rounded-full bg-green-500" style="width: {{ (statement.matched_lines / statement.total_lines * 100) if statement.total_lines else 0 }}%"></div>
+                        <div class="h-2 rounded-full bg-emerald-500" style="width: {{ (statement.matched_lines / statement.total_lines * 100) if statement.total_lines else 0 }}%"></div>
                     </div>
                     <span class="text-sm font-medium text-slate-900 dark:text-white">{{ ((statement.matched_lines / statement.total_lines * 100) | int if statement.total_lines else 0) }}%</span>
                 </div>
@@ -59,50 +58,50 @@
     </div>
 
     <!-- Statement Lines -->
-    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+    <div class="card">
         <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
             <div class="flex items-center justify-between">
                 <h3 class="font-medium text-slate-900 dark:text-white">Transaction Lines</h3>
                 <div class="flex items-center gap-4 text-sm text-slate-500">
                     <span>Total: {{ statement.total_lines }}</span>
-                    <span class="text-green-600">Matched: {{ statement.matched_lines }}</span>
-                    <span class="text-yellow-600">Unmatched: {{ statement.unmatched_lines }}</span>
+                    <span class="text-emerald-600 dark:text-emerald-400">Matched: {{ statement.matched_lines }}</span>
+                    <span class="text-amber-600 dark:text-amber-400">Unmatched: {{ statement.unmatched_lines }}</span>
                 </div>
             </div>
         </div>
 
-        <div class="overflow-x-auto">
-            <table class="w-full">
+        <div class="table-container">
+            <table class="table">
                 <thead>
-                    <tr class="border-b border-slate-200 dark:border-slate-700">
-                        <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">#</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Date</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Description</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Reference</th>
-                        <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Amount</th>
-                        <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Balance</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Status</th>
+                    <tr>
+                        <th scope="col">#</th>
+                        <th scope="col">Date</th>
+                        <th scope="col">Description</th>
+                        <th scope="col">Reference</th>
+                        <th scope="col" class="text-right">Amount</th>
+                        <th scope="col" class="text-right">Balance</th>
+                        <th scope="col">Status</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                <tbody>
                     {% for line in lines %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                        <td class="px-6 py-3 text-sm text-slate-500">{{ line.line_number }}</td>
-                        <td class="px-6 py-3 text-sm text-slate-600 dark:text-slate-400">{{ line.transaction_date }}</td>
-                        <td class="px-6 py-3">
+                    <tr>
+                        <td class="text-sm text-slate-500">{{ line.line_number }}</td>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">{{ line.transaction_date }}</td>
+                        <td>
                             <p class="text-sm text-slate-900 dark:text-white">{{ line.description | default("-") }}</p>
                             {% if line.payee_payer %}
                             <p class="text-xs text-slate-500">{{ line.payee_payer }}</p>
                             {% endif %}
                         </td>
-                        <td class="px-6 py-3 text-sm text-slate-600 dark:text-slate-400">{{ line.reference | default(line.bank_reference) | default("-") }}</td>
-                        <td class="px-6 py-3 text-right text-sm font-medium {{ 'text-green-600' if line.transaction_type == 'credit' else 'text-red-600' }}">
+                        <td class="text-sm text-slate-600 dark:text-slate-400">{{ line.reference | default(line.bank_reference) | default("-") }}</td>
+                        <td class="table-cell-amount {{ 'text-emerald-600 dark:text-emerald-400' if line.transaction_type == 'credit' else 'text-rose-600 dark:text-rose-400' }}">
                             {{ "+" if line.transaction_type == 'credit' else "-" }}{{ line.amount }}
                         </td>
-                        <td class="px-6 py-3 text-right text-sm text-slate-600 dark:text-slate-400">{{ line.running_balance | default("-") }}</td>
-                        <td class="px-6 py-3">
+                        <td class="table-cell-amount text-slate-600 dark:text-slate-400">{{ line.running_balance | default("-") }}</td>
+                        <td>
                             {% if line.is_matched %}
-                            <span class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                            <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
                                 <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                                 </svg>
@@ -115,7 +114,9 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="7" class="px-6 py-12 text-center text-sm text-slate-500">No transaction lines</td>
+                        <td colspan="7" class="py-12">
+                            {{ empty_state('No transaction lines', 'This statement has no lines to show.', 'document') }}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -125,29 +126,23 @@
 
     <!-- Summary -->
     <div class="grid gap-4 sm:grid-cols-3">
-        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+        <div class="card p-4">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Credits</p>
-            <p class="mt-1 text-xl font-bold text-green-600 dark:text-green-400">+{{ statement.total_credits }}</p>
+            <p class="mt-1 text-xl font-bold text-emerald-600 dark:text-emerald-400">+{{ statement.total_credits }}</p>
         </div>
-        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+        <div class="card p-4">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Debits</p>
-            <p class="mt-1 text-xl font-bold text-red-600 dark:text-red-400">-{{ statement.total_debits }}</p>
+            <p class="mt-1 text-xl font-bold text-rose-600 dark:text-rose-400">-{{ statement.total_debits }}</p>
         </div>
-        <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/50">
+        <div class="card p-4">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Net Change</p>
             <p class="mt-1 text-xl font-bold text-slate-900 dark:text-white">{{ statement.closing_balance - statement.opening_balance if statement else 0 }}</p>
         </div>
     </div>
 </div>
 {% else %}
-<div class="py-12 text-center">
-    <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-    </svg>
-    <p class="mt-2 text-sm text-slate-500">Statement not found</p>
-    <a href="/finance/banking/statements" class="mt-4 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700">
-        Back to Statements
-    </a>
+<div class="py-12">
+    {{ empty_state('Statement not found', 'The statement you are looking for is unavailable.', 'document', 'Back to Statements', '/finance/banking/statements') }}
 </div>
 {% endif %}
 {% endblock %}

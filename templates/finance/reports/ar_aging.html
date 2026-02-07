@@ -3,7 +3,7 @@
 {% block page_title %}AR aging report{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -12,7 +12,7 @@
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="text-slate-700 dark:text-slate-300">AR aging</span>
+    <span class="text-slate-700 dark:text-slate-300" aria-current="page">AR aging</span>
 </nav>
 {% endblock %}
 
@@ -82,11 +82,11 @@
                     <table class="w-full text-sm">
                         <thead class="bg-slate-50 dark:bg-slate-800/50">
                             <tr>
-                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
-                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Customer</th>
-                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Due Date</th>
-                                <th class="text-center py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Days</th>
-                                <th class="text-right py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
+                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
+                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Customer</th>
+                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Due Date</th>
+                                <th scope="col" class="text-center py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Days</th>
+                                <th scope="col" class="text-right py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -122,11 +122,11 @@
                     <table class="w-full text-sm">
                         <thead class="bg-slate-50 dark:bg-slate-800/50">
                             <tr>
-                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
-                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Customer</th>
-                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Due Date</th>
-                                <th class="text-center py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Days</th>
-                                <th class="text-right py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
+                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
+                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Customer</th>
+                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Due Date</th>
+                                <th scope="col" class="text-center py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Days</th>
+                                <th scope="col" class="text-right py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -162,11 +162,11 @@
                     <table class="w-full text-sm">
                         <thead class="bg-slate-50 dark:bg-slate-800/50">
                             <tr>
-                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
-                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Customer</th>
-                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Due Date</th>
-                                <th class="text-center py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Days</th>
-                                <th class="text-right py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
+                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
+                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Customer</th>
+                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Due Date</th>
+                                <th scope="col" class="text-center py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Days</th>
+                                <th scope="col" class="text-right py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -202,11 +202,11 @@
                     <table class="w-full text-sm">
                         <thead class="bg-slate-50 dark:bg-slate-800/50">
                             <tr>
-                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
-                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Customer</th>
-                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Due Date</th>
-                                <th class="text-center py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Days</th>
-                                <th class="text-right py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
+                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
+                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Customer</th>
+                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Due Date</th>
+                                <th scope="col" class="text-center py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Days</th>
+                                <th scope="col" class="text-right py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -242,11 +242,11 @@
                     <table class="w-full text-sm">
                         <thead class="bg-slate-50 dark:bg-slate-800/50">
                             <tr>
-                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
-                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Customer</th>
-                                <th class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Due Date</th>
-                                <th class="text-center py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Days</th>
-                                <th class="text-right py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
+                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
+                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Customer</th>
+                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Due Date</th>
+                                <th scope="col" class="text-center py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Days</th>
+                                <th scope="col" class="text-right py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
                             </tr>
                         </thead>
                         <tbody>

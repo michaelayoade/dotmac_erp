@@ -1,14 +1,19 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import status_badge, empty_state %}
 
 {% block page_title %}Bank Account{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400">
-    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/finance/banking/accounts" class="hover:text-primary-600 dark:hover:text-primary-400">Bank Accounts</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white">{{ account.account_name if account else "Detail" }}</span>
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/finance/banking/accounts" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Bank Accounts</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ account.account_name if account else "Detail" }}</span>
 </nav>
 {% endblock %}
 
@@ -16,14 +21,14 @@
 {% if account %}
 <div class="flex items-center gap-2">
     <a href="/finance/banking/statements/import?account_id={{ account.bank_account_id }}"
-       class="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800">
+       class="btn btn-secondary">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
         </svg>
         Import Statement
     </a>
     <a href="/finance/banking/reconciliations/new?account_id={{ account.bank_account_id }}"
-       class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25 btn-hover">
+       class="btn btn-primary">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
@@ -37,7 +42,7 @@
 {% if account %}
 <div class="space-y-6">
     <!-- Account Header -->
-    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+    <div class="card p-6">
         <div class="flex items-start justify-between">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-primary-100 dark:bg-primary-900/30">
@@ -51,15 +56,9 @@
                 </div>
             </div>
             <div class="flex items-center gap-3">
-                {% if account.status == 'active' %}
-                <span class="inline-flex rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Active</span>
-                {% elif account.status == 'inactive' %}
-                <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">Inactive</span>
-                {% else %}
-                <span class="inline-flex rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">Closed</span>
-                {% endif %}
+                {{ status_badge(account.status | upper, 'sm') }}
                 <a href="/finance/banking/accounts/{{ account.bank_account_id }}/edit"
-                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700">
+                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700" aria-label="Edit">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                     </svg>
@@ -71,7 +70,7 @@
     <!-- Account Details Grid -->
     <div class="grid gap-6 lg:grid-cols-2">
         <!-- Account Information -->
-        <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="card p-6">
             <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Account Information</h3>
 
             <dl class="space-y-3">
@@ -109,7 +108,7 @@
         </div>
 
         <!-- Balances & Reconciliation -->
-        <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="card p-6">
             <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Balances & Reconciliation</h3>
 
             <dl class="space-y-3">
@@ -141,7 +140,7 @@
 
     <!-- Contact Information -->
     {% if account.contact_name or account.contact_phone or account.contact_email %}
-    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+    <div class="card p-6">
         <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Contact Information</h3>
 
         <div class="grid gap-4 sm:grid-cols-3">
@@ -169,21 +168,72 @@
 
     <!-- Notes -->
     {% if account.notes %}
-    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+    <div class="card p-6">
         <h3 class="mb-2 text-lg font-medium text-slate-900 dark:text-white">Notes</h3>
         <p class="text-sm text-slate-600 dark:text-slate-400">{{ account.notes | sanitize_html }}</p>
     </div>
     {% endif %}
+
+    <!-- Recent Transactions -->
+    <div class="card">
+        <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+            <div class="flex items-center justify-between">
+                <h3 class="font-medium text-slate-900 dark:text-white">Recent Transactions</h3>
+                <a href="/finance/banking/statements?account_id={{ account.bank_account_id }}"
+                   class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">
+                    View statements
+                </a>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Description</th>
+                        <th scope="col">Reference</th>
+                        <th scope="col">Statement</th>
+                        <th scope="col" class="text-right">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for line in transactions %}
+                    <tr>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">{{ line.transaction_date }}</td>
+                        <td>
+                            <p class="text-sm text-slate-900 dark:text-white">{{ line.description | default("-") }}</p>
+                            {% if line.payee_payer %}
+                            <p class="text-xs text-slate-500">{{ line.payee_payer }}</p>
+                            {% endif %}
+                        </td>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">{{ line.reference | default(line.bank_reference) | default("-") }}</td>
+                        <td>
+                            <a href="/finance/banking/statements/{{ line.statement_id }}"
+                               class="text-sm font-mono text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                                {{ line.statement_number }}
+                            </a>
+                            <p class="text-xs text-slate-500">{{ line.statement_date }}</p>
+                        </td>
+                        <td class="table-cell-amount {{ 'text-emerald-600 dark:text-emerald-400' if line.transaction_type == 'credit' else 'text-rose-600 dark:text-rose-400' }}">
+                            {{ "+" if line.transaction_type == 'credit' else "-" }}{{ line.amount }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="py-12">
+                            {{ empty_state('No transactions yet', 'Transactions will appear here once statements are imported.', 'document') }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 {% else %}
-<div class="py-12 text-center">
-    <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-    </svg>
-    <p class="mt-2 text-sm text-slate-500">Bank account not found</p>
-    <a href="/finance/banking/accounts" class="mt-4 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700">
-        Back to Bank Accounts
-    </a>
+<div class="py-12">
+    {{ empty_state('Bank account not found', 'The account you are looking for is unavailable.', 'document', 'Back to Bank Accounts', '/finance/banking/accounts') }}
 </div>
 {% endif %}
 {% endblock %}
