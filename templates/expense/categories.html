@@ -1,5 +1,5 @@
 {% extends "expense/base_expense.html" %}
-{% from "components/macros.html" import pagination, empty_state %}
+{% from "components/macros.html" import live_search, pagination, empty_state %}
 
 {% block content %}
 <div class="space-y-6">
@@ -16,45 +16,37 @@
         </a>
     </div>
 
-    <div class="card p-4">
-        <form method="get" class="flex flex-wrap items-end gap-4">
-            <div class="min-w-[220px]">
-                <label class="form-label">Search</label>
-                <input type="text" name="search" value="{{ search }}" class="form-input" placeholder="Code or name">
-            </div>
-            <div class="min-w-[160px]">
-                <label class="form-label">Status</label>
-                <select name="is_active" class="form-input form-select">
-                    <option value="">All Status</option>
-                    <option value="true" {{ 'selected' if is_active == True else '' }}>Active</option>
-                    <option value="false" {{ 'selected' if is_active == False else '' }}>Inactive</option>
-                </select>
-            </div>
-            <button type="submit" class="btn btn-secondary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                </svg>
-                Filter
-            </button>
-            {% if search or is_active is not none %}
-            <a href="/expense/categories" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300">Clear filters</a>
-            {% endif %}
-        </form>
-    </div>
+    {{ live_search(
+        search=search,
+        filters=[
+            {
+                "name": "is_active",
+                "label": "All Status",
+                "value": is_active if is_active is not none else "",
+                "options": [
+                    {"value": "true", "label": "Active"},
+                    {"value": "false", "label": "Inactive"}
+                ]
+            }
+        ],
+        base_url="/expense/categories",
+        placeholder="Search categories..."
+    ) }}
 
+    <div id="results-container">
     <div class="card overflow-hidden">
         {% if categories %}
         <div class="table-container">
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Code</th>
-                        <th>Name</th>
-                        <th>Expense Account</th>
-                        <th class="text-right">Max per Claim</th>
-                        <th>Receipt Required</th>
-                        <th>Status</th>
-                        <th></th>
+                        <th scope="col">Code</th>
+                        <th scope="col">Name</th>
+                        <th scope="col">Expense Account</th>
+                        <th scope="col" class="text-right">Max per Claim</th>
+                        <th scope="col">Receipt Required</th>
+                        <th scope="col">Status</th>
+                        <th scope="col"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -91,7 +83,7 @@
                                 </a>
                                 {% if category.is_active %}
                                 <form method="post" action="/expense/categories/{{ category.category_id }}/delete" onsubmit="return confirm('Deactivate this category?');">
-                                    <button type="submit" class="table-action-btn text-rose-600 hover:text-rose-700" title="Deactivate">
+                                    <button type="submit" class="table-action-btn text-rose-600 hover:text-rose-700" title="Deactivate" aria-label="Deactivate">
                                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6m-7 0a1 1 0 01-1-1V4a1 1 0 011-1h6a1 1 0 011 1v2a1 1 0 01-1 1"/>
                                         </svg>
@@ -116,5 +108,6 @@
         ) }}
         {% endif %}
     </div>
+    </div>{# /results-container #}
 </div>
 {% endblock %}

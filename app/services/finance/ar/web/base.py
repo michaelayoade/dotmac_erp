@@ -115,6 +115,7 @@ def customer_option_view(customer: Customer) -> dict:
         "customer_code": customer.customer_code,
         "currency_code": customer.currency_code,
         "payment_terms_days": customer.credit_terms_days,
+        "default_tax_code_id": customer.default_tax_code_id,
     }
 
 
@@ -126,6 +127,7 @@ def customer_form_view(customer: Customer) -> dict:
         "customer_code": customer.customer_code,
         "customer_name": customer_display_name(customer),
         "tax_id": customer.tax_identification_number,
+        "default_tax_code_id": customer.default_tax_code_id,
         "currency_code": customer.currency_code,
         "payment_terms_days": customer.credit_terms_days,
         "credit_limit": customer.credit_limit,
@@ -151,6 +153,8 @@ def customer_list_view(
         "customer_id": customer.customer_id,
         "customer_code": customer.customer_code,
         "customer_name": customer_display_name(customer),
+        "legal_name": customer.legal_name,
+        "trading_name": customer.trading_name,
         "tax_id": customer.tax_identification_number,
         "payment_terms_days": customer.credit_terms_days,
         "credit_limit": format_currency(
@@ -177,6 +181,7 @@ def customer_detail_view(customer: Customer, balance: Decimal) -> dict:
         "customer_code": customer.customer_code,
         "customer_name": customer_display_name(customer),
         "tax_id": customer.tax_identification_number,
+        "default_tax_code_id": customer.default_tax_code_id,
         "currency_code": customer.currency_code,
         "payment_terms_days": customer.credit_terms_days,
         "credit_limit": format_currency(

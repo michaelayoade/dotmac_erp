@@ -40,6 +40,7 @@ from app.services.finance.ar.web.base import (
 )
 from app.services.finance.common.attachment import AttachmentInput, attachment_service
 from app.services.finance.platform.currency_context import get_currency_context
+from app.services.finance.tax.tax_master import tax_code_service
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -57,7 +58,8 @@ class CustomerWebService:
             customer_code=form_data.get("customer_code", ""),
             customer_type=parse_customer_type(form_data.get("customer_type")),
             customer_name=form_data.get("customer_name", ""),
-            trading_name=form_data.get("customer_name"),
+            trading_name=form_data.get("trading_name")
+            or form_data.get("customer_name", ""),
             tax_id=form_data.get("tax_id"),
             currency_code=form_data.get(
                 "currency_code",
@@ -75,6 +77,11 @@ class CustomerWebService:
             default_revenue_account_id=(
                 UUID(form_data["default_revenue_account_id"])
                 if form_data.get("default_revenue_account_id")
+                else None
+            ),
+            default_tax_code_id=(
+                UUID(form_data["default_tax_code_id"])
+                if form_data.get("default_tax_code_id")
                 else None
             ),
             billing_address={
@@ -223,11 +230,26 @@ class CustomerWebService:
 
         revenue_accounts = get_accounts(db, org_id, IFRSCategory.REVENUE)
         receivable_accounts = get_accounts(db, org_id, IFRSCategory.ASSETS, "AR")
+        tax_codes = [
+            {
+                "tax_code_id": str(tax.tax_code_id),
+                "tax_code": tax.tax_code,
+                "tax_name": tax.tax_name,
+            }
+            for tax in tax_code_service.list(
+                db,
+                organization_id=org_id,
+                is_active=True,
+                applies_to_sales=True,
+                limit=200,
+            )
+        ]
 
         context = {
             "customer": customer_view,
             "revenue_accounts": revenue_accounts,
             "receivable_accounts": receivable_accounts,
+            "tax_codes": tax_codes,
         }
         context.update(get_currency_context(db, organization_id))
 
@@ -254,6 +276,15 @@ class CustomerWebService:
 
         if not customer or customer.organization_id != org_id:
             return {"customer": None, "open_invoices": []}
+
+        default_tax_code_label = None
+        if customer.default_tax_code_id:
+            try:
+                tax_code = tax_code_service.get(db, str(customer.default_tax_code_id))
+                if tax_code and tax_code.organization_id == org_id:
+                    default_tax_code_label = f"{tax_code.tax_code} - {tax_code.tax_name}"
+            except Exception:
+                default_tax_code_label = None
 
         open_statuses = [
             InvoiceStatus.POSTED,
@@ -336,8 +367,14 @@ class CustomerWebService:
             "customer_detail_context: found %d open invoices", len(open_invoices)
         )
 
+        customer_view = customer_detail_view(customer, balance)
+        customer_view["default_tax_code_label"] = default_tax_code_label
+        customer_view["default_tax_code_id"] = (
+            str(customer.default_tax_code_id) if customer.default_tax_code_id else None
+        )
+
         return {
-            "customer": customer_detail_view(customer, balance),
+            "customer": customer_view,
             "open_invoices": open_invoices,
             "attachments": attachments_view,
         }

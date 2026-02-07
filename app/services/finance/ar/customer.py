@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+import re
 from decimal import Decimal
 from typing import Any, List, Optional
 from uuid import UUID
@@ -40,7 +41,7 @@ class CustomerInput:
     """
 
     # Template-friendly names (what API/templates send)
-    customer_code: str
+    customer_code: Optional[str] = None
     customer_type: CustomerType
     customer_name: str  # Maps to model: legal_name
     default_receivable_account_id: Optional[UUID] = (
@@ -49,6 +50,8 @@ class CustomerInput:
     trading_name: Optional[str] = None
     tax_id: Optional[str] = None  # Maps to model: tax_identification_number
     registration_number: Optional[str] = None
+    vat_category: Optional[str] = None
+    default_tax_code_id: Optional[UUID] = None
     credit_limit: Optional[Decimal] = None
     payment_terms_days: int = 30  # Maps to model: credit_terms_days
     credit_hold: bool = False
@@ -102,12 +105,16 @@ class CustomerService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
+        customer_code = input.customer_code or ""
+        if not customer_code.strip():
+            customer_code = CustomerService._generate_customer_code(db, org_id)
+
         # Validate unique customer code
         validate_unique_code(
             db=db,
             model_class=Customer,
             org_id=org_id,
-            code_value=input.customer_code,
+            code_value=customer_code,
             code_field_name="customer_code",
             entity_name="Customer",
         )
@@ -115,12 +122,13 @@ class CustomerService(ListResponseMixin):
         # Map template-friendly names to model field names
         customer = Customer(
             organization_id=org_id,
-            customer_code=input.customer_code,
+            customer_code=customer_code,
             customer_type=input.customer_type,
             legal_name=input.customer_name,  # template: customer_name → model: legal_name
             trading_name=input.trading_name,
             tax_identification_number=input.tax_id,  # template: tax_id → model: tax_identification_number
             registration_number=input.registration_number,
+            vat_category=input.vat_category,
             credit_limit=input.credit_limit,
             credit_terms_days=input.payment_terms_days,  # template: payment_terms_days → model: credit_terms_days
             credit_hold=input.credit_hold,
@@ -129,6 +137,7 @@ class CustomerService(ListResponseMixin):
             price_list_id=input.price_list_id,
             ar_control_account_id=input.default_receivable_account_id,  # template: default_receivable_account_id → model: ar_control_account_id
             default_revenue_account_id=input.default_revenue_account_id,
+            default_tax_code_id=input.default_tax_code_id,
             sales_rep_user_id=input.sales_rep_user_id,
             customer_group_id=input.customer_group_id,
             risk_category=input.risk_category,
@@ -183,6 +192,9 @@ class CustomerService(ListResponseMixin):
         if not customer:
             raise HTTPException(status_code=404, detail="Customer not found")
 
+        if not input.customer_code:
+            input.customer_code = customer.customer_code
+
         # Validate unique customer code (if changed)
         if customer.customer_code != input.customer_code:
             validate_unique_code(
@@ -206,6 +218,8 @@ class CustomerService(ListResponseMixin):
             input.tax_id
         )  # template: tax_id → model: tax_identification_number
         customer.registration_number = input.registration_number
+        if input.vat_category is not None:
+            customer.vat_category = input.vat_category
         customer.credit_limit = input.credit_limit
         customer.credit_terms_days = (
             input.payment_terms_days
@@ -219,6 +233,7 @@ class CustomerService(ListResponseMixin):
                 input.default_receivable_account_id
             )  # template: default_receivable_account_id → model: ar_control_account_id
         customer.default_revenue_account_id = input.default_revenue_account_id
+        customer.default_tax_code_id = input.default_tax_code_id
         customer.sales_rep_user_id = input.sales_rep_user_id
         customer.customer_group_id = input.customer_group_id
         customer.risk_category = input.risk_category
@@ -277,6 +292,7 @@ class CustomerService(ListResponseMixin):
             "tax_id": "tax_identification_number",
             "payment_terms_days": "credit_terms_days",
             "default_receivable_account_id": "ar_control_account_id",
+            "vat_category": "vat_category",
         }
 
         # Fields that pass through unchanged (same name in template and model)
@@ -289,6 +305,7 @@ class CustomerService(ListResponseMixin):
             "currency_code",
             "price_list_id",
             "default_revenue_account_id",
+            "default_tax_code_id",
             "sales_rep_user_id",
             "customer_group_id",
             "risk_category",
@@ -323,6 +340,32 @@ class CustomerService(ListResponseMixin):
         db.refresh(customer)
 
         return customer
+
+    @staticmethod
+    def _generate_customer_code(db: Session, org_id: UUID) -> str:
+        """Generate a unique customer code (CUST-00001)."""
+        prefix = "CUST"
+        max_num = 0
+        codes = (
+            db.query(Customer.customer_code)
+            .filter(
+                Customer.organization_id == org_id,
+                Customer.customer_code.ilike(f"{prefix}-%"),
+            )
+            .all()
+        )
+        pattern = re.compile(rf"^{prefix}-(\d+)$", re.IGNORECASE)
+        for (code,) in codes:
+            if not code:
+                continue
+            match = pattern.match(code.strip())
+            if match:
+                try:
+                    max_num = max(max_num, int(match.group(1)))
+                except ValueError:
+                    continue
+        next_num = max_num + 1
+        return f"{prefix}-{next_num:05d}"
 
     @staticmethod
     def update_credit_limit(

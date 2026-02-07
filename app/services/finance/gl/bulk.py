@@ -58,7 +58,16 @@ class AccountBulkService(BulkActionService[Account]):
         An account cannot be deleted if it has journal entries or is a control account.
         """
         # Check if this is a control account (not for direct posting)
-        if entity.account_type == AccountType.CONTROL:
+        is_control = getattr(entity, "is_control_account", False)
+        account_type = getattr(entity, "account_type", None)
+        if not is_control and account_type is not None:
+            if isinstance(account_type, AccountType):
+                is_control = account_type == AccountType.CONTROL
+            else:
+                value = getattr(account_type, "value", account_type)
+                is_control = str(value).lower() == "control"
+
+        if is_control:
             return (
                 False,
                 f"Cannot delete '{entity.account_name}': is a control account",
@@ -84,9 +93,19 @@ class AccountBulkService(BulkActionService[Account]):
         if field_name == "account_type":
             return entity.account_type.value if entity.account_type else ""
         if field_name == "normal_balance":
-            return entity.normal_balance.value if entity.normal_balance else ""
-        if field_name == "category":
-            return entity.category.category_name if entity.category else ""
+            normal_balance = getattr(entity, "normal_balance", None)
+            return normal_balance.value if normal_balance else ""
+        if field_name in ("category", "account_category"):
+            category = getattr(entity, "category", None) or getattr(
+                entity, "account_category", None
+            )
+            if category is None:
+                return ""
+            name = getattr(category, "category_name", None)
+            if name is not None:
+                return name
+            value = getattr(category, "value", category)
+            return str(value)
 
         return super()._get_export_value(entity, field_name)
 

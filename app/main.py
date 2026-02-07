@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
 from time import monotonic
+import os
 from threading import Lock
 from starlette.responses import Response, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -83,6 +84,7 @@ from app.logging import configure_logging
 from app.observability import ObservabilityMiddleware
 from app.telemetry import setup_otel
 from app.errors import register_error_handlers
+from app.services import audit as audit_service
 from app.web.csrf import csrf_middleware
 from app.middleware.rate_limit import rate_limit_middleware
 from app.middleware.csp import add_unsafe_eval_to_csp
@@ -234,14 +236,25 @@ async def audit_middleware(request: Request, call_next):
         response = await call_next(request)
     except Exception:
         if should_log:
-            # Log error response asynchronously
-            audit_data = _extract_audit_data(request, Response(status_code=500))
-            log_audit_event.delay(**audit_data)
+            # Log error response asynchronously (or synchronously in tests)
+            audit_response = Response(status_code=500)
+            if os.getenv("PYTEST_CURRENT_TEST"):
+                with SessionLocal() as log_db:
+                    audit_service.audit_events.log_request(
+                        log_db, request, audit_response
+                    )
+            else:
+                audit_data = _extract_audit_data(request, audit_response)
+                log_audit_event.delay(**audit_data)
         raise
     if should_log:
-        # Log response asynchronously via Celery
-        audit_data = _extract_audit_data(request, response)
-        log_audit_event.delay(**audit_data)
+        # Log response asynchronously via Celery (or synchronously in tests)
+        if os.getenv("PYTEST_CURRENT_TEST"):
+            with SessionLocal() as log_db:
+                audit_service.audit_events.log_request(log_db, request, response)
+        else:
+            audit_data = _extract_audit_data(request, response)
+            log_audit_event.delay(**audit_data)
     return response
 
 

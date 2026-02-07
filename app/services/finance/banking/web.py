@@ -355,8 +355,40 @@ class BankingWebService:
         account = db.get(BankAccount, coerce_uuid(account_id))
         if not account or account.organization_id != org_id:
             account = None
+        transactions: list[dict] = []
+        if account:
+            rows = (
+                db.query(BankStatementLine, BankStatement)
+                .join(
+                    BankStatement,
+                    BankStatementLine.statement_id == BankStatement.statement_id,
+                )
+                .filter(
+                    BankStatement.organization_id == org_id,
+                    BankStatement.bank_account_id == account.bank_account_id,
+                )
+                .order_by(
+                    BankStatementLine.transaction_date.desc(),
+                    BankStatementLine.line_number.desc(),
+                )
+                .limit(50)
+                .all()
+            )
+            for line, statement in rows:
+                view = _statement_line_view(line)
+                view.update(
+                    {
+                        "statement_id": statement.statement_id,
+                        "statement_number": statement.statement_number,
+                        "statement_date": _format_date(statement.statement_date),
+                    }
+                )
+                transactions.append(view)
 
-        return {"account": _account_view(account) if account else None}
+        return {
+            "account": _account_view(account) if account else None,
+            "transactions": transactions,
+        }
 
     @staticmethod
     def list_statements_context(
@@ -552,6 +584,8 @@ class BankingWebService:
     def reconciliation_form_context(
         db: Session,
         organization_id: str,
+        *,
+        account_id: Optional[str] = None,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
         accounts = (
@@ -563,7 +597,10 @@ class BankingWebService:
             .order_by(BankAccount.bank_name, BankAccount.account_number)
             .all()
         )
-        return {"accounts": [_account_view(account) for account in accounts]}
+        context: dict = {"accounts": [_account_view(account) for account in accounts]}
+        if account_id:
+            context["selected_account_id"] = account_id
+        return context
 
     @staticmethod
     def reconciliation_detail_context(
@@ -1243,9 +1280,15 @@ class BankingWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
+        *,
+        account_id: Optional[str] = None,
     ) -> HTMLResponse:
         context = base_context(request, auth, "New Reconciliation", "banking")
-        context.update(self.reconciliation_form_context(db, str(auth.organization_id)))
+        context.update(
+            self.reconciliation_form_context(
+                db, str(auth.organization_id), account_id=account_id
+            )
+        )
         return templates.TemplateResponse(
             request,
             "finance/banking/reconciliation_form.html",

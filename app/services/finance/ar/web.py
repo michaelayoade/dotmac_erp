@@ -35,6 +35,7 @@ from app.models.finance.core_org.cost_center import CostCenter
 from app.models.finance.core_org.project import Project
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
+from app.models.inventory.item import Item
 from app.services.audit_info import get_audit_service
 from app.services.common import coerce_uuid
 from app.services.finance.ar.ar_aging import ar_aging_service
@@ -148,6 +149,7 @@ def _customer_option_view(customer: Customer) -> dict:
         "customer_code": customer.customer_code,
         "currency_code": customer.currency_code,
         "payment_terms_days": customer.credit_terms_days,
+        "default_tax_code_id": customer.default_tax_code_id,
     }
 
 
@@ -158,6 +160,7 @@ def _customer_form_view(customer: Customer) -> dict:
         "customer_code": customer.customer_code,
         "customer_name": _customer_display_name(customer),
         "tax_id": customer.tax_identification_number,
+        "default_tax_code_id": customer.default_tax_code_id,
         "currency_code": customer.currency_code,
         "payment_terms_days": customer.credit_terms_days,
         "credit_limit": customer.credit_limit,
@@ -182,6 +185,8 @@ def _customer_list_view(
         "customer_id": customer.customer_id,
         "customer_code": customer.customer_code,
         "customer_name": _customer_display_name(customer),
+        "legal_name": customer.legal_name,
+        "trading_name": customer.trading_name,
         "tax_id": customer.tax_identification_number,
         "payment_terms_days": customer.credit_terms_days,
         "credit_limit": _format_currency(
@@ -208,6 +213,7 @@ def _customer_detail_view(customer: Customer, balance: Decimal) -> dict:
         "customer_code": customer.customer_code,
         "customer_name": _customer_display_name(customer),
         "tax_id": customer.tax_identification_number,
+        "default_tax_code_id": customer.default_tax_code_id,
         "currency_code": customer.currency_code,
         "payment_terms_days": customer.credit_terms_days,
         "credit_limit": _format_currency(
@@ -424,18 +430,19 @@ class ARWebService:
         return CustomerInput(
             customer_code=form_data.get("customer_code", ""),
             customer_type=_parse_customer_type(form_data.get("customer_type")),
-            legal_name=form_data.get("customer_name", ""),
-            trading_name=form_data.get("customer_name"),
-            tax_identification_number=form_data.get("tax_id"),
+            customer_name=form_data.get("customer_name", ""),
+            trading_name=form_data.get("trading_name")
+            or form_data.get("customer_name", ""),
+            tax_id=form_data.get("tax_id"),
             currency_code=form_data.get(
                 "currency_code",
                 settings.default_functional_currency_code,
             ),
-            credit_terms_days=int(form_data.get("payment_terms_days", 30)),
+            payment_terms_days=int(form_data.get("payment_terms_days", 30)),
             credit_limit=Decimal(credit_limit) if credit_limit else None,
             credit_hold=form_data.get("credit_hold") is not None,
             risk_category=RiskCategory.MEDIUM,
-            ar_control_account_id=(
+            default_receivable_account_id=(
                 UUID(form_data["default_receivable_account_id"])
                 if form_data.get("default_receivable_account_id")
                 else UUID("00000000-0000-0000-0000-000000000001")
@@ -443,6 +450,11 @@ class ARWebService:
             default_revenue_account_id=(
                 UUID(form_data["default_revenue_account_id"])
                 if form_data.get("default_revenue_account_id")
+                else None
+            ),
+            default_tax_code_id=(
+                UUID(form_data["default_tax_code_id"])
+                if form_data.get("default_tax_code_id")
                 else None
             ),
             billing_address={
@@ -491,6 +503,7 @@ class ARWebService:
                         revenue_account_id=UUID(line["revenue_account_id"])
                         if line.get("revenue_account_id")
                         else None,
+                        item_id=UUID(line["item_id"]) if line.get("item_id") else None,
                         tax_code_ids=tax_code_ids,
                         tax_code_id=legacy_tax_code_id,
                         cost_center_id=UUID(line["cost_center_id"])
@@ -625,11 +638,26 @@ class ARWebService:
 
         revenue_accounts = _get_accounts(db, org_id, IFRSCategory.REVENUE)
         receivable_accounts = _get_accounts(db, org_id, IFRSCategory.ASSETS, "AR")
+        tax_codes = [
+            {
+                "tax_code_id": str(tax.tax_code_id),
+                "tax_code": tax.tax_code,
+                "tax_name": tax.tax_name,
+            }
+            for tax in tax_code_service.list(
+                db,
+                organization_id=org_id,
+                is_active=True,
+                applies_to_sales=True,
+                limit=200,
+            )
+        ]
 
         context = {
             "customer": customer_view,
             "revenue_accounts": revenue_accounts,
             "receivable_accounts": receivable_accounts,
+            "tax_codes": tax_codes,
         }
         context.update(get_currency_context(db, organization_id))
         return context
@@ -649,6 +677,15 @@ class ARWebService:
 
         if not customer or customer.organization_id != org_id:
             return {"customer": None, "open_invoices": []}
+
+        default_tax_code_label = None
+        if customer.default_tax_code_id:
+            try:
+                tax_code = tax_code_service.get(db, str(customer.default_tax_code_id))
+                if tax_code and tax_code.organization_id == org_id:
+                    default_tax_code_label = f"{tax_code.tax_code} - {tax_code.tax_name}"
+            except Exception:
+                default_tax_code_label = None
 
         open_statuses = [
             InvoiceStatus.POSTED,
@@ -706,6 +743,12 @@ class ARWebService:
                 }
             )
 
+        customer_view = _customer_detail_view(customer, balance)
+        customer_view["default_tax_code_label"] = default_tax_code_label
+        customer_view["default_tax_code_id"] = (
+            str(customer.default_tax_code_id) if customer.default_tax_code_id else None
+        )
+
         # Get attachments
         attachments = attachment_service.list_for_entity(
             db,
@@ -726,7 +769,7 @@ class ARWebService:
         ]
 
         return {
-            "customer": _customer_detail_view(customer, balance),
+            "customer": customer_view,
             "open_invoices": open_invoices,
             "attachments": attachments_view,
         }
@@ -917,10 +960,35 @@ class ARWebService:
             )
         ]
 
+        items = (
+            db.query(Item)
+            .filter(
+                Item.organization_id == org_id,
+                Item.is_active.is_(True),
+                Item.is_saleable.is_(True),
+            )
+            .order_by(Item.item_code)
+            .all()
+        )
+        item_options = [
+            {
+                "item_id": str(i.item_id),
+                "item_code": i.item_code,
+                "item_name": i.item_name,
+                "list_price": float(i.list_price) if i.list_price is not None else None,
+                "revenue_account_id": str(i.revenue_account_id)
+                if i.revenue_account_id
+                else None,
+                "tax_code_id": str(i.tax_code_id) if i.tax_code_id else None,
+            }
+            for i in items
+        ]
+
         context = {
             "customers_list": customers_list,
             "revenue_accounts": revenue_accounts,
             "tax_codes": tax_codes,
+            "items": item_options,
             "cost_centers": _get_cost_centers(db, org_id),
             "projects": _get_projects(db, org_id),
             "organization_id": str(organization_id),
@@ -1090,6 +1158,7 @@ class ARWebService:
         organization_id: str,
         invoice_id: Optional[str] = None,
         receipt_id: Optional[str] = None,
+        customer_id: Optional[str] = None,
     ) -> dict:
         from app.models.finance.tax.tax_code import TaxCode, TaxType
 
@@ -1152,6 +1221,16 @@ class ARWebService:
             except Exception:
                 pass
 
+        # Determine selected customer (if provided)
+        selected_customer_id = None
+        if customer_id:
+            try:
+                selected_customer = customer_service.get(db, org_id, customer_id)
+                if selected_customer and selected_customer.organization_id == org_id:
+                    selected_customer_id = str(selected_customer.customer_id)
+            except Exception:
+                selected_customer_id = None
+
         # Get customers with WHT info
         customers_list = []
         for customer in customer_service.list(
@@ -1209,6 +1288,10 @@ class ARWebService:
 
         if invoice_id:
             query = query.filter(Invoice.invoice_id == coerce_uuid(invoice_id))
+        elif selected_customer_id:
+            query = query.filter(
+                Invoice.customer_id == coerce_uuid(selected_customer_id)
+            )
 
         rows = query.order_by(Invoice.due_date).all()
 
@@ -1244,6 +1327,7 @@ class ARWebService:
             "open_invoices": open_invoices,
             "receipt": receipt_view,
             "existing_allocations": existing_allocations,
+            "selected_customer_id": selected_customer_id,
         }
         context.update(get_currency_context(db, organization_id))
         return context
@@ -2639,6 +2723,7 @@ class ARWebService:
         auth: WebAuthContext,
         db: Session,
         invoice_id: Optional[str],
+        customer_id: Optional[str] = None,
     ) -> HTMLResponse:
         context = base_context(request, auth, "New AR Receipt", "ar")
         context.update(
@@ -2646,6 +2731,7 @@ class ARWebService:
                 db,
                 str(auth.organization_id),
                 invoice_id=invoice_id,
+                customer_id=customer_id,
             )
         )
         return templates.TemplateResponse(

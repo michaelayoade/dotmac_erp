@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.models.finance.core_org.location import LocationType
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.hr import OrganizationService
-from app.services.people.hr.web.employee_web import DEFAULT_PAGE_SIZE
+from app.services.people.hr.web.constants import DEFAULT_PAGE_SIZE
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 

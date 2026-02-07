@@ -218,6 +218,11 @@ class ARInvoiceService(ListResponseMixin):
 
         # Collect all line-level references
         for line in input.lines:
+            if not line.tax_code_ids and not line.tax_code_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Tax code is required for each invoice line",
+                )
             if line.revenue_account_id:
                 account_ids.add(line.revenue_account_id)
             if line.item_id:

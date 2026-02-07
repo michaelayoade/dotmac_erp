@@ -462,16 +462,18 @@ class TestBulkExport:
             service = AccountBulkService(mock_db, organization_id)
             response = await service.bulk_export([mock_account.account_id])
 
-            content = ""
-            for chunk in response.body_iterator:
-                content = chunk if isinstance(chunk, str) else chunk.decode()
+            content = (
+                response.body.decode()
+                if isinstance(response.body, bytes)
+                else response.body
+            )
 
             headers = content.split("\n")[0]
             assert "Account Code" in headers
             assert "Account Name" in headers
             assert "Account Type" in headers
             assert "Category" in headers
-            assert "Control Account" in headers
+            assert "Normal Balance" in headers
 
     @pytest.mark.asyncio
     async def test_export_csv_data(self, mock_db, mock_account, organization_id):
@@ -484,9 +486,11 @@ class TestBulkExport:
             service = AccountBulkService(mock_db, organization_id)
             response = await service.bulk_export([mock_account.account_id])
 
-            content = ""
-            for chunk in response.body_iterator:
-                content = chunk if isinstance(chunk, str) else chunk.decode()
+            content = (
+                response.body.decode()
+                if isinstance(response.body, bytes)
+                else response.body
+            )
 
             assert mock_account.account_name in content
             assert mock_account.account_code in content

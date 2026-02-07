@@ -1,4 +1,5 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import live_search %}
 
 {% block page_title %}Appraisal Cycles{% endblock %}
 
@@ -36,37 +37,22 @@
     </div>
     {% endif %}
 
-    <!-- Filters -->
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap gap-4 items-end">
-                <div class="flex-1 min-w-[200px]">
-                    <label for="search" class="form-label">Search</label>
-                    <input type="text" name="search" id="search" value="{{ search | default('', true) }}"
-                           class="form-input w-full" placeholder="Code or name...">
-                </div>
-                <div class="w-48">
-                    <label for="status" class="form-label">Status</label>
-                    <select name="status" id="status" class="form-select w-full">
-                        <option value="">All</option>
-                        {% for s in statuses %}
-                        <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="w-32">
-                    <label for="year" class="form-label">Year</label>
-                    <input type="number" name="year" id="year" value="{{ year | default('', true) }}"
-                           class="form-input w-full" placeholder="2024" min="2000" max="2100">
-                </div>
-                <button type="submit" class="btn btn-secondary h-10">Filter</button>
-                {% if search or status or year %}
-                <a href="/people/perf/cycles" class="btn btn-ghost h-10">Clear</a>
-                {% endif %}
-            </div>
-        </form>
-    </div>
+    {% call(search_attrs) live_search(
+        search=search,
+        base_url="/people/perf/appraisal-cycles",
+        placeholder="Search appraisal cycles..."
+    ) %}
+        <select name="status" class="form-select" {{ search_attrs }}>
+            <option value="">All Status</option>
+            {% for s in statuses %}
+            <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
+            {% endfor %}
+        </select>
+        <input type="number" name="year" value="{{ year if year else '' }}"
+               class="form-input w-32" placeholder="Year" min="2000" max="2100" {{ search_attrs }}>
+    {% endcall %}
 
+    <div id="results-container">
     {% if cycles %}
     <div class="card overflow-hidden">
         <div class="overflow-x-auto">
@@ -153,5 +139,6 @@
         </div>
     </div>
     {% endif %}
+    </div>{# /results-container #}
 </div>
 {% endblock %}

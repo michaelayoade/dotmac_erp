@@ -431,9 +431,11 @@ class TestBulkExport:
             service = CustomerBulkService(mock_db, organization_id)
             response = await service.bulk_export([mock_customer.customer_id])
 
-            content = ""
-            for chunk in response.body_iterator:
-                content = chunk if isinstance(chunk, str) else chunk.decode()
+            content = (
+                response.body.decode()
+                if isinstance(response.body, bytes)
+                else response.body
+            )
 
             headers = content.split("\n")[0]
             assert "Customer Code" in headers
@@ -454,9 +456,11 @@ class TestBulkExport:
             service = CustomerBulkService(mock_db, organization_id)
             response = await service.bulk_export([mock_customer.customer_id])
 
-            content = ""
-            for chunk in response.body_iterator:
-                content = chunk if isinstance(chunk, str) else chunk.decode()
+            content = (
+                response.body.decode()
+                if isinstance(response.body, bytes)
+                else response.body
+            )
 
             assert mock_customer.legal_name in content
             assert mock_customer.customer_code in content

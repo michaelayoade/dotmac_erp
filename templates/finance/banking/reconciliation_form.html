@@ -25,6 +25,17 @@
           hx-on::after-request="if(event.detail.successful) { const data = JSON.parse(event.detail.xhr.response); window.location.href='/finance/banking/reconciliations/' + data.reconciliation_id; }"
           class="space-y-6">
 
+        {% if selected_account_id %}
+        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 flex items-center gap-2">
+            <svg class="w-4 h-4 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span class="text-sm text-blue-700 dark:text-blue-300">
+                {% for acc in accounts %}{% if acc.bank_account_id == selected_account_id %}Reconciling <strong>{{ acc.bank_name }} — {{ acc.account_number }}</strong>{% endif %}{% endfor %}
+            </span>
+        </div>
+        {% endif %}
+
         <!-- Bank Account Selection -->
         <div class="card p-6">
             <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Select Bank Account</h3>
@@ -38,7 +49,7 @@
                         class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     <option value="">Select a bank account</option>
                     {% for acc in accounts %}
-                    <option value="{{ acc.bank_account_id }}">{{ acc.bank_name }} - {{ acc.account_number }} ({{ acc.account_name }})</option>
+                    <option value="{{ acc.bank_account_id }}" {{ 'selected' if selected_account_id is defined and acc.bank_account_id == selected_account_id else '' }}>{{ acc.bank_name }} - {{ acc.account_number }} ({{ acc.account_name }})</option>
                     {% endfor %}
                 </select>
             </div>

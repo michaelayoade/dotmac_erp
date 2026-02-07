@@ -26,7 +26,7 @@ class CustomerBase(BaseModel):
     This allows API clients to send template-friendly names (customer_name, tax_id, etc.)
     """
 
-    customer_code: str = Field(max_length=30)
+    customer_code: Optional[str] = Field(default=None, max_length=30)
     customer_type: str = Field(default="COMPANY", max_length=20)
     customer_name: str = Field(
         max_length=255
@@ -35,12 +35,14 @@ class CustomerBase(BaseModel):
     tax_id: Optional[str] = Field(
         default=None, max_length=50
     )  # Template name (service maps to tax_identification_number)
+    vat_category: Optional[str] = Field(default=None, max_length=50)
     payment_terms_days: int = Field(
         default=30
     )  # Template name (service maps to credit_terms_days)
     credit_limit: Optional[Decimal] = None
     currency_code: str = Field(default="NGN", max_length=3)
     default_revenue_account_id: Optional[UUID] = None
+    default_tax_code_id: Optional[UUID] = None
     default_receivable_account_id: Optional[UUID] = (
         None  # Template name (service maps to ar_control_account_id)
     )
@@ -63,6 +65,8 @@ class CustomerUpdate(BaseModel):
     customer_name: Optional[str] = Field(default=None, max_length=255)
     trading_name: Optional[str] = Field(default=None, max_length=255)
     tax_id: Optional[str] = Field(default=None, max_length=50)
+    vat_category: Optional[str] = Field(default=None, max_length=50)
+    default_tax_code_id: Optional[UUID] = None
     payment_terms_days: Optional[int] = None
     credit_limit: Optional[Decimal] = None
     is_active: Optional[bool] = None
@@ -85,6 +89,7 @@ class CustomerRead(BaseModel):
     tax_id: Optional[str] = Field(
         default=None, validation_alias="tax_identification_number"
     )
+    vat_category: Optional[str] = None
     payment_terms_days: int = Field(validation_alias="credit_terms_days")
     credit_limit: Optional[Decimal] = None
     currency_code: str
@@ -92,6 +97,7 @@ class CustomerRead(BaseModel):
     default_receivable_account_id: Optional[UUID] = Field(
         default=None, validation_alias="ar_control_account_id"
     )
+    default_tax_code_id: Optional[UUID] = None
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -106,6 +112,7 @@ class ARInvoiceLineCreate(BaseModel):
     """AR invoice line for creation."""
 
     revenue_account_id: UUID
+    item_id: Optional[UUID] = None
     description: str = Field(max_length=500)
     quantity: Decimal = Field(default=Decimal("1"))
     unit_price: Decimal

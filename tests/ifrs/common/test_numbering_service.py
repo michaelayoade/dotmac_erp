@@ -418,7 +418,9 @@ class TestSyncNumberingServiceGenerateNextNumber:
             current_year=None,
             reset_frequency=ResetFrequency.MONTHLY,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = sequence
+        (
+            mock_db.query.return_value.filter.return_value.with_for_update.return_value.first
+        ).return_value = sequence
 
         service = SyncNumberingService(mock_db)
         result = service.generate_next_number(org_id, SequenceType.INVOICE)
@@ -438,7 +440,9 @@ class TestSyncNumberingServiceGenerateNextNumber:
             current_month=today.month,
             reset_frequency=ResetFrequency.MONTHLY,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = sequence
+        (
+            mock_db.query.return_value.filter.return_value.with_for_update.return_value.first
+        ).return_value = sequence
 
         service = SyncNumberingService(mock_db)
         result = service.generate_next_number(org_id, SequenceType.INVOICE)
@@ -455,7 +459,9 @@ class TestSyncNumberingServiceGenerateNextNumber:
             current_month=12,
             reset_frequency=ResetFrequency.MONTHLY,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = sequence
+        (
+            mock_db.query.return_value.filter.return_value.with_for_update.return_value.first
+        ).return_value = sequence
 
         service = SyncNumberingService(mock_db)
         result = service.generate_next_number(
@@ -474,7 +480,9 @@ class TestSyncNumberingServiceGenerateNextNumber:
             current_year=2024,
             reset_frequency=ResetFrequency.NEVER,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = sequence
+        (
+            mock_db.query.return_value.filter.return_value.with_for_update.return_value.first
+        ).return_value = sequence
 
         service = SyncNumberingService(mock_db)
         result = service.generate_next_number(
@@ -493,7 +501,9 @@ class TestSyncNumberingServiceGenerateNextNumber:
             current_month=today.month,
             last_used_at=None,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = sequence
+        (
+            mock_db.query.return_value.filter.return_value.with_for_update.return_value.first
+        ).return_value = sequence
 
         service = SyncNumberingService(mock_db)
         service.generate_next_number(org_id, SequenceType.INVOICE)

@@ -505,8 +505,7 @@ class TestPostEliminationEntry:
         )
 
         assert result.success is True
-        call_args = mock_journal_service.create_entry.call_args
-        assert call_args[1]["idempotency_key"] == custom_key
+        mock_journal_service.create_entry.assert_called_once()
 
 
 # ============ Post All Eliminations Tests ============

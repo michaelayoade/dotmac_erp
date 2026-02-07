@@ -88,11 +88,10 @@
     </div>
     {% endif %}
     <div class="card p-0 overflow-hidden print:border print:border-slate-300">
-        {% include "partials/_document_header.html" with {
-            "doc_title": "Payslip",
-            "doc_number": slip.slip_number,
-            "doc_status": slip.status.value | title
-        } %}
+                {% set doc_title = "Payslip" %}
+        {% set doc_number = slip.slip_number %}
+        {% set doc_status = slip.status.value | title %}
+        {% include "partials/_document_header.html" %}
     </div>
     {# ═══════════════════════════════════════════════════════════════════════
        Workflow Stepper - Visual progress indicator

@@ -467,19 +467,21 @@
                            class="form-input">
                 </div>
 
-                <!-- VAT Category -->
+                <!-- Default Tax Code -->
                 <div>
-                    <label for="vat_category" class="form-label">
-                        VAT Category
+                    <label for="default_tax_code_id" class="form-label">
+                        Default Tax Code
                     </label>
-                    {% set selected_vat = customer.vat_category if customer and customer.vat_category else 'STANDARD' %}
-                    <select id="vat_category" name="vat_category" class="form-input form-select">
-                        <option value="STANDARD" {{ 'selected' if selected_vat == 'STANDARD' else '' }}>Standard Rated</option>
-                        <option value="ZERO_RATED" {{ 'selected' if selected_vat == 'ZERO_RATED' else '' }}>Zero Rated</option>
-                        <option value="EXEMPT" {{ 'selected' if selected_vat == 'EXEMPT' else '' }}>Exempt</option>
-                        <option value="OUT_OF_SCOPE" {{ 'selected' if selected_vat == 'OUT_OF_SCOPE' else '' }}>Out of Scope</option>
+                    {% set selected_tax = customer.default_tax_code_id|string if customer and customer.default_tax_code_id else '' %}
+                    <select id="default_tax_code_id" name="default_tax_code_id" class="form-input form-select">
+                        <option value="">No default tax</option>
+                        {% for tax in tax_codes %}
+                        <option value="{{ tax.tax_code_id }}" {{ 'selected' if selected_tax and tax.tax_code_id == selected_tax else '' }}>
+                            {{ tax.tax_code }} - {{ tax.tax_name }}
+                        </option>
+                        {% endfor %}
                     </select>
-                    <p class="form-help">Used to determine VAT treatment on sales</p>
+                    <p class="form-help">Default sales tax code to apply on new invoices, quotes, and orders</p>
                 </div>
 
                 <!-- Currency -->

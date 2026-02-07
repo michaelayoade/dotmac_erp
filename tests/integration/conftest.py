@@ -36,6 +36,7 @@ os.environ.setdefault("TOTP_ISSUER", "TestApp")
 
 import pytest
 from sqlalchemy import create_engine, event
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 
@@ -78,7 +79,10 @@ def db(engine) -> Generator[Session, None, None]:
     Each test runs in a transaction that is rolled back after the test,
     ensuring complete isolation between tests.
     """
-    connection = engine.connect()
+    try:
+        connection = engine.connect()
+    except OperationalError as exc:
+        pytest.skip(f"Integration database unavailable: {exc}")
     transaction = connection.begin()
 
     # Create session bound to this connection

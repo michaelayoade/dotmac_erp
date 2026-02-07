@@ -49,10 +49,9 @@
 
     <!-- Report -->
     <div class="card p-6 print:shadow-none print:border-0">
-        {% include "partials/_document_header.html" with {
-            "doc_title": "Statement of profit or loss",
-            "doc_number": period_name
-        } %}
+                {% set doc_title = "Statement of profit or loss" %}
+        {% set doc_number = period_name %}
+        {% include "partials/_document_header.html" %}
         <div class="text-center mb-8 print:mb-4">
             <p class="text-slate-500 dark:text-slate-400">For the period {{ start_date }} to {{ end_date }}</p>
             <p class="text-sm text-slate-400 dark:text-slate-500">{{ period_name }}</p>

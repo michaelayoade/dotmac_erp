@@ -15,7 +15,7 @@ from app.services.people.hr import (
     DesignationFilters,
 )
 from app.services.common import PaginationParams, coerce_uuid
-from app.services.people.hr.web.employee_web import DEFAULT_PAGE_SIZE
+from app.services.people.hr.web.constants import DEFAULT_PAGE_SIZE
 from app.templates import templates
 from app.web.deps import base_context, get_db, require_hr_access, WebAuthContext
 

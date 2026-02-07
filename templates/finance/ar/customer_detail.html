@@ -116,8 +116,8 @@
                     <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ customer.tax_id | default("-") }}</dd>
                 </div>
                 <div class="flex justify-between">
-                    <dt class="text-sm text-slate-500">VAT Category</dt>
-                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ customer.vat_category | default("STANDARD") }}</dd>
+                    <dt class="text-sm text-slate-500">Default Tax Code</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ customer.default_tax_code_label | default("Not set") }}</dd>
                 </div>
             </dl>
         </div>

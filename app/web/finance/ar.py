@@ -361,11 +361,18 @@ def list_receipts(
 def new_receipt_form(
     request: Request,
     invoice_id: Optional[str] = None,
+    customer_id: Optional[str] = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
     """New AR receipt form page."""
-    return ar_web_service.receipt_new_form_response(request, auth, db, invoice_id)
+    return ar_web_service.receipt_new_form_response(
+        request,
+        auth,
+        db,
+        invoice_id=invoice_id,
+        customer_id=customer_id,
+    )
 
 
 @router.get("/receipts/{receipt_id}", response_class=HTMLResponse)

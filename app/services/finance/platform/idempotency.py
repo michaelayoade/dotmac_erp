@@ -74,8 +74,11 @@ class IdempotencyService(ListResponseMixin):
         if record is None:
             return None
 
-        # Check if expired
-        if record.expires_at < now:
+        # Check if expired (handle naive datetimes in SQLite)
+        expires_at = record.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < now:
             # Expired record - delete it and return None
             db.delete(record)
             db.commit()

@@ -60,12 +60,13 @@ class TestBankAccountAPI:
         """Test successful bank account creation."""
         mock_account = MockBankAccount(organization_id=org_id)
 
-        with patch(
-            "app.api.finance.banking.bank_account_service.create"
-        ) as mock_create, patch(
-            "app.api.finance.banking._bank_account_payload_from_request",
-            new=AsyncMock(),
-        ) as mock_payload:
+        with (
+            patch("app.api.finance.banking.bank_account_service.create") as mock_create,
+            patch(
+                "app.api.finance.banking._bank_account_payload_from_request",
+                new=AsyncMock(),
+            ) as mock_payload,
+        ):
             mock_create.return_value = mock_account
 
             payload = BankAccountCreate(

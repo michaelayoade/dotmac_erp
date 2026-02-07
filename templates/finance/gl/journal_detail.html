@@ -179,11 +179,10 @@
 <div class="space-y-6">
     {# Main Journal Document Card #}
     <div class="document-card">
-        {% include "partials/_document_header.html" with {
-            "doc_title": "Journal Entry",
-            "doc_number": entry.journal_number,
-            "doc_status": entry.status | replace('_', ' ') | title
-        } %}
+                {% set doc_title = "Journal Entry" %}
+        {% set doc_number = entry.journal_number %}
+        {% set doc_status = entry.status | replace('_', ' ') | title %}
+        {% include "partials/_document_header.html" %}
         <div class="document-header">
             <div class="flex flex-wrap items-start justify-between gap-4">
                 <div></div>

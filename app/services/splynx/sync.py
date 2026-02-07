@@ -14,7 +14,7 @@ from decimal import Decimal
 from typing import Any, Optional, TypedDict
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer, CustomerType
@@ -314,6 +314,55 @@ class SplynxSyncService:
         )
         return self.db.scalar(stmt)
 
+    def _find_existing_customer(
+        self, splynx_customer: SplynxCustomer
+    ) -> Optional[Customer]:
+        """Try to match a Splynx customer to an existing ERP customer."""
+        name = (splynx_customer.name or splynx_customer.login or "").strip()
+        email = (splynx_customer.email or "").strip().lower()
+        phone = (splynx_customer.phone or "").strip().lower()
+
+        if splynx_customer.id:
+            stmt = select(Customer).where(
+                Customer.organization_id == self.organization_id,
+                Customer.primary_contact["splynx_id"].astext == str(splynx_customer.id),
+            )
+            customer = self.db.scalar(stmt)
+            if customer:
+                return customer
+
+        contact_filters = []
+        if email:
+            contact_filters.append(
+                func.lower(Customer.primary_contact["email"].astext) == email
+            )
+        if phone:
+            contact_filters.append(
+                func.lower(Customer.primary_contact["phone"].astext) == phone
+            )
+        if contact_filters:
+            stmt = select(Customer).where(
+                Customer.organization_id == self.organization_id,
+                or_(*contact_filters),
+            )
+            customer = self.db.scalar(stmt)
+            if customer:
+                return customer
+
+        if name:
+            stmt = select(Customer).where(
+                Customer.organization_id == self.organization_id,
+                or_(
+                    func.lower(Customer.legal_name) == name.lower(),
+                    func.lower(Customer.trading_name) == name.lower(),
+                ),
+            )
+            matches = self.db.scalars(stmt).all()
+            if len(matches) == 1:
+                return matches[0]
+
+        return None
+
     def _get_existing_invoice(self, invoice_number: str) -> Optional[Invoice]:
         """Get existing invoice by number."""
         stmt = select(Invoice).where(
@@ -540,6 +589,9 @@ class SplynxSyncService:
         else:
             customer_code = self._make_customer_code(splynx_customer.id)
             existing = self._get_existing_customer(customer_code)
+
+        if not existing:
+            existing = self._find_existing_customer(splynx_customer)
 
         customer_code = self._make_customer_code(splynx_customer.id)
 

@@ -343,12 +343,11 @@ class TestListInvoices:
         mock_query.all.return_value = invoices
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.finance.ar.invoice.Invoice"):
-            result = ARInvoiceService.list(
-                mock_db,
-                organization_id=str(org_id),
-                status=InvoiceStatus.DRAFT,
-            )
+        result = ARInvoiceService.list(
+            mock_db,
+            organization_id=str(org_id),
+            status=InvoiceStatus.DRAFT,
+        )
 
         assert result == invoices
 
@@ -885,21 +884,11 @@ class TestListInvoicesEdgeCases:
         mock_query.all.return_value = invoices
         mock_db.query.return_value = mock_query
 
-        # Patch and_ to return a MagicMock for overdue filter
-        with patch("app.services.finance.ar.invoice.Invoice") as MockInv:
-            # Configure Invoice attributes for comparison mocking
-            MockInv.organization_id.__eq__ = MagicMock(return_value=MagicMock())
-            MockInv.due_date.__lt__ = MagicMock(return_value=MagicMock())
-            MockInv.status.in_ = MagicMock(return_value=MagicMock())
-            MockInv.invoice_date = MagicMock()
-            with patch(
-                "app.services.finance.ar.invoice.and_", return_value=MagicMock()
-            ):
-                result = ARInvoiceService.list(
-                    mock_db,
-                    organization_id=str(org_id),
-                    overdue_only=True,
-                )
+        result = ARInvoiceService.list(
+            mock_db,
+            organization_id=str(org_id),
+            overdue_only=True,
+        )
 
         assert result == invoices
 
@@ -918,12 +907,11 @@ class TestListInvoicesEdgeCases:
         mock_query.all.return_value = invoices
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.finance.ar.invoice.Invoice"):
-            result = ARInvoiceService.list(
-                mock_db,
-                organization_id=str(org_id),
-                customer_id=str(customer_id),
-            )
+        result = ARInvoiceService.list(
+            mock_db,
+            organization_id=str(org_id),
+            customer_id=str(customer_id),
+        )
 
         assert result == invoices
 
@@ -941,16 +929,11 @@ class TestListInvoicesEdgeCases:
         mock_query.all.return_value = invoices
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.finance.ar.invoice.Invoice") as MockInv:
-            # Configure Invoice attributes for comparison mocking
-            MockInv.organization_id.__eq__ = MagicMock(return_value=MagicMock())
-            MockInv.invoice_date.__ge__ = MagicMock(return_value=MagicMock())
-            MockInv.invoice_date.__le__ = MagicMock(return_value=MagicMock())
-            result = ARInvoiceService.list(
-                mock_db,
-                organization_id=str(org_id),
-                from_date=date(2024, 1, 1),
-                to_date=date(2024, 12, 31),
-            )
+        result = ARInvoiceService.list(
+            mock_db,
+            organization_id=str(org_id),
+            from_date=date(2024, 1, 1),
+            to_date=date(2024, 12, 31),
+        )
 
         assert result == invoices

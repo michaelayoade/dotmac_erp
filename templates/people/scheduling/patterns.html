@@ -1,4 +1,5 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import live_search %}
 
 {% block page_title %}Shift Patterns{% endblock %}
 
@@ -28,28 +29,17 @@
         </div>
     </div>
 
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap gap-4 items-end">
-                <div class="flex-1 min-w-[200px] max-w-md">
-                    <label for="search" class="form-label">Search</label>
-                    <input type="text" name="search" id="search" value="{{ search | default('', true) }}"
-                        placeholder="Search by code or name"
-                        class="form-input w-full">
-                </div>
-                <div class="w-40">
-                    <label for="is_active" class="form-label">Status</label>
-                    <select name="is_active" id="is_active" class="form-select w-full">
-                        <option value="">All</option>
-                        <option value="true" {% if is_active == "true" %}selected{% endif %}>Active</option>
-                        <option value="false" {% if is_active == "false" %}selected{% endif %}>Inactive</option>
-                    </select>
-                </div>
-                <button type="submit" class="btn btn-secondary h-10">Filter</button>
-            </div>
-        </form>
-    </div>
+    {{ live_search(
+        search=search,
+        filters=[
+            {"name": "is_active", "label": "All", "value": is_active,
+             "options": [{"value": "true", "label": "Active"}, {"value": "false", "label": "Inactive"}]}
+        ],
+        base_url="/people/scheduling/patterns",
+        placeholder="Search patterns..."
+    ) }}
 
+    <div id="results-container">
     {% if patterns %}
     <div class="card overflow-hidden">
         <div class="overflow-x-auto">
@@ -122,5 +112,6 @@
         </div>
     </div>
     {% endif %}
+    </div>{# /results-container #}
 </div>
 {% endblock %}

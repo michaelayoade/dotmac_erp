@@ -446,6 +446,175 @@ def generate_form_context_with_org(self, organization_id: UUID) -> dict:
     return context
 ```
 
+## Form Design Standards
+
+### Context Query Parameters
+Forms that create entities linked to a parent MUST accept the parent ID as a query parameter. Use consistent names across all modules:
+
+| Parameter | Used By |
+|-----------|---------|
+| `customer_id` | Receipts, invoices, quotes, sales orders |
+| `supplier_id` | AP payments, purchase orders |
+| `invoice_id` | Receipts (AR), payments (AP) |
+| `account_id` | Journal entries, transfers |
+| `project_id` | Expenses, time entries, tasks |
+| `po_id` | Goods received notes |
+| `so_id` | Delivery notes, invoices |
+| `quote_id` | Sales orders |
+| `employee_id` | Leave requests, payslips, expense claims |
+
+### Form Context Method Pattern
+Every form MUST have a dedicated `*_form_context()` method on the web service that returns all dropdown data, defaults, and pre-selections:
+
+```python
+@staticmethod
+def receipt_form_context(
+    db: Session,
+    organization_id: str,
+    *,
+    invoice_id: Optional[str] = None,   # Query param pre-selection
+    customer_id: Optional[str] = None,  # Query param pre-selection
+    receipt_id: Optional[str] = None,   # Edit mode
+) -> dict:
+    context = {"customers": [...], "accounts": [...], "payment_methods": [...]}
+
+    # Pre-select from query param
+    if invoice_id:
+        invoice = service.get_by_id(UUID(invoice_id))
+        context["selected_invoice"] = invoice
+        context["selected_customer_id"] = str(invoice.customer_id)
+        context["locked_customer"] = True  # Lock downstream field
+
+    return context
+```
+
+### Data Precedence Rules
+When populating form fields, apply values in this order (first wins):
+
+1. **Edit mode** (existing record) — overrides everything
+2. **Related entity from query param** — e.g., `?invoice_id=` sets customer and amount
+3. **Organization defaults** — today's date, org currency, default accounts
+4. **Empty/blank** — field left for user input
+
+### Locked Field UI
+When a field is auto-selected from a query param, display it read-only and hide the editable control:
+
+```html
+{# Locked display when customer comes from invoice context #}
+<div x-show="lockedCustomer" class="form-input bg-slate-50 dark:bg-slate-700 cursor-not-allowed">
+    <span x-text="selectedCustomerName"></span>
+    <span class="text-xs text-slate-400 ml-2">(from invoice)</span>
+</div>
+<select x-show="!lockedCustomer" name="customer_id" class="form-select">
+    {% for c in customers %}
+    <option value="{{ c.customer_id }}" {{ 'selected' if selected_customer_id == c.customer_id|string }}>
+        {{ c.customer_name }}
+    </option>
+    {% endfor %}
+</select>
+```
+
+### Context Banner
+When a form is prefilled from a parent entity, show a concise banner at the top:
+
+```html
+{% if selected_invoice %}
+<div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4 flex items-center gap-2">
+    <svg class="w-4 h-4 text-blue-500" ...><!-- info icon --></svg>
+    <span class="text-sm text-blue-700 dark:text-blue-300">
+        Creating receipt for Invoice <strong>{{ selected_invoice.invoice_number }}</strong>
+        — {{ selected_invoice.total | format_currency }}
+    </span>
+</div>
+{% endif %}
+```
+
+### Navigation Continuity
+"New X" links from detail pages MUST include the parent entity ID:
+
+```html
+{# On invoice detail page — link to new receipt #}
+<a href="/finance/ar/receipts/new?invoice_id={{ invoice.invoice_id }}" class="btn btn-primary">
+    Record Payment
+</a>
+
+{# On customer detail page — link to new invoice #}
+<a href="/finance/ar/invoices/new?customer_id={{ customer.customer_id }}" class="btn btn-primary">
+    New Invoice
+</a>
+```
+
+### Post-Submit Redirect
+After successful form submission, redirect based on context:
+
+```python
+# If form was opened from a parent entity, redirect back to it
+if invoice_id:
+    return RedirectResponse(
+        url=f"/finance/ar/invoices/{invoice_id}?success=Receipt+created",
+        status_code=303,
+    )
+# Otherwise redirect to the list page
+return RedirectResponse(
+    url="/finance/ar/receipts?success=Receipt+created",
+    status_code=303,
+)
+```
+
+### Error Re-Population
+On validation failure, re-render the form with the error message and original input preserved:
+
+```python
+except (ValueError, ValidationError) as e:
+    context = base_context(request, auth, "New Receipt", "finance", db=db)
+    context.update(self.receipt_form_context(db, str(auth.organization_id)))
+    context["error"] = str(e)
+    context["form_data"] = data  # Re-populate fields
+    return templates.TemplateResponse(request, "finance/ar/receipt_form.html", context)
+```
+
+### Form Template Section Order
+All form templates MUST follow this layout:
+
+1. **Context banner** (if prefilled from parent entity)
+2. **Error summary** (if validation failed)
+3. **Header details** — dates, reference numbers, payment method
+4. **Primary entity** — customer/supplier/employee selector
+5. **Amounts and allocations** — line items, totals
+6. **Notes and attachments** — optional fields
+7. **Form actions** — Cancel (left), Save (right), optional Save & New
+
+### Build Input Methods
+Parse and validate raw form data in a dedicated static method — never in the route:
+
+```python
+@staticmethod
+def build_receipt_input(data: dict) -> CustomerPaymentInput:
+    return CustomerPaymentInput(
+        customer_id=UUID(data["customer_id"]),
+        payment_date=parse_date(data.get("payment_date")) or date.today(),
+        payment_method=PaymentMethod(data.get("payment_method", "BANK_TRANSFER")),
+        amount=Decimal(data.get("amount", "0")),
+        allocations=[
+            PaymentAllocationInput(**a)
+            for a in json.loads(data.get("allocations", "[]"))
+        ],
+    )
+```
+
+### Cross-Entity Validation
+When a form references a parent entity, validate ownership on submit:
+
+```python
+# Reject if invoice doesn't belong to selected customer
+if invoice.customer_id != input_data.customer_id:
+    raise ValueError("Invoice does not belong to selected customer")
+
+# Reject if entity belongs to different org (multi-tenancy)
+if invoice.organization_id != org_id:
+    raise ValueError("Invoice not found")
+```
+
 ## Error Handling Rules
 
 ### Never Use Bare `except:`
@@ -657,6 +826,136 @@ Optional:
 - `ERPNEXT_API_KEY`, `ERPNEXT_API_SECRET` - ERPNext integration
 - `SMTP_*` - Email configuration
 - `PAYSTACK_SECRET_KEY` - Payment processing
+
+## UI/UX Design Standards
+
+### Typography Rules
+- **Page titles (h1)**: `text-xl font-semibold font-display` (Fraunces) — via `topbar` macro
+- **Section titles (h2/h3)**: `text-lg font-semibold` or `text-xl font-semibold` (DM Sans)
+- **Body text**: `text-sm` (14px) — default for tables, forms, descriptions
+- **Captions/labels**: `text-xs font-medium` (12px) — timestamps, secondary labels
+- **Financial values**: ALWAYS `font-mono tabular-nums` — amounts, IDs, invoice numbers
+- **Minimum text size**: `text-xs` (12px) — NEVER use `text-[10px]` or `text-[11px]`
+- **Table column headers**: Use `label-caps` or uppercase styling consistently
+
+### Spacing Conventions
+- `gap-4` between cards in a grid
+- `gap-6` between page sections (`space-y-6` for vertical flow)
+- `gap-8` between major page zones
+- `p-4` for card padding on mobile, `p-6` on desktop
+- `p-5` for stat cards
+
+### Color Standards
+| Status | Color | Text Class | BG Class |
+|--------|-------|------------|----------|
+| Success/Paid/Active | Emerald | `text-emerald-700 dark:text-emerald-400` | `bg-emerald-50 dark:bg-emerald-900/20` |
+| Warning/Pending/Draft | Amber | `text-amber-700 dark:text-amber-400` | `bg-amber-50 dark:bg-amber-900/20` |
+| Error/Overdue/Rejected | Rose | `text-rose-700 dark:text-rose-400` | `bg-rose-50 dark:bg-rose-900/20` |
+| Info/Processing | Blue | `text-blue-700 dark:text-blue-400` | `bg-blue-50 dark:bg-blue-900/20` |
+| Neutral/Closed/Voided | Slate | `text-slate-600 dark:text-slate-400` | `bg-slate-100 dark:bg-slate-800` |
+
+Module accents: Finance=teal, People=violet, Expense=amber, Inventory=emerald, Procurement=blue, Operations=indigo.
+
+### Component Standards
+
+**Status badges**: ALWAYS use `{{ status_badge(status, 'sm') }}` macro from `components/macros.html`. NEVER create inline badge HTML.
+
+**Empty states**: ALWAYS use `{{ empty_state(title, description, icon) }}` macro. Every table `{% for %}` loop MUST have `{% else %}` with an empty state.
+
+**Tables**:
+- Wrap in `<div class="table-container">` for horizontal scroll
+- Left-align text, right-align numbers (`text-right`), center status badges (`text-center`)
+- Add `scope="col"` to all `<th>` elements
+- Hide secondary columns on mobile: `hidden sm:table-cell`
+- Amounts: `<td class="text-right font-mono">{{ amount | format_currency }}</td>`
+
+**Forms**:
+- Labels above fields: `<label class="form-label">Name</label>`
+- Required indicator: `<span class="text-rose-500">*</span>` after label text
+- Error display: Use `.form-error` class below field, PLUS error summary at form top
+- NEVER use `alert()` for validation — use inline errors or toast notifications
+- All POST forms MUST include `{{ request.state.csrf_form | safe }}`
+
+**Modals**: MUST include `role="dialog"`, `aria-modal="true"`, `aria-labelledby="modal-title-id"`, `@keydown.escape` handler, and focus trap.
+
+**Toasts**: Bottom-right, stacked upward. Auto-dismiss: 5s success, 8s warning, persistent error. Use `aria-live="polite"`.
+
+**Search / Typeahead**: ALWAYS use the `live_search` macro from `components/macros.html`. NEVER write inline search forms.
+```jinja2
+{# Simple search (no filters) #}
+{{ live_search(search=search, base_url="/module/items", placeholder="Search items...") }}
+
+{# With static filter dropdowns #}
+{{ live_search(
+    search=search,
+    filters=[
+        {"name": "status", "label": "All Status", "value": status,
+         "options": [{"value": "ACTIVE", "label": "Active"}, {"value": "INACTIVE", "label": "Inactive"}]}
+    ],
+    base_url="/module/items",
+    placeholder="Search items..."
+) }}
+
+{# With dynamic filters (Jinja2 loops) — use {% call %} block #}
+{% call(search_attrs) live_search(search=search, base_url="/module/items", placeholder="Search items...") %}
+    <select name="category_id" class="form-select" {{ search_attrs }}>
+        <option value="">All Categories</option>
+        {% for cat in categories %}
+        <option value="{{ cat.id }}" {{ 'selected' if selected == cat.id|string else '' }}>{{ cat.name }}</option>
+        {% endfor %}
+    </select>
+{% endcall %}
+
+{# With entity autosuggest (navigates to detail page on select) #}
+{{ live_search(search=search, base_url="/finance/ar/customers",
+               entity_type="customers", placeholder="Search customers...") }}
+```
+- Results table + pagination MUST be wrapped in `<div id="results-container">...</div>`
+- The macro creates its own `<div class="card p-4">` — never double-wrap in another card
+- `search_attrs` in `{% call %}` blocks provides HTMX trigger/target attrs for custom filter elements
+- Companion JS: `static/js/live-search.js` (auto-loaded in `base.html`)
+- Old macros (`search_filter_bar`, `search_autosuggest`) are DEPRECATED — do not use
+
+### Dark Mode Rules
+- ALWAYS pair light/dark variants: `bg-white dark:bg-slate-800`, `text-slate-900 dark:text-white`, `border-slate-200 dark:border-slate-700`
+- Never use pure black (`#000000`) — darkest is `slate-900`
+- Test both modes before merging template changes
+
+### Accessibility (WCAG 2.2 AA)
+- All icon-only buttons MUST have `aria-label`: `<button aria-label="Delete invoice">`
+- Sidebar `<nav>` needs `aria-label="Main navigation"`
+- Active sidebar links need `aria-current="page"`
+- Breadcrumbs: `<nav aria-label="Breadcrumb">` with `<ol>` structure, final item gets `aria-current="page"`
+- Focus visible on all interactive elements (existing `:focus-visible` CSS is correct)
+- Color must NEVER be the sole indicator — always pair with text, icon, or pattern
+- Touch targets: minimum 44x44px on mobile
+- Decorative icons: `aria-hidden="true"`
+
+### Data Display
+- **Dates**: `DD MMM YYYY` in tables (e.g., "07 Feb 2026"), ISO `YYYY-MM-DD` in form inputs
+- **Currency**: ISO code or symbol with `font-mono tabular-nums`, right-aligned
+- **Enums**: `{{ status | replace('_', ' ') | title }}` — never show raw enum values
+- **None/null**: `{{ var if var else '' }}` or `{{ var if var else '-' }}` — NEVER render "None"
+- **Negative amounts**: Parentheses + rose text: `<span class="text-rose-600">(1,234.56)</span>`
+
+### Transition Standards
+- Color/opacity changes: `transition-colors duration-150`
+- Layout changes: `transition-all duration-200 ease-out`
+- Modal enter: `duration-200 ease-out`, leave: `duration-150 ease-in`
+- NEVER exceed 400ms for any UI transition
+- Respect `@media (prefers-reduced-motion: reduce)` — CSS handles this
+
+### Template Pre-Commit Checklist
+- [ ] `font-display` on page titles (via topbar macro)
+- [ ] `font-mono tabular-nums` on all financial values
+- [ ] Status badges use `status_badge()` macro (no inline badges)
+- [ ] Tables have `scope="col"` on `<th>`, amounts `text-right`, in `table-container`
+- [ ] Empty states on all tables/lists (via `empty_state()` macro)
+- [ ] Dark mode variants on all bg, text, border classes
+- [ ] All icon-only buttons have `aria-label`
+- [ ] Modals have `role="dialog"` + `aria-modal="true"` + escape handler
+- [ ] No text smaller than `text-xs` (12px)
+- [ ] Dates as `DD MMM YYYY`, enums filtered with `replace('_', ' ') | title`
 
 ## Security Checklist (Pre-Commit)
 

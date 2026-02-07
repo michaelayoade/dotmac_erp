@@ -44,10 +44,12 @@
 .app-header {
     padding-left: var(--content-gutter);
     padding-right: var(--content-gutter);
+    width: 100%;
 }
 
 .app-page {
     padding: var(--content-gutter);
+    width: 100%;
 }
 
 .app-footer {

@@ -1,4 +1,5 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import live_search %}
 
 {% block page_title %}Applicants{% endblock %}
 
@@ -27,46 +28,30 @@
         </a>
     </div>
 
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap gap-4 items-end">
-                <div class="flex-1 min-w-[200px] max-w-md">
-                    <label for="search" class="form-label">Search</label>
-                    <input type="text" name="search" id="search" value="{{ search | default('', true) }}"
-                        placeholder="Search by name, email, or application #"
-                        class="form-input w-full">
-                </div>
-                <div class="w-44">
-                    <label for="status" class="form-label">Status</label>
-                    <select name="status" id="status" class="form-select w-full">
-                        <option value="">All</option>
-                        {% for s in statuses %}
-                        <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="w-56">
-                    <label for="job_opening_id" class="form-label">Job Opening</label>
-                    <select name="job_opening_id" id="job_opening_id" class="form-select w-full">
-                        <option value="">All</option>
-                        {% for opening in job_openings %}
-                        <option value="{{ opening.job_opening_id }}" {% if job_opening_id == opening.job_opening_id|string %}selected{% endif %}>
-                            {{ opening.job_title }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="w-40">
-                    <label for="source" class="form-label">Source</label>
-                    <input type="text" name="source" id="source" value="{{ source | default('', true) }}"
-                        placeholder="e.g. LinkedIn"
-                        class="form-input w-full">
-                </div>
-                <button type="submit" class="btn btn-secondary h-10">Filter</button>
-            </div>
-        </form>
-    </div>
+    {% call(search_attrs) live_search(
+        search=search,
+        base_url="/people/recruit/applicants",
+        placeholder="Search applicants..."
+    ) %}
+        <select name="status" class="form-select" {{ search_attrs }}>
+            <option value="">All Statuses</option>
+            {% for s in statuses %}
+            <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
+            {% endfor %}
+        </select>
+        <select name="job_opening_id" class="form-select" {{ search_attrs }}>
+            <option value="">All Job Openings</option>
+            {% for opening in job_openings %}
+            <option value="{{ opening.job_opening_id }}" {{ 'selected' if job_opening_id == opening.job_opening_id|string else '' }}>
+                {{ opening.job_title }}
+            </option>
+            {% endfor %}
+        </select>
+        <input type="text" name="source" value="{{ source | default('', true) }}"
+            placeholder="e.g. LinkedIn" class="form-input w-40" {{ search_attrs }}>
+    {% endcall %}
 
+    <div id="results-container">
     {% if applicants %}
     <div class="card overflow-hidden">
         <div class="overflow-x-auto">
@@ -144,5 +129,6 @@
         </div>
     </div>
     {% endif %}
+    </div>{# /results-container #}
 </div>
 {% endblock %}

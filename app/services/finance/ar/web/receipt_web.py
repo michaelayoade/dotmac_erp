@@ -245,6 +245,7 @@ class ReceiptWebService:
         organization_id: str,
         invoice_id: Optional[str] = None,
         receipt_id: Optional[str] = None,
+        customer_id: Optional[str] = None,
     ) -> dict:
         """Get context for receipt create/edit form."""
         logger.debug(
@@ -313,6 +314,16 @@ class ReceiptWebService:
             except Exception:
                 pass
 
+        # Determine selected customer (if provided)
+        selected_customer_id = None
+        if customer_id:
+            try:
+                selected_customer = customer_service.get(db, org_id, customer_id)
+                if selected_customer and selected_customer.organization_id == org_id:
+                    selected_customer_id = str(selected_customer.customer_id)
+            except Exception:
+                selected_customer_id = None
+
         # Get customers with WHT info
         customers_list = []
         for customer in customer_service.list(
@@ -369,6 +380,10 @@ class ReceiptWebService:
 
         if invoice_id:
             query = query.filter(Invoice.invoice_id == coerce_uuid(invoice_id))
+        elif selected_customer_id:
+            query = query.filter(
+                Invoice.customer_id == coerce_uuid(selected_customer_id)
+            )
 
         rows = query.order_by(Invoice.due_date).all()
 
@@ -404,6 +419,7 @@ class ReceiptWebService:
             "open_invoices": open_invoices,
             "receipt": receipt_view,
             "existing_allocations": existing_allocations,
+            "selected_customer_id": selected_customer_id,
         }
         context.update(get_currency_context(db, organization_id))
         return context
@@ -607,6 +623,7 @@ class ReceiptWebService:
         auth: WebAuthContext,
         db: Session,
         invoice_id: Optional[str],
+        customer_id: Optional[str] = None,
     ) -> HTMLResponse:
         """Render new receipt form."""
         context = base_context(request, auth, "New AR Receipt", "ar")
@@ -615,6 +632,7 @@ class ReceiptWebService:
                 db,
                 str(auth.organization_id),
                 invoice_id=invoice_id,
+                customer_id=customer_id,
             )
         )
         return templates.TemplateResponse(

@@ -47,10 +47,9 @@
     </div>
 
     <div class="card p-6 print:shadow-none print:border-0">
-        {% include "partials/_document_header.html" with {
-            "doc_title": "Cash flow statement",
-            "doc_number": start_date ~ " to " ~ end_date
-        } %}
+                {% set doc_title = "Cash flow statement" %}
+        {% set doc_number = start_date ~ " to " ~ end_date %}
+        {% include "partials/_document_header.html" %}
         <div class="text-center mb-8 print:mb-4">
             <p class="text-slate-500 dark:text-slate-400">{{ start_date }} to {{ end_date }}</p>
         </div>

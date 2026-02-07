@@ -596,6 +596,207 @@
                 }
             });
         });
+
+        // ═══════════════════════════════════════════════════════════════════
+        // Form Prefill + Locking (context-aware)
+        // Prefills fields from query params and locks them by default.
+        // Applies to entity forms (POST forms or JS-submitted forms).
+        // ═══════════════════════════════════════════════════════════════════
+        document.addEventListener('DOMContentLoaded', function() {
+            const params = new URLSearchParams(window.location.search);
+            if (!params || params.size === 0) return;
+
+            const ignoreKeys = new Set([
+                'search', 'q', 'page', 'limit', 'offset', 'status',
+                'start_date', 'end_date', 'from', 'to', 'sort', 'order',
+                'success', 'error', 'saved', 'tab'
+            ]);
+
+            const labelMap = {
+                customer_id: 'Customer',
+                supplier_id: 'Supplier',
+                invoice_id: 'Invoice',
+                receipt_id: 'Receipt',
+                payment_id: 'Payment',
+                bank_account_id: 'Bank Account',
+                account_id: 'Account',
+                gl_account_id: 'GL Account',
+                project_id: 'Project',
+                cost_center_id: 'Cost Center',
+                po_id: 'Purchase Order',
+                quote_id: 'Quote',
+                sales_order_id: 'Sales Order',
+                warehouse_id: 'Warehouse',
+                item_id: 'Item',
+                tax_code_id: 'Tax Code',
+                payment_terms_id: 'Payment Terms',
+                fund_id: 'Fund',
+                fiscal_year_id: 'Fiscal Year',
+                fiscal_period_id: 'Fiscal Period'
+            };
+
+            function isEntityForm(form) {
+                const method = (form.getAttribute('method') || '').toUpperCase();
+                const action = (form.getAttribute('action') || '').toLowerCase();
+                return (
+                    method === 'POST' ||
+                    form.hasAttribute('hx-post') ||
+                    form.hasAttribute('@submit.prevent') ||
+                    form.hasAttribute('x-on:submit.prevent') ||
+                    action.includes('/new') ||
+                    action.includes('/edit')
+                );
+            }
+
+            function humanizeKey(key) {
+                if (labelMap[key]) return labelMap[key];
+                return key
+                    .replace(/_id$/, '')
+                    .replace(/_/g, ' ')
+                    .replace(/\b\w/g, (c) => c.toUpperCase());
+            }
+
+            document.querySelectorAll('form').forEach((form) => {
+                if (!isEntityForm(form)) return;
+
+                const applied = [];
+                params.forEach((value, key) => {
+                    if (!value || ignoreKeys.has(key)) return;
+                    if (!key.endsWith('_id') && !labelMap[key]) return;
+
+                    const field = form.querySelector(`[name="${CSS.escape(key)}"]`);
+                    if (!field) return;
+
+                    // Apply value
+                    if (field.value !== value) {
+                        field.value = value;
+                        field.dispatchEvent(new Event('input', { bubbles: true }));
+                        field.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+
+                    // Lock field unless explicitly opted out
+                    const lock =
+                        (form.dataset.prefillLock || 'true') !== 'false' &&
+                        (field.dataset.prefillLock || 'true') !== 'false';
+
+                    if (lock && !field.disabled) {
+                        field.disabled = true;
+                        field.classList.add('prefill-locked');
+                        if (!form.querySelector(`input[type="hidden"][name="${CSS.escape(key)}"][data-prefill-hidden="1"]`)) {
+                            const hidden = document.createElement('input');
+                            hidden.type = 'hidden';
+                            hidden.name = key;
+                            hidden.value = value;
+                            hidden.dataset.prefillHidden = '1';
+                            form.appendChild(hidden);
+                        }
+                    }
+
+                    applied.push(key);
+                });
+
+                if (applied.length) {
+                    const banner = document.createElement('div');
+                    const labels = applied.map(humanizeKey);
+                    banner.className = 'mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200';
+                    banner.innerHTML = `
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="font-medium">Prefilled:</span>
+                                <span>${labels.join(', ')}</span>
+                            </div>
+                            <a href="${window.location.pathname}"
+                               class="text-xs font-medium text-amber-700 hover:text-amber-900 dark:text-amber-200 dark:hover:text-amber-100">
+                               Clear context
+                            </a>
+                        </div>
+                    `;
+                    form.parentNode.insertBefore(banner, form);
+                }
+            });
+        });
+
+        // ═══════════════════════════════════════════════════════════════════
+        // Context Link Propagation
+        // Appends current context (*_id) to "new" links within the same module.
+        // ═══════════════════════════════════════════════════════════════════
+        document.addEventListener('DOMContentLoaded', function() {
+            const query = new URLSearchParams(window.location.search);
+            const path = window.location.pathname;
+            const segments = path.split('/').filter(Boolean);
+            const modulePrefix =
+                segments.length >= 2 ? `/${segments[0]}/${segments[1]}` : `/${segments[0] || ''}`;
+
+            const uuidRe = /[0-9a-fA-F-]{36}/;
+            const entityOverrides = {
+                'purchase-orders': 'po_id',
+                'sales-orders': 'sales_order_id',
+                'credit-notes': 'credit_note_id',
+                'goods-receipts': 'receipt_id',
+                'banking/accounts': 'bank_account_id'
+            };
+
+            function singularize(entity) {
+                if (!entity) return entity;
+                const cleaned = entity.replace(/-+/g, '_');
+                return cleaned.endsWith('s') ? cleaned.slice(0, -1) : cleaned;
+            }
+
+            function addContextParam(key, value) {
+                if (!key || !value) return;
+                if (!query.has(key)) {
+                    query.set(key, value);
+                }
+            }
+
+            // Derive context from path: /module/entity/{uuid} or /module/entity/{uuid}/edit
+            if (segments.length >= 3) {
+                const tail = segments[segments.length - 1];
+                const prev = segments[segments.length - 2];
+                let entity = prev;
+                let id = null;
+
+                if (uuidRe.test(tail)) {
+                    id = tail;
+                } else if (uuidRe.test(prev)) {
+                    id = prev;
+                    entity = segments[segments.length - 3] || '';
+                }
+
+                if (id) {
+                    const overrideKey = entityOverrides[`${segments[0]}/${segments[1]}/${entity}`] ||
+                                        entityOverrides[`${segments[0]}/${segments[1]}`] ||
+                                        entityOverrides[entity];
+                    const key = overrideKey || `${singularize(entity)}_id`;
+                    addContextParam(key, id);
+                }
+            }
+
+            const contextKeys = Array.from(query.keys()).filter((k) => k.endsWith('_id'));
+            if (!contextKeys.length) return;
+
+            document.querySelectorAll('a[href]').forEach((link) => {
+                if (link.hasAttribute('data-no-context')) return;
+                const href = link.getAttribute('href');
+                if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+
+                const url = new URL(href, window.location.origin);
+                if (!url.pathname.startsWith(modulePrefix)) return;
+                if (!url.pathname.includes('/new')) return;
+
+                let changed = false;
+                contextKeys.forEach((key) => {
+                    if (!url.searchParams.has(key)) {
+                        url.searchParams.set(key, query.get(key));
+                        changed = true;
+                    }
+                });
+
+                if (changed) {
+                    link.setAttribute('href', url.pathname + '?' + url.searchParams.toString() + url.hash);
+                }
+            });
+        });
     </script>
 
     {% block scripts %}{% endblock %}

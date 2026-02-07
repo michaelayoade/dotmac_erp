@@ -286,6 +286,7 @@
                         {% for c in customers %}
                         <option value="{{ c.customer_id }}"
                                 data-email="{{ c.email or '' }}"
+                                data-default-tax-code-id="{{ c.default_tax_code_id or '' }}"
                                 {% if selected_customer_id == c.customer_id %}selected{% endif %}>
                             {{ c.name }}
                         </option>

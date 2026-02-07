@@ -594,8 +594,6 @@ class DotMacCRMSyncService:
                         has_more = True
 
                 current_offset += batch_size
-                if len(results) < batch_size:
-                    break
 
         return InventoryListResponse(
             items=items,

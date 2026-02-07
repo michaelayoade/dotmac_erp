@@ -260,6 +260,10 @@ def create_expense_claim(
             project_id=payload.project_id,
             currency_code=payload.currency_code,
             cost_center_id=payload.cost_center_id,
+            recipient_bank_code=payload.recipient_bank_code,
+            recipient_bank_name=payload.recipient_bank_name,
+            recipient_account_number=payload.recipient_account_number,
+            recipient_name=payload.recipient_name,
             notes=payload.notes,
             items=[item.model_dump() for item in payload.items],
         )

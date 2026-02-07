@@ -7,7 +7,12 @@ from unittest.mock import MagicMock, patch
 from types import ModuleType
 
 import pytest
-from fastapi.testclient import TestClient
+import asyncio
+import json
+from http.cookies import SimpleCookie
+from urllib.parse import urlencode, urlparse
+
+import httpx
 from jose import jwt
 from sqlalchemy import create_engine, String, TypeDecorator, Text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
@@ -280,8 +285,8 @@ from app.models.expense import (
     ExpenseCategory,
     ExpenseClaimAction,
 )
+from app.models.finance.platform.idempotency_record import IdempotencyRecord
 
-# IdempotencyRecord uses PostgreSQL-specific defaults; omit from default SQLite tables.
 # Import discipline models to resolve Employee relationship
 from app.models.people.discipline import DisciplinaryCase  # noqa: F401
 
@@ -305,6 +310,7 @@ SQLITE_COMPATIBLE_TABLES = [
     ExpenseClaim.__table__,
     ExpenseClaimItem.__table__,
     ExpenseClaimAction.__table__,
+    IdempotencyRecord.__table__,
 ]
 
 # Create only SQLite-compatible tables, tolerating per-table failures
@@ -418,6 +424,141 @@ def client(db_session):
     seed_audit_settings(db_session)
     seed_scheduler_settings(db_session)
 
+    class _ASGIResponse:
+        def __init__(
+            self, status_code: int, headers: list[tuple[str, str]], body: bytes
+        ):
+            self.status_code = status_code
+            self.headers = httpx.Headers(headers)
+            self.content = body
+            self.text = body.decode(errors="replace")
+            self._cookies = httpx.Cookies()
+
+        def json(self):
+            return json.loads(self.content.decode() or "null")
+
+        @property
+        def cookies(self):
+            return self._cookies
+
+    class _ASGIClient:
+        def __init__(self, app):
+            self._app = app
+            self._cookies = httpx.Cookies()
+
+        def _build_headers(
+            self, headers: dict | None, body: bytes
+        ) -> list[tuple[bytes, bytes]]:
+            hdrs = []
+            if headers:
+                for k, v in headers.items():
+                    hdrs.append((k.lower().encode(), str(v).encode()))
+            if self._cookies:
+                cookie_header = "; ".join(
+                    f"{name}={value}" for name, value in self._cookies.items()
+                )
+                hdrs.append((b"cookie", cookie_header.encode()))
+            if body and not any(k == b"content-length" for k, _ in hdrs):
+                hdrs.append((b"content-length", str(len(body)).encode()))
+            return hdrs
+
+        async def _request(
+            self,
+            method: str,
+            url: str,
+            json_data=None,
+            data=None,
+            headers: dict | None = None,
+        ) -> _ASGIResponse:
+            parsed = urlparse(url)
+            path = parsed.path or "/"
+            query = parsed.query.encode()
+
+            body = b""
+            req_headers = headers.copy() if headers else {}
+
+            if json_data is not None:
+                body = json.dumps(json_data).encode()
+                req_headers.setdefault("content-type", "application/json")
+            elif data is not None:
+                if isinstance(data, dict):
+                    body = urlencode(data, doseq=True).encode()
+                else:
+                    body = str(data).encode()
+                req_headers.setdefault(
+                    "content-type", "application/x-www-form-urlencoded"
+                )
+
+            scope = {
+                "type": "http",
+                "method": method,
+                "path": path,
+                "raw_path": path.encode(),
+                "query_string": query,
+                "headers": self._build_headers(req_headers, body),
+                "client": ("127.0.0.1", 12345),
+                "server": ("testserver", 80),
+                "scheme": "http",
+            }
+
+            response_status = 500
+            response_headers: list[tuple[bytes, bytes]] = []
+            response_body_parts: list[bytes] = []
+
+            async def receive():
+                nonlocal body
+                if body is None:
+                    return {"type": "http.disconnect"}
+                data = body
+                body = None
+                return {"type": "http.request", "body": data, "more_body": False}
+
+            async def send(message):
+                nonlocal response_status, response_headers, response_body_parts
+                if message["type"] == "http.response.start":
+                    response_status = message["status"]
+                    response_headers = message.get("headers", [])
+                elif message["type"] == "http.response.body":
+                    response_body_parts.append(message.get("body", b""))
+
+            await self._app(scope, receive, send)
+
+            decoded_headers = [
+                (k.decode("latin-1"), v.decode("latin-1")) for k, v in response_headers
+            ]
+            response = _ASGIResponse(
+                response_status, decoded_headers, b"".join(response_body_parts)
+            )
+
+            # Update cookies from Set-Cookie headers
+            for name, value in decoded_headers:
+                if name.lower() == "set-cookie":
+                    cookie = SimpleCookie()
+                    cookie.load(value)
+                    for key, morsel in cookie.items():
+                        response._cookies.set(key, morsel.value)
+                        self._cookies.set(key, morsel.value)
+
+            return response
+
+        def request(self, method: str, url: str, **kwargs):
+            return asyncio.run(self._request(method, url, **kwargs))
+
+        def get(self, url: str, **kwargs):
+            return self.request("GET", url, **kwargs)
+
+        def post(self, url: str, **kwargs):
+            return self.request("POST", url, **kwargs)
+
+        def put(self, url: str, **kwargs):
+            return self.request("PUT", url, **kwargs)
+
+        def patch(self, url: str, **kwargs):
+            return self.request("PATCH", url, **kwargs)
+
+        def delete(self, url: str, **kwargs):
+            return self.request("DELETE", url, **kwargs)
+
     # Mock the app startup seeding to avoid duplicate seeding
     with (
         patch("app.main.seed_auth_settings", create=True),
@@ -425,8 +566,7 @@ def client(db_session):
         patch("app.main.seed_scheduler_settings", create=True),
         patch("app.main.SessionLocal", return_value=MagicMock(), create=True),
     ):
-        with TestClient(app, raise_server_exceptions=False) as test_client:
-            yield test_client
+        yield _ASGIClient(app)
 
     app.dependency_overrides.clear()
 

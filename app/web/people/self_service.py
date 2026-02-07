@@ -391,7 +391,9 @@ async def create_expense_claim(
     description = _safe_form_text(form.get("description"))
     claimed_amount = _safe_form_text(form.get("claimed_amount"))
     recipient_bank_code = _safe_form_text(form.get("recipient_bank_code"))
+    recipient_bank_name = _safe_form_text(form.get("recipient_bank_name"))
     recipient_account_number = _safe_form_text(form.get("recipient_account_number"))
+    recipient_name = _safe_form_text(form.get("recipient_name"))
     receipt_url = _safe_form_text(form.get("receipt_url"))
     receipt_number = _safe_form_text(form.get("receipt_number"))
     receipt_file = form.get("receipt_file")
@@ -430,7 +432,9 @@ async def create_expense_claim(
         description=description,
         claimed_amount=claimed_amount,
         recipient_bank_code=recipient_bank_code or None,
+        recipient_bank_name=recipient_bank_name or None,
         recipient_account_number=recipient_account_number or None,
+        recipient_name=recipient_name or None,
         receipt_url=receipt_url or None,
         receipt_number=receipt_number or None,
         receipt_file=receipt_file,
@@ -474,7 +478,9 @@ async def update_expense_claim(
         raise HTTPException(status_code=400, detail="No claim items submitted")
 
     recipient_bank_code = _safe_form_text(form.get("recipient_bank_code"))
+    recipient_bank_name = _safe_form_text(form.get("recipient_bank_name"))
     recipient_account_number = _safe_form_text(form.get("recipient_account_number"))
+    recipient_name = _safe_form_text(form.get("recipient_name"))
     if not recipient_bank_code or not recipient_account_number:
         raise HTTPException(
             status_code=400, detail="Bank code and account number are required"
@@ -536,7 +542,9 @@ async def update_expense_claim(
         claim_id=claim_id,
         items=items,
         recipient_bank_code=recipient_bank_code or None,
+        recipient_bank_name=recipient_bank_name or None,
         recipient_account_number=recipient_account_number or None,
+        recipient_name=recipient_name or None,
         project_id=project_id,
         ticket_id=ticket_id,
         task_id=task_id,

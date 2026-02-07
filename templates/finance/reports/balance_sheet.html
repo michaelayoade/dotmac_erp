@@ -45,10 +45,9 @@
 
     <!-- Report -->
     <div class="card p-6 print:shadow-none print:border-0">
-        {% include "partials/_document_header.html" with {
-            "doc_title": "Statement of financial position",
-            "doc_number": as_of_date
-        } %}
+                {% set doc_title = "Statement of financial position" %}
+        {% set doc_number = as_of_date %}
+        {% include "partials/_document_header.html" %}
         <div class="text-center mb-8 print:mb-4">
             <p class="text-slate-500 dark:text-slate-400">As of {{ as_of_date }}</p>
             <p class="text-sm text-slate-400 dark:text-slate-500">{{ period_name }}</p>

@@ -32,10 +32,9 @@
 <div class="space-y-6 print:space-y-4">
     <!-- Report Header -->
     <div class="card p-6 print:border-0 print:p-0">
-        {% include "partials/_document_header.html" with {
-            "doc_title": "Bank Reconciliation Report",
-            "doc_number": report.reconciliation.reconciliation_date
-        } %}
+                {% set doc_title = "Bank Reconciliation Report" %}
+        {% set doc_number = report.reconciliation.reconciliation_date %}
+        {% include "partials/_document_header.html" %}
         <div class="text-center mb-6">
             <p class="text-slate-500">As of {{ report.reconciliation.reconciliation_date }}</p>
         </div>

@@ -85,11 +85,13 @@ def create_customer(
         customer_name=payload.customer_name,  # Template-friendly name
         trading_name=payload.trading_name,
         tax_id=payload.tax_id,  # Template-friendly name
+        vat_category=payload.vat_category,
         payment_terms_days=payload.payment_terms_days,  # Template-friendly name
         credit_limit=payload.credit_limit,
         currency_code=settings.default_functional_currency_code,
         default_revenue_account_id=payload.default_revenue_account_id,
         default_receivable_account_id=payload.default_receivable_account_id,  # Template-friendly name
+        default_tax_code_id=payload.default_tax_code_id,
     )
     return customer_service.create_customer(db, organization_id, input_data)
 
@@ -168,6 +170,7 @@ def create_ar_invoice(
     lines = [
         ARInvoiceLineInput(
             revenue_account_id=line.revenue_account_id,
+            item_id=line.item_id,
             description=line.description,
             quantity=line.quantity,
             unit_price=line.unit_price,

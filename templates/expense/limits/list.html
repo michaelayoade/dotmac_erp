@@ -1,5 +1,5 @@
 {% extends "expense/base_expense.html" %}
-{% from "components/macros.html" import pagination, empty_state %}
+{% from "components/macros.html" import live_search, pagination, empty_state %}
 
 {% block content %}
 <div class="space-y-6">
@@ -67,42 +67,31 @@
         </a>
     </div>
 
-    <!-- Filters -->
-    <div class="card p-4">
-        <form method="get" class="flex flex-wrap items-end gap-4">
-            <div class="min-w-[200px]">
-                <label class="form-label">Search</label>
-                <input type="text" name="search" value="{{ filters.search or '' }}" class="form-input" placeholder="Rule code or name">
-            </div>
-            <div class="min-w-[160px]">
-                <label class="form-label">Scope Type</label>
-                <select name="scope_type" class="form-input form-select">
-                    <option value="">All Scopes</option>
-                    {% for st in scope_types %}
-                    <option value="{{ st }}" {{ 'selected' if filters.scope_type == st else '' }}>{{ st | replace('_', ' ') | title }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="min-w-[130px]">
-                <label class="form-label">Status</label>
-                <select name="is_active" class="form-input form-select">
-                    <option value="">All</option>
-                    <option value="true" {{ 'selected' if filters.is_active == 'true' else '' }}>Active</option>
-                    <option value="false" {{ 'selected' if filters.is_active == 'false' else '' }}>Inactive</option>
-                </select>
-            </div>
-            <button type="submit" class="btn btn-secondary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                </svg>
-                Filter
-            </button>
-            {% if filters.search or filters.scope_type or filters.is_active %}
-            <a href="/expense/limits/rules" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300">Clear</a>
-            {% endif %}
-        </form>
-    </div>
+    {% call(search_attrs) live_search(
+        search=filters.search or '',
+        filters=[
+            {
+                "name": "is_active",
+                "label": "All Status",
+                "value": filters.is_active or "",
+                "options": [
+                    {"value": "true", "label": "Active"},
+                    {"value": "false", "label": "Inactive"}
+                ]
+            }
+        ],
+        base_url="/expense/limits",
+        placeholder="Search limits..."
+    ) %}
+        <select name="scope_type" class="form-select" {{ search_attrs }}>
+            <option value="">All Scopes</option>
+            {% for st in scope_types %}
+            <option value="{{ st }}" {{ 'selected' if filters.scope_type == st else '' }}>{{ st | replace('_', ' ') | title }}</option>
+            {% endfor %}
+        </select>
+    {% endcall %}
 
+    <div id="results-container">
     <!-- Rules Table -->
     <div class="card overflow-hidden">
         {% if rules %}
@@ -110,15 +99,15 @@
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Rule Code</th>
-                        <th>Name</th>
-                        <th>Scope</th>
-                        <th>Period</th>
-                        <th class="text-right">Limit Amount</th>
-                        <th>Action</th>
-                        <th>Priority</th>
-                        <th>Status</th>
-                        <th></th>
+                        <th scope="col">Rule Code</th>
+                        <th scope="col">Name</th>
+                        <th scope="col">Scope</th>
+                        <th scope="col">Period</th>
+                        <th scope="col" class="text-right">Limit Amount</th>
+                        <th scope="col">Action</th>
+                        <th scope="col">Priority</th>
+                        <th scope="col">Status</th>
+                        <th scope="col"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -161,7 +150,7 @@
                                 </a>
                                 <form method="post" action="/expense/limits/rules/{{ rule.rule_id }}/delete" class="inline" onsubmit="return confirm('Delete this rule?')">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                                    <button type="submit" class="table-action-btn text-red-500 hover:text-red-700" title="Delete">
+                                    <button type="submit" class="table-action-btn text-red-500 hover:text-red-700" title="Delete" aria-label="Delete">
                                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                         </svg>
@@ -185,5 +174,6 @@
         ) }}
         {% endif %}
     </div>
+    </div>{# /results-container #}
 </div>
 {% endblock %}

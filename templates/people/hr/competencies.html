@@ -1,4 +1,5 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import live_search %}
 
 {% block page_title %}Competencies{% endblock %}
 
@@ -45,32 +46,18 @@
     </div>
     {% endif %}
 
-    <!-- Filters -->
-    <div class="card p-4">
-        <form method="get" action="/people/hr/competencies" class="flex flex-wrap items-end gap-4">
-            <div class="flex-1 min-w-[200px]">
-                <label for="search" class="form-label">Search</label>
-                <input type="text" name="search" id="search" value="{{ search or '' }}"
-                       class="form-input w-full" placeholder="Code or name...">
-            </div>
-            <div class="w-48">
-                <label for="category" class="form-label">Category</label>
-                <select name="category" id="category" class="form-select w-full">
-                    <option value="">All Categories</option>
-                    {% for cat in categories %}
-                    <option value="{{ cat.value }}" {{ 'selected' if selected_category == cat.value }}>
-                        {{ cat.value | replace('_', ' ') | title }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <button type="submit" class="btn btn-secondary">Filter</button>
-            {% if search or selected_category %}
-            <a href="/people/hr/competencies" class="btn btn-ghost">Clear</a>
-            {% endif %}
-        </form>
-    </div>
+    {% call(search_attrs) live_search(search=search, base_url="/people/hr/competencies", placeholder="Search competencies...") %}
+    <select name="category" class="form-select" {{ search_attrs }}>
+        <option value="">All Categories</option>
+        {% for cat in categories %}
+        <option value="{{ cat.value }}" {{ 'selected' if selected_category == cat.value }}>
+            {{ cat.value | replace('_', ' ') | title }}
+        </option>
+        {% endfor %}
+    </select>
+    {% endcall %}
 
+    <div id="results-container">
     {% if competencies %}
     <div class="card overflow-hidden">
         <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
@@ -146,5 +133,6 @@
         <a href="/people/hr/competencies/new" class="btn btn-primary">Add First Competency</a>
     </div>
     {% endif %}
+    </div>{# /results-container #}
 </div>
 {% endblock %}

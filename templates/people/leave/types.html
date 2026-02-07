@@ -1,4 +1,5 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import live_search %}
 
 {% block page_title %}Leave Types{% endblock %}
 
@@ -33,26 +34,19 @@
         </div>
     </div>
 
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap items-end gap-4">
-                <div class="w-64">
-                    <label for="search" class="form-label">Search</label>
-                    <input type="text" name="search" id="search" value="{{ search | default('', true) }}" class="form-input w-full" placeholder="Code or name">
-                </div>
-                <div class="w-44">
-                    <label for="is_active" class="form-label">Status</label>
-                    <select name="is_active" id="is_active" class="form-select w-full">
-                        <option value="" {% if is_active is none %}selected{% endif %}>All</option>
-                        <option value="true" {% if is_active is sameas true %}selected{% endif %}>Active</option>
-                        <option value="false" {% if is_active is sameas false %}selected{% endif %}>Inactive</option>
-                    </select>
-                </div>
-                <button type="submit" class="btn btn-secondary h-10">Filter</button>
-            </div>
-        </form>
-    </div>
+    {% call(search_attrs) live_search(
+        search=search,
+        base_url="/people/leave/types",
+        placeholder="Search leave types..."
+    ) %}
+        <select name="is_active" class="form-select" {{ search_attrs }}>
+            <option value="" {% if is_active is none %}selected{% endif %}>All</option>
+            <option value="true" {% if is_active is sameas true %}selected{% endif %}>Active</option>
+            <option value="false" {% if is_active is sameas false %}selected{% endif %}>Inactive</option>
+        </select>
+    {% endcall %}
 
+    <div id="results-container">
     {% if types %}
     <div class="card overflow-hidden">
         <div class="overflow-x-auto">
@@ -104,5 +98,6 @@
         <p class="text-slate-500 dark:text-slate-400">No leave types found.</p>
     </div>
     {% endif %}
+    </div>{# /results-container #}
 </div>
 {% endblock %}

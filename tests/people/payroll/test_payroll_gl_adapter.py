@@ -102,22 +102,19 @@ def test_create_slip_journal_includes_employer_pension_expense():
 
     with (
         patch(
-            "app.services.people.payroll.payroll_gl_adapter.JournalService.create_journal"
-        ) as create_journal,
+            "app.services.people.payroll.payroll_gl_adapter.BasePostingAdapter.create_and_approve_journal"
+        ) as create_and_approve,
         patch(
-            "app.services.people.payroll.payroll_gl_adapter.JournalService.submit_journal"
-        ),
-        patch(
-            "app.services.people.payroll.payroll_gl_adapter.JournalService.approve_journal"
-        ),
-        patch(
-            "app.services.people.payroll.payroll_gl_adapter.LedgerPostingService.post_journal_entry"
+            "app.services.people.payroll.payroll_gl_adapter.BasePostingAdapter.post_to_ledger"
         ) as post_entry,
     ):
         post_entry.return_value = SimpleNamespace(
-            success=True, posting_batch_id="batch"
+            success=True, posting_batch_id="batch", message="Posted successfully"
         )
-        create_journal.return_value = SimpleNamespace(journal_entry_id="journal")
+        create_and_approve.return_value = (
+            SimpleNamespace(journal_entry_id="journal"),
+            None,
+        )
 
         result = PayrollGLAdapter.create_slip_journal(
             db=db,
@@ -128,7 +125,7 @@ def test_create_slip_journal_includes_employer_pension_expense():
         )
 
     assert result.success is True
-    journal_input = create_journal.call_args[0][2]
+    journal_input = create_and_approve.call_args[0][2]
     lines = journal_input.lines
     assert any(
         line.account_id == exp_employer_pension and line.debit_amount == Decimal("100")
@@ -180,22 +177,19 @@ def test_create_run_journal_includes_employer_pension_expense():
 
     with (
         patch(
-            "app.services.people.payroll.payroll_gl_adapter.JournalService.create_journal"
-        ) as create_journal,
+            "app.services.people.payroll.payroll_gl_adapter.BasePostingAdapter.create_and_approve_journal"
+        ) as create_and_approve,
         patch(
-            "app.services.people.payroll.payroll_gl_adapter.JournalService.submit_journal"
-        ),
-        patch(
-            "app.services.people.payroll.payroll_gl_adapter.JournalService.approve_journal"
-        ),
-        patch(
-            "app.services.people.payroll.payroll_gl_adapter.LedgerPostingService.post_journal_entry"
+            "app.services.people.payroll.payroll_gl_adapter.BasePostingAdapter.post_to_ledger"
         ) as post_entry,
     ):
         post_entry.return_value = SimpleNamespace(
-            success=True, posting_batch_id="batch"
+            success=True, posting_batch_id="batch", message="Posted successfully"
         )
-        create_journal.return_value = SimpleNamespace(journal_entry_id="journal")
+        create_and_approve.return_value = (
+            SimpleNamespace(journal_entry_id="journal"),
+            None,
+        )
 
         result = PayrollGLAdapter.create_run_journal(
             db=db,
@@ -207,7 +201,7 @@ def test_create_run_journal_includes_employer_pension_expense():
         )
 
     assert result.success is True
-    journal_input = create_journal.call_args[0][2]
+    journal_input = create_and_approve.call_args[0][2]
     lines = journal_input.lines
     assert any(
         line.account_id == exp_employer_pension and line.debit_amount == Decimal("100")

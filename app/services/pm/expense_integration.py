@@ -60,19 +60,37 @@ class ProjectExpenseService:
 
         expenses = self.db.scalars(stmt).all()
 
-        return [
-            {
-                "expense_id": e.claim_id,
-                "claim_number": e.claim_number,
-                "description": getattr(e, "description", None),
-                "amount": getattr(e, "total_claimed_amount", Decimal("0")),
-                "status": getattr(e, "status", "UNKNOWN"),
-                "expense_date": getattr(e, "claim_date", None),
-                "employee_id": getattr(e, "employee_id", None),
-                "category": None,
-            }
-            for e in expenses
-        ]
+        result = []
+        for e in expenses:
+            employee_name = None
+            emp_id = getattr(e, "employee_id", None)
+            if emp_id:
+                try:
+                    from app.models.people.hr.employee import Employee
+
+                    emp = self.db.get(Employee, emp_id)
+                    if emp:
+                        employee_name = (
+                            f"{emp.first_name} {emp.last_name}"
+                            if emp.first_name
+                            else emp.last_name
+                        )
+                except ImportError:
+                    pass
+
+            result.append(
+                {
+                    "expense_id": e.claim_id,
+                    "claim_number": e.claim_number,
+                    "description": getattr(e, "purpose", None),
+                    "amount": getattr(e, "total_claimed_amount", Decimal("0")),
+                    "status": getattr(e, "status", "UNKNOWN"),
+                    "expense_date": getattr(e, "claim_date", None),
+                    "employee_name": employee_name,
+                    "category_name": None,
+                }
+            )
+        return result
 
     def get_expense_summary(self, project_id: uuid.UUID) -> Dict:
         """
@@ -137,10 +155,12 @@ class ProjectExpenseService:
 
         return {
             "project_id": project_id,
+            "total_amount": total_amount,
             "total_expenses": total_amount,
             "expense_count": total_count,
             "approved_amount": approved_amount,
             "pending_amount": pending_amount,
+            "currency": "NGN",
             "expenses_by_category": expenses_by_category,
         }
 

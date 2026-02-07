@@ -21,6 +21,7 @@ from app.models.finance.ar.quote import Quote, QuoteStatus
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.models.finance.tax.tax_code import TaxCode
+from app.models.inventory.item import Item
 from app.services.common import coerce_uuid
 from app.services.finance.ar.quote import quote_service
 from app.services.finance.common import format_currency, format_date
@@ -69,6 +70,9 @@ class QuoteWebService:
                 "customer_id": str(c.customer_id),
                 "name": c.trading_name or c.legal_name,
                 "email": _customer_email(c),
+                "default_tax_code_id": str(c.default_tax_code_id)
+                if c.default_tax_code_id
+                else None,
             }
             for c in customers
         ]
@@ -124,11 +128,32 @@ class QuoteWebService:
             for t in payment_terms
         ]
 
+        # Items (products/services)
+        items = (
+            db.query(Item)
+            .filter(
+                Item.organization_id == org_id,
+                Item.is_active.is_(True),
+                Item.is_saleable.is_(True),
+            )
+            .order_by(Item.item_code)
+            .all()
+        )
+        item_options = [
+            {
+                "item_id": str(i.item_id),
+                "item_code": i.item_code,
+                "item_name": i.item_name,
+            }
+            for i in items
+        ]
+
         context = {
             "customers": customer_options,
             "revenue_accounts": revenue_options,
             "tax_codes": tax_options,
             "payment_terms": terms_options,
+            "items": item_options,
             "today": format_date(date.today()),
             "default_valid_until": format_date(date.today() + timedelta(days=30)),
         }

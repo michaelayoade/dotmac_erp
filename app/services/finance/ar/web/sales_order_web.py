@@ -22,6 +22,7 @@ from app.models.finance.ar.sales_order import SalesOrder, SOStatus
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.models.finance.tax.tax_code import TaxCode
+from app.models.inventory.item import Item
 from app.services.common import coerce_uuid
 from app.services.finance.ar.sales_order import sales_order_service
 from app.services.finance.common import format_currency, format_date
@@ -70,6 +71,9 @@ class SalesOrderWebService:
                 "customer_id": str(c.customer_id),
                 "name": _customer_display_name(c),
                 "email": _customer_email(c),
+                "default_tax_code_id": str(c.default_tax_code_id)
+                if c.default_tax_code_id
+                else None,
             }
             for c in customers
         ]
@@ -125,11 +129,32 @@ class SalesOrderWebService:
             for t in payment_terms
         ]
 
+        # Items (products/services)
+        items = (
+            db.query(Item)
+            .filter(
+                Item.organization_id == org_id,
+                Item.is_active.is_(True),
+                Item.is_saleable.is_(True),
+            )
+            .order_by(Item.item_code)
+            .all()
+        )
+        item_options = [
+            {
+                "item_id": str(i.item_id),
+                "item_code": i.item_code,
+                "item_name": i.item_name,
+            }
+            for i in items
+        ]
+
         context = {
             "customers": customer_options,
             "revenue_accounts": revenue_options,
             "tax_codes": tax_options,
             "payment_terms": terms_options,
+            "items": item_options,
             "today": format_date(date.today()),
         }
         context.update(get_currency_context(db, str(org_id)))
@@ -437,6 +462,17 @@ class SalesOrderWebService:
         )
         try:
             lines = json.loads(lines_json) if lines_json else []
+            if not lines:
+                return None, "Please add at least one order line."
+
+            line_errors = []
+            for idx, line in enumerate(lines, start=1):
+                if not (line.get("item_code") or line.get("item_id")):
+                    line_errors.append(f"Line {idx}: product/item is required.")
+                if not line.get("description"):
+                    line_errors.append(f"Line {idx}: description is required.")
+            if line_errors:
+                return None, " ".join(line_errors)
 
             # Get default currency if not provided
             if not currency_code:

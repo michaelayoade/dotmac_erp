@@ -210,10 +210,10 @@ class TestFAPostingAdapterDepreciationSuccess:
 
         with (
             patch(
-                "app.services.fixed_assets.fa_posting_adapter.JournalService"
+                "app.services.fixed_assets.fa_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.fixed_assets.fa_posting_adapter.LedgerPostingService"
+                "app.services.fixed_assets.fa_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
             patch(
                 "app.services.fixed_assets.fa_posting_adapter.org_context_service"
@@ -221,12 +221,13 @@ class TestFAPostingAdapterDepreciationSuccess:
         ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
-            mock_journal_svc.create_journal.return_value = mock_journal_result
+            mock_journal_svc.return_value = (mock_journal_result, None)
 
             mock_posting_result = MagicMock()
             mock_posting_result.success = True
             mock_posting_result.posting_batch_id = uuid.uuid4()
-            mock_posting_svc.post_journal_entry.return_value = mock_posting_result
+            mock_posting_result.message = "Posted depreciation successfully"
+            mock_posting_svc.return_value = mock_posting_result
 
             mock_org_ctx.get_functional_currency.return_value = "USD"
 
@@ -274,10 +275,10 @@ class TestFAPostingAdapterDepreciationSuccess:
 
         with (
             patch(
-                "app.services.fixed_assets.fa_posting_adapter.JournalService"
+                "app.services.fixed_assets.fa_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.fixed_assets.fa_posting_adapter.LedgerPostingService"
+                "app.services.fixed_assets.fa_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
             patch(
                 "app.services.fixed_assets.fa_posting_adapter.org_context_service"
@@ -285,12 +286,12 @@ class TestFAPostingAdapterDepreciationSuccess:
         ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
-            mock_journal_svc.create_journal.return_value = mock_journal_result
+            mock_journal_svc.return_value = (mock_journal_result, None)
 
             mock_posting_result = MagicMock()
             mock_posting_result.success = True
             mock_posting_result.posting_batch_id = uuid.uuid4()
-            mock_posting_svc.post_journal_entry.return_value = mock_posting_result
+            mock_posting_svc.return_value = mock_posting_result
 
             mock_org_ctx.get_functional_currency.return_value = "USD"
 
@@ -304,7 +305,7 @@ class TestFAPostingAdapterDepreciationSuccess:
 
             assert result.success is True
             # Verify journal creation was called with aggregated amounts
-            mock_journal_svc.create_journal.assert_called_once()
+            mock_journal_svc.assert_called_once()
 
 
 class TestFAPostingAdapterDisposalSuccess:
@@ -329,20 +330,20 @@ class TestFAPostingAdapterDisposalSuccess:
 
         with (
             patch(
-                "app.services.fixed_assets.fa_posting_adapter.JournalService"
+                "app.services.fixed_assets.fa_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.fixed_assets.fa_posting_adapter.LedgerPostingService"
+                "app.services.fixed_assets.fa_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
         ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
-            mock_journal_svc.create_journal.return_value = mock_journal_result
+            mock_journal_svc.return_value = (mock_journal_result, None)
 
             mock_posting_result = MagicMock()
             mock_posting_result.success = True
             mock_posting_result.posting_batch_id = uuid.uuid4()
-            mock_posting_svc.post_journal_entry.return_value = mock_posting_result
+            mock_posting_svc.return_value = mock_posting_result
 
             result = FAPostingAdapter.post_asset_disposal(
                 mock_db,
@@ -374,20 +375,20 @@ class TestFAPostingAdapterDisposalSuccess:
 
         with (
             patch(
-                "app.services.fixed_assets.fa_posting_adapter.JournalService"
+                "app.services.fixed_assets.fa_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.fixed_assets.fa_posting_adapter.LedgerPostingService"
+                "app.services.fixed_assets.fa_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
         ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
-            mock_journal_svc.create_journal.return_value = mock_journal_result
+            mock_journal_svc.return_value = (mock_journal_result, None)
 
             mock_posting_result = MagicMock()
             mock_posting_result.success = True
             mock_posting_result.posting_batch_id = uuid.uuid4()
-            mock_posting_svc.post_journal_entry.return_value = mock_posting_result
+            mock_posting_svc.return_value = mock_posting_result
 
             result = FAPostingAdapter.post_asset_disposal(
                 mock_db,
@@ -462,20 +463,20 @@ class TestFAPostingAdapterRevaluationSuccess:
 
         with (
             patch(
-                "app.services.fixed_assets.fa_posting_adapter.JournalService"
+                "app.services.fixed_assets.fa_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.fixed_assets.fa_posting_adapter.LedgerPostingService"
+                "app.services.fixed_assets.fa_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
         ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
-            mock_journal_svc.create_journal.return_value = mock_journal_result
+            mock_journal_svc.return_value = (mock_journal_result, None)
 
             mock_posting_result = MagicMock()
             mock_posting_result.success = True
             mock_posting_result.posting_batch_id = uuid.uuid4()
-            mock_posting_svc.post_journal_entry.return_value = mock_posting_result
+            mock_posting_svc.return_value = mock_posting_result
 
             result = FAPostingAdapter.post_revaluation(
                 mock_db,
@@ -507,20 +508,20 @@ class TestFAPostingAdapterRevaluationSuccess:
 
         with (
             patch(
-                "app.services.fixed_assets.fa_posting_adapter.JournalService"
+                "app.services.fixed_assets.fa_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.fixed_assets.fa_posting_adapter.LedgerPostingService"
+                "app.services.fixed_assets.fa_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
         ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
-            mock_journal_svc.create_journal.return_value = mock_journal_result
+            mock_journal_svc.return_value = (mock_journal_result, None)
 
             mock_posting_result = MagicMock()
             mock_posting_result.success = True
             mock_posting_result.posting_batch_id = uuid.uuid4()
-            mock_posting_svc.post_journal_entry.return_value = mock_posting_result
+            mock_posting_svc.return_value = mock_posting_result
 
             result = FAPostingAdapter.post_revaluation(
                 mock_db,

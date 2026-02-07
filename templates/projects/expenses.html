@@ -22,20 +22,20 @@
     <!-- Summary Cards -->
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-4">
         <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-            <div class="text-2xl font-bold text-slate-900 dark:text-white">
-                {{ summary.currency }} {{ '{:,.2f}'.format(summary.total_amount) if summary else '0.00' }}
+            <div class="text-2xl font-bold font-mono tabular-nums text-slate-900 dark:text-white">
+                {{ summary.currency if summary else '' }} {{ '{:,.2f}'.format(summary.total_amount) if summary and summary.total_amount else '0.00' }}
             </div>
             <div class="text-sm text-slate-500 dark:text-slate-400">Total Expenses</div>
         </div>
         <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-            <div class="text-2xl font-bold text-green-600 dark:text-green-400">
-                {{ summary.currency }} {{ '{:,.2f}'.format(summary.approved_amount) if summary else '0.00' }}
+            <div class="text-2xl font-bold font-mono tabular-nums text-green-600 dark:text-green-400">
+                {{ summary.currency if summary else '' }} {{ '{:,.2f}'.format(summary.approved_amount) if summary and summary.approved_amount else '0.00' }}
             </div>
             <div class="text-sm text-slate-500 dark:text-slate-400">Approved</div>
         </div>
         <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-            <div class="text-2xl font-bold text-amber-600 dark:text-amber-400">
-                {{ summary.currency }} {{ '{:,.2f}'.format(summary.pending_amount) if summary else '0.00' }}
+            <div class="text-2xl font-bold font-mono tabular-nums text-amber-600 dark:text-amber-400">
+                {{ summary.currency if summary else '' }} {{ '{:,.2f}'.format(summary.pending_amount) if summary and summary.pending_amount else '0.00' }}
             </div>
             <div class="text-sm text-slate-500 dark:text-slate-400">Pending</div>
         </div>
@@ -54,7 +54,7 @@
             <div class="flex items-center justify-between">
                 <span class="text-sm text-slate-600 dark:text-slate-400">{{ category }}</span>
                 <span class="text-sm font-medium text-slate-900 dark:text-white">
-                    {{ summary.currency }} {{ '{:,.2f}'.format(amount) }}
+                    {{ summary.currency if summary else '' }} {{ '{:,.2f}'.format(amount) if amount else '0.00' }}
                 </span>
             </div>
             {% endfor %}
@@ -80,28 +80,29 @@
                 <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                     <td class="px-6 py-4">
                         <span class="text-sm text-slate-900 dark:text-white">
-                            {{ expense.expense_date.strftime('%d %b %Y') if expense.expense_date else '-' }}
+                            {{ expense.expense_date | format_date if expense.expense_date else '-' }}
                         </span>
                     </td>
                     <td class="px-6 py-4">
                         <span class="text-sm text-slate-600 dark:text-slate-400">
-                            {{ expense.employee.full_name if expense.employee else 'Unknown' }}
+                            {{ expense.employee_name if expense.employee_name else '-' }}
                         </span>
                     </td>
                     <td class="px-6 py-4">
                         <span class="text-sm text-slate-600 dark:text-slate-400">
-                            {{ expense.category.category_name if expense.category else '-' }}
+                            {{ expense.category_name if expense.category_name else '-' }}
                         </span>
                     </td>
                     <td class="px-6 py-4">
                         <span class="text-sm text-slate-600 dark:text-slate-400">{{ expense.description or '-' }}</span>
                     </td>
                     <td class="px-6 py-4 text-right">
-                        <span class="text-sm font-medium text-slate-900 dark:text-white">
-                            {{ expense.currency_code or 'NGN' }} {{ '{:,.2f}'.format(expense.amount) }}
+                        <span class="text-sm font-medium font-mono tabular-nums text-slate-900 dark:text-white">
+                            {{ '{:,.2f}'.format(expense.amount) if expense.amount else '0.00' }}
                         </span>
                     </td>
                     <td class="px-6 py-4 text-center">
+                        {% set expense_status = expense.status.value if expense.status and expense.status is not string else (expense.status if expense.status else 'DRAFT') %}
                         {% set status_colors = {
                             'DRAFT': 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300',
                             'SUBMITTED': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
@@ -109,8 +110,8 @@
                             'REJECTED': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
                             'PAID': 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
                         } %}
-                        <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium {{ status_colors.get(expense.status.value if expense.status else 'DRAFT', 'bg-slate-100') }}">
-                            {{ expense.status.value if expense.status else 'DRAFT' }}
+                        <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium {{ status_colors.get(expense_status, 'bg-slate-100') }}">
+                            {{ expense_status | replace('_', ' ') | title }}
                         </span>
                     </td>
                 </tr>

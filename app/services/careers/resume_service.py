@@ -9,12 +9,14 @@ Handles secure file uploads for job applications with:
 
 import logging
 import uuid
+from dataclasses import replace
 from pathlib import Path
 from typing import Optional
 
 from app.config import settings
 from app.services.file_upload import (
     FileUploadError,
+    FileUploadService,
     get_resume_upload,
     resolve_safe_path,
 )
@@ -47,17 +49,34 @@ class ResumeService:
     Provides secure file validation and storage for job applications.
     """
 
-    upload_dir: Path
+    _upload_dir: Path
     max_size: int
     allowed_extensions: set[str]
 
     def __init__(self):
-        self.upload_dir = Path(settings.resume_upload_dir)
+        self._upload_dir = Path(settings.resume_upload_dir)
         self.max_size = settings.resume_max_size_bytes
         self.allowed_extensions = {
             ext.strip().lower() for ext in settings.resume_allowed_extensions.split(",")
         }
         self.upload_service = get_resume_upload()
+        self._sync_upload_service_base()
+
+    @property
+    def upload_dir(self) -> Path:
+        return self._upload_dir
+
+    @upload_dir.setter
+    def upload_dir(self, value: Path) -> None:
+        self._upload_dir = Path(value)
+        self._sync_upload_service_base()
+
+    def _sync_upload_service_base(self) -> None:
+        resolved = self._upload_dir.resolve()
+        if self.upload_service.base_path != resolved:
+            self.upload_service = FileUploadService(
+                replace(self.upload_service.config, base_dir=str(resolved))
+            )
 
     def validate_file(
         self, filename: str, file_size: int, file_data: Optional[bytes] = None
@@ -73,6 +92,8 @@ class ResumeService:
         Returns:
             Tuple of (is_valid, error_message)
         """
+        if self.max_size and file_size > self.max_size:
+            return False, "File too large"
         try:
             self.upload_service.validate(
                 content_type=None,

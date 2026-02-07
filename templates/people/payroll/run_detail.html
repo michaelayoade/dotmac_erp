@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, live_search %}
 
 {% block page_title %}Payroll Run {{ entry.entry_number }}{% endblock %}
 
@@ -215,48 +215,34 @@
     </div>
 
     <!-- Salary Slips Table -->
-    <div class="card overflow-hidden">
-        <div class="p-4 border-b border-slate-200 dark:border-slate-700 space-y-3">
-            <div class="flex items-center justify-between">
-                <h2 class="text-lg font-medium text-slate-900 dark:text-white">Salary Slips</h2>
-                {% if slip_status_counts %}
-                <div class="flex gap-2 text-xs">
-                    {% for status, count in slip_status_counts.items() %}
-                    <span class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                        {{ status | title }}: {{ count }}
-                    </span>
-                    {% endfor %}
-                </div>
-                {% endif %}
-            </div>
-            <form method="get" class="flex flex-wrap gap-3 items-end">
-                <div class="flex-1 min-w-[220px] max-w-md">
-                    <label for="slip_search" class="form-label text-xs">Search</label>
-                    <input type="text" id="slip_search" name="search" value="{{ slip_search | default('', true) }}"
-                        placeholder="Slip number or employee..."
-                        class="form-input w-full">
-                </div>
-                <div class="w-44">
-                    <label for="slip_status" class="form-label text-xs">Status</label>
-                    <select id="slip_status" name="status" class="form-select w-full">
-                        <option value="">All</option>
-                        {% for s in slip_statuses %}
-                        <option value="{{ s }}" {% if slip_status == s %}selected{% endif %}>{{ s | title }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <button type="submit" class="btn btn-secondary h-10">Filter</button>
-                {% if slip_search or slip_status %}
-                <a href="/people/payroll/runs/{{ entry.entry_id }}" class="btn btn-ghost h-10">Clear</a>
-                {% endif %}
-                {% if total_slip_count is not none %}
-                <div class="text-xs text-slate-500 dark:text-slate-400 ml-auto">
-                    Showing {{ filtered_slip_count }} of {{ total_slip_count }}
-                </div>
-                {% endif %}
-            </form>
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-medium text-slate-900 dark:text-white">Salary Slips</h2>
+        {% if slip_status_counts %}
+        <div class="flex gap-2 text-xs">
+            {% for status, count in slip_status_counts.items() %}
+            <span class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                {{ status | title }}: {{ count }}
+            </span>
+            {% endfor %}
         </div>
+        {% endif %}
+    </div>
 
+    {% call(search_attrs) live_search(
+        search=slip_search,
+        base_url="/people/payroll/runs/" ~ entry.entry_id|string,
+        placeholder="Search..."
+    ) %}
+        <select name="status" class="form-select" {{ search_attrs }}>
+            <option value="">All</option>
+            {% for s in slip_statuses %}
+            <option value="{{ s }}" {{ 'selected' if slip_status == s else '' }}>{{ s | title }}</option>
+            {% endfor %}
+        </select>
+    {% endcall %}
+
+    <div id="results-container">
+    <div class="card overflow-hidden">
         {% if slips %}
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
@@ -349,5 +335,6 @@
         </div>
         {% endif %}
     </div>
+    </div>{# /results-container #}
 </div>
 {% endblock %}

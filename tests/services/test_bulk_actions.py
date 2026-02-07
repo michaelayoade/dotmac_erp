@@ -421,10 +421,12 @@ class TestBulkExport:
 
         response = await service.bulk_export([uuid.uuid4()])
 
-        # Get the CSV content from the async body_iterator
-        content = ""
-        async for chunk in response.body_iterator:
-            content = chunk if isinstance(chunk, str) else chunk.decode()
+        # Get the CSV content from the response body
+        content = (
+            response.body.decode()
+            if isinstance(response.body, bytes)
+            else response.body
+        )
 
         lines = content.strip().split("\n")
         headers = lines[0]
@@ -448,17 +450,19 @@ class TestBulkExport:
 
         response = await service.bulk_export([uuid.uuid4()])
 
-        content = ""
-        async for chunk in response.body_iterator:
-            content = chunk if isinstance(chunk, str) else chunk.decode()
+        content = (
+            response.body.decode()
+            if isinstance(response.body, bytes)
+            else response.body
+        )
 
         assert "Test Entity" in content
         assert "True" in content
 
     @pytest.mark.asyncio
     async def test_bulk_export_streaming_response(self, mock_db, organization_id):
-        """Export should return a StreamingResponse."""
-        from fastapi.responses import StreamingResponse
+        """Export should return a Response."""
+        from fastapi import Response
 
         entity = MagicMock()
         entity.id = uuid.uuid4()
@@ -471,7 +475,7 @@ class TestBulkExport:
 
         response = await service.bulk_export([uuid.uuid4()])
 
-        assert isinstance(response, StreamingResponse)
+        assert isinstance(response, Response)
         assert response.media_type == "text/csv"
 
     @pytest.mark.asyncio

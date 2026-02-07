@@ -1,4 +1,5 @@
 {% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import status_badge %}
 
 {% block page_title %}Feature Flags{% endblock %}
 {% block page_subtitle %}Enable or disable system features{% endblock %}
@@ -55,15 +56,7 @@
             <div class="flex-1">
                 <div class="flex items-center gap-2">
                     <h3 class="font-semibold text-slate-900 dark:text-white">{{ feature.label }}</h3>
-                    {% if feature.enabled %}
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                        Enabled
-                    </span>
-                    {% else %}
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                        Disabled
-                    </span>
-                    {% endif %}
+                    {{ status_badge('ENABLED' if feature.enabled else 'DISABLED', 'sm') }}
                 </div>
                 <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ feature.description }}</p>
             </div>

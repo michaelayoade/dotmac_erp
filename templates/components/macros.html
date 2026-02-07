@@ -11,13 +11,29 @@
    ============================================ #}
 {% macro status_badge(status, size="md") %}
 {% set status_upper = status|upper %}
+{% set status_clean = status_upper|replace('_', ' ') %}
 {% set badge_classes = {
   'DRAFT': 'badge-draft',
   'PENDING': 'badge-pending',
+  'PENDING REVIEW': 'badge-pending',
+  'PENDING_REVIEW': 'badge-pending',
+  'PENDING APPROVAL': 'badge-pending',
+  'PENDING_APPROVAL': 'badge-pending',
   'POSTED': 'badge-posted',
   'APPROVED': 'badge-approved',
   'PAID': 'badge-paid',
+  'IMPORTED': 'badge-pending',
   'COMPLETED': 'badge-paid',
+  'RECONCILED': 'badge-approved',
+  'RECEIVED': 'badge-paid',
+  'PARTIALLY_RECEIVED': 'badge-pending',
+  'PARTIALLY RECEIVED': 'badge-pending',
+  'INSPECTING': 'badge-pending',
+  'ACCEPTED': 'badge-approved',
+  'PARTIAL': 'badge-pending',
+  'DISPOSED': 'badge-rejected',
+  'FULLY_DEPRECIATED': 'badge-draft',
+  'FULLY DEPRECIATED': 'badge-draft',
   'ACTIVE': 'badge-approved',
   'PARTIAL': 'badge-pending',
   'PARTIALLY_PAID': 'badge-pending',
@@ -34,13 +50,24 @@
   'DEPLETED': 'badge-draft',
   'AVAILABLE': 'badge-approved',
   'IN_PROGRESS': 'badge-pending',
+  'IN PROGRESS': 'badge-pending',
   'OPEN': 'badge-approved',
   'SUBMITTED': 'badge-pending',
   'PROCESSING': 'badge-pending',
-  'RECEIVED': 'badge-paid'
+  'RECEIVED': 'badge-paid',
+  'VALID': 'badge-approved',
+  'EXPIRING SOON': 'badge-overdue',
+  'EXPIRING_SOON': 'badge-overdue',
+  'SLIPS CREATED': 'badge-pending',
+  'SLIPS_CREATED': 'badge-pending',
+  'ENABLED': 'badge-approved',
+  'DISABLED': 'badge-draft',
+  'FILED': 'badge-paid',
+  'REVIEWED': 'badge-approved',
+  'PREPARED': 'badge-pending'
 } %}
-{% set badge_class = badge_classes.get(status_upper, 'badge-draft') %}
-<span class="{{ badge_class }}">{{ status|title }}</span>
+{% set badge_class = badge_classes.get(status_upper, badge_classes.get(status_clean, 'badge-draft')) %}
+<span class="{{ badge_class }}">{{ status|replace('_', ' ')|title }}</span>
 {% endmacro %}
 
 
@@ -265,6 +292,7 @@
 
 
 {# ============================================
+   DEPRECATED: Use live_search with entity_type parameter instead.
    SEARCH WITH AUTO-SUGGEST
    Enhanced search component with autocomplete suggestions
    Usage: {{ search_autosuggest(
@@ -350,8 +378,27 @@
                 <svg class="h-4 w-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                 </svg>
-              </template>
-            </div>
+        </template>
+      </div>
+
+      {# Empty state for suggestions #}
+      <div x-show="showSuggestions && !loading && suggestions.length === 0 && query.length >= 2"
+           x-transition:enter="transition ease-out duration-150"
+           x-transition:enter-start="opacity-0 translate-y-1"
+           x-transition:enter-end="opacity-100 translate-y-0"
+           x-transition:leave="transition ease-in duration-100"
+           x-transition:leave-start="opacity-100 translate-y-0"
+           x-transition:leave-end="opacity-0 translate-y-1"
+           class="absolute z-50 left-0 right-0 mt-1 rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800">
+        <div class="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+          No matches found. Press Enter to search.
+        </div>
+        {% if entity_type == "customers" %}
+        <div class="px-4 pb-3">
+          <a href="/finance/ar/customers/new" class="btn btn-secondary btn-sm">Add Customer</a>
+        </div>
+        {% endif %}
+      </div>
 
             {# Label and subtitle #}
             <div class="flex-1 min-w-0">
@@ -495,6 +542,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
 
 
 {# ============================================
+   DEPRECATED: Use live_search instead.
    SEARCH FILTER BAR (Basic - no auto-suggest)
    Reusable search and filter component for list pages
    Usage: {{ search_filter_bar(search=search, filters=filters, base_url="/ap/suppliers") }}
@@ -536,6 +584,168 @@ if (typeof window.searchAutosuggest === 'undefined') {
     {% if show_clear and (search or filters|selectattr('value')|list) %}
     <a href="{{ base_url }}" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
       Clear filters
+    </a>
+    {% endif %}
+  </form>
+</div>
+{% endmacro %}
+
+
+{# ============================================
+   LIVE SEARCH (HTMX-powered, replaces search_filter_bar + search_autosuggest)
+   Debounced server-side search with live table filtering, optional autosuggest dropdown.
+   Supports {% call %} blocks for custom filters (date inputs, dynamic selects).
+
+   Usage (simple):
+     {{ live_search(search=search, base_url="/inventory/items", placeholder="Search items...") }}
+
+   Usage (with dropdown filters):
+     {{ live_search(search=search, base_url="/finance/ar/invoices",
+                    filters=[{"name": "status", "label": "All Status", "value": status,
+                              "options": [{"value": "DRAFT", "label": "Draft"}]}]) }}
+
+   Usage (with call block for complex filters):
+     {% call(search_attrs) live_search(search=search, base_url="/finance/ar/invoices") %}
+       <select name="customer_id" class="form-select" {{ search_attrs }}>...</select>
+       <input type="date" name="start_date" class="form-input" {{ search_attrs }}>
+     {% endcall %}
+
+   Usage (with entity autosuggest):
+     {{ live_search(search=search, base_url="/finance/ar/customers",
+                    entity_type="customers", placeholder="Search customers...") }}
+
+   Results container: Wrap table + pagination in <div id="results-container">
+   ============================================ #}
+{% macro live_search(search="", filters=[], base_url="", target_id="results-container",
+                     placeholder="Search...", show_clear=true, debounce_ms=300,
+                     entity_type="") %}
+<div class="card p-4" data-live-search>
+  <form method="get" action="{{ base_url }}" class="flex flex-wrap items-center gap-3"
+        {% if entity_type %}x-data="liveSearch('{{ entity_type }}')" @submit="showSuggestions = false"{% endif %}>
+
+    {# Search Input #}
+    <div class="relative flex-1 min-w-[200px]"
+         {% if entity_type %}@click.away="showSuggestions = false"{% endif %}>
+      <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+      </svg>
+
+      {# HTMX loading spinner #}
+      <svg data-live-search-spinner class="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 animate-spin hidden" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+
+      <input type="text" name="search" value="{{ search if search else '' }}"
+             placeholder="{{ placeholder }}"
+             autocomplete="off"
+             class="form-input pl-10 w-full"
+             hx-get="{{ base_url }}"
+             hx-trigger="input changed delay:{{ debounce_ms }}ms, search"
+             hx-target="#{{ target_id }}"
+             hx-select="#{{ target_id }}"
+             hx-push-url="true"
+             hx-include="closest form"
+             hx-indicator="closest [data-live-search]"
+             {% if entity_type %}
+             x-model="query"
+             x-ref="searchInput"
+             @input.debounce.{{ debounce_ms }}ms="fetchSuggestions()"
+             @focus="if (suggestions.length) showSuggestions = true"
+             @keydown.down.prevent="navigateDown()"
+             @keydown.up.prevent="navigateUp()"
+             @keydown.enter="selectCurrent($event)"
+             @keydown.escape="showSuggestions = false"
+             {% endif %}>
+
+      {% if entity_type %}
+      {# Autosuggest Dropdown #}
+      <div x-show="showSuggestions && suggestions.length > 0" x-cloak
+           x-transition:enter="transition ease-out duration-150"
+           x-transition:enter-start="opacity-0 translate-y-1"
+           x-transition:enter-end="opacity-100 translate-y-0"
+           x-transition:leave="transition ease-in duration-100"
+           x-transition:leave-start="opacity-100 translate-y-0"
+           x-transition:leave-end="opacity-0 translate-y-1"
+           class="absolute z-50 left-0 right-0 mt-1 rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800 overflow-hidden max-h-64 overflow-y-auto">
+
+        <template x-for="(s, idx) in suggestions" :key="s.id || idx">
+          <button type="button"
+                  @click="selectSuggestion(s)"
+                  @mouseenter="selectedIndex = idx"
+                  :class="{ 'bg-teal-50 dark:bg-teal-900/30': selectedIndex === idx }"
+                  class="w-full px-4 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors flex items-center gap-3 border-b border-slate-100 dark:border-slate-700 last:border-0">
+            <div class="flex-shrink-0 h-8 w-8 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+              <svg class="h-4 w-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              </svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium text-slate-900 dark:text-white truncate" x-text="s.label"></p>
+              <p x-show="s.subtitle" class="text-xs text-slate-500 dark:text-slate-400 truncate" x-text="s.subtitle"></p>
+            </div>
+            <svg x-show="selectedIndex === idx" class="h-4 w-4 text-teal-600 dark:text-teal-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </button>
+        </template>
+
+        <div x-show="hasMore" class="px-4 py-2 text-xs text-center text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-900/50">
+          Type more to refine results...
+        </div>
+      </div>
+
+      {# No results message #}
+      <div x-show="showSuggestions && suggestions.length === 0 && query.length >= 2 && !suggestLoading" x-cloak
+           class="absolute z-50 left-0 right-0 mt-1 rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800 px-4 py-3 text-sm text-slate-500 dark:text-slate-400 text-center">
+        No results found for "<span x-text="query" class="font-medium"></span>"
+      </div>
+      {% endif %}
+    </div>
+
+    {# Filter Dropdowns (from filters parameter) #}
+    {% for filter in filters %}
+    <select name="{{ filter.name }}" class="form-select"
+            hx-get="{{ base_url }}"
+            hx-trigger="change"
+            hx-target="#{{ target_id }}"
+            hx-select="#{{ target_id }}"
+            hx-push-url="true"
+            hx-include="closest form">
+      <option value="">{{ filter.label }}</option>
+      {% for option in filter.options %}
+      <option value="{{ option.value }}" {{ 'selected' if filter.value == option.value|string else '' }}>
+        {{ option.label }}
+      </option>
+      {% endfor %}
+    </select>
+    {% endfor %}
+
+    {# Caller block for custom filters (date inputs, dynamic selects, etc.) #}
+    {% if caller %}
+    {{ caller(
+        'hx-get="' ~ base_url ~ '" hx-trigger="change" hx-target="#' ~ target_id ~ '" hx-select="#' ~ target_id ~ '" hx-push-url="true" hx-include="closest form"'
+    ) }}
+    {% endif %}
+
+    {# Submit button — progressive enhancement fallback for no-JS #}
+    <noscript>
+      <button type="submit" class="btn btn-secondary">
+        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        Search
+      </button>
+    </noscript>
+
+    {# Clear Filters Link #}
+    {% set has_active_filters = search or filters|selectattr('value')|list %}
+    {% if show_clear and has_active_filters %}
+    <a href="{{ base_url }}" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
+      <svg class="inline h-3.5 w-3.5 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+      Clear
     </a>
     {% endif %}
   </form>
@@ -637,7 +847,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
       <thead>
         <tr>
           {% for header in headers %}
-          <th class="{{ header.class if header.class else '' }}">{{ header.label if header.label else header }}</th>
+          <th scope="col" class="{{ header.class if header.class else '' }}">{{ header.label if header.label else header }}</th>
           {% endfor %}
         </tr>
       </thead>
@@ -667,7 +877,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
 {% macro action_buttons(view_href=none, edit_href=none, delete_action=none, extra_actions=[]) %}
 <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
   {% if view_href %}
-  <a href="{{ view_href }}" class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors" title="View">
+  <a href="{{ view_href }}" class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors" title="View" aria-label="View">
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
@@ -675,7 +885,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
   </a>
   {% endif %}
   {% if edit_href %}
-  <a href="{{ edit_href }}" class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors" title="Edit">
+  <a href="{{ edit_href }}" class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors" title="Edit" aria-label="Edit">
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
     </svg>
@@ -872,7 +1082,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
         </svg>
         <span class="hidden sm:inline-flex flex-1 text-left">Search...</span>
-        <kbd class="hidden xl:inline-flex h-5 items-center gap-1 rounded border border-slate-300 bg-slate-100 px-1.5 font-mono text-[10px] font-medium text-slate-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-400">
+        <kbd class="hidden xl:inline-flex h-5 items-center gap-1 rounded border border-slate-300 bg-slate-100 px-1.5 font-mono text-xs font-medium text-slate-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-400">
           <span class="text-xs">⌘</span>K
         </kbd>
       </button>

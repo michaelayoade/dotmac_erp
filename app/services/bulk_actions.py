@@ -14,8 +14,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Generic, TypeVar, cast
 from uuid import UUID
 
-from fastapi import HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import HTTPException, Response
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
@@ -233,7 +232,7 @@ class BulkActionService(ABC, Generic[T]):
         self,
         ids: list[UUID],
         format: str = "csv",
-    ) -> StreamingResponse:
+    ) -> Response:
         """
         Export selected records to CSV.
 
@@ -271,9 +270,9 @@ class BulkActionService(ABC, Generic[T]):
 
         output.seek(0)
 
-        # Return as streaming response
-        return StreamingResponse(
-            iter([output.getvalue()]),
+        # Return as a plain response (content is already in memory)
+        return Response(
+            content=output.getvalue(),
             media_type="text/csv",
             headers={
                 "Content-Disposition": f'attachment; filename="{self._get_export_filename()}"',

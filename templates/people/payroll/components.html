@@ -1,4 +1,5 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import live_search %}
 
 {% block page_title %}Salary Components{% endblock %}
 
@@ -23,34 +24,17 @@
 
 {% block content %}
 <div class="space-y-6">
-    {# Search and Filters #}
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap gap-4 items-end">
-                <div class="flex-1 min-w-[200px] max-w-md">
-                    <label for="search" class="form-label">Search</label>
-                    <div class="relative">
-                        <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                        </svg>
-                        <input type="text" name="search" id="search" value="{{ search | default('', true) }}"
-                            placeholder="Search components..."
-                            class="form-input w-full pl-10">
-                    </div>
-                </div>
-                <div class="w-40">
-                    <label for="component_type" class="form-label">Type</label>
-                    <select name="component_type" id="component_type" class="form-select w-full">
-                        <option value="">All Types</option>
-                        <option value="EARNING" {% if component_type == 'EARNING' %}selected{% endif %}>Earning</option>
-                        <option value="DEDUCTION" {% if component_type == 'DEDUCTION' %}selected{% endif %}>Deduction</option>
-                    </select>
-                </div>
-                <button type="submit" class="btn btn-secondary h-10">Filter</button>
-            </div>
-        </form>
-    </div>
+    {{ live_search(
+        search=search,
+        filters=[
+            {"name": "component_type", "label": "All Types", "value": component_type,
+             "options": [{"value": "EARNING", "label": "Earning"}, {"value": "DEDUCTION", "label": "Deduction"}]}
+        ],
+        base_url="/people/payroll/components",
+        placeholder="Search components..."
+    ) }}
 
+    <div id="results-container">
     {# Components Grid #}
     {% if components %}
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -165,5 +149,6 @@
         </a>
     </div>
     {% endif %}
+    </div>{# /results-container #}
 </div>
 {% endblock %}

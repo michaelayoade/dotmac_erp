@@ -1,4 +1,5 @@
 {% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import live_search %}
 
 {% block page_title %}Synced CRM Entities{% endblock %}
 {% block page_subtitle %}Browse projects, tickets, and work orders synced from DotMac CRM{% endblock %}
@@ -14,59 +15,35 @@
         <span class="text-slate-900 dark:text-white font-medium">Entities</span>
     </nav>
 
-    <!-- Filters -->
-    <div class="admin-card p-4">
-        <form method="get" action="/admin/sync/crm/entities" class="flex flex-wrap items-center gap-4">
-            <div class="flex-1 min-w-[200px]">
-                <label for="search" class="sr-only">Search</label>
-                <input type="text" name="search" id="search" value="{{ filter_search or '' }}"
-                       placeholder="Search by name, code, or CRM ID..."
-                       class="w-full rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:border-primary-500 focus:ring-primary-500">
-            </div>
-            <div class="min-w-[150px]">
-                <label for="entity_type" class="sr-only">Entity Type</label>
-                <select name="entity_type" id="entity_type"
-                        class="w-full rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:border-primary-500 focus:ring-primary-500">
-                    <option value="">All Types</option>
-                    {% for value, label in entity_type_choices %}
-                    <option value="{{ value }}" {{ 'selected' if filter_entity_type == value else '' }}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="min-w-[140px]">
-                <label for="status" class="sr-only">Status</label>
-                <select name="status" id="status"
-                        class="w-full rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:border-primary-500 focus:ring-primary-500">
-                    <option value="">All Statuses</option>
-                    {% for value, label in status_choices %}
-                    <option value="{{ value }}" {{ 'selected' if filter_status == value else '' }}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <button type="submit" class="px-4 py-2 rounded-xl bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition">
-                Filter
-            </button>
-            {% if filter_search or filter_entity_type or filter_status %}
-            <a href="/admin/sync/crm/entities" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
-                Clear
-            </a>
-            {% endif %}
-        </form>
-    </div>
+    {% call(search_attrs) live_search(search=filter_search, base_url="/admin/sync/crm/entities", placeholder="Search by name, code, or CRM ID...") %}
+        <select name="entity_type" class="form-select" {{ search_attrs }}>
+            <option value="">All Types</option>
+            {% for value, label in entity_type_choices %}
+            <option value="{{ value }}" {{ 'selected' if filter_entity_type == value else '' }}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="status" class="form-select" {{ search_attrs }}>
+            <option value="">All Statuses</option>
+            {% for value, label in status_choices %}
+            <option value="{{ value }}" {{ 'selected' if filter_status == value else '' }}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    {% endcall %}
 
     <!-- Results -->
+    <div id="results-container">
     <div class="admin-card overflow-hidden">
         {% if entities %}
         <div class="overflow-x-auto">
             <table class="w-full">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Entity</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Type</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Customer</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">CRM ID</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Synced</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Entity</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Type</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Customer</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">CRM ID</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Synced</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -186,6 +163,7 @@
             {% endif %}
         </div>
         {% endif %}
+    </div>
     </div>
 </div>
 {% endblock %}

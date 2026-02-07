@@ -11,7 +11,7 @@
         {% endif %}
         <div class="min-w-0">
             <p class="truncate text-sm font-semibold text-slate-900 dark:text-white" title="{{ brand_name }}">{{ brand_name }}</p>
-            <span class="mt-0.5 hidden sm:inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide {{ module_pill_class }}">{{ module_label }}</span>
+            <span class="mt-0.5 hidden sm:inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide {{ module_pill_class }}">{{ module_label }}</span>
         </div>
     </a>
     <button @click="closeSidebar()" x-show="!isDesktop" x-cloak

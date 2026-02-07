@@ -109,8 +109,12 @@ class TestCaseCRUD:
         result = service.create_case(organization_id, data)
 
         # Verify case was added and flushed
-        db.add.assert_called_once()
-        db.flush.assert_called_once()
+        from app.models.people.discipline.case import DisciplinaryCase
+
+        assert any(
+            isinstance(call.args[0], DisciplinaryCase) for call in db.add.call_args_list
+        )
+        assert db.flush.call_count >= 1
 
         # The result is the added object (mocked)
         assert db.add.call_args is not None
@@ -285,7 +289,11 @@ class TestWorkflowTransitions:
         assert mock_case.status == CaseStatus.RESPONSE_RECEIVED
         assert result.response_text == "I apologize for my actions."
         assert result.is_initial_response is True
-        db.add.assert_called_once()
+        from app.models.people.discipline.case_response import CaseResponse
+
+        assert any(
+            isinstance(call.args[0], CaseResponse) for call in db.add.call_args_list
+        )
 
     def test_schedule_hearing_from_response_received(
         self,

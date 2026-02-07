@@ -574,6 +574,8 @@ class MockSlip:
         self.slip_id = slip_id
         self.slip_number = slip_number
         self.organization_id = uuid.uuid4()
+        self.employee_id = uuid.uuid4()
+        self.employee = MagicMock(employee_id=self.employee_id)
         self.status = SalarySlipStatus.APPROVED
         self.paid_at = None
         self.paid_by_id = None

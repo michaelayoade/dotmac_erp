@@ -150,7 +150,9 @@ class ExpenseClaimBase(BaseModel):
     currency_code: str = "NGN"
     cost_center_id: Optional[UUID] = None
     recipient_bank_code: Optional[str] = Field(default=None, max_length=20)
+    recipient_bank_name: Optional[str] = Field(default=None, max_length=100)
     recipient_account_number: Optional[str] = Field(default=None, max_length=20)
+    recipient_name: Optional[str] = Field(default=None, max_length=150)
     notes: Optional[str] = None
 
 
@@ -172,7 +174,9 @@ class ExpenseClaimUpdate(BaseModel):
     task_id: Optional[UUID] = None
     cost_center_id: Optional[UUID] = None
     recipient_bank_code: Optional[str] = Field(default=None, max_length=20)
+    recipient_bank_name: Optional[str] = Field(default=None, max_length=100)
     recipient_account_number: Optional[str] = Field(default=None, max_length=20)
+    recipient_name: Optional[str] = Field(default=None, max_length=150)
     notes: Optional[str] = None
 
 

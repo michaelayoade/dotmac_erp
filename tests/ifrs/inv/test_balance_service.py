@@ -406,7 +406,9 @@ class TestGetItemStockSummary:
         """Should set below_reorder when available <= reorder_point."""
         mock_item.reorder_point = Decimal("100")
         mock_db.get.return_value = mock_item
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        (
+            mock_db.query.return_value.join.return_value.filter.return_value.all
+        ).return_value = []
 
         result = InventoryBalanceService.get_item_stock_summary(
             mock_db, org_id, item_id
@@ -474,7 +476,9 @@ class TestGetLowStockItems:
     def test_returns_items_at_reorder_point(self, mock_db, org_id, mock_item):
         """Should include items at exactly reorder point."""
         mock_item.reorder_point = Decimal("50")
-        mock_db.query.return_value.filter.return_value.all.return_value = [mock_item]
+        (
+            mock_db.query.return_value.join.return_value.filter.return_value.all
+        ).return_value = [(mock_item, None)]
 
         with patch.object(
             InventoryBalanceService, "get_on_hand", return_value=Decimal("50")
@@ -490,7 +494,9 @@ class TestGetLowStockItems:
     def test_returns_items_below_reorder_point(self, mock_db, org_id, mock_item):
         """Should include items below reorder point."""
         mock_item.reorder_point = Decimal("50")
-        mock_db.query.return_value.filter.return_value.all.return_value = [mock_item]
+        (
+            mock_db.query.return_value.join.return_value.filter.return_value.all
+        ).return_value = [(mock_item, None)]
 
         with patch.object(
             InventoryBalanceService, "get_on_hand", return_value=Decimal("30")
@@ -508,7 +514,9 @@ class TestGetLowStockItems:
         """Should include items below minimum when include_below_minimum=True."""
         mock_item.reorder_point = Decimal("10")
         mock_item.minimum_stock = Decimal("50")
-        mock_db.query.return_value.filter.return_value.all.return_value = [mock_item]
+        (
+            mock_db.query.return_value.join.return_value.filter.return_value.all
+        ).return_value = [(mock_item, None)]
 
         # Available = 20, which is below minimum (50) but above reorder (10)
         with patch.object(
@@ -528,7 +536,9 @@ class TestGetLowStockItems:
         mock_item.reorder_point = Decimal("50")
         mock_item.reorder_quantity = Decimal("100")
         mock_item.maximum_stock = Decimal("200")
-        mock_db.query.return_value.filter.return_value.all.return_value = [mock_item]
+        (
+            mock_db.query.return_value.join.return_value.filter.return_value.all
+        ).return_value = [(mock_item, None)]
 
         with patch.object(
             InventoryBalanceService, "get_on_hand", return_value=Decimal("30")
@@ -547,7 +557,9 @@ class TestGetLowStockItems:
         mock_item.reorder_point = Decimal("50")
         mock_item.default_supplier_id = supplier_id
         mock_item.lead_time_days = 7
-        mock_db.query.return_value.filter.return_value.all.return_value = [mock_item]
+        (
+            mock_db.query.return_value.join.return_value.filter.return_value.all
+        ).return_value = [(mock_item, None)]
 
         with patch.object(
             InventoryBalanceService, "get_on_hand", return_value=Decimal("10")

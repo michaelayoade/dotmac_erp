@@ -25,6 +25,7 @@ from app.models.finance.ar.invoice_line import InvoiceLine
 from app.models.finance.ar.payment_allocation import PaymentAllocation
 from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
+from app.models.inventory.item import Item
 from app.services.common import coerce_uuid
 from app.services.finance.ar.customer import customer_service
 from app.services.finance.ar.invoice import (
@@ -89,6 +90,7 @@ class InvoiceWebService:
                         revenue_account_id=UUID(line["revenue_account_id"])
                         if line.get("revenue_account_id")
                         else None,
+                        item_id=UUID(line["item_id"]) if line.get("item_id") else None,
                         tax_code_ids=tax_code_ids,
                         tax_code_id=legacy_tax_code_id,
                         cost_center_id=UUID(line["cost_center_id"])
@@ -316,10 +318,35 @@ class InvoiceWebService:
             )
         ]
 
+        items = (
+            db.query(Item)
+            .filter(
+                Item.organization_id == org_id,
+                Item.is_active.is_(True),
+                Item.is_saleable.is_(True),
+            )
+            .order_by(Item.item_code)
+            .all()
+        )
+        item_options = [
+            {
+                "item_id": str(i.item_id),
+                "item_code": i.item_code,
+                "item_name": i.item_name,
+                "list_price": float(i.list_price) if i.list_price is not None else None,
+                "revenue_account_id": str(i.revenue_account_id)
+                if i.revenue_account_id
+                else None,
+                "tax_code_id": str(i.tax_code_id) if i.tax_code_id else None,
+            }
+            for i in items
+        ]
+
         context = {
             "customers_list": customers_list,
             "revenue_accounts": revenue_accounts,
             "tax_codes": tax_codes,
+            "items": item_options,
             "cost_centers": get_cost_centers(db, org_id),
             "projects": get_projects(db, org_id),
             "organization_id": str(organization_id),

@@ -1,4 +1,5 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import live_search %}
 
 {% block page_title %}Training Programs{% endblock %}
 
@@ -45,34 +46,22 @@
 
 {% block content %}
 <div class="space-y-6">
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap gap-4 items-end">
-                <div class="flex-1 min-w-[200px] max-w-md">
-                    <label for="search" class="form-label">Search</label>
-                    <input type="text" name="search" id="search" value="{{ search | default('', true) }}"
-                        placeholder="Search by code or name"
-                        class="form-input w-full">
-                </div>
-                <div class="w-44">
-                    <label for="status" class="form-label">Status</label>
-                    <select name="status" id="status" class="form-select w-full">
-                        <option value="">All</option>
-                        {% for s in statuses %}
-                        <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="w-48">
-                    <label for="category" class="form-label">Category</label>
-                    <input type="text" name="category" id="category" value="{{ category | default('', true) }}"
-                        class="form-input w-full" placeholder="e.g. Compliance">
-                </div>
-                <button type="submit" class="btn btn-secondary h-10">Filter</button>
-            </div>
-        </form>
-    </div>
+    {% call(search_attrs) live_search(
+        search=search,
+        base_url="/people/training/programs",
+        placeholder="Search training programs..."
+    ) %}
+        <select name="status" class="form-select" {{ search_attrs }}>
+            <option value="">All Status</option>
+            {% for s in statuses %}
+            <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
+            {% endfor %}
+        </select>
+        <input type="text" name="category" value="{{ category if category else '' }}"
+               class="form-input" placeholder="Category" {{ search_attrs }}>
+    {% endcall %}
 
+    <div id="results-container">
     {% if programs %}
     <div class="card overflow-hidden">
         <div class="overflow-x-auto">
@@ -144,5 +133,6 @@
         </div>
     </div>
     {% endif %}
+    </div>{# /results-container #}
 </div>
 {% endblock %}

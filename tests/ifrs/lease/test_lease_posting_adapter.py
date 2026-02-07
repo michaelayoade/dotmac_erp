@@ -373,20 +373,21 @@ class TestLeasePostingAdapterSuccessCases:
 
         with (
             patch(
-                "app.services.finance.lease.lease_posting_adapter.JournalService"
+                "app.services.finance.lease.lease_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
+                "app.services.finance.lease.lease_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
         ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
-            mock_journal_svc.create_journal.return_value = mock_journal_result
+            mock_journal_svc.return_value = (mock_journal_result, None)
 
             mock_posting_result = MagicMock()
             mock_posting_result.success = True
             mock_posting_result.posting_batch_id = uuid.uuid4()
-            mock_posting_svc.post_journal_entry.return_value = mock_posting_result
+            mock_posting_result.message = "Posted successfully"
+            mock_posting_svc.return_value = mock_posting_result
 
             result = LeasePostingAdapter.post_initial_recognition(
                 mock_db,
@@ -415,20 +416,21 @@ class TestLeasePostingAdapterSuccessCases:
 
         with (
             patch(
-                "app.services.finance.lease.lease_posting_adapter.JournalService"
+                "app.services.finance.lease.lease_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
+                "app.services.finance.lease.lease_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
         ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
-            mock_journal_svc.create_journal.return_value = mock_journal_result
+            mock_journal_svc.return_value = (mock_journal_result, None)
 
             mock_posting_result = MagicMock()
             mock_posting_result.success = True
             mock_posting_result.posting_batch_id = uuid.uuid4()
-            mock_posting_svc.post_journal_entry.return_value = mock_posting_result
+            mock_posting_result.message = "Posted successfully"
+            mock_posting_svc.return_value = mock_posting_result
 
             result = LeasePostingAdapter.post_initial_recognition(
                 mock_db,
@@ -453,20 +455,21 @@ class TestLeasePostingAdapterSuccessCases:
 
         with (
             patch(
-                "app.services.finance.lease.lease_posting_adapter.JournalService"
+                "app.services.finance.lease.lease_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
+                "app.services.finance.lease.lease_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
         ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
-            mock_journal_svc.create_journal.return_value = mock_journal_result
+            mock_journal_svc.return_value = (mock_journal_result, None)
 
             mock_posting_result = MagicMock()
             mock_posting_result.success = True
             mock_posting_result.posting_batch_id = uuid.uuid4()
-            mock_posting_svc.post_journal_entry.return_value = mock_posting_result
+            mock_posting_result.message = "Posted successfully"
+            mock_posting_svc.return_value = mock_posting_result
 
             result = LeasePostingAdapter.post_interest_accrual(
                 mock_db,
@@ -493,20 +496,21 @@ class TestLeasePostingAdapterSuccessCases:
 
         with (
             patch(
-                "app.services.finance.lease.lease_posting_adapter.JournalService"
+                "app.services.finance.lease.lease_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
+                "app.services.finance.lease.lease_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
         ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
-            mock_journal_svc.create_journal.return_value = mock_journal_result
+            mock_journal_svc.return_value = (mock_journal_result, None)
 
             mock_posting_result = MagicMock()
             mock_posting_result.success = True
             mock_posting_result.posting_batch_id = uuid.uuid4()
-            mock_posting_svc.post_journal_entry.return_value = mock_posting_result
+            mock_posting_result.message = "Posted successfully"
+            mock_posting_svc.return_value = mock_posting_result
 
             result = LeasePostingAdapter.post_lease_payment(
                 mock_db,
@@ -532,20 +536,21 @@ class TestLeasePostingAdapterSuccessCases:
 
         with (
             patch(
-                "app.services.finance.lease.lease_posting_adapter.JournalService"
+                "app.services.finance.lease.lease_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
+                "app.services.finance.lease.lease_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
         ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
-            mock_journal_svc.create_journal.return_value = mock_journal_result
+            mock_journal_svc.return_value = (mock_journal_result, None)
 
             mock_posting_result = MagicMock()
             mock_posting_result.success = True
             mock_posting_result.posting_batch_id = uuid.uuid4()
-            mock_posting_svc.post_journal_entry.return_value = mock_posting_result
+            mock_posting_result.message = "Posted successfully"
+            mock_posting_svc.return_value = mock_posting_result
 
             result = LeasePostingAdapter.post_rou_depreciation(
                 mock_db,
@@ -579,20 +584,21 @@ class TestLeasePostingAdapterSuccessCases:
 
         with (
             patch(
-                "app.services.finance.lease.lease_posting_adapter.JournalService"
+                "app.services.finance.lease.lease_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
+                "app.services.finance.lease.lease_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
         ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
-            mock_journal_svc.create_journal.return_value = mock_journal_result
+            mock_journal_svc.return_value = (mock_journal_result, None)
 
             mock_posting_result = MagicMock()
             mock_posting_result.success = True
             mock_posting_result.posting_batch_id = uuid.uuid4()
-            mock_posting_svc.post_journal_entry.return_value = mock_posting_result
+            mock_posting_result.message = "Posted successfully"
+            mock_posting_svc.return_value = mock_posting_result
 
             result = LeasePostingAdapter.post_lease_termination(
                 mock_db,
@@ -625,20 +631,21 @@ class TestLeasePostingAdapterSuccessCases:
 
         with (
             patch(
-                "app.services.finance.lease.lease_posting_adapter.JournalService"
+                "app.services.finance.lease.lease_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.finance.lease.lease_posting_adapter.LedgerPostingService"
+                "app.services.finance.lease.lease_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
         ):
             mock_journal_result = MagicMock()
             mock_journal_result.journal_entry_id = uuid.uuid4()
-            mock_journal_svc.create_journal.return_value = mock_journal_result
+            mock_journal_svc.return_value = (mock_journal_result, None)
 
             mock_posting_result = MagicMock()
             mock_posting_result.success = True
             mock_posting_result.posting_batch_id = uuid.uuid4()
-            mock_posting_svc.post_journal_entry.return_value = mock_posting_result
+            mock_posting_result.message = "Posted successfully"
+            mock_posting_svc.return_value = mock_posting_result
 
             result = LeasePostingAdapter.post_lease_termination(
                 mock_db,

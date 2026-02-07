@@ -138,11 +138,14 @@ def list_reconciliations(
 @router.get("/reconciliations/new", response_class=HTMLResponse)
 def new_reconciliation_form(
     request: Request,
+    account_id: Optional[str] = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
     """New reconciliation form page."""
-    return banking_web_service.reconciliation_new_form_response(request, auth, db)
+    return banking_web_service.reconciliation_new_form_response(
+        request, auth, db, account_id=account_id
+    )
 
 
 @router.get("/reconciliations/{reconciliation_id}", response_class=HTMLResponse)

@@ -401,9 +401,11 @@ class TestBulkExport:
             service = SupplierBulkService(mock_db, organization_id)
             response = await service.bulk_export([mock_supplier.supplier_id])
 
-            content = ""
-            for chunk in response.body_iterator:
-                content = chunk if isinstance(chunk, str) else chunk.decode()
+            content = (
+                response.body.decode()
+                if isinstance(response.body, bytes)
+                else response.body
+            )
 
             headers = content.split("\n")[0]
             assert "Supplier Code" in headers
@@ -423,9 +425,11 @@ class TestBulkExport:
             service = SupplierBulkService(mock_db, organization_id)
             response = await service.bulk_export([mock_supplier.supplier_id])
 
-            content = ""
-            for chunk in response.body_iterator:
-                content = chunk if isinstance(chunk, str) else chunk.decode()
+            content = (
+                response.body.decode()
+                if isinstance(response.body, bytes)
+                else response.body
+            )
 
             assert mock_supplier.legal_name in content
             assert mock_supplier.supplier_code in content
@@ -451,8 +455,8 @@ class TestBulkExport:
     async def test_export_streaming_response(
         self, mock_db, mock_supplier, organization_id
     ):
-        """Export should return a StreamingResponse."""
-        from fastapi.responses import StreamingResponse
+        """Export should return a Response."""
+        from fastapi import Response
 
         mock_db.query.return_value.filter.return_value.all.return_value = [
             mock_supplier
@@ -464,7 +468,7 @@ class TestBulkExport:
             service = SupplierBulkService(mock_db, organization_id)
             response = await service.bulk_export([mock_supplier.supplier_id])
 
-            assert isinstance(response, StreamingResponse)
+            assert isinstance(response, Response)
             assert response.media_type == "text/csv"
 
 

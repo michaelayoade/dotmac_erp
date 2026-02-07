@@ -7,7 +7,6 @@ from decimal import Decimal
 from unittest.mock import patch
 from uuid import uuid4
 
-from fastapi import HTTPException
 
 from app.services.finance.tax.tax_posting_adapter import (
     TAXPostingAdapter,
@@ -146,15 +145,16 @@ class TestTAXPostingAdapterPostTaxTransaction:
 
         with (
             patch(
-                "app.services.finance.tax.tax_posting_adapter.JournalService"
+                "app.services.finance.tax.tax_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
+                "app.services.finance.tax.tax_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
         ):
-            mock_journal_svc.create_journal.return_value = MockJournalResult()
-            mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
-                success=True
+            mock_journal_svc.return_value = (MockJournalResult(), None)
+            mock_posting_svc.return_value = MockPostingResult(
+                success=True,
+                message="Posted successfully",
             )
 
             result = TAXPostingAdapter.post_tax_transaction(
@@ -189,15 +189,16 @@ class TestTAXPostingAdapterPostTaxTransaction:
 
         with (
             patch(
-                "app.services.finance.tax.tax_posting_adapter.JournalService"
+                "app.services.finance.tax.tax_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
+                "app.services.finance.tax.tax_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
         ):
-            mock_journal_svc.create_journal.return_value = MockJournalResult()
-            mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
-                success=True
+            mock_journal_svc.return_value = (MockJournalResult(), None)
+            mock_posting_svc.return_value = MockPostingResult(
+                success=True,
+                message="Posted successfully",
             )
 
             result = TAXPostingAdapter.post_tax_transaction(
@@ -230,15 +231,16 @@ class TestTAXPostingAdapterPostTaxTransaction:
 
         with (
             patch(
-                "app.services.finance.tax.tax_posting_adapter.JournalService"
+                "app.services.finance.tax.tax_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
+                "app.services.finance.tax.tax_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
         ):
-            mock_journal_svc.create_journal.return_value = MockJournalResult()
-            mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
-                success=True
+            mock_journal_svc.return_value = (MockJournalResult(), None)
+            mock_posting_svc.return_value = MockPostingResult(
+                success=True,
+                message="Posted successfully",
             )
 
             result = TAXPostingAdapter.post_tax_transaction(
@@ -298,10 +300,14 @@ class TestTAXPostingAdapterPostTaxTransaction:
         mock_db.get.side_effect = [mock_txn, mock_code]
 
         with patch(
-            "app.services.finance.tax.tax_posting_adapter.JournalService"
+            "app.services.finance.tax.tax_posting_adapter.BasePostingAdapter.create_and_approve_journal"
         ) as mock_journal_svc:
-            mock_journal_svc.create_journal.side_effect = HTTPException(
-                status_code=400, detail="Journal validation failed"
+            mock_journal_svc.return_value = (
+                None,
+                MockPostingResult(
+                    success=False,
+                    message="Journal creation failed: Journal validation failed",
+                ),
             )
 
             result = TAXPostingAdapter.post_tax_transaction(
@@ -330,14 +336,14 @@ class TestTAXPostingAdapterPostTaxTransaction:
 
         with (
             patch(
-                "app.services.finance.tax.tax_posting_adapter.JournalService"
+                "app.services.finance.tax.tax_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
+                "app.services.finance.tax.tax_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
         ):
-            mock_journal_svc.create_journal.return_value = MockJournalResult()
-            mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
+            mock_journal_svc.return_value = (MockJournalResult(), None)
+            mock_posting_svc.return_value = MockPostingResult(
                 success=False, message="Period closed"
             )
 
@@ -350,7 +356,7 @@ class TestTAXPostingAdapterPostTaxTransaction:
             )
 
             assert result.success is False
-            assert "Ledger posting failed" in result.message
+            assert "Period closed" in result.message
 
 
 class TestTAXPostingAdapterPostCurrentTaxProvision:
@@ -370,15 +376,16 @@ class TestTAXPostingAdapterPostCurrentTaxProvision:
 
         with (
             patch(
-                "app.services.finance.tax.tax_posting_adapter.JournalService"
+                "app.services.finance.tax.tax_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
+                "app.services.finance.tax.tax_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
         ):
-            mock_journal_svc.create_journal.return_value = MockJournalResult()
-            mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
-                success=True
+            mock_journal_svc.return_value = (MockJournalResult(), None)
+            mock_posting_svc.return_value = MockPostingResult(
+                success=True,
+                message="Posted successfully",
             )
 
             result = TAXPostingAdapter.post_current_tax_provision(
@@ -406,15 +413,16 @@ class TestTAXPostingAdapterPostCurrentTaxProvision:
 
         with (
             patch(
-                "app.services.finance.tax.tax_posting_adapter.JournalService"
+                "app.services.finance.tax.tax_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
+                "app.services.finance.tax.tax_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
         ):
-            mock_journal_svc.create_journal.return_value = MockJournalResult()
-            mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
-                success=True
+            mock_journal_svc.return_value = (MockJournalResult(), None)
+            mock_posting_svc.return_value = MockPostingResult(
+                success=True,
+                message="Posted successfully",
             )
 
             result = TAXPostingAdapter.post_current_tax_provision(
@@ -494,15 +502,16 @@ class TestTAXPostingAdapterPostDeferredTaxMovement:
 
         with (
             patch(
-                "app.services.finance.tax.tax_posting_adapter.JournalService"
+                "app.services.finance.tax.tax_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
+                "app.services.finance.tax.tax_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
         ):
-            mock_journal_svc.create_journal.return_value = MockJournalResult()
-            mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
-                success=True
+            mock_journal_svc.return_value = (MockJournalResult(), None)
+            mock_posting_svc.return_value = MockPostingResult(
+                success=True,
+                message="Posted successfully",
             )
 
             result = TAXPostingAdapter.post_deferred_tax_movement(
@@ -536,15 +545,16 @@ class TestTAXPostingAdapterPostDeferredTaxMovement:
 
         with (
             patch(
-                "app.services.finance.tax.tax_posting_adapter.JournalService"
+                "app.services.finance.tax.tax_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
+                "app.services.finance.tax.tax_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
         ):
-            mock_journal_svc.create_journal.return_value = MockJournalResult()
-            mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
-                success=True
+            mock_journal_svc.return_value = (MockJournalResult(), None)
+            mock_posting_svc.return_value = MockPostingResult(
+                success=True,
+                message="Posted successfully",
             )
 
             result = TAXPostingAdapter.post_deferred_tax_movement(
@@ -578,15 +588,16 @@ class TestTAXPostingAdapterPostDeferredTaxMovement:
 
         with (
             patch(
-                "app.services.finance.tax.tax_posting_adapter.JournalService"
+                "app.services.finance.tax.tax_posting_adapter.BasePostingAdapter.create_and_approve_journal"
             ) as mock_journal_svc,
             patch(
-                "app.services.finance.tax.tax_posting_adapter.LedgerPostingService"
+                "app.services.finance.tax.tax_posting_adapter.BasePostingAdapter.post_to_ledger"
             ) as mock_posting_svc,
         ):
-            mock_journal_svc.create_journal.return_value = MockJournalResult()
-            mock_posting_svc.post_journal_entry.return_value = MockPostingResult(
-                success=True
+            mock_journal_svc.return_value = (MockJournalResult(), None)
+            mock_posting_svc.return_value = MockPostingResult(
+                success=True,
+                message="Posted successfully",
             )
 
             result = TAXPostingAdapter.post_deferred_tax_movement(

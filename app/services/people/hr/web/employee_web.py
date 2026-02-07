@@ -34,6 +34,7 @@ from app.models.people.payroll.salary_assignment import SalaryStructureAssignmen
 from app.models.person import Gender, Person
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.attendance.attendance_service import AttendanceService
+from app.services.people.hr.web.constants import DEFAULT_PAGE_SIZE, DROPDOWN_LIMIT
 from app.services.people.hr import (
     DepartmentFilters,
     DesignationFilters,
@@ -50,9 +51,6 @@ from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_PAGE_SIZE = 25
-DROPDOWN_LIMIT = 1000
 
 
 class HRWebService:

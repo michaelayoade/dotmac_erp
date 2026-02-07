@@ -61,10 +61,9 @@
     <!-- Report -->
     {% if selected_account %}
     <div class="card p-6 print:shadow-none print:border-0">
-        {% include "partials/_document_header.html" with {
-            "doc_title": "General ledger detail",
-            "doc_number": selected_account.account_code
-        } %}
+                {% set doc_title = "General ledger detail" %}
+        {% set doc_number = selected_account.account_code %}
+        {% include "partials/_document_header.html" %}
         <div class="text-center mb-6 print:mb-4">
             <p class="text-lg text-slate-700 dark:text-slate-300 mt-2">
                 <span class="font-mono">{{ selected_account.account_code }}</span> - {{ selected_account.account_name }}

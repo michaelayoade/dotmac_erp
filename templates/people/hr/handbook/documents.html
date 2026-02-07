@@ -1,4 +1,5 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import live_search %}
 
 {% block page_title %}HR Documents{% endblock %}
 
@@ -26,54 +27,26 @@
 {% block content %}
 <div class="space-y-6">
 
-    {# Filters #}
-    <div class="card">
-        <div class="card-body">
-            <form method="get" class="flex flex-wrap items-center gap-4">
-                <div class="flex items-center gap-2">
-                    <label for="category" class="text-sm font-medium text-slate-700 dark:text-slate-300">Category:</label>
-                    <select id="category"
-                            name="category"
-                            onchange="this.form.submit()"
-                            class="rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white shadow-sm focus:border-teal-500 focus:ring-teal-500 text-sm">
-                        <option value="">All Categories</option>
-                        {% for cat in categories %}
-                        <option value="{{ cat.value }}" {% if category_filter == cat.value %}selected{% endif %}>
-                            {{ cat.value | replace('_', ' ') | title }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="flex items-center gap-2">
-                    <label for="status" class="text-sm font-medium text-slate-700 dark:text-slate-300">Status:</label>
-                    <select id="status"
-                            name="status"
-                            onchange="this.form.submit()"
-                            class="rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white shadow-sm focus:border-teal-500 focus:ring-teal-500 text-sm">
-                        <option value="">All Statuses</option>
-                        {% for st in statuses %}
-                        <option value="{{ st.value }}" {% if status_filter == st.value %}selected{% endif %}>
-                            {{ st.value | replace('_', ' ') | title }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="flex-1">
-                    <input type="text"
-                           name="search"
-                           value="{{ search or '' }}"
-                           placeholder="Search documents..."
-                           class="w-full max-w-xs rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white shadow-sm focus:border-teal-500 focus:ring-teal-500 text-sm">
-                </div>
-                {% if category_filter or status_filter or search %}
-                <a href="/people/hr/handbook" class="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400">
-                    Clear filters
-                </a>
-                {% endif %}
-            </form>
-        </div>
-    </div>
+    {% call(search_attrs) live_search(search=search, base_url="/people/hr/handbook", placeholder="Search documents...") %}
+    <select name="category" class="form-select" {{ search_attrs }}>
+        <option value="">All Categories</option>
+        {% for cat in categories %}
+        <option value="{{ cat.value }}" {% if category_filter == cat.value %}selected{% endif %}>
+            {{ cat.value | replace('_', ' ') | title }}
+        </option>
+        {% endfor %}
+    </select>
+    <select name="status" class="form-select" {{ search_attrs }}>
+        <option value="">All Statuses</option>
+        {% for st in statuses %}
+        <option value="{{ st.value }}" {% if status_filter == st.value %}selected{% endif %}>
+            {{ st.value | replace('_', ' ') | title }}
+        </option>
+        {% endfor %}
+    </select>
+    {% endcall %}
 
+    <div id="results-container">
     {# Documents List #}
     {% if documents %}
     <div class="card overflow-hidden">
@@ -214,6 +187,7 @@
         {% endif %}
     </div>
     {% endif %}
+    </div>{# /results-container #}
 
 </div>
 {% endblock %}

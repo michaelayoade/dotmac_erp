@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from sqlalchemy import (
+    JSON,
     DateTime,
     Index,
     Integer,
@@ -56,7 +57,7 @@ class IdempotencyRecord(Base):
 
     response_status: Mapped[int] = mapped_column(Integer, nullable=False)
     response_body: Mapped[Optional[dict[str, Any]]] = mapped_column(
-        JSONB,
+        JSONB().with_variant(JSON, "sqlite"),
         nullable=True,
     )
 

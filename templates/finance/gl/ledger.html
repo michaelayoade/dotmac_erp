@@ -1,4 +1,5 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import live_search %}
 
 {% block page_title %}General Ledger{% endblock %}
 
@@ -33,56 +34,24 @@
 
 {% block content %}
 <div class="space-y-6 page-enter">
-    <!-- Filters -->
-    <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
-        <form method="get" class="flex flex-wrap items-end gap-4">
-            <!-- Account Filter -->
-            <div class="flex-1 min-w-[200px]">
-                <label for="account_id" class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Account</label>
-                <select name="account_id" id="account_id"
-                        class="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                    <option value="">All Accounts</option>
-                    {% for account in accounts %}
-                    <option value="{{ account.account_id }}" {{ 'selected' if selected_account_id == account.account_id else '' }}>
-                        {{ account.account_code }} - {{ account.account_name }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <!-- Date Range -->
-            <div>
-                <label for="start_date" class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">From Date</label>
-                <input type="date" name="start_date" id="start_date" value="{{ start_date }}"
-                       class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-            </div>
-            <div>
-                <label for="end_date" class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">To Date</label>
-                <input type="date" name="end_date" id="end_date" value="{{ end_date }}"
-                       class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-            </div>
-
-            <!-- Search -->
-            <div class="min-w-[200px]">
-                <label for="search" class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Search</label>
-                <input type="text" name="search" id="search" value="{{ search }}"
-                       placeholder="Description, reference..."
-                       class="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-            </div>
-
-            <!-- Submit -->
-            <button type="submit"
-                    class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
-                Apply
-            </button>
-            {% if selected_account_id or start_date or end_date or search %}
-            <a href="/finance/gl/ledger"
-               class="rounded-lg px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
-                Clear
-            </a>
-            {% endif %}
-        </form>
-    </div>
+    {% call(search_attrs) live_search(
+        search=search,
+        base_url="/finance/gl/ledger",
+        placeholder="Description, reference..."
+    ) %}
+        <select name="account_id" class="form-select" {{ search_attrs }}>
+            <option value="">All Accounts</option>
+            {% for account in accounts %}
+            <option value="{{ account.account_id }}" {{ 'selected' if selected_account_id == account.account_id else '' }}>
+                {{ account.account_code }} - {{ account.account_name }}
+            </option>
+            {% endfor %}
+        </select>
+        <input type="date" name="start_date" value="{{ start_date if start_date else '' }}"
+               class="form-input" {{ search_attrs }}>
+        <input type="date" name="end_date" value="{{ end_date if end_date else '' }}"
+               class="form-input" {{ search_attrs }}>
+    {% endcall %}
 
     <!-- Account Header (when single account selected) -->
     {% if selected_account %}
@@ -101,6 +70,7 @@
     </div>
     {% endif %}
 
+    <div id="results-container">
     <!-- Ledger Transactions Table -->
     <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50 overflow-hidden">
         <div class="overflow-x-auto">
@@ -219,5 +189,6 @@
         {% endif %}
     </div>
     {% endif %}
+    </div>{# /results-container #}
 </div>
 {% endblock %}

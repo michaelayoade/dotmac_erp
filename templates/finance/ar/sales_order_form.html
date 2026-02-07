@@ -47,10 +47,12 @@
                     <label for="customer_id" class="form-label">
                         Customer <span class="text-rose-500">*</span>
                     </label>
-                    <select id="customer_id" name="customer_id" x-model="form.customer_id" required class="form-input form-select">
+                    <select id="customer_id" name="customer_id" x-model="form.customer_id" @change="onCustomerChange" required class="form-input form-select">
                         <option value="">Select customer</option>
                         {% for c in customers %}
-                        <option value="{{ c.customer_id }}" {% if selected_customer_id == c.customer_id %}selected{% endif %}>
+                        <option value="{{ c.customer_id }}"
+                                data-default-tax-code-id="{{ c.default_tax_code_id or '' }}"
+                                {% if selected_customer_id == c.customer_id %}selected{% endif %}>
                             {{ c.name }}
                         </option>
                         {% endfor %}

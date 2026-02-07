@@ -1,4 +1,5 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import live_search %}
 
 {% block page_title %}Employee Grades{% endblock %}
 
@@ -23,19 +24,9 @@
 
 {% block content %}
 <div class="space-y-6">
-    {# Search #}
-    <form method="get" class="card p-4">
-        <div class="flex gap-4 items-end">
-            <div class="flex-1">
-                <label for="search" class="form-label">Search</label>
-                <input type="text" name="search" id="search" value="{{ search }}"
-                    placeholder="Search grades..."
-                    class="form-input w-full">
-            </div>
-            <button type="submit" class="btn btn-secondary">Search</button>
-        </div>
-    </form>
+    {{ live_search(search=search, base_url="/people/hr/grades", placeholder="Search grades...") }}
 
+    <div id="results-container">
     {# Grades Table #}
     <div class="card">
         <div class="table-container">
@@ -113,5 +104,6 @@
         </div>
         {% endif %}
     </div>
+    </div>{# /results-container #}
 </div>
 {% endblock %}

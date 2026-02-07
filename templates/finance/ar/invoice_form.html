@@ -552,7 +552,8 @@
                                 data-currency="{{ customer.currency_code }}"
                                 data-terms="{{ customer.payment_terms_days }}"
                                 data-credit-limit="{{ customer.credit_limit }}"
-                                data-balance="{{ customer.balance }}">
+                                data-balance="{{ customer.balance }}"
+                                data-default-tax-code-id="{{ customer.default_tax_code_id or '' }}">
                             {{ customer.customer_code }} - {{ customer.customer_name }}
                         </option>
                         {% endfor %}
@@ -921,6 +922,7 @@ function invoiceForm() {
         customerCreditLimit: 0,
         customerBalance: 0,
         creditWarning: '',
+        defaultTaxCodeId: '',
         taxBreakdown: [], // Aggregated tax breakdown for totals display
         organizationId: '{{ organization_id }}',
 
@@ -978,13 +980,24 @@ function invoiceForm() {
                 const terms = parseInt(option.dataset.terms) || 30;
                 this.customerCreditLimit = parseFloat(option.dataset.creditLimit) || 0;
                 this.customerBalance = parseFloat(option.dataset.balance) || 0;
+                this.defaultTaxCodeId = option.dataset.defaultTaxCodeId || '';
 
                 if (currency) this.form.currency_code = currency;
                 this.paymentTermsDays = terms;
                 this.calculateDueDate();
                 this.checkCredit();
+
+                if (this.defaultTaxCodeId) {
+                    this.form.lines.forEach((line, idx) => {
+                        if (!line.tax_code_ids || line.tax_code_ids.length === 0) {
+                            line.tax_code_ids = [this.defaultTaxCodeId];
+                            this.calculateLineTaxes(idx);
+                        }
+                    });
+                }
             } else {
                 this.creditWarning = '';
+                this.defaultTaxCodeId = '';
             }
         },
 
@@ -1019,7 +1032,7 @@ function invoiceForm() {
                 quantity: 1,
                 unit_price: 0,
                 amount: 0,
-                tax_code_ids: [],
+                tax_code_ids: this.defaultTaxCodeId ? [this.defaultTaxCodeId] : [],
                 tax_amount: 0,
                 tax_details: []
             });

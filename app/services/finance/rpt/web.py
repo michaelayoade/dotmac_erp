@@ -1098,7 +1098,7 @@ class ReportsWebService:
 
             entry = {
                 "invoice_number": invoice.invoice_number,
-                "customer_name": customer.customer_name,
+                "customer_name": customer.trading_name or customer.legal_name,
                 "invoice_date": _format_date(invoice.invoice_date),
                 "due_date": _format_date(due_date),
                 "amount": _format_currency(balance, invoice.currency_code),

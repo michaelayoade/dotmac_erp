@@ -377,12 +377,14 @@ class TestPostInvoice:
         assert result.success is False
         assert "No revenue account" in result.message
 
-    @patch("app.services.finance.ar.posting.invoice.JournalService")
-    @patch("app.services.finance.ar.posting.invoice.LedgerPostingService")
+    @patch(
+        "app.services.finance.ar.posting.invoice.BasePostingAdapter.create_and_approve_journal"
+    )
+    @patch("app.services.finance.ar.posting.invoice.BasePostingAdapter.post_to_ledger")
     def test_post_invoice_success(
         self,
-        mock_ledger_service,
-        mock_journal_service,
+        mock_post_to_ledger,
+        mock_create_and_approve,
         mock_db,
         organization_id,
         user_id,
@@ -406,12 +408,10 @@ class TestPostInvoice:
         ]
 
         journal = MockJournal()
-        mock_journal_service.create_journal.return_value = journal
-        mock_journal_service.submit_journal.return_value = None
-        mock_journal_service.approve_journal.return_value = None
+        mock_create_and_approve.return_value = (journal, None)
 
         posting_result = MockPostingResult(success=True)
-        mock_ledger_service.post_journal_entry.return_value = posting_result
+        mock_post_to_ledger.return_value = posting_result
 
         result = ARPostingAdapter.post_invoice(
             db=mock_db,
@@ -425,12 +425,14 @@ class TestPostInvoice:
         assert result.journal_entry_id == journal.journal_entry_id
         assert "successfully" in result.message.lower()
 
-    @patch("app.services.finance.ar.posting.invoice.JournalService")
-    @patch("app.services.finance.ar.posting.invoice.LedgerPostingService")
+    @patch(
+        "app.services.finance.ar.posting.invoice.BasePostingAdapter.create_and_approve_journal"
+    )
+    @patch("app.services.finance.ar.posting.invoice.BasePostingAdapter.post_to_ledger")
     def test_post_credit_note(
         self,
-        mock_ledger_service,
-        mock_journal_service,
+        mock_post_to_ledger,
+        mock_create_and_approve,
         mock_db,
         organization_id,
         user_id,
@@ -462,10 +464,10 @@ class TestPostInvoice:
         ]
 
         journal = MockJournal()
-        mock_journal_service.create_journal.return_value = journal
+        mock_create_and_approve.return_value = (journal, None)
 
         posting_result = MockPostingResult(success=True)
-        mock_ledger_service.post_journal_entry.return_value = posting_result
+        mock_post_to_ledger.return_value = posting_result
 
         result = ARPostingAdapter.post_invoice(
             db=mock_db,
@@ -477,17 +479,19 @@ class TestPostInvoice:
 
         assert result.success is True
         # Verify journal was created with credit note logic
-        call_args = mock_journal_service.create_journal.call_args
+        call_args = mock_create_and_approve.call_args
         journal_input = call_args[0][2]  # Third positional arg
         # First line should have credit (not debit) for credit note
         assert journal_input.lines[0].credit_amount > Decimal("0")
 
-    @patch("app.services.finance.ar.posting.invoice.JournalService")
-    @patch("app.services.finance.ar.posting.invoice.LedgerPostingService")
+    @patch(
+        "app.services.finance.ar.posting.invoice.BasePostingAdapter.create_and_approve_journal"
+    )
+    @patch("app.services.finance.ar.posting.invoice.BasePostingAdapter.post_to_ledger")
     def test_post_multicurrency_invoice(
         self,
-        mock_ledger_service,
-        mock_journal_service,
+        mock_post_to_ledger,
+        mock_create_and_approve,
         mock_db,
         organization_id,
         user_id,
@@ -520,10 +524,10 @@ class TestPostInvoice:
         ]
 
         journal = MockJournal()
-        mock_journal_service.create_journal.return_value = journal
+        mock_create_and_approve.return_value = (journal, None)
 
         posting_result = MockPostingResult(success=True)
-        mock_ledger_service.post_journal_entry.return_value = posting_result
+        mock_post_to_ledger.return_value = posting_result
 
         result = ARPostingAdapter.post_invoice(
             db=mock_db,
@@ -535,15 +539,17 @@ class TestPostInvoice:
 
         assert result.success is True
         # Verify functional amounts were calculated
-        call_args = mock_journal_service.create_journal.call_args
+        call_args = mock_create_and_approve.call_args
         journal_input = call_args[0][2]
         assert journal_input.currency_code == "EUR"
         assert journal_input.exchange_rate == Decimal("1.10")
 
-    @patch("app.services.finance.ar.posting.invoice.JournalService")
+    @patch(
+        "app.services.finance.ar.posting.invoice.BasePostingAdapter.create_and_approve_journal"
+    )
     def test_post_invoice_journal_creation_failure(
         self,
-        mock_journal_service,
+        mock_create_and_approve,
         mock_db,
         organization_id,
         user_id,
@@ -552,8 +558,6 @@ class TestPostInvoice:
         mock_invoice_line,
     ):
         """Test handling of journal creation failure."""
-        from fastapi import HTTPException
-
         mock_invoice.customer_id = mock_customer.customer_id
 
         def get_side_effect(model, id):
@@ -568,8 +572,11 @@ class TestPostInvoice:
             mock_invoice_line
         ]
 
-        mock_journal_service.create_journal.side_effect = HTTPException(
-            status_code=400, detail="Period closed"
+        mock_create_and_approve.return_value = (
+            None,
+            MockPostingResult(
+                success=False, message="Journal creation failed: Period closed"
+            ),
         )
 
         result = ARPostingAdapter.post_invoice(
@@ -583,12 +590,14 @@ class TestPostInvoice:
         assert result.success is False
         assert "Journal creation failed" in result.message
 
-    @patch("app.services.finance.ar.posting.invoice.JournalService")
-    @patch("app.services.finance.ar.posting.invoice.LedgerPostingService")
+    @patch(
+        "app.services.finance.ar.posting.invoice.BasePostingAdapter.create_and_approve_journal"
+    )
+    @patch("app.services.finance.ar.posting.invoice.BasePostingAdapter.post_to_ledger")
     def test_post_invoice_ledger_posting_failure(
         self,
-        mock_ledger_service,
-        mock_journal_service,
+        mock_post_to_ledger,
+        mock_create_and_approve,
         mock_db,
         organization_id,
         user_id,
@@ -612,12 +621,12 @@ class TestPostInvoice:
         ]
 
         journal = MockJournal()
-        mock_journal_service.create_journal.return_value = journal
+        mock_create_and_approve.return_value = (journal, None)
 
         posting_result = MockPostingResult(
-            success=False, message="Insufficient balance"
+            success=False, message="Ledger posting failed: Insufficient balance"
         )
-        mock_ledger_service.post_journal_entry.return_value = posting_result
+        mock_post_to_ledger.return_value = posting_result
 
         result = ARPostingAdapter.post_invoice(
             db=mock_db,
@@ -631,12 +640,14 @@ class TestPostInvoice:
         assert "Ledger posting failed" in result.message
         assert result.journal_entry_id == journal.journal_entry_id
 
-    @patch("app.services.finance.ar.posting.invoice.JournalService")
-    @patch("app.services.finance.ar.posting.invoice.LedgerPostingService")
+    @patch(
+        "app.services.finance.ar.posting.invoice.BasePostingAdapter.create_and_approve_journal"
+    )
+    @patch("app.services.finance.ar.posting.invoice.BasePostingAdapter.post_to_ledger")
     def test_post_invoice_with_idempotency_key(
         self,
-        mock_ledger_service,
-        mock_journal_service,
+        mock_post_to_ledger,
+        mock_create_and_approve,
         mock_db,
         organization_id,
         user_id,
@@ -660,10 +671,10 @@ class TestPostInvoice:
         ]
 
         journal = MockJournal()
-        mock_journal_service.create_journal.return_value = journal
+        mock_create_and_approve.return_value = (journal, None)
 
         posting_result = MockPostingResult(success=True)
-        mock_ledger_service.post_journal_entry.return_value = posting_result
+        mock_post_to_ledger.return_value = posting_result
 
         custom_key = "my-custom-key-123"
         result = ARPostingAdapter.post_invoice(
@@ -677,16 +688,17 @@ class TestPostInvoice:
 
         assert result.success is True
         # Verify the idempotency key was passed
-        call_args = mock_ledger_service.post_journal_entry.call_args
-        posting_request = call_args[0][1]
-        assert posting_request.idempotency_key == custom_key
+        call_args = mock_post_to_ledger.call_args
+        assert call_args.kwargs["idempotency_key"] == custom_key
 
-    @patch("app.services.finance.ar.posting.invoice.JournalService")
-    @patch("app.services.finance.ar.posting.invoice.LedgerPostingService")
+    @patch(
+        "app.services.finance.ar.posting.invoice.BasePostingAdapter.create_and_approve_journal"
+    )
+    @patch("app.services.finance.ar.posting.invoice.BasePostingAdapter.post_to_ledger")
     def test_post_invoice_with_cost_centers(
         self,
-        mock_ledger_service,
-        mock_journal_service,
+        mock_post_to_ledger,
+        mock_create_and_approve,
         mock_db,
         organization_id,
         user_id,
@@ -719,10 +731,10 @@ class TestPostInvoice:
         ]
 
         journal = MockJournal()
-        mock_journal_service.create_journal.return_value = journal
+        mock_create_and_approve.return_value = (journal, None)
 
         posting_result = MockPostingResult(success=True)
-        mock_ledger_service.post_journal_entry.return_value = posting_result
+        mock_post_to_ledger.return_value = posting_result
 
         result = ARPostingAdapter.post_invoice(
             db=mock_db,
@@ -734,19 +746,21 @@ class TestPostInvoice:
 
         assert result.success is True
         # Verify dimensions were passed to journal lines
-        call_args = mock_journal_service.create_journal.call_args
+        call_args = mock_create_and_approve.call_args
         journal_input = call_args[0][2]
         revenue_line = journal_input.lines[1]  # Second line is revenue
         assert revenue_line.cost_center_id == cost_center_id
         assert revenue_line.project_id == project_id
         assert revenue_line.segment_id == segment_id
 
-    @patch("app.services.finance.ar.posting.invoice.JournalService")
-    @patch("app.services.finance.ar.posting.invoice.LedgerPostingService")
+    @patch(
+        "app.services.finance.ar.posting.invoice.BasePostingAdapter.create_and_approve_journal"
+    )
+    @patch("app.services.finance.ar.posting.invoice.BasePostingAdapter.post_to_ledger")
     def test_post_invoice_exception_handling(
         self,
-        mock_ledger_service,
-        mock_journal_service,
+        mock_post_to_ledger,
+        mock_create_and_approve,
         mock_db,
         organization_id,
         user_id,
@@ -770,10 +784,10 @@ class TestPostInvoice:
         ]
 
         journal = MockJournal()
-        mock_journal_service.create_journal.return_value = journal
+        mock_create_and_approve.return_value = (journal, None)
 
-        mock_ledger_service.post_journal_entry.side_effect = Exception(
-            "Database connection lost"
+        mock_post_to_ledger.return_value = MockPostingResult(
+            success=False, message="Ledger posting failed: Database connection lost"
         )
 
         result = ARPostingAdapter.post_invoice(
@@ -785,7 +799,7 @@ class TestPostInvoice:
         )
 
         assert result.success is False
-        assert "Posting error" in result.message
+        assert "Ledger posting failed" in result.message
         assert result.journal_entry_id == journal.journal_entry_id
 
 
@@ -871,12 +885,14 @@ class TestPostPayment:
         assert result.success is False
         assert "Customer not found" in result.message
 
-    @patch("app.services.finance.ar.posting.payment.JournalService")
-    @patch("app.services.finance.ar.posting.payment.LedgerPostingService")
+    @patch(
+        "app.services.finance.ar.posting.payment.BasePostingAdapter.create_and_approve_journal"
+    )
+    @patch("app.services.finance.ar.posting.payment.BasePostingAdapter.post_to_ledger")
     def test_post_payment_success(
         self,
-        mock_ledger_service,
-        mock_journal_service,
+        mock_post_to_ledger,
+        mock_create_and_approve,
         mock_db,
         organization_id,
         user_id,
@@ -896,10 +912,10 @@ class TestPostPayment:
         mock_db.get.side_effect = get_side_effect
 
         journal = MockJournal()
-        mock_journal_service.create_journal.return_value = journal
+        mock_create_and_approve.return_value = (journal, None)
 
         posting_result = MockPostingResult(success=True)
-        mock_ledger_service.post_journal_entry.return_value = posting_result
+        mock_post_to_ledger.return_value = posting_result
 
         result = ARPostingAdapter.post_payment(
             db=mock_db,
@@ -914,18 +930,20 @@ class TestPostPayment:
         assert "successfully" in result.message.lower()
 
         # Verify journal lines (Debit Bank, Credit AR)
-        call_args = mock_journal_service.create_journal.call_args
+        call_args = mock_create_and_approve.call_args
         journal_input = call_args[0][2]
         assert len(journal_input.lines) == 2
         assert journal_input.lines[0].debit_amount == mock_payment.amount
         assert journal_input.lines[1].credit_amount == mock_payment.amount
 
-    @patch("app.services.finance.ar.posting.payment.JournalService")
-    @patch("app.services.finance.ar.posting.payment.LedgerPostingService")
+    @patch(
+        "app.services.finance.ar.posting.payment.BasePostingAdapter.create_and_approve_journal"
+    )
+    @patch("app.services.finance.ar.posting.payment.BasePostingAdapter.post_to_ledger")
     def test_post_multicurrency_payment(
         self,
-        mock_ledger_service,
-        mock_journal_service,
+        mock_post_to_ledger,
+        mock_create_and_approve,
         mock_db,
         organization_id,
         user_id,
@@ -950,10 +968,10 @@ class TestPostPayment:
         mock_db.get.side_effect = get_side_effect
 
         journal = MockJournal()
-        mock_journal_service.create_journal.return_value = journal
+        mock_create_and_approve.return_value = (journal, None)
 
         posting_result = MockPostingResult(success=True)
-        mock_ledger_service.post_journal_entry.return_value = posting_result
+        mock_post_to_ledger.return_value = posting_result
 
         result = ARPostingAdapter.post_payment(
             db=mock_db,
@@ -964,15 +982,17 @@ class TestPostPayment:
         )
 
         assert result.success is True
-        call_args = mock_journal_service.create_journal.call_args
+        call_args = mock_create_and_approve.call_args
         journal_input = call_args[0][2]
         # Functional amount = 800 * 1.25 = 1000
         assert journal_input.lines[0].debit_amount_functional == Decimal("1000.00")
 
-    @patch("app.services.finance.ar.posting.payment.JournalService")
+    @patch(
+        "app.services.finance.ar.posting.payment.BasePostingAdapter.create_and_approve_journal"
+    )
     def test_post_payment_journal_failure(
         self,
-        mock_journal_service,
+        mock_create_and_approve,
         mock_db,
         organization_id,
         user_id,
@@ -980,8 +1000,6 @@ class TestPostPayment:
         mock_customer,
     ):
         """Test handling of journal creation failure for payment."""
-        from fastapi import HTTPException
-
         mock_payment.customer_id = mock_customer.customer_id
 
         def get_side_effect(model, id):
@@ -993,8 +1011,11 @@ class TestPostPayment:
 
         mock_db.get.side_effect = get_side_effect
 
-        mock_journal_service.create_journal.side_effect = HTTPException(
-            status_code=400, detail="Invalid account"
+        mock_create_and_approve.return_value = (
+            None,
+            MockPostingResult(
+                success=False, message="Journal creation failed: Invalid account"
+            ),
         )
 
         result = ARPostingAdapter.post_payment(
@@ -1008,12 +1029,14 @@ class TestPostPayment:
         assert result.success is False
         assert "Journal creation failed" in result.message
 
-    @patch("app.services.finance.ar.posting.payment.JournalService")
-    @patch("app.services.finance.ar.posting.payment.LedgerPostingService")
+    @patch(
+        "app.services.finance.ar.posting.payment.BasePostingAdapter.create_and_approve_journal"
+    )
+    @patch("app.services.finance.ar.posting.payment.BasePostingAdapter.post_to_ledger")
     def test_post_payment_ledger_failure(
         self,
-        mock_ledger_service,
-        mock_journal_service,
+        mock_post_to_ledger,
+        mock_create_and_approve,
         mock_db,
         organization_id,
         user_id,
@@ -1033,10 +1056,12 @@ class TestPostPayment:
         mock_db.get.side_effect = get_side_effect
 
         journal = MockJournal()
-        mock_journal_service.create_journal.return_value = journal
+        mock_create_and_approve.return_value = (journal, None)
 
-        posting_result = MockPostingResult(success=False, message="Period locked")
-        mock_ledger_service.post_journal_entry.return_value = posting_result
+        posting_result = MockPostingResult(
+            success=False, message="Ledger posting failed: Period locked"
+        )
+        mock_post_to_ledger.return_value = posting_result
 
         result = ARPostingAdapter.post_payment(
             db=mock_db,
@@ -1049,12 +1074,14 @@ class TestPostPayment:
         assert result.success is False
         assert "Ledger posting failed" in result.message
 
-    @patch("app.services.finance.ar.posting.payment.JournalService")
-    @patch("app.services.finance.ar.posting.payment.LedgerPostingService")
+    @patch(
+        "app.services.finance.ar.posting.payment.BasePostingAdapter.create_and_approve_journal"
+    )
+    @patch("app.services.finance.ar.posting.payment.BasePostingAdapter.post_to_ledger")
     def test_post_payment_exception_handling(
         self,
-        mock_ledger_service,
-        mock_journal_service,
+        mock_post_to_ledger,
+        mock_create_and_approve,
         mock_db,
         organization_id,
         user_id,
@@ -1074,10 +1101,10 @@ class TestPostPayment:
         mock_db.get.side_effect = get_side_effect
 
         journal = MockJournal()
-        mock_journal_service.create_journal.return_value = journal
+        mock_create_and_approve.return_value = (journal, None)
 
-        mock_ledger_service.post_journal_entry.side_effect = Exception(
-            "Network timeout"
+        mock_post_to_ledger.return_value = MockPostingResult(
+            success=False, message="Ledger posting failed: Network timeout"
         )
 
         result = ARPostingAdapter.post_payment(
@@ -1089,7 +1116,7 @@ class TestPostPayment:
         )
 
         assert result.success is False
-        assert "Posting error" in result.message
+        assert "Ledger posting failed" in result.message
 
 
 # ============ Tax Transaction Creation Tests ============

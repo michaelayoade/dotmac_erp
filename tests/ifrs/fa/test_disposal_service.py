@@ -46,7 +46,12 @@ class TestAssetDisposalService:
             mock_db, org_id, input_data, user_id
         )
 
-        mock_db.add.assert_called_once()
+        from app.models.fixed_assets.asset_disposal import AssetDisposal
+
+        assert any(
+            isinstance(call.args[0], AssetDisposal)
+            for call in mock_db.add.call_args_list
+        )
         mock_db.commit.assert_called_once()
         mock_db.refresh.assert_called_once()
 
@@ -164,7 +169,12 @@ class TestAssetDisposalService:
 
         # Net proceeds: 5000 - 200 = 4800
         # Gain: 4800 - 3000 = 1800
-        mock_db.add.assert_called_once()
+        from app.models.fixed_assets.asset_disposal import AssetDisposal
+
+        assert any(
+            isinstance(call.args[0], AssetDisposal)
+            for call in mock_db.add.call_args_list
+        )
 
     def test_calculate_loss_on_disposal(self, mock_db, org_id, mock_asset, user_id):
         """Test loss calculation on disposal."""
@@ -198,7 +208,12 @@ class TestAssetDisposalService:
 
         # Net proceeds: 3000 - 200 = 2800
         # Loss: 2800 - 5000 = -2200
-        mock_db.add.assert_called_once()
+        from app.models.fixed_assets.asset_disposal import AssetDisposal
+
+        assert any(
+            isinstance(call.args[0], AssetDisposal)
+            for call in mock_db.add.call_args_list
+        )
 
     def test_approve_disposal_success(self, mock_db, org_id, mock_asset, user_id):
         """Test successful disposal approval."""
@@ -314,4 +329,9 @@ class TestAssetDisposalService:
             mock_db, org_id, input_data, user_id
         )
 
-        mock_db.add.assert_called_once()
+        from app.models.fixed_assets.asset_disposal import AssetDisposal
+
+        assert any(
+            isinstance(call.args[0], AssetDisposal)
+            for call in mock_db.add.call_args_list
+        )

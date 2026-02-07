@@ -143,9 +143,11 @@ class BatchTransferService:
                 )
                 continue
 
-            # Get employee name
+            # Prefer beneficiary name on the claim for third-party reimbursements
             employee_name = "Unknown"
-            if claim.employee:
+            if claim.recipient_name:
+                employee_name = claim.recipient_name
+            elif claim.employee:
                 employee_name = claim.employee.full_name
 
             sequence += 1

@@ -1067,7 +1067,10 @@ class TestReverseEntry:
                     mock_db, org_id, journal.journal_entry_id, date.today(), user_id
                 )
 
-        mock_db.add.assert_called_once()
+        assert any(
+            call.args and call.args[0] is mock_reversal
+            for call in mock_db.add.call_args_list
+        )
         mock_db.commit.assert_called_once()
 
     def test_reverse_non_posted_journal_fails(self, mock_db, org_id, user_id):

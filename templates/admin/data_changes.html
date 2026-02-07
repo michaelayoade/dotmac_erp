@@ -1,4 +1,5 @@
 {% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import live_search %}
 
 {% block page_title %}Data Changes{% endblock %}
 {% block page_subtitle %}Field-level audit trail with tamper detection{% endblock %}
@@ -9,84 +10,41 @@
         <span class="text-sm text-slate-500 dark:text-slate-400">
             {{ pagination.total }} change{{ 's' if pagination.total != 1 else '' }} recorded
         </span>
-        <div class="flex flex-wrap items-center gap-3">
-            <div class="relative">
-                <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                </svg>
-                <input
-                    type="text"
-                    name="search"
-                    value="{{ search | default('', true) }}"
-                    placeholder="Search record ID, reason..."
-                    class="w-56 pl-10 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
-                    hx-get="/admin/data-changes"
-                    hx-trigger="keyup changed delay:300ms"
-                    hx-target="#changes-table-container"
-                    hx-select="#changes-table-container"
-                    hx-push-url="true"
-                    hx-include="[name='module'], [name='entity'], [name='action']"
-                />
-            </div>
-            <select
-                name="module"
-                class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
-                hx-get="/admin/data-changes"
-                hx-trigger="change"
-                hx-target="#changes-table-container"
-                hx-select="#changes-table-container"
-                hx-push-url="true"
-                hx-include="[name='search'], [name='entity'], [name='action']"
-            >
-                <option value="" {{ 'selected' if not module_filter else '' }}>All Modules</option>
-                {% for m in modules %}
-                <option value="{{ m }}" {{ 'selected' if module_filter == m else '' }}>{{ m | replace('_', ' ') | title }}</option>
-                {% endfor %}
-            </select>
-            <select
-                name="entity"
-                class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
-                hx-get="/admin/data-changes"
-                hx-trigger="change"
-                hx-target="#changes-table-container"
-                hx-select="#changes-table-container"
-                hx-push-url="true"
-                hx-include="[name='search'], [name='module'], [name='action']"
-            >
-                <option value="" {{ 'selected' if not entity_filter else '' }}>All Entities</option>
-                {% for e in entities %}
-                <option value="{{ e }}" {{ 'selected' if entity_filter == e else '' }}>{{ e | replace('_', ' ') | title }}</option>
-                {% endfor %}
-            </select>
-            <select
-                name="action"
-                class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
-                hx-get="/admin/data-changes"
-                hx-trigger="change"
-                hx-target="#changes-table-container"
-                hx-select="#changes-table-container"
-                hx-push-url="true"
-                hx-include="[name='search'], [name='module'], [name='entity']"
-            >
-                <option value="" {{ 'selected' if not action_filter else '' }}>All Actions</option>
-                {% for a in actions %}
-                <option value="{{ a }}" {{ 'selected' if action_filter == a else '' }}>{{ a }}</option>
-                {% endfor %}
-            </select>
-        </div>
     </div>
 
+    {% call(search_attrs) live_search(search=search, base_url="/admin/data-changes", placeholder="Search record ID, reason...") %}
+        <select name="module" class="form-select" {{ search_attrs }}>
+            <option value="">All Modules</option>
+            {% for m in modules %}
+            <option value="{{ m }}" {{ 'selected' if module_filter == m else '' }}>{{ m | replace('_', ' ') | title }}</option>
+            {% endfor %}
+        </select>
+        <select name="entity" class="form-select" {{ search_attrs }}>
+            <option value="">All Entities</option>
+            {% for e in entities %}
+            <option value="{{ e }}" {{ 'selected' if entity_filter == e else '' }}>{{ e | replace('_', ' ') | title }}</option>
+            {% endfor %}
+        </select>
+        <select name="action" class="form-select" {{ search_attrs }}>
+            <option value="">All Actions</option>
+            {% for a in actions %}
+            <option value="{{ a }}" {{ 'selected' if action_filter == a else '' }}>{{ a }}</option>
+            {% endfor %}
+        </select>
+    {% endcall %}
+
+    <div id="results-container">
     <div id="changes-table-container" class="admin-card overflow-hidden">
         <div class="overflow-x-auto">
             <table class="w-full">
                 <thead class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
                     <tr>
-                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Time</th>
-                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Module</th>
-                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Entity</th>
-                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Action</th>
-                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Changed Fields</th>
-                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Details</th>
+                        <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Time</th>
+                        <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Module</th>
+                        <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Entity</th>
+                        <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Action</th>
+                        <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Changed Fields</th>
+                        <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Details</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700" x-data>
@@ -258,6 +216,7 @@
             </div>
         </div>
         {% endif %}
+    </div>
     </div>
 </div>
 {% endblock %}

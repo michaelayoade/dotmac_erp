@@ -937,9 +937,12 @@ class SelfServiceWebService:
                 "selected_task_id": selected_task_id,
                 "employee_bank_code": (employee.bank_branch_code if employee else "")
                 or "",
+                "employee_bank_name": (employee.bank_name if employee else "") or "",
                 "employee_bank_account_number": (
                     employee.bank_account_number if employee else ""
                 )
+                or "",
+                "employee_recipient_name": (employee.full_name if employee else "")
                 or "",
             }
         )
@@ -962,7 +965,9 @@ class SelfServiceWebService:
         description: str,
         claimed_amount: str,
         recipient_bank_code: Optional[str] = None,
+        recipient_bank_name: Optional[str] = None,
         recipient_account_number: Optional[str] = None,
+        recipient_name: Optional[str] = None,
         receipt_url: Optional[str] = None,
         receipt_number: Optional[str] = None,
         receipt_file: Optional[UploadFile] = None,
@@ -996,7 +1001,9 @@ class SelfServiceWebService:
             ticket_id=coerce_uuid(ticket_id) if ticket_id else None,
             task_id=coerce_uuid(task_id) if task_id else None,
             recipient_bank_code=recipient_bank_code,
+            recipient_bank_name=recipient_bank_name,
             recipient_account_number=recipient_account_number,
+            recipient_name=recipient_name,
             items=[
                 {
                     "expense_date": expense_date,
@@ -1097,7 +1104,9 @@ class SelfServiceWebService:
         claim_id: UUID,
         items: list[dict],
         recipient_bank_code: Optional[str] = None,
+        recipient_bank_name: Optional[str] = None,
         recipient_account_number: Optional[str] = None,
+        recipient_name: Optional[str] = None,
         project_id: Optional[UUID] = None,
         ticket_id: Optional[UUID] = None,
         task_id: Optional[UUID] = None,
@@ -1119,7 +1128,9 @@ class SelfServiceWebService:
             org_id,
             claim_id,
             recipient_bank_code=recipient_bank_code,
+            recipient_bank_name=recipient_bank_name,
             recipient_account_number=recipient_account_number,
+            recipient_name=recipient_name,
             project_id=project_id,
             ticket_id=ticket_id,
             task_id=task_id,

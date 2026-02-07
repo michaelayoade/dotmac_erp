@@ -81,6 +81,11 @@ class Customer(Base):
     tax_identification_number: Mapped[Optional[str]] = mapped_column(
         String(50), nullable=True
     )
+    vat_category: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="VAT class/category for the customer",
+    )
     registration_number: Mapped[Optional[str]] = mapped_column(
         String(50), nullable=True
     )
@@ -112,6 +117,12 @@ class Customer(Base):
     default_revenue_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
+    )
+    default_tax_code_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tax.tax_code.tax_code_id"),
+        nullable=True,
+        comment="Default sales tax code for this customer",
     )
 
     # Relationships

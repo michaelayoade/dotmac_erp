@@ -133,6 +133,11 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
 
     __tablename__ = "expense_claim"
     __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "claim_number",
+            name="uq_expense_claim_org_number",
+        ),
         Index("idx_expense_claim_employee", "employee_id"),
         Index("idx_expense_claim_status", "organization_id", "status"),
         Index("idx_expense_claim_date", "organization_id", "claim_date"),
@@ -153,11 +158,10 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         index=True,
     )
 
-    # Reference
+    # Reference (unique per org via composite constraint in __table_args__)
     claim_number: Mapped[str] = mapped_column(
         String(30),
         nullable=False,
-        unique=True,
     )
 
     # Employee
@@ -278,6 +282,16 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         String(20),
         nullable=True,
         comment="Paystack recipient bank code",
+    )
+    recipient_bank_name: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="Recipient bank name",
+    )
+    recipient_name: Mapped[Optional[str]] = mapped_column(
+        String(150),
+        nullable=True,
+        comment="Beneficiary name for reimbursement",
     )
     recipient_account_number: Mapped[Optional[str]] = mapped_column(
         String(20),
