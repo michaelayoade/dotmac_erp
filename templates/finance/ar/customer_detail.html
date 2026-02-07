@@ -29,6 +29,7 @@
     </a>
     <form method="POST" action="/finance/ar/customers/{{ customer.customer_id }}/delete"
           onsubmit="return confirm('Are you sure you want to delete this customer? This action cannot be undone.');">
+        {{ request.state.csrf_form | safe }}
         <button type="submit"
                 class="btn btn-danger-outline">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -137,14 +138,44 @@
         </div>
     </div>
 
-    <div class="card p-6">
-        <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Open Invoices</h3>
-        <div class="table-container">
+    <!-- Transactions -->
+    <div class="card" x-data='{ activeTab: "invoices" }'>
+        <div class="border-b border-slate-200 dark:border-slate-700">
+            <nav class="flex gap-0 -mb-px overflow-x-auto" aria-label="Transaction tabs">
+                <button @click="activeTab = 'invoices'"
+                        :class="activeTab === 'invoices' ? 'border-teal-500 text-teal-600 dark:text-teal-400' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300'"
+                        class="whitespace-nowrap border-b-2 px-6 py-3 text-sm font-medium transition-colors">
+                    Invoices
+                    {% if invoices %}<span class="ml-1.5 rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-xs">{{ invoices | length }}</span>{% endif %}
+                </button>
+                <button @click="activeTab = 'receipts'"
+                        :class="activeTab === 'receipts' ? 'border-teal-500 text-teal-600 dark:text-teal-400' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300'"
+                        class="whitespace-nowrap border-b-2 px-6 py-3 text-sm font-medium transition-colors">
+                    Receipts
+                    {% if receipts %}<span class="ml-1.5 rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-xs">{{ receipts | length }}</span>{% endif %}
+                </button>
+                <button @click="activeTab = 'quotes'"
+                        :class="activeTab === 'quotes' ? 'border-teal-500 text-teal-600 dark:text-teal-400' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300'"
+                        class="whitespace-nowrap border-b-2 px-6 py-3 text-sm font-medium transition-colors">
+                    Quotes
+                    {% if quotes %}<span class="ml-1.5 rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-xs">{{ quotes | length }}</span>{% endif %}
+                </button>
+                <button @click="activeTab = 'sales_orders'"
+                        :class="activeTab === 'sales_orders' ? 'border-teal-500 text-teal-600 dark:text-teal-400' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300'"
+                        class="whitespace-nowrap border-b-2 px-6 py-3 text-sm font-medium transition-colors">
+                    Sales Orders
+                    {% if sales_orders %}<span class="ml-1.5 rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-xs">{{ sales_orders | length }}</span>{% endif %}
+                </button>
+            </nav>
+        </div>
+
+        <!-- Invoices Tab -->
+        <div x-show="activeTab === 'invoices'" class="overflow-x-auto">
             <table class="table">
                 <thead>
                     <tr>
-                        <th scope="col">Invoice</th>
-                        <th scope="col">Invoice Date</th>
+                        <th scope="col">Invoice #</th>
+                        <th scope="col">Date</th>
                         <th scope="col">Due Date</th>
                         <th scope="col" class="text-right">Total</th>
                         <th scope="col" class="text-right">Balance</th>
@@ -152,25 +183,131 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for invoice in open_invoices %}
-                    <tr>
+                    {% for inv in invoices %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                         <td>
-                            <a href="/finance/ar/invoices/{{ invoice.invoice_id }}" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">
-                                {{ invoice.invoice_number }}
+                            <a href="/finance/ar/invoices/{{ inv.invoice_id }}" class="font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                                {{ inv.invoice_number }}
                             </a>
                         </td>
-                        <td>{{ invoice.invoice_date }}</td>
-                        <td>{{ invoice.due_date }}</td>
-                        <td class="table-cell-amount">{{ invoice.total_amount }}</td>
-                        <td class="table-cell-amount">{{ invoice.balance }}</td>
-                        <td>
-                            {{ status_badge('OVERDUE' if invoice.is_overdue else invoice.status, 'sm') }}
-                        </td>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">{{ inv.invoice_date }}</td>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">{{ inv.due_date }}</td>
+                        <td class="table-cell-amount">{{ inv.total_amount }}</td>
+                        <td class="table-cell-amount">{{ inv.balance }}</td>
+                        <td>{{ status_badge('OVERDUE' if inv.is_overdue else inv.status, 'sm') }}</td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="6" class="py-12">
-                            {{ empty_state('No open invoices', 'This customer has no open invoices.', 'document') }}
+                        <td colspan="6" class="py-8">
+                            {{ empty_state('No invoices', 'No invoices for this customer yet.') }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Receipts Tab -->
+        <div x-show="activeTab === 'receipts'" x-cloak class="overflow-x-auto">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Receipt #</th>
+                        <th scope="col">Date</th>
+                        <th scope="col" class="text-right">Amount</th>
+                        <th scope="col">Method</th>
+                        <th scope="col">Reference</th>
+                        <th scope="col">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in receipts %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td>
+                            <a href="/finance/ar/receipts/{{ r.payment_id }}" class="font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                                {{ r.payment_number }}
+                            </a>
+                        </td>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">{{ r.payment_date }}</td>
+                        <td class="table-cell-amount">{{ r.amount }}</td>
+                        <td class="text-sm">{{ r.payment_method }}</td>
+                        <td class="text-sm font-mono text-slate-600 dark:text-slate-400">{{ r.reference }}</td>
+                        <td>{{ status_badge(r.status, 'sm') }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="py-8">
+                            {{ empty_state('No receipts', 'No receipts recorded for this customer yet.') }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Quotes Tab -->
+        <div x-show="activeTab === 'quotes'" x-cloak class="overflow-x-auto">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Quote #</th>
+                        <th scope="col">Date</th>
+                        <th scope="col">Valid Until</th>
+                        <th scope="col" class="text-right">Amount</th>
+                        <th scope="col">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for q in quotes %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td>
+                            <a href="/finance/quotes/{{ q.quote_id }}" class="font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                                {{ q.quote_number }}
+                            </a>
+                        </td>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">{{ q.quote_date }}</td>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">{{ q.valid_until }}</td>
+                        <td class="table-cell-amount">{{ q.total_amount }}</td>
+                        <td>{{ status_badge(q.status, 'sm') }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="py-8">
+                            {{ empty_state('No quotes', 'No quotes for this customer yet.') }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Sales Orders Tab -->
+        <div x-show="activeTab === 'sales_orders'" x-cloak class="overflow-x-auto">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">SO #</th>
+                        <th scope="col">Date</th>
+                        <th scope="col" class="text-right">Amount</th>
+                        <th scope="col">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for so in sales_orders %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td>
+                            <a href="/finance/sales-orders/{{ so.so_id }}" class="font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                                {{ so.so_number }}
+                            </a>
+                        </td>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">{{ so.order_date }}</td>
+                        <td class="table-cell-amount">{{ so.total_amount }}</td>
+                        <td>{{ status_badge(so.status, 'sm') }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="py-8">
+                            {{ empty_state('No sales orders', 'No sales orders for this customer yet.') }}
                         </td>
                     </tr>
                     {% endfor %}

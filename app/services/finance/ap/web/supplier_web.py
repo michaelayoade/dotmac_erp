@@ -287,7 +287,16 @@ class SupplierWebService:
             supplier = None
 
         if not supplier or supplier.organization_id != org_id:
-            return {"supplier": None, "open_invoices": []}
+            return {
+                "supplier": None,
+                "invoices": [],
+                "payments": [],
+                "purchase_orders": [],
+                "goods_receipts": [],
+            }
+
+        from app.models.finance.ap.goods_receipt import GoodsReceipt
+        from app.models.finance.ap.purchase_order import PurchaseOrder
 
         open_statuses = [
             SupplierInvoiceStatus.POSTED,
@@ -305,42 +314,115 @@ class SupplierWebService:
             SupplierInvoice.status.in_(open_statuses),
         ).scalar() or Decimal("0")
 
-        invoices = (
+        # All invoices (all statuses)
+        today = date.today()
+        all_invoices_query = (
             db.query(SupplierInvoice)
             .filter(
                 SupplierInvoice.organization_id == org_id,
                 SupplierInvoice.supplier_id == supplier.supplier_id,
-                SupplierInvoice.status.in_(open_statuses),
             )
-            .order_by(SupplierInvoice.due_date)
-            .limit(10)
+            .order_by(SupplierInvoice.invoice_date.desc())
+            .limit(20)
             .all()
         )
-
-        today = date.today()
-        open_invoices = []
-        for invoice in invoices:
-            balance_due = invoice.total_amount - invoice.amount_paid
-            open_invoices.append(
+        invoices_view: list[dict] = []
+        for inv in all_invoices_query:
+            balance_due = inv.total_amount - inv.amount_paid
+            invoices_view.append(
                 {
-                    "invoice_id": invoice.invoice_id,
-                    "invoice_number": invoice.invoice_number,
-                    "invoice_date": format_date(invoice.invoice_date),
-                    "due_date": format_date(invoice.due_date),
+                    "invoice_id": inv.invoice_id,
+                    "invoice_number": inv.invoice_number,
+                    "invoice_date": format_date(inv.invoice_date),
+                    "due_date": format_date(inv.due_date),
                     "total_amount": format_currency(
-                        invoice.total_amount,
-                        invoice.currency_code,
+                        inv.total_amount, inv.currency_code
                     ),
-                    "balance": format_currency(
-                        balance_due,
-                        invoice.currency_code,
-                    ),
-                    "status": invoice_status_label(invoice.status),
+                    "balance": format_currency(balance_due, inv.currency_code),
+                    "status": invoice_status_label(inv.status),
                     "is_overdue": (
-                        invoice.due_date < today
-                        and invoice.status
+                        inv.due_date < today
+                        and inv.status
                         not in {SupplierInvoiceStatus.PAID, SupplierInvoiceStatus.VOID}
                     ),
+                }
+            )
+
+        # Payments
+        payments_query = (
+            db.query(SupplierPayment)
+            .filter(
+                SupplierPayment.organization_id == org_id,
+                SupplierPayment.supplier_id == supplier.supplier_id,
+            )
+            .order_by(SupplierPayment.payment_date.desc())
+            .limit(20)
+            .all()
+        )
+        payments_view: list[dict] = []
+        for p in payments_query:
+            payments_view.append(
+                {
+                    "payment_id": p.payment_id,
+                    "payment_number": p.payment_number,
+                    "payment_date": format_date(p.payment_date),
+                    "amount": format_currency(p.amount, p.currency_code),
+                    "payment_method": (
+                        p.payment_method.value.replace("_", " ").title()
+                        if p.payment_method
+                        else "-"
+                    ),
+                    "reference": p.reference or "-",
+                    "status": p.status.value if p.status else "-",
+                }
+            )
+
+        # Purchase Orders
+        pos_query = (
+            db.query(PurchaseOrder)
+            .filter(
+                PurchaseOrder.organization_id == org_id,
+                PurchaseOrder.supplier_id == supplier.supplier_id,
+            )
+            .order_by(PurchaseOrder.po_date.desc())
+            .limit(20)
+            .all()
+        )
+        purchase_orders_view: list[dict] = []
+        for po in pos_query:
+            purchase_orders_view.append(
+                {
+                    "po_id": po.po_id,
+                    "po_number": po.po_number,
+                    "po_date": format_date(po.po_date),
+                    "total_amount": (
+                        format_currency(po.total_amount, po.currency_code)
+                        if po.total_amount
+                        else "-"
+                    ),
+                    "status": po.status.value if po.status else "-",
+                }
+            )
+
+        # Goods Receipts
+        receipts_query = (
+            db.query(GoodsReceipt)
+            .filter(
+                GoodsReceipt.organization_id == org_id,
+                GoodsReceipt.supplier_id == supplier.supplier_id,
+            )
+            .order_by(GoodsReceipt.receipt_date.desc())
+            .limit(20)
+            .all()
+        )
+        goods_receipts_view: list[dict] = []
+        for gr in receipts_query:
+            goods_receipts_view.append(
+                {
+                    "receipt_id": gr.receipt_id,
+                    "receipt_number": gr.receipt_number,
+                    "receipt_date": format_date(gr.receipt_date),
+                    "status": gr.status.value if gr.status else "-",
                 }
             )
 
@@ -364,12 +446,20 @@ class SupplierWebService:
         ]
 
         logger.debug(
-            "supplier_detail_context: found %d open invoices", len(open_invoices)
+            "supplier_detail_context: found %d invoices, %d payments, "
+            "%d purchase orders, %d goods receipts",
+            len(invoices_view),
+            len(payments_view),
+            len(purchase_orders_view),
+            len(goods_receipts_view),
         )
 
         return {
             "supplier": supplier_detail_view(supplier, balance),
-            "open_invoices": open_invoices,
+            "invoices": invoices_view,
+            "payments": payments_view,
+            "purchase_orders": purchase_orders_view,
+            "goods_receipts": goods_receipts_view,
             "attachments": attachments_view,
         }
 

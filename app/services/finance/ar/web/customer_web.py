@@ -20,6 +20,8 @@ from app.config import settings
 from app.models.finance.ar.customer import Customer, RiskCategory
 from app.models.finance.ar.customer_payment import CustomerPayment
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus
+from app.models.finance.ar.quote import Quote  # noqa: F811
+from app.models.finance.ar.sales_order import SalesOrder  # noqa: F811
 from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
 from app.services.audit_info import get_audit_service
@@ -35,7 +37,6 @@ from app.services.finance.ar.web.base import (
     format_file_size,
     get_accounts,
     invoice_status_label,
-    logger,
     parse_customer_type,
 )
 from app.services.finance.common.attachment import AttachmentInput, attachment_service
@@ -275,14 +276,22 @@ class CustomerWebService:
             customer = None
 
         if not customer or customer.organization_id != org_id:
-            return {"customer": None, "open_invoices": []}
+            return {
+                "customer": None,
+                "invoices": [],
+                "receipts": [],
+                "quotes": [],
+                "sales_orders": [],
+            }
 
         default_tax_code_label = None
         if customer.default_tax_code_id:
             try:
                 tax_code = tax_code_service.get(db, str(customer.default_tax_code_id))
                 if tax_code and tax_code.organization_id == org_id:
-                    default_tax_code_label = f"{tax_code.tax_code} - {tax_code.tax_name}"
+                    default_tax_code_label = (
+                        f"{tax_code.tax_code} - {tax_code.tax_name}"
+                    )
             except Exception:
                 default_tax_code_label = None
 
@@ -303,44 +312,123 @@ class CustomerWebService:
             Invoice.status.in_(open_statuses),
         ).scalar() or Decimal("0")
 
-        invoices = (
+        from datetime import date
+
+        today = date.today()
+
+        # All invoices (all statuses)
+        all_invoices_query = (
             db.query(Invoice)
             .filter(
                 Invoice.organization_id == org_id,
                 Invoice.customer_id == customer.customer_id,
-                Invoice.status.in_(open_statuses),
             )
-            .order_by(Invoice.due_date)
-            .limit(10)
+            .order_by(Invoice.invoice_date.desc())
+            .limit(20)
             .all()
         )
-
-        from datetime import date
-
-        today = date.today()
-        open_invoices = []
-        for invoice in invoices:
-            balance_due = invoice.total_amount - invoice.amount_paid
-            open_invoices.append(
+        invoices_view: list[dict] = []
+        for inv in all_invoices_query:
+            balance_due = inv.total_amount - inv.amount_paid
+            invoices_view.append(
                 {
-                    "invoice_id": invoice.invoice_id,
-                    "invoice_number": invoice.invoice_number,
-                    "invoice_date": format_date(invoice.invoice_date),
-                    "due_date": format_date(invoice.due_date),
+                    "invoice_id": inv.invoice_id,
+                    "invoice_number": inv.invoice_number,
+                    "invoice_date": format_date(inv.invoice_date),
+                    "due_date": format_date(inv.due_date),
                     "total_amount": format_currency(
-                        invoice.total_amount,
-                        invoice.currency_code,
+                        inv.total_amount, inv.currency_code
                     ),
-                    "balance": format_currency(
-                        balance_due,
-                        invoice.currency_code,
-                    ),
-                    "status": invoice_status_label(invoice.status),
+                    "balance": format_currency(balance_due, inv.currency_code),
+                    "status": invoice_status_label(inv.status),
                     "is_overdue": (
-                        invoice.due_date < today
-                        and invoice.status
-                        not in {InvoiceStatus.PAID, InvoiceStatus.VOID}
+                        inv.due_date < today
+                        and inv.status not in {InvoiceStatus.PAID, InvoiceStatus.VOID}
                     ),
+                }
+            )
+
+        # Receipts
+        receipts_query = (
+            db.query(CustomerPayment)
+            .filter(
+                CustomerPayment.organization_id == org_id,
+                CustomerPayment.customer_id == customer.customer_id,
+            )
+            .order_by(CustomerPayment.payment_date.desc())
+            .limit(20)
+            .all()
+        )
+        receipts_view: list[dict] = []
+        for r in receipts_query:
+            receipts_view.append(
+                {
+                    "payment_id": r.payment_id,
+                    "payment_number": r.payment_number,
+                    "payment_date": format_date(r.payment_date),
+                    "amount": format_currency(r.amount, r.currency_code),
+                    "payment_method": (
+                        r.payment_method.value.replace("_", " ").title()
+                        if r.payment_method
+                        else "-"
+                    ),
+                    "reference": r.reference or "-",
+                    "status": r.status.value if r.status else "-",
+                }
+            )
+
+        # Quotes
+        quotes_query = (
+            db.query(Quote)
+            .filter(
+                Quote.organization_id == org_id,
+                Quote.customer_id == customer.customer_id,
+            )
+            .order_by(Quote.quote_date.desc())
+            .limit(20)
+            .all()
+        )
+        quotes_view: list[dict] = []
+        for q in quotes_query:
+            quotes_view.append(
+                {
+                    "quote_id": q.quote_id,
+                    "quote_number": q.quote_number,
+                    "quote_date": format_date(q.quote_date),
+                    "valid_until": format_date(q.valid_until) if q.valid_until else "-",
+                    "total_amount": (
+                        format_currency(q.total_amount, q.currency_code)
+                        if q.total_amount
+                        else "-"
+                    ),
+                    "status": q.status.value if q.status else "-",
+                }
+            )
+
+        # Sales Orders
+        sales_orders_query = (
+            db.query(SalesOrder)
+            .filter(
+                SalesOrder.organization_id == org_id,
+                SalesOrder.customer_id == customer.customer_id,
+            )
+            .order_by(SalesOrder.order_date.desc())
+            .limit(20)
+            .all()
+        )
+        sales_orders_view: list[dict] = []
+        for so in sales_orders_query:
+            sales_orders_view.append(
+                {
+                    "so_id": so.so_id,
+                    "so_number": so.so_number,
+                    "order_date": format_date(so.order_date),
+                    "total_amount": (
+                        format_currency(so.total_amount, so.currency_code)
+                        if so.total_amount
+                        else "-"
+                    ),
+                    "status": so.status.value if so.status else "-",
                 }
             )
 
@@ -364,7 +452,12 @@ class CustomerWebService:
         ]
 
         logger.debug(
-            "customer_detail_context: found %d open invoices", len(open_invoices)
+            "customer_detail_context: found %d invoices, %d receipts, "
+            "%d quotes, %d sales orders",
+            len(invoices_view),
+            len(receipts_view),
+            len(quotes_view),
+            len(sales_orders_view),
         )
 
         customer_view = customer_detail_view(customer, balance)
@@ -375,7 +468,10 @@ class CustomerWebService:
 
         return {
             "customer": customer_view,
-            "open_invoices": open_invoices,
+            "invoices": invoices_view,
+            "receipts": receipts_view,
+            "quotes": quotes_view,
+            "sales_orders": sales_orders_view,
             "attachments": attachments_view,
         }
 
