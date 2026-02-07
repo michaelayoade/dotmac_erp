@@ -68,6 +68,7 @@ from app.schemas.expense import (
     EmployeeExpenseSummary,
 )
 from app.services.expense import ExpenseService
+from app.services.expense.expense_service import ApproverAuthorityError
 from app.services.common import PaginationParams
 from app.services.finance.platform.idempotency import IdempotencyService
 from app.api.idempotency import (
@@ -526,6 +527,18 @@ def approve_claim(
             response_body=response.model_dump(mode="json"),
         )
         return response
+    except ApproverAuthorityError as exc:
+        db.rollback()
+        detail = str(exc)
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=403,
+            response_body={"detail": detail},
+        )
+        raise HTTPException(status_code=403, detail=detail)
     except HTTPException as exc:
         db.rollback()
         IdempotencyService.update_response(

@@ -21,6 +21,7 @@ from app.services.expense.expense_posting_adapter import (
     ExpensePostingResult,
 )
 from app.services.expense.expense_service import (
+    ApproverAuthorityError,
     CardTransactionNotFoundError,
     CashAdvanceNotFoundError,
     CorporateCardNotFoundError,
@@ -55,6 +56,7 @@ __all__ = [
     "ExpenseClaimNotFoundError",
     "ExpenseClaimStatusError",
     "ExpenseLimitBlockedError",
+    "ApproverAuthorityError",
     "CashAdvanceNotFoundError",
     "CorporateCardNotFoundError",
     "CardTransactionNotFoundError",

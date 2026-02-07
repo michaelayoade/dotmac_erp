@@ -26,6 +26,7 @@ from app.models.expense.expense_claim import (
 from app.models.people.hr.employee import Employee
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.expense.expense_service import (
+    ApproverAuthorityError,
     ExpenseClaimStatusError,
     ExpenseService,
     ExpenseServiceError,
@@ -293,6 +294,13 @@ class ExpenseClaimsWebService:
                     status_code=303,
                 )
             db.commit()
+        except ApproverAuthorityError as exc:
+            db.rollback()
+            message = quote(str(exc))
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error={message}",
+                status_code=303,
+            )
         except ExpenseClaimStatusError:
             db.rollback()
             return RedirectResponse(

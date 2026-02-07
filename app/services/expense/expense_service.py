@@ -137,6 +137,23 @@ class ExpenseLimitBlockedError(ExpenseServiceError):
         super().__init__(message)
 
 
+class ApproverAuthorityError(ExpenseServiceError):
+    """Approver's authority limit is below the claim amount."""
+
+    def __init__(
+        self,
+        claim_amount: Decimal,
+        max_approval_amount: Decimal,
+    ):
+        self.claim_amount = claim_amount
+        self.max_approval_amount = max_approval_amount
+        super().__init__(
+            f"Your approval limit ({max_approval_amount:,.2f}) is below "
+            f"the claim amount ({claim_amount:,.2f}). "
+            f"Please escalate to a higher authority."
+        )
+
+
 # Valid status transitions for expense claims
 CLAIM_STATUS_TRANSITIONS = {
     ExpenseClaimStatus.DRAFT: {
@@ -875,6 +892,10 @@ class ExpenseService:
             return claim
 
         try:
+            # Validate approver authority before allowing approval
+            if approver_id:
+                self._validate_approver_authority(org_id, claim, approver_id)
+
             claim.status = ExpenseClaimStatus.APPROVED
             claim.approver_id = approver_id
             claim.approved_on = date.today()
@@ -1020,6 +1041,44 @@ class ExpenseService:
                 ExpenseClaimActionStatus.FAILED,
             )
             raise
+
+    def _validate_approver_authority(
+        self,
+        org_id: UUID,
+        claim: ExpenseClaim,
+        approver_id: UUID,
+    ) -> None:
+        """Validate the approver has sufficient authority for the claim amount.
+
+        Raises ApproverAuthorityError if the approver's configured
+        max_approval_amount is below the claim total.  When no approval
+        limit is configured for the approver the check is skipped
+        (backward-compatible with orgs that haven't set up limits).
+        """
+        from app.models.people.hr.employee import Employee
+        from app.services.expense.approval_service import ExpenseApprovalService
+
+        approver = self.db.get(Employee, approver_id)
+        if not approver:
+            return  # Unknown approver — let downstream handle
+
+        approval_svc = ExpenseApprovalService(self.db, self.ctx)
+        max_amount = approval_svc._get_approver_max_amount(org_id, approver)
+
+        if max_amount is None:
+            # No approval limit configured — allow (backward compat)
+            return
+
+        claim_amount = claim.total_claimed_amount or Decimal("0")
+        if claim_amount > max_amount:
+            logger.warning(
+                "Approver %s authority (%s) insufficient for claim %s amount (%s)",
+                approver_id,
+                max_amount,
+                claim.claim_id,
+                claim_amount,
+            )
+            raise ApproverAuthorityError(claim_amount, max_amount)
 
     def reject_claim(
         self,
