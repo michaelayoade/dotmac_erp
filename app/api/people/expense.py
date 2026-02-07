@@ -671,6 +671,60 @@ def mark_claim_paid(
         raise
 
 
+# Cancel claim
+@router.post("/claims/{claim_id}/cancel", response_model=ExpenseClaimRead)
+def cancel_claim(
+    claim_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+    reason: Optional[str] = None,
+):
+    """Cancel an expense claim (DRAFT or SUBMITTED only)."""
+    from app.services.people.expense import ExpenseClaimStatusError
+
+    svc = ExpenseService(db)
+    try:
+        claim = svc.cancel_claim(
+            org_id=organization_id,
+            claim_id=claim_id,
+            reason=reason,
+        )
+        db.commit()
+        return ExpenseClaimRead.model_validate(claim)
+    except ExpenseClaimStatusError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+
+
+# Resubmit rejected claim
+@router.post("/claims/{claim_id}/resubmit", response_model=ExpenseClaimRead)
+def resubmit_claim(
+    claim_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Resubmit a rejected expense claim (resets to DRAFT)."""
+    from app.services.people.expense import ExpenseClaimStatusError
+
+    svc = ExpenseService(db)
+    try:
+        claim = svc.resubmit_claim(
+            org_id=organization_id,
+            claim_id=claim_id,
+        )
+        db.commit()
+        return ExpenseClaimRead.model_validate(claim)
+    except ExpenseClaimStatusError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+
+
 # Link advance to claim
 @router.post("/claims/{claim_id}/link-advance", response_model=ExpenseClaimRead)
 def link_advance_to_claim(

@@ -14,7 +14,7 @@ from urllib.parse import quote
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.domain_settings import SettingDomain
@@ -69,26 +69,29 @@ class ExpenseClaimsWebService:
         start = date_type.fromisoformat(start_date) if start_date else None
         end = date_type.fromisoformat(end_date) if end_date else None
 
-        query = (
-            db.query(ExpenseClaim)
+        stmt = (
+            select(ExpenseClaim)
             .options(joinedload(ExpenseClaim.employee))
-            .filter(ExpenseClaim.organization_id == org_id)
+            .where(ExpenseClaim.organization_id == org_id)
         )
         if status_value:
-            query = query.filter(ExpenseClaim.status == status_value)
+            stmt = stmt.where(ExpenseClaim.status == status_value)
         if start:
-            query = query.filter(ExpenseClaim.claim_date >= start)
+            stmt = stmt.where(ExpenseClaim.claim_date >= start)
         if end:
-            query = query.filter(ExpenseClaim.claim_date <= end)
+            stmt = stmt.where(ExpenseClaim.claim_date <= end)
 
-        claims = query.order_by(ExpenseClaim.claim_date.desc()).limit(100).all()
-
-        status_rows = (
-            db.query(ExpenseClaim.status, func.count())
-            .filter(ExpenseClaim.organization_id == org_id)
-            .group_by(ExpenseClaim.status)
+        claims = list(
+            db.scalars(stmt.order_by(ExpenseClaim.claim_date.desc()).limit(100))
+            .unique()
             .all()
         )
+
+        status_rows = db.execute(
+            select(ExpenseClaim.status, func.count())
+            .where(ExpenseClaim.organization_id == org_id)
+            .group_by(ExpenseClaim.status)
+        ).all()
         status_counts: dict[ExpenseClaimStatus | None, int] = {
             row[0]: row[1] for row in status_rows
         }
@@ -117,13 +120,18 @@ class ExpenseClaimsWebService:
         org_id = coerce_uuid(auth.organization_id)
         claim_uuid = coerce_uuid(claim_id)
         claim = (
-            db.query(ExpenseClaim)
-            .options(
-                joinedload(ExpenseClaim.items).joinedload(ExpenseClaimItem.category),
-                joinedload(ExpenseClaim.employee),
+            db.scalars(
+                select(ExpenseClaim)
+                .options(
+                    joinedload(ExpenseClaim.items).joinedload(
+                        ExpenseClaimItem.category
+                    ),
+                    joinedload(ExpenseClaim.employee),
+                )
+                .where(ExpenseClaim.organization_id == org_id)
+                .where(ExpenseClaim.claim_id == claim_uuid)
             )
-            .filter(ExpenseClaim.organization_id == org_id)
-            .filter(ExpenseClaim.claim_id == claim_uuid)
+            .unique()
             .first()
         )
         if not claim:
@@ -169,13 +177,13 @@ class ExpenseClaimsWebService:
                 PaymentIntentStatus.PROCESSING,
             ]
             has_active_payment = (
-                db.query(PaymentIntent)
-                .filter(
-                    PaymentIntent.source_type == "EXPENSE_CLAIM",
-                    PaymentIntent.source_id == claim_uuid,
-                    PaymentIntent.status.in_(active_statuses),
-                )
-                .first()
+                db.scalars(
+                    select(PaymentIntent).where(
+                        PaymentIntent.source_type == "EXPENSE_CLAIM",
+                        PaymentIntent.source_id == claim_uuid,
+                        PaymentIntent.status.in_(active_statuses),
+                    )
+                ).first()
                 is not None
             )
 
@@ -276,12 +284,11 @@ class ExpenseClaimsWebService:
 
         org_id = coerce_uuid(auth.organization_id)
         claim_uuid = coerce_uuid(claim_id)
-        approver = (
-            db.query(Employee)
-            .filter(Employee.organization_id == org_id)
-            .filter(Employee.person_id == auth.person_id)
-            .first()
-        )
+        approver = db.scalars(
+            select(Employee)
+            .where(Employee.organization_id == org_id)
+            .where(Employee.person_id == auth.person_id)
+        ).first()
         approver_id = approver.employee_id if approver else None
 
         svc = ExpenseService(db)
@@ -340,12 +347,11 @@ class ExpenseClaimsWebService:
 
         org_id = coerce_uuid(auth.organization_id)
         claim_uuid = coerce_uuid(claim_id)
-        approver = (
-            db.query(Employee)
-            .filter(Employee.organization_id == org_id)
-            .filter(Employee.person_id == auth.person_id)
-            .first()
-        )
+        approver = db.scalars(
+            select(Employee)
+            .where(Employee.organization_id == org_id)
+            .where(Employee.person_id == auth.person_id)
+        ).first()
         approver_id = approver.employee_id if approver else None
 
         svc = ExpenseService(db)
@@ -381,6 +387,89 @@ class ExpenseClaimsWebService:
 
         return RedirectResponse(
             f"/expense/claims/{claim_id}?action=rejected", status_code=303
+        )
+
+    @staticmethod
+    def cancel_claim_response(
+        claim_id: str,
+        reason: str | None,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        """Cancel an expense claim (DRAFT or SUBMITTED only)."""
+        org_id = coerce_uuid(auth.organization_id)
+        claim_uuid = coerce_uuid(claim_id)
+
+        svc = ExpenseService(db)
+        try:
+            claim = svc.cancel_claim(
+                org_id,
+                claim_uuid,
+                reason=(reason or "").strip() or None,
+            )
+            if claim.status != ExpenseClaimStatus.CANCELLED:
+                db.rollback()
+                return RedirectResponse(
+                    f"/expense/claims/{claim_id}?error=cancel_in_progress",
+                    status_code=303,
+                )
+            db.commit()
+        except ExpenseClaimStatusError:
+            db.rollback()
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=invalid_status", status_code=303
+            )
+        except Exception:
+            db.rollback()
+            logger.exception(
+                "Expense claim cancellation failed",
+                extra={"claim_id": claim_id},
+            )
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=cancel_failed", status_code=303
+            )
+
+        return RedirectResponse(
+            f"/expense/claims/{claim_id}?action=cancelled", status_code=303
+        )
+
+    @staticmethod
+    def resubmit_claim_response(
+        claim_id: str,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        """Resubmit a rejected expense claim (resets to DRAFT)."""
+        org_id = coerce_uuid(auth.organization_id)
+        claim_uuid = coerce_uuid(claim_id)
+
+        svc = ExpenseService(db)
+        try:
+            claim = svc.resubmit_claim(org_id, claim_uuid)
+            if claim.status != ExpenseClaimStatus.DRAFT:
+                db.rollback()
+                return RedirectResponse(
+                    f"/expense/claims/{claim_id}?error=resubmit_failed",
+                    status_code=303,
+                )
+            db.commit()
+        except ExpenseClaimStatusError:
+            db.rollback()
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=invalid_status", status_code=303
+            )
+        except Exception:
+            db.rollback()
+            logger.exception(
+                "Expense claim resubmission failed",
+                extra={"claim_id": claim_id},
+            )
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=resubmit_failed", status_code=303
+            )
+
+        return RedirectResponse(
+            f"/expense/claims/{claim_id}?action=resubmitted", status_code=303
         )
 
     @staticmethod
@@ -438,18 +527,17 @@ class ExpenseClaimsWebService:
 
         org_id = coerce_uuid(auth.organization_id)
 
-        expense_accounts = (
-            db.query(Account)
+        expense_accounts = db.scalars(
+            select(Account)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-            .filter(
+            .where(
                 Account.organization_id == org_id,
                 AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
                 Account.is_active.is_(True),
                 AccountCategory.is_active.is_(True),
             )
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
 
         context = base_context(request, auth, "New Expense Category", "categories")
         context.update(
@@ -510,20 +598,20 @@ class ExpenseClaimsWebService:
         svc = ExpenseService(db)
 
         if errors:
-            expense_accounts = (
-                db.query(Account)
+            expense_accounts = db.scalars(
+                select(Account)
                 .join(
-                    AccountCategory, Account.category_id == AccountCategory.category_id
+                    AccountCategory,
+                    Account.category_id == AccountCategory.category_id,
                 )
-                .filter(
+                .where(
                     Account.organization_id == org_id,
                     AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
                     Account.is_active.is_(True),
                     AccountCategory.is_active.is_(True),
                 )
                 .order_by(Account.account_code)
-                .all()
-            )
+            ).all()
             context = base_context(request, auth, "New Expense Category", "categories")
             context.update(
                 {
@@ -560,20 +648,20 @@ class ExpenseClaimsWebService:
             db.commit()
         except ExpenseServiceError as exc:
             db.rollback()
-            expense_accounts = (
-                db.query(Account)
+            expense_accounts = db.scalars(
+                select(Account)
                 .join(
-                    AccountCategory, Account.category_id == AccountCategory.category_id
+                    AccountCategory,
+                    Account.category_id == AccountCategory.category_id,
                 )
-                .filter(
+                .where(
                     Account.organization_id == org_id,
                     AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
                     Account.is_active.is_(True),
                     AccountCategory.is_active.is_(True),
                 )
                 .order_by(Account.account_code)
-                .all()
-            )
+            ).all()
             context = base_context(request, auth, "New Expense Category", "categories")
             context.update(
                 {
@@ -610,18 +698,17 @@ class ExpenseClaimsWebService:
         svc = ExpenseService(db)
         category = svc.get_category(org_id, coerce_uuid(category_id))
 
-        expense_accounts = (
-            db.query(Account)
+        expense_accounts = db.scalars(
+            select(Account)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-            .filter(
+            .where(
                 Account.organization_id == org_id,
                 AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
                 Account.is_active.is_(True),
                 AccountCategory.is_active.is_(True),
             )
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
 
         context = base_context(request, auth, "Edit Expense Category", "categories")
         context.update(
@@ -683,20 +770,20 @@ class ExpenseClaimsWebService:
         svc = ExpenseService(db)
 
         if errors:
-            expense_accounts = (
-                db.query(Account)
+            expense_accounts = db.scalars(
+                select(Account)
                 .join(
-                    AccountCategory, Account.category_id == AccountCategory.category_id
+                    AccountCategory,
+                    Account.category_id == AccountCategory.category_id,
                 )
-                .filter(
+                .where(
                     Account.organization_id == org_id,
                     AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
                     Account.is_active.is_(True),
                     AccountCategory.is_active.is_(True),
                 )
                 .order_by(Account.account_code)
-                .all()
-            )
+            ).all()
             context = base_context(request, auth, "Edit Expense Category", "categories")
             context.update(
                 {
@@ -949,14 +1036,15 @@ class ExpenseClaimsWebService:
                 request, "expense/advances/detail.html", context
             )
 
-        bank_accounts = (
-            db.query(BankAccount)
-            .filter(
-                BankAccount.organization_id == org_id,
-                BankAccount.status == BankAccountStatus.active,
-            )
-            .order_by(BankAccount.account_name)
-            .all()
+        bank_accounts = list(
+            db.scalars(
+                select(BankAccount)
+                .where(
+                    BankAccount.organization_id == org_id,
+                    BankAccount.status == BankAccountStatus.active,
+                )
+                .order_by(BankAccount.account_name)
+            ).all()
         )
 
         linked_claims = []

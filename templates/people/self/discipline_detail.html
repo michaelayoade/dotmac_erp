@@ -87,7 +87,7 @@
                 <div class="p-6">
                     <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Submit Your Response</h2>
                     <form action="/people/self/discipline/{{ case.case_id }}/respond" method="POST">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                         <div class="space-y-4">
                             <div>
                                 <label for="response_text" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -220,7 +220,7 @@
                         You have until {{ case.appeal_deadline }} to file an appeal against this decision.
                     </p>
                     <form action="/people/self/discipline/{{ case.case_id }}/appeal" method="POST">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                         <div class="space-y-4">
                             <div>
                                 <label for="appeal_reason" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">

@@ -164,17 +164,15 @@ def process_expense_approval_reminders() -> dict:
 
     with SessionLocal() as db:
         today = date.today()
+        today_start = datetime.combine(today, datetime.min.time())
 
         # Find all pending claims
+        # PENDING_APPROVAL is unused — all claims awaiting approval
+        # are in SUBMITTED status.
         pending_claims = db.scalars(
             select(ExpenseClaim)
             .where(
-                ExpenseClaim.status.in_(
-                    [
-                        ExpenseClaimStatus.SUBMITTED,
-                        ExpenseClaimStatus.PENDING_APPROVAL,
-                    ]
-                ),
+                ExpenseClaim.status == ExpenseClaimStatus.SUBMITTED,
             )
             .order_by(ExpenseClaim.claim_date)
         ).all()
@@ -183,7 +181,12 @@ def process_expense_approval_reminders() -> dict:
 
         for claim in pending_claims:
             try:
-                days_pending = (today - claim.claim_date).days
+                # Use updated_at (set on status change to SUBMITTED) instead
+                # of claim_date (the expense incurrence date) for accuracy.
+                pending_since = (
+                    claim.updated_at.date() if claim.updated_at else claim.claim_date
+                )
+                days_pending = (today - pending_since).days
 
                 # Determine reminder type
                 if days_pending >= ESCALATION_WARNING_DAYS:
@@ -194,6 +197,26 @@ def process_expense_approval_reminders() -> dict:
                     reminder_type = "first"
                 else:
                     continue  # Too early for reminder
+
+                # Dedup: skip if a reminder was already sent today for this claim
+                from sqlalchemy import func as sa_func
+
+                from app.models.notification import (
+                    EntityType,
+                    Notification,
+                    NotificationType,
+                )
+
+                already_sent = db.scalar(
+                    select(sa_func.count(Notification.notification_id)).where(
+                        Notification.entity_type == EntityType.EXPENSE,
+                        Notification.entity_id == claim.claim_id,
+                        Notification.notification_type == NotificationType.REMINDER,
+                        Notification.created_at >= today_start,
+                    )
+                )
+                if already_sent and already_sent > 0:
+                    continue
 
                 # Get approver
                 approver = None
@@ -215,6 +238,23 @@ def process_expense_approval_reminders() -> dict:
                 )
 
                 if success:
+                    # Record Notification for dedup on subsequent runs
+                    from app.models.notification import NotificationChannel
+                    from app.services.notification import NotificationService
+
+                    nsvc = NotificationService()
+                    nsvc.create(
+                        db,
+                        organization_id=claim.organization_id,
+                        recipient_id=approver.person_id,
+                        entity_type=EntityType.EXPENSE,
+                        entity_id=claim.claim_id,
+                        notification_type=NotificationType.REMINDER,
+                        title=f"Expense Approval Reminder: {claim.claim_number}",
+                        message="Claim "
+                        f"{claim.claim_number} pending {days_pending} days",
+                        channel=NotificationChannel.EMAIL,
+                    )
                     if reminder_type == "first":
                         results["first_reminders_sent"] += 1
                     elif reminder_type == "second":
@@ -659,7 +699,7 @@ def poll_stuck_expense_transfers() -> dict:
                 db, SettingDomain.payments, "paystack_webhook_secret"
             )
             if not secret_key or not public_key:
-                logger.warning(f"No Paystack keys for org {org_id}")
+                logger.warning("No Paystack keys for org %s", org_id)
                 continue
 
             config = PaystackConfig(

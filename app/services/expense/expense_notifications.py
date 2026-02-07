@@ -605,7 +605,7 @@ View claim at: {claim_url}
             True if notification was sent successfully
         """
         if not approver.work_email:
-            logger.warning(f"No email for approver {approver.employee_id}")
+            logger.warning("No email for approver %s", approver.employee_id)
             return False
 
         claimant_name = "An employee"
@@ -698,7 +698,7 @@ Review now at: {claim_url}
                 organization_id=claim.organization_id,
             )
         except Exception as e:
-            logger.error(f"Failed to send reminder notification: {e}")
+            logger.error("Failed to send reminder notification: %s", e)
             return False
 
     def notify_claim_paid(

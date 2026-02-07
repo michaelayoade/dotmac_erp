@@ -601,3 +601,36 @@ def get_pm_attachment_upload() -> FileUploadService:
 def get_discipline_attachment_upload() -> FileUploadService:
     """Get discipline attachment upload service."""
     return FileUploadService(_discipline_attachment_config())
+
+
+def _expense_receipt_config() -> FileUploadConfig:
+    return FileUploadConfig(
+        base_dir="/app/uploads/expense_receipts",
+        allowed_content_types=frozenset(
+            {
+                "image/jpeg",
+                "image/png",
+                "image/gif",
+                "image/webp",
+                "application/pdf",
+            }
+        ),
+        allowed_extensions=frozenset(
+            {
+                ".jpg",
+                ".jpeg",
+                ".png",
+                ".gif",
+                ".webp",
+                ".pdf",
+            }
+        ),
+        max_size_bytes=10 * 1024 * 1024,
+        compute_checksum=True,
+        require_magic_bytes=True,
+    )
+
+
+def get_expense_receipt_upload() -> FileUploadService:
+    """Get expense receipt upload service."""
+    return FileUploadService(_expense_receipt_config())

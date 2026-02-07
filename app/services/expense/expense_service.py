@@ -158,15 +158,19 @@ class ApproverAuthorityError(ExpenseServiceError):
 CLAIM_STATUS_TRANSITIONS = {
     ExpenseClaimStatus.DRAFT: {
         ExpenseClaimStatus.SUBMITTED,
+        ExpenseClaimStatus.CANCELLED,
     },
     ExpenseClaimStatus.SUBMITTED: {
         ExpenseClaimStatus.APPROVED,
         ExpenseClaimStatus.REJECTED,
+        ExpenseClaimStatus.CANCELLED,
     },
     ExpenseClaimStatus.APPROVED: {
         ExpenseClaimStatus.PAID,
     },
-    ExpenseClaimStatus.REJECTED: set(),  # Terminal state
+    ExpenseClaimStatus.REJECTED: {
+        ExpenseClaimStatus.DRAFT,  # Allow resubmission after rejection
+    },
     ExpenseClaimStatus.PAID: set(),  # Terminal state
     ExpenseClaimStatus.CANCELLED: set(),  # Terminal state
 }
@@ -815,8 +819,8 @@ class ExpenseService:
                     new_values={"status": "SUBMITTED"},
                     user_id=claim.employee_id,
                 )
-            except Exception:
-                pass  # Side effect — never breaks the main operation
+            except Exception as e:
+                logger.exception("Workflow event failed for claim %s: %s", claim_id, e)
 
             # Include any receipt warnings
             warning_msg = "; ".join(receipt_warnings) if receipt_warnings else None
@@ -904,6 +908,23 @@ class ExpenseService:
             if approver_id:
                 self._validate_approver_authority(org_id, claim, approver_id)
 
+                # Self-approval prevention (separation of duties)
+                if claim.employee_id:
+                    from app.models.people.hr.employee import Employee
+
+                    approver = self.db.get(Employee, approver_id)
+                    claimant = self.db.get(Employee, claim.employee_id)
+                    if (
+                        approver
+                        and claimant
+                        and approver.person_id
+                        and claimant.person_id
+                        and approver.person_id == claimant.person_id
+                    ):
+                        raise ExpenseServiceError(
+                            "Cannot approve your own expense claim"
+                        )
+
             claim.status = ExpenseClaimStatus.APPROVED
             claim.approver_id = approver_id
             claim.approved_on = date.today()
@@ -942,10 +963,6 @@ class ExpenseService:
                 )
 
                 if not posting_result.success:
-                    # Log but don't fail the approval
-                    import logging
-
-                    logger = logging.getLogger(__name__)
                     logger.warning(
                         "GL posting failed for claim %s: %s",
                         claim_id,
@@ -968,9 +985,6 @@ class ExpenseService:
                 )
 
                 if not invoice_result.success:
-                    import logging
-
-                    logger = logging.getLogger(__name__)
                     logger.warning(
                         "Supplier invoice creation failed for claim %s: %s",
                         claim_id,
@@ -1031,8 +1045,8 @@ class ExpenseService:
                     },
                     user_id=approver_id,
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception("Workflow event failed for claim %s: %s", claim_id, e)
 
             self._set_action_status(
                 org_id,
@@ -1127,7 +1141,6 @@ class ExpenseService:
         try:
             claim.status = ExpenseClaimStatus.REJECTED
             claim.approver_id = approver_id
-            claim.approved_on = date.today()
             claim.rejection_reason = reason
 
             # Send notification if requested
@@ -1183,8 +1196,8 @@ class ExpenseService:
                     new_values={"status": "REJECTED", "rejection_reason": reason},
                     user_id=approver_id,
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception("Workflow event failed for claim %s: %s", claim_id, e)
 
             self._set_action_status(
                 org_id,
@@ -1334,6 +1347,149 @@ class ExpenseService:
                 ExpenseClaimActionStatus.FAILED,
             )
             raise
+
+    def cancel_claim(
+        self,
+        org_id: UUID,
+        claim_id: UUID,
+        *,
+        reason: Optional[str] = None,
+    ) -> ExpenseClaim:
+        """
+        Cancel an expense claim.
+
+        Only claims in DRAFT or SUBMITTED status can be cancelled.
+        Cancellation is a terminal state — the claim cannot be reopened.
+
+        Args:
+            org_id: Organization ID
+            claim_id: Claim to cancel
+            reason: Optional cancellation reason
+
+        Returns:
+            The cancelled expense claim
+        """
+        claim = self.get_claim(org_id, claim_id)
+
+        if claim.status == ExpenseClaimStatus.CANCELLED:
+            return claim
+
+        if claim.status not in {
+            ExpenseClaimStatus.DRAFT,
+            ExpenseClaimStatus.SUBMITTED,
+        }:
+            raise ExpenseClaimStatusError(
+                claim.status.value, ExpenseClaimStatus.CANCELLED.value
+            )
+
+        if not self._begin_action(org_id, claim_id, ExpenseClaimActionType.CANCEL):
+            return claim
+
+        try:
+            old_status = claim.status.value
+            claim.status = ExpenseClaimStatus.CANCELLED
+            if reason:
+                claim.notes = (
+                    f"{claim.notes}\n\nCancelled: {reason}"
+                    if claim.notes
+                    else f"Cancelled: {reason}"
+                )
+
+            self.db.flush()
+
+            fire_audit_event(
+                db=self.db,
+                organization_id=org_id,
+                table_schema="expense",
+                table_name="expense_claim",
+                record_id=str(claim.claim_id),
+                action=AuditAction.UPDATE,
+                old_values={"status": old_status},
+                new_values={"status": ExpenseClaimStatus.CANCELLED.value},
+            )
+
+            self._set_action_status(
+                org_id,
+                claim_id,
+                ExpenseClaimActionType.CANCEL,
+                ExpenseClaimActionStatus.COMPLETED,
+            )
+            logger.info("Cancelled expense claim %s (was %s)", claim_id, old_status)
+            return claim
+        except Exception:
+            self._set_action_status(
+                org_id,
+                claim_id,
+                ExpenseClaimActionType.CANCEL,
+                ExpenseClaimActionStatus.FAILED,
+            )
+            raise
+
+    def resubmit_claim(
+        self,
+        org_id: UUID,
+        claim_id: UUID,
+    ) -> ExpenseClaim:
+        """
+        Resubmit a previously rejected expense claim.
+
+        Resets the claim to DRAFT so the employee can edit and resubmit.
+        Clears rejection fields and stale action records to allow
+        a fresh submission cycle.
+
+        Args:
+            org_id: Organization ID
+            claim_id: Claim to resubmit
+
+        Returns:
+            The claim reset to DRAFT status
+        """
+        claim = self.get_claim(org_id, claim_id)
+
+        if claim.status != ExpenseClaimStatus.REJECTED:
+            raise ExpenseClaimStatusError(
+                claim.status.value, ExpenseClaimStatus.DRAFT.value
+            )
+
+        old_status = claim.status.value
+        claim.status = ExpenseClaimStatus.DRAFT
+        claim.rejection_reason = None
+        claim.approver_id = None
+        claim.approved_on = None
+        claim.total_approved_amount = None
+        claim.net_payable_amount = None
+
+        # Clear per-item approved amounts
+        for item in claim.items:
+            item.approved_amount = None
+
+        # Remove stale action records so the claim can go through
+        # SUBMIT → APPROVE/REJECT cycle again without idempotency
+        # conflicts on the unique constraint (org_id, claim_id, action_type).
+        from sqlalchemy import delete
+
+        self.db.execute(
+            delete(ExpenseClaimAction).where(
+                ExpenseClaimAction.organization_id == org_id,
+                ExpenseClaimAction.claim_id == claim_id,
+            )
+        )
+
+        self.db.flush()
+
+        fire_audit_event(
+            db=self.db,
+            organization_id=org_id,
+            table_schema="expense",
+            table_name="expense_claim",
+            record_id=str(claim.claim_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": old_status},
+            new_values={"status": ExpenseClaimStatus.DRAFT.value},
+        )
+
+        logger.info("Resubmit: reset claim %s to DRAFT", claim_id)
+        return claim
 
     def link_advance(
         self,

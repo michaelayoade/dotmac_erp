@@ -728,7 +728,22 @@ if (typeof window.searchAutosuggest === 'undefined') {
     ) }}
     {% endif %}
 
-    {# Submit button — progressive enhancement fallback for no-JS #}
+    {# Filter button — visible when filters or caller block present #}
+    {% set has_filters = filters|length > 0 or caller %}
+    {% if has_filters %}
+    <button type="submit" class="btn btn-secondary"
+            hx-get="{{ base_url }}"
+            hx-trigger="click"
+            hx-target="#{{ target_id }}"
+            hx-select="#{{ target_id }}"
+            hx-push-url="true"
+            hx-include="closest form">
+      <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+      </svg>
+      Filter
+    </button>
+    {% endif %}
     <noscript>
       <button type="submit" class="btn btn-secondary">
         <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

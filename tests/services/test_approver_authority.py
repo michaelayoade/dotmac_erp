@@ -54,6 +54,7 @@ def _make_claim(
     claim.advance_adjusted = Decimal("0")
     claim.items = []
     claim.employee = None
+    claim.employee_id = None
     return claim
 
 
@@ -223,6 +224,79 @@ class TestApproverAuthorityValidation:
         ):
             with pytest.raises(ApproverAuthorityError):
                 svc.approve_claim(org_id, claim_id, approver_id=approver_id)
+
+
+class TestSelfApprovalPrevention:
+    """Tests that an employee cannot approve their own expense claim."""
+
+    def test_self_approval_blocked(self, org_id, approver_id, claim_id):
+        """approve_claim() raises when approver is the claimant."""
+        from app.services.expense.expense_service import ExpenseServiceError
+
+        person_id = uuid4()
+        db = MagicMock()
+
+        # Both employee records share the same person_id
+        approver_emp = MagicMock()
+        approver_emp.person_id = person_id
+
+        claimant_emp = MagicMock()
+        claimant_emp.person_id = person_id
+
+        employee_id = uuid4()
+        claim = _make_claim(claim_id, org_id)
+        claim.employee_id = employee_id
+
+        # db.get returns approver_emp for approver_id, claimant_emp for employee_id
+        def mock_get(model, pk):
+            if pk == approver_id:
+                return approver_emp
+            if pk == employee_id:
+                return claimant_emp
+            return None
+
+        db.get = MagicMock(side_effect=mock_get)
+
+        svc = ExpenseService(db)
+        svc.get_claim = MagicMock(return_value=claim)
+        svc._begin_action = MagicMock(return_value=True)
+        svc._set_action_status = MagicMock()
+
+        with patch.object(svc, "_validate_approver_authority"):
+            with pytest.raises(ExpenseServiceError, match="Cannot approve your own"):
+                svc.approve_claim(org_id, claim_id, approver_id=approver_id)
+
+    def test_different_person_allowed(self, org_id, approver_id, claim_id):
+        """approve_claim() succeeds when approver is a different person."""
+        db = MagicMock()
+
+        approver_emp = MagicMock()
+        approver_emp.person_id = uuid4()
+
+        claimant_emp = MagicMock()
+        claimant_emp.person_id = uuid4()
+
+        employee_id = uuid4()
+        claim = _make_claim(claim_id, org_id)
+        claim.employee_id = employee_id
+
+        def mock_get(model, pk):
+            if pk == approver_id:
+                return approver_emp
+            if pk == employee_id:
+                return claimant_emp
+            return None
+
+        db.get = MagicMock(side_effect=mock_get)
+
+        svc = ExpenseService(db)
+        svc.get_claim = MagicMock(return_value=claim)
+        svc._begin_action = MagicMock(return_value=True)
+        svc._set_action_status = MagicMock()
+
+        with patch.object(svc, "_validate_approver_authority"):
+            result = svc.approve_claim(org_id, claim_id, approver_id=approver_id)
+            assert result.status == ExpenseClaimStatus.APPROVED
 
 
 class TestApproverAuthorityErrorMessage:

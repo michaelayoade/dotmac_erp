@@ -1,5 +1,11 @@
 """Expense management service implementation.
 
+.. deprecated::
+    This module is superseded by ``app.services.expense.expense_service``.
+    Import via ``app.services.people.expense.ExpenseService`` which now
+    re-exports from the canonical module.  This file is kept only for
+    reference and will be removed in a future cleanup.
+
 Handles expense categories, claims, cash advances, and corporate cards.
 Adapted from DotMac People for the unified ERP platform.
 """
@@ -101,15 +107,19 @@ class ExpenseClaimStatusError(ExpenseServiceError):
 CLAIM_STATUS_TRANSITIONS = {
     ExpenseClaimStatus.DRAFT: {
         ExpenseClaimStatus.SUBMITTED,
+        ExpenseClaimStatus.CANCELLED,
     },
     ExpenseClaimStatus.SUBMITTED: {
         ExpenseClaimStatus.APPROVED,
         ExpenseClaimStatus.REJECTED,
+        ExpenseClaimStatus.CANCELLED,
     },
     ExpenseClaimStatus.APPROVED: {
         ExpenseClaimStatus.PAID,
     },
-    ExpenseClaimStatus.REJECTED: set(),  # Terminal state
+    ExpenseClaimStatus.REJECTED: {
+        ExpenseClaimStatus.DRAFT,  # Allow resubmission after rejection
+    },
     ExpenseClaimStatus.PAID: set(),  # Terminal state
     ExpenseClaimStatus.CANCELLED: set(),  # Terminal state
 }
@@ -700,7 +710,6 @@ class ExpenseService:
         try:
             claim.status = ExpenseClaimStatus.REJECTED
             claim.approver_id = approver_id
-            claim.approved_on = date.today()
             claim.rejection_reason = reason
 
             self.db.flush()
@@ -882,6 +891,95 @@ class ExpenseService:
                 ExpenseClaimActionStatus.FAILED,
             )
             raise
+
+    def cancel_claim(
+        self,
+        org_id: UUID,
+        claim_id: UUID,
+        *,
+        reason: Optional[str] = None,
+    ) -> ExpenseClaim:
+        """Cancel an expense claim (DRAFT or SUBMITTED only)."""
+        claim = self.get_claim(org_id, claim_id)
+
+        if claim.status == ExpenseClaimStatus.CANCELLED:
+            return claim
+
+        if claim.status not in {
+            ExpenseClaimStatus.DRAFT,
+            ExpenseClaimStatus.SUBMITTED,
+        }:
+            raise ExpenseClaimStatusError(
+                claim.status.value, ExpenseClaimStatus.CANCELLED.value
+            )
+
+        if not self._begin_action(org_id, claim_id, ExpenseClaimActionType.CANCEL):
+            return claim
+
+        try:
+            old_status = claim.status.value
+            claim.status = ExpenseClaimStatus.CANCELLED
+            if reason:
+                claim.notes = (
+                    f"{claim.notes}\n\nCancelled: {reason}"
+                    if claim.notes
+                    else f"Cancelled: {reason}"
+                )
+            self.db.flush()
+
+            self._set_action_status(
+                org_id,
+                claim_id,
+                ExpenseClaimActionType.CANCEL,
+                ExpenseClaimActionStatus.COMPLETED,
+            )
+            logger.info("Cancelled expense claim %s (was %s)", claim_id, old_status)
+            return claim
+        except Exception:
+            self._set_action_status(
+                org_id,
+                claim_id,
+                ExpenseClaimActionType.CANCEL,
+                ExpenseClaimActionStatus.FAILED,
+            )
+            raise
+
+    def resubmit_claim(
+        self,
+        org_id: UUID,
+        claim_id: UUID,
+    ) -> ExpenseClaim:
+        """Resubmit a previously rejected expense claim (resets to DRAFT)."""
+        claim = self.get_claim(org_id, claim_id)
+
+        if claim.status != ExpenseClaimStatus.REJECTED:
+            raise ExpenseClaimStatusError(
+                claim.status.value, ExpenseClaimStatus.DRAFT.value
+            )
+
+        claim.status = ExpenseClaimStatus.DRAFT
+        claim.rejection_reason = None
+        claim.approver_id = None
+        claim.approved_on = None
+        claim.total_approved_amount = None
+        claim.net_payable_amount = None
+
+        for item in claim.items:
+            item.approved_amount = None
+
+        # Clear stale action records so re-submission cycle works
+        from sqlalchemy import delete
+
+        self.db.execute(
+            delete(ExpenseClaimAction).where(
+                ExpenseClaimAction.organization_id == org_id,
+                ExpenseClaimAction.claim_id == claim_id,
+            )
+        )
+
+        self.db.flush()
+        logger.info("Resubmit: reset claim %s to DRAFT", claim_id)
+        return claim
 
     def link_advance(
         self,

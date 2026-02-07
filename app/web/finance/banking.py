@@ -98,6 +98,38 @@ def import_statement_form(
     return banking_web_service.statement_import_form_response(request, auth, db)
 
 
+@router.get("/statements/sample-csv")
+def download_sample_csv(
+    _auth: WebAuthContext = Depends(require_finance_access),
+):
+    """Download a sample CSV template for bank statement import."""
+    import io
+
+    from fastapi.responses import StreamingResponse
+
+    header = (
+        "transaction_date,transaction_type,amount,description,"
+        "reference,payee_payer,check_number,value_date,running_balance\n"
+    )
+    rows = [
+        "2026-01-15,credit,50000.00,Salary deposit from ABC Corp,TRF-001,ABC Corp Ltd,,2026-01-15,50000.00\n",
+        "2026-01-16,debit,2500.00,Office rent payment,CHQ-4521,Landlord Properties,4521,2026-01-16,47500.00\n",
+        "2026-01-17,debit,150.75,ATM withdrawal - Lekki,ATM-889,,,,47349.25\n",
+        "2026-01-18,credit,12000.00,Customer payment - Invoice INV-0042,TRF-002,XYZ Trading,,2026-01-18,59349.25\n",
+        "2026-01-20,debit,8500.00,Vendor payment - PO-0015,TRF-003,Office Supplies Ltd,,2026-01-20,50849.25\n",
+    ]
+    content = header + "".join(rows)
+    buf = io.BytesIO(content.encode("utf-8"))
+
+    return StreamingResponse(
+        buf,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="bank_statement_sample.csv"'
+        },
+    )
+
+
 @router.get("/statements/{statement_id}", response_class=HTMLResponse)
 def view_statement(
     request: Request,

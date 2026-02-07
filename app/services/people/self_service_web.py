@@ -5,11 +5,8 @@ Self-service web view service for employees and managers.
 from __future__ import annotations
 
 import logging
-import shutil
-import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
-from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode
 from uuid import UUID
@@ -150,14 +147,20 @@ class SelfServiceWebService:
 
     @staticmethod
     def _save_receipt_file(org_id: UUID, receipt_file: UploadFile) -> str:
-        upload_dir = Path("uploads/people_expense_receipts") / str(org_id)
-        upload_dir.mkdir(parents=True, exist_ok=True)
-        suffix = Path(receipt_file.filename or "").suffix
-        file_name = f"{uuid.uuid4().hex}{suffix}"
-        file_path = upload_dir / file_name
-        with file_path.open("wb") as buffer:
-            shutil.copyfileobj(receipt_file.file, buffer)
-        return str(file_path)
+        from app.services.file_upload import FileUploadError, get_expense_receipt_upload
+
+        svc = get_expense_receipt_upload()
+        file_data = receipt_file.file.read()
+        try:
+            result = svc.save(
+                file_data=file_data,
+                content_type=receipt_file.content_type,
+                subdirs=(str(org_id),),
+                original_filename=receipt_file.filename,
+            )
+        except FileUploadError:
+            raise
+        return str(result.file_path)
 
     @staticmethod
     def _get_tickets_for_dropdown(db: Session, org_id: UUID) -> list:
