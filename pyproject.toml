@@ -45,6 +45,78 @@ types-python-dateutil = "^2.9.0.20251115"
 pandas = "^2.3.3"
 openpyxl = "^3.1.5"
 ruff = "^0.15.0"
+pre-commit = "^4.5.1"
+detect-secrets = "^1.5.0"
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "UP",     # pyupgrade
+    "S",      # flake8-bandit (security)
+    "T20",    # flake8-print
+    "SIM",    # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "E712",   # comparison to True/False — intentional in SQLAlchemy filters (column == True)
+    "E711",   # None comparison — SQLAlchemy uses `== None` for IS NULL filters
+    "E741",   # ambiguous variable name — common in financial code (l, I)
+    "B008",   # function calls in defaults — FastAPI Depends() pattern
+    "B904",   # raise from — gradual adoption, too many existing violations
+    "S101",   # assert used — OK in tests
+    "S104",   # binding to all interfaces — OK for Docker
+    "S110",   # try-except-pass — some are intentional (optional cleanup)
+    "UP007",  # X | Y unions — keep Optional[] for readability
+    "UP042",  # StrEnum — large refactor, existing str+Enum pattern works
+    "SIM102", # collapsible if — readability preference, not a bug
+    "SIM105", # suppressible exception — contextlib.suppress() not always clearer
+    "SIM108", # ternary — multiline if/else often more readable
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "S105", "S106", "S311", "B017"]  # test fixtures use hardcoded values
+"alembic/**/*.py" = ["E402", "F841", "S608"]  # migrations: late imports, unused vars, raw SQL
+"scripts/**/*.py" = ["T20", "E402", "S"]  # scripts: print, late imports, relaxed security
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+strict_optional = true
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+disallow_untyped_defs = false  # gradual adoption
+check_untyped_defs = true
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "app/tasks/*",
+    "app/celery_app.py",
+    "app/config.py",
+    "alembic/*",
+    "scripts/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__",
+    "raise NotImplementedError",
+]
+show_missing = true
 
 [build-system]
 requires = ["poetry-core"]
