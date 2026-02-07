@@ -476,6 +476,15 @@ def base_context(
 
         organization = db.get(Organization, auth.organization_id)
 
+    # Set per-request formatting preferences from organisation settings
+    if organization is not None:
+        from app.services.formatting_context import (
+            resolve_from_org,
+            set_formatting_prefs,
+        )
+
+        set_formatting_prefs(resolve_from_org(organization))
+
     # Get org-specific branding if db session available
     org_branding = None
     if db and auth.organization_id:
@@ -595,6 +604,16 @@ def base_context(
         "can_team_expenses": can_team_expenses,
         "csrf_token": getattr(request.state, "csrf_token", ""),
         "notifications": notifications or [],
+        # Org formatting settings for JS / template use
+        "org_date_format": getattr(organization, "date_format", None)
+        if organization
+        else None,
+        "org_number_format": getattr(organization, "number_format", None)
+        if organization
+        else None,
+        "org_timezone": getattr(organization, "timezone", None)
+        if organization
+        else None,
     }
     if db and auth.organization_id and get_currency_context is not None:
         try:

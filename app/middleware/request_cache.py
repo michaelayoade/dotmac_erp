@@ -34,3 +34,7 @@ class RequestCacheMiddleware(BaseHTTPMiddleware):
         finally:
             # Always clear the request cache
             request_cache.clear()
+            # Clear per-request formatting preferences
+            from app.services.formatting_context import clear_formatting_prefs
+
+            clear_formatting_prefs()

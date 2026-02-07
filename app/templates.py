@@ -16,6 +16,7 @@ from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 
 from app.i18n import t
+from app.services import formatters as _fmt
 
 # Single shared templates instance
 templates = Jinja2Templates(directory="templates")
@@ -26,32 +27,47 @@ templates.env.globals["t"] = t  # Translation function
 templates.env.globals["_"] = t  # Alias for convenience
 
 
-# Custom filters
+# Custom filters — delegate to service-layer formatters so that org-aware
+# separators, currency codes, and date formats are applied automatically
+# when a formatting context is active (see app.services.formatting_context).
 def format_currency(
     value: Union[Decimal, float, int, None], symbol: str = "", decimals: int = 2
 ) -> str:
-    """Format a number as currency with thousand separators."""
+    """Format a number as currency with thousand separators.
+
+    Template usage::
+
+        {{ amount | format_currency('$', 0) }}
+        {{ amount | format_currency }}           {# uses org defaults #}
+    """
     if value is None:
         return f"{symbol}0.00" if symbol else "0.00"
-    try:
-        num = float(value)
-        formatted = f"{num:,.{decimals}f}"
-        return f"{symbol}{formatted}" if symbol else formatted
-    except (ValueError, TypeError):
-        return str(value)
+    # When a symbol like "$" or "NGN " is explicitly provided, use it.
+    # Otherwise let the service formatter decide (org pref or config default).
+    if symbol:
+        return f"{symbol}{_fmt.format_currency(value, show_symbol=False, decimal_places=decimals)}"
+    return _fmt.format_currency(value, show_symbol=False, decimal_places=decimals)
 
 
 def format_number(value: Union[Decimal, float, int, None], decimals: int = 2) -> str:
-    """Format a number with thousand separators."""
+    """Format a number with org-aware thousand separators."""
     if value is None:
         return "0"
-    try:
-        num = float(value)
-        if decimals == 0:
-            return f"{num:,.0f}"
-        return f"{num:,.{decimals}f}"
-    except (ValueError, TypeError):
-        return str(value)
+    return _fmt.format_number(value, decimal_places=decimals, none_value="0")
+
+
+def format_date_filter(value, fmt: str = "") -> str:
+    """Jinja2 filter for date formatting.  Uses org prefs when *fmt* is empty."""
+    if fmt:
+        return _fmt.format_date(value, format=fmt)
+    return _fmt.format_date(value)
+
+
+def format_datetime_filter(value, fmt: str = "") -> str:
+    """Jinja2 filter for datetime formatting.  Uses org prefs when *fmt* is empty."""
+    if fmt:
+        return _fmt.format_datetime(value, fmt=fmt)
+    return _fmt.format_datetime(value)
 
 
 def urldecode(value: str | None) -> str:
@@ -218,6 +234,8 @@ def nl2br(value: str | None) -> Markup:
 # Register custom filters
 templates.env.filters["format_currency"] = format_currency
 templates.env.filters["format_number"] = format_number
+templates.env.filters["format_date"] = format_date_filter
+templates.env.filters["format_datetime"] = format_datetime_filter
 templates.env.filters["urldecode"] = urldecode
 templates.env.filters["sanitize_html"] = sanitize_html
 templates.env.filters["nl2br"] = nl2br

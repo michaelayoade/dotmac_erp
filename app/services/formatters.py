@@ -12,6 +12,13 @@ Functions are organised into three groups:
 * **Formatters** – convert typed Python values into human-readable strings
   for templates, PDFs, and exports.
 * **Enum helpers** – safely parse / display ``Enum`` members.
+
+Org-aware formatting
+~~~~~~~~~~~~~~~~~~~~
+When ``set_formatting_prefs()`` has been called for the current request (see
+``app.services.formatting_context``), the formatters automatically use the
+organisation's date format, number separators, and currency code.  Callers
+that pass an **explicit** format parameter override the org setting.
 """
 
 from __future__ import annotations
@@ -20,7 +27,7 @@ import logging
 from datetime import date, datetime, time
 from decimal import Decimal, InvalidOperation
 from enum import Enum
-from typing import Optional, Type, TypeVar
+from typing import Optional, Type, TypeVar, Union
 
 from app.config import settings
 
@@ -30,13 +37,23 @@ logger = logging.getLogger(__name__)
 E = TypeVar("E", bound=Enum)
 
 # ---------------------------------------------------------------------------
+# Sentinel defaults — used to distinguish "caller passed an explicit format"
+# from "caller used the default".  We check identity (``is``) not equality.
+# ---------------------------------------------------------------------------
+
+_DEFAULT_DATE_FMT: str = "%Y-%m-%d"
+_DEFAULT_DATETIME_FMT: str = "%Y-%m-%d %H:%M"
+
+# ---------------------------------------------------------------------------
 # Parsers
 # ---------------------------------------------------------------------------
 
 
 def parse_date(
     value: Optional[str],
-    fmt: str = "%Y-%m-%d",
+    fmt: str = _DEFAULT_DATE_FMT,
+    *,
+    format: Optional[str] = None,
 ) -> Optional[date]:
     """Parse a date string into a :class:`date`.
 
@@ -48,6 +65,8 @@ def parse_date(
     if not value or not str(value).strip():
         return None
     cleaned = str(value).strip()
+    if format:
+        fmt = format
     # Fast path – fromisoformat handles YYYY-MM-DD and YYYY-MM-DDTHH:MM:SS
     try:
         return date.fromisoformat(cleaned)
@@ -104,13 +123,28 @@ def parse_decimal(
 ) -> Optional[Decimal]:
     """Parse a string into a :class:`Decimal`.
 
-    Strips commas and whitespace before conversion.  Returns *default* on
-    failure.
+    When an org formatting context is active, removes the org's thousand
+    separator and normalises the decimal separator to ``.`` before parsing.
+    Otherwise falls back to stripping commas (US-style).
+
+    Returns *default* on failure.
     """
     if not value:
         return default
     try:
-        cleaned = str(value).replace(",", "").strip()
+        cleaned = str(value).strip()
+        # Use org-aware separator handling when context is available
+        from app.services.formatting_context import get_formatting_prefs
+
+        prefs = get_formatting_prefs()
+        if prefs is not None:
+            # Remove thousand separator, then normalise decimal separator
+            cleaned = cleaned.replace(prefs.thousand_sep, "")
+            if prefs.decimal_sep != ".":
+                cleaned = cleaned.replace(prefs.decimal_sep, ".")
+        else:
+            # Legacy behaviour: strip commas
+            cleaned = cleaned.replace(",", "")
         return Decimal(cleaned)
     except (InvalidOperation, ValueError, TypeError):
         return default
@@ -147,17 +181,67 @@ def parse_time(value: Optional[str], fmt: str = "%H:%M") -> Optional[time]:
 
 
 # ---------------------------------------------------------------------------
+# Number formatting helper (private)
+# ---------------------------------------------------------------------------
+
+
+def _format_number_with_seps(
+    value: Decimal,
+    *,
+    decimal_places: int = 2,
+    thousand_sep: str = ",",
+    decimal_sep: str = ".",
+) -> str:
+    """Format a Decimal with the given thousand/decimal separators.
+
+    Uses Python's built-in ``{:,.Nf}`` (always US-style ``1,234.56``) then
+    performs a 3-step replacement via a ``\\x00`` placeholder so that
+    separators don't collide during substitution.
+    """
+    format_str = f"{{:,.{decimal_places}f}}"
+    us_formatted = format_str.format(value)
+
+    # Fast path — if separators match US defaults, nothing to replace
+    if thousand_sep == "," and decimal_sep == ".":
+        return us_formatted
+
+    # 3-step swap: comma → placeholder, dot → decimal_sep, placeholder → thousand_sep
+    result = us_formatted.replace(",", "\x00")
+    result = result.replace(".", decimal_sep)
+    result = result.replace("\x00", thousand_sep)
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Formatters
 # ---------------------------------------------------------------------------
 
 
-def format_date(value: Optional[date], fmt: str = "%Y-%m-%d") -> str:
-    """Format a date as a string.  Returns ``""`` for ``None``."""
+def format_date(
+    value: Optional[date],
+    fmt: str = _DEFAULT_DATE_FMT,
+    *,
+    format: Optional[str] = None,
+) -> str:
+    """Format a date as a string.  Returns ``""`` for ``None``.
+
+    When the caller uses the default *fmt* and an org formatting context is
+    active, the org's preferred date format is applied automatically.
+    """
     if value is None:
         return ""
     try:
         if isinstance(value, datetime):
             value = value.date()
+        if format:
+            fmt = format
+        elif fmt is _DEFAULT_DATE_FMT:
+            # No explicit override — try org context
+            from app.services.formatting_context import get_formatting_prefs
+
+            prefs = get_formatting_prefs()
+            if prefs is not None:
+                fmt = prefs.date_strftime
         return value.strftime(fmt)
     except (ValueError, AttributeError):
         return ""
@@ -170,19 +254,42 @@ def format_date_display(value: Optional[date], fmt: str = "%d %b %Y") -> str:
 
 def format_datetime(
     value: Optional[datetime],
-    fmt: str = "%Y-%m-%d %H:%M",
+    fmt: str = _DEFAULT_DATETIME_FMT,
 ) -> str:
-    """Format a datetime as a string.  Returns ``""`` for ``None``."""
+    """Format a datetime as a string.  Returns ``""`` for ``None``.
+
+    When the caller uses the default *fmt* and an org formatting context is
+    active, the org's preferred datetime format is used.  If the org has a
+    timezone configured and the datetime is tz-aware, it is converted first.
+    """
     if value is None:
         return ""
     try:
+        if fmt is _DEFAULT_DATETIME_FMT:
+            from app.services.formatting_context import get_formatting_prefs
+
+            prefs = get_formatting_prefs()
+            if prefs is not None:
+                fmt = prefs.datetime_strftime
+                # Timezone conversion for tz-aware datetimes
+                if (
+                    prefs.timezone_name
+                    and hasattr(value, "tzinfo")
+                    and value.tzinfo is not None
+                ):
+                    try:
+                        from zoneinfo import ZoneInfo
+
+                        value = value.astimezone(ZoneInfo(prefs.timezone_name))
+                    except (KeyError, ImportError):
+                        pass  # unknown tz or missing tzdata — use as-is
         return value.strftime(fmt)
     except (ValueError, AttributeError):
         return ""
 
 
 def format_currency(
-    amount: Optional[Decimal],
+    amount: Optional[Union[Decimal, float, int]],
     currency: Optional[str] = None,
     *,
     none_value: str = "",
@@ -191,12 +298,16 @@ def format_currency(
 ) -> str:
     """Format an amount as currency.
 
+    When an org formatting context is active, uses the org's number separators
+    and (if *currency* is ``None``) the org's currency code.
+
     Parameters
     ----------
     amount:
         The numeric value.  Accepts ``Decimal``, ``float``, ``int``, or ``None``.
     currency:
-        Currency code (default: ``settings.default_presentation_currency_code``).
+        Currency code.  Falls back to org pref, then
+        ``settings.default_presentation_currency_code``.
     none_value:
         Returned when *amount* is ``None``.
     show_symbol:
@@ -208,10 +319,28 @@ def format_currency(
         return none_value
     try:
         value = Decimal(str(amount))
-        format_str = f"{{:,.{decimal_places}f}}"
-        formatted = format_str.format(value)
+
+        # Determine separators and currency from context
+        from app.services.formatting_context import get_formatting_prefs
+
+        prefs = get_formatting_prefs()
+        if prefs is not None:
+            thousand_sep = prefs.thousand_sep
+            decimal_sep = prefs.decimal_sep
+            fallback_currency = prefs.currency_code
+        else:
+            thousand_sep = ","
+            decimal_sep = "."
+            fallback_currency = settings.default_presentation_currency_code
+
+        formatted = _format_number_with_seps(
+            value,
+            decimal_places=decimal_places,
+            thousand_sep=thousand_sep,
+            decimal_sep=decimal_sep,
+        )
         if show_symbol:
-            currency_code = currency or settings.default_presentation_currency_code
+            currency_code = currency or fallback_currency
             return f"{currency_code} {formatted}"
         return formatted
     except (InvalidOperation, ValueError, TypeError):
@@ -219,7 +348,7 @@ def format_currency(
 
 
 def format_currency_compact(
-    amount: Optional[Decimal],
+    amount: Optional[Union[Decimal, float, int]],
     *,
     none_value: str = "",
     decimal_places: int = 2,
@@ -231,6 +360,41 @@ def format_currency_compact(
         show_symbol=False,
         decimal_places=decimal_places,
     )
+
+
+def format_number(
+    value: Optional[Union[Decimal, float, int]],
+    *,
+    none_value: str = "0",
+    decimal_places: int = 2,
+) -> str:
+    """Format a number with org-aware thousand/decimal separators.
+
+    This is the public API for number formatting without a currency symbol.
+    """
+    if value is None:
+        return none_value
+    try:
+        dec_value = Decimal(str(value))
+
+        from app.services.formatting_context import get_formatting_prefs
+
+        prefs = get_formatting_prefs()
+        if prefs is not None:
+            thousand_sep = prefs.thousand_sep
+            decimal_sep = prefs.decimal_sep
+        else:
+            thousand_sep = ","
+            decimal_sep = "."
+
+        return _format_number_with_seps(
+            dec_value,
+            decimal_places=decimal_places,
+            thousand_sep=thousand_sep,
+            decimal_sep=decimal_sep,
+        )
+    except (InvalidOperation, ValueError, TypeError):
+        return none_value
 
 
 def format_file_size(size: Optional[int], precision: int = 1) -> str:

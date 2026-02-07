@@ -17,6 +17,11 @@ from app.models.finance.core_config import ResetFrequency, SequenceType
 from app.models.finance.core_org import Organization
 from app.schemas.settings import DomainSettingUpdate
 from app.services.email import SMTPConfig
+from app.services.formatting_context import (
+    COMMON_TIMEZONES,
+    DATE_FORMAT_CHOICES as DATE_FORMATS,
+    NUMBER_FORMAT_CHOICES as NUMBER_FORMATS,
+)
 from app.services.settings_spec import (
     DOMAIN_SETTINGS_SERVICE,
     get_spec,
@@ -80,40 +85,6 @@ RESET_FREQUENCY_LABELS = {
     ResetFrequency.YEARLY: "Yearly",
     ResetFrequency.MONTHLY: "Monthly",
 }
-
-
-# Common timezone list
-COMMON_TIMEZONES = [
-    ("UTC", "UTC"),
-    ("America/New_York", "Eastern Time (US)"),
-    ("America/Chicago", "Central Time (US)"),
-    ("America/Denver", "Mountain Time (US)"),
-    ("America/Los_Angeles", "Pacific Time (US)"),
-    ("Europe/London", "London"),
-    ("Europe/Paris", "Paris"),
-    ("Europe/Berlin", "Berlin"),
-    ("Asia/Tokyo", "Tokyo"),
-    ("Asia/Shanghai", "Shanghai"),
-    ("Asia/Singapore", "Singapore"),
-    ("Australia/Sydney", "Sydney"),
-    ("Africa/Lagos", "Lagos"),
-    ("Africa/Johannesburg", "Johannesburg"),
-]
-
-DATE_FORMATS = [
-    ("YYYY-MM-DD", "2025-01-10"),
-    ("DD/MM/YYYY", "10/01/2025"),
-    ("MM/DD/YYYY", "01/10/2025"),
-    ("DD-MM-YYYY", "10-01-2025"),
-    ("DD.MM.YYYY", "10.01.2025"),
-]
-
-NUMBER_FORMATS = [
-    ("1,234.56", "Comma thousand, dot decimal"),
-    ("1.234,56", "Dot thousand, comma decimal"),
-    ("1 234.56", "Space thousand, dot decimal"),
-    ("1 234,56", "Space thousand, comma decimal"),
-]
 
 
 class SettingsWebService:
@@ -479,6 +450,8 @@ class SettingsWebService:
 
         for module_def in EMAIL_MODULE_SETTINGS:
             prefix = f"module_{module_def['key']}_"
+            if not any(key.startswith(prefix) for key in data):
+                continue
             routing = db.scalar(
                 select(ModuleEmailRouting).where(
                     ModuleEmailRouting.organization_id == organization_id,
