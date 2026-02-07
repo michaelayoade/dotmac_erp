@@ -170,6 +170,7 @@ Required: `DATABASE_URL`, `SECRET_KEY`, `REDIS_URL`
 Optional: `ERPNEXT_API_KEY/SECRET`, `SMTP_*`, `PAYSTACK_SECRET_KEY`
 
 ## Extended Standards (in .claude/rules/)
+- **`design-system.md`** — Complete UI reference: tokens, colors, components, layout, interactions, dark mode
 - `forms.md` — Form design patterns, context methods, locked fields
 - `ui-ux.md` — Typography, colors, components, accessibility, dark mode
 - `security.md` — Error handling, template escaping, CSRF, multi-tenancy
