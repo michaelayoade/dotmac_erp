@@ -24,7 +24,7 @@
             </form>
         </div>
 
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-10">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
             <!-- Revenue -->
             <div class="stat-hero" data-testid="dashboard-stat-total-revenue">
                 <div class="stat-hero-icon stat-hero-icon-revenue">
@@ -34,7 +34,7 @@
                 </div>
                 <span class="stat-hero-label">Revenue</span>
                 <span class="stat-hero-value">{{ stats.total_revenue | default(currency_zero) }}</span>
-                {% if stats.revenue_trend %}
+                {% if stats.revenue_trend is not none %}
                 <span class="stat-hero-trend {{ 'stat-hero-trend-up' if stats.revenue_trend > 0 else 'stat-hero-trend-down' }}">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         {% if stats.revenue_trend > 0 %}
@@ -68,7 +68,7 @@
                 </div>
                 <span class="stat-hero-label">{% if is_ipsas %}Surplus/Deficit{% else %}Net Income{% endif %}</span>
                 <span class="stat-hero-value">{{ stats.net_income | default(currency_zero) }}</span>
-                {% if stats.income_trend %}
+                {% if stats.income_trend is not none %}
                 <span class="stat-hero-trend {{ 'stat-hero-trend-up' if stats.income_trend > 0 else 'stat-hero-trend-down' }}">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         {% if stats.income_trend > 0 %}

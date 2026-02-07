@@ -356,6 +356,7 @@ code {
 
 .app-page {
     padding: var(--content-gutter);
+    overflow-x: hidden;
 }
 
 .app-footer {
@@ -3171,7 +3172,7 @@ video {
 
 .people-stat-grid {
         position: relative;
-        padding: var(--content-gutter);
+        padding: var(--spacing-lg);
         margin: 0;
         background: linear-gradient(135deg, rgba(139, 92, 246, 0.03) 0%, rgba(124, 58, 237, 0.06) 50%, rgba(139, 92, 246, 0.02) 100%);
         border-radius: var(--radius-card) var(--radius-card) 0 0;
@@ -3214,7 +3215,7 @@ video {
 
 .expense-stat-grid {
         position: relative;
-        padding: var(--content-gutter);
+        padding: var(--spacing-lg);
         margin: 0;
         background: linear-gradient(135deg, rgba(245, 158, 11, 0.03) 0%, rgba(217, 119, 6, 0.06) 50%, rgba(245, 158, 11, 0.02) 100%);
         border-radius: var(--radius-card) var(--radius-card) 0 0;
@@ -3257,7 +3258,7 @@ video {
 
 .finance-stat-grid {
         position: relative;
-        padding: var(--content-gutter);
+        padding: var(--spacing-lg);
         margin: 0;
         background: linear-gradient(135deg, rgba(13, 148, 136, 0.03) 0%, rgba(17, 94, 89, 0.06) 50%, rgba(13, 148, 136, 0.02) 100%);
         border-radius: var(--radius-card) var(--radius-card) 0 0;
