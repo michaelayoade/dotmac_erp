@@ -683,7 +683,9 @@ class ARWebService:
             try:
                 tax_code = tax_code_service.get(db, str(customer.default_tax_code_id))
                 if tax_code and tax_code.organization_id == org_id:
-                    default_tax_code_label = f"{tax_code.tax_code} - {tax_code.tax_name}"
+                    default_tax_code_label = (
+                        f"{tax_code.tax_code} - {tax_code.tax_name}"
+                    )
             except Exception:
                 default_tax_code_label = None
 

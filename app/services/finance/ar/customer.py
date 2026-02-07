@@ -41,9 +41,9 @@ class CustomerInput:
     """
 
     # Template-friendly names (what API/templates send)
-    customer_code: Optional[str] = None
     customer_type: CustomerType
     customer_name: str  # Maps to model: legal_name
+    customer_code: Optional[str] = None
     default_receivable_account_id: Optional[UUID] = (
         None  # Maps to model: ar_control_account_id
     )

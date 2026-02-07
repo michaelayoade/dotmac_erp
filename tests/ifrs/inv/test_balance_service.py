@@ -254,8 +254,8 @@ class TestGetItemBalance:
         self, mock_db, org_id, item_id, warehouse_id, mock_item, mock_warehouse
     ):
         """Should return balance with warehouse info when warehouse provided."""
-        mock_db.get.side_effect = (
-            lambda model, id: mock_item if id == item_id else mock_warehouse
+        mock_db.get.side_effect = lambda model, id: (
+            mock_item if id == item_id else mock_warehouse
         )
 
         with patch.object(

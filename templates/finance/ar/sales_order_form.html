@@ -356,6 +356,7 @@ function soForm() {
                 { item_code: '', revenue_account_id: '', description: '', quantity: 1, unit_price: 0, tax_code_id: '', tax_amount: 0, line_total: 0 }
             ]
         },
+        defaultTaxCodeId: '',
         taxRates: {
             {% for tax in tax_codes %}
             '{{ tax.tax_code_id }}': {{ tax.rate }},
@@ -379,9 +380,27 @@ function soForm() {
             return new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency }).format(amount || 0);
         },
 
+        onCustomerChange() {
+            const select = document.getElementById('customer_id');
+            const option = select.options[select.selectedIndex];
+            if (option && option.value) {
+                this.defaultTaxCodeId = option.dataset.defaultTaxCodeId || '';
+                if (this.defaultTaxCodeId) {
+                    this.form.lines.forEach((line, idx) => {
+                        if (!line.tax_code_id) {
+                            line.tax_code_id = this.defaultTaxCodeId;
+                            this.calculateLine(idx);
+                        }
+                    });
+                }
+            } else {
+                this.defaultTaxCodeId = '';
+            }
+        },
+
         addLine() {
             this.form.lines.push({
-                item_code: '', revenue_account_id: '', description: '', quantity: 1, unit_price: 0, tax_code_id: '', tax_amount: 0, line_total: 0
+                item_code: '', revenue_account_id: '', description: '', quantity: 1, unit_price: 0, tax_code_id: this.defaultTaxCodeId || '', tax_amount: 0, line_total: 0
             });
         },
 

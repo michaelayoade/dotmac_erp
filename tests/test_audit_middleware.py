@@ -259,8 +259,8 @@ class TestAuditMiddlewareReadTriggers:
         request.url.path = "/api/v1/users"
         request.method = "GET"
         request.headers = MagicMock()
-        request.headers.get.side_effect = (
-            lambda h, default="": "true" if h == "x-audit-read" else default
+        request.headers.get.side_effect = lambda h, default="": (
+            "true" if h == "x-audit-read" else default
         )
         request.query_params = {}
 

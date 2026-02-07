@@ -165,8 +165,9 @@ class ExpenseClaimMapping(DocTypeMapping):
                     target="purpose",
                     required=False,
                     default="Expense Reimbursement",
-                    transformer=lambda v: clean_string(v, 500)
-                    or "Expense Reimbursement",
+                    transformer=lambda v: (
+                        clean_string(v, 500) or "Expense Reimbursement"
+                    ),
                 ),
                 # Cost center reference
                 FieldMapping(

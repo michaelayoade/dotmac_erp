@@ -509,8 +509,8 @@ class TestRecordCount:
         self, mock_db, org_id, mock_count, user_id, mock_item, warehouse_id
     ):
         """Should create new line for items not in original snapshot."""
-        mock_db.get.side_effect = (
-            lambda model, id: mock_count if id == mock_count.count_id else mock_item
+        mock_db.get.side_effect = lambda model, id: (
+            mock_count if id == mock_count.count_id else mock_item
         )
         mock_db.query.return_value.filter.return_value.first.return_value = (
             None  # No existing line
@@ -731,8 +731,8 @@ class TestPostCount:
             unit_cost=Decimal("10.00"),
             uom="EACH",
         )
-        mock_db.get.side_effect = (
-            lambda model, id: mock_count if id == mock_count.count_id else mock_item
+        mock_db.get.side_effect = lambda model, id: (
+            mock_count if id == mock_count.count_id else mock_item
         )
         mock_db.query.return_value.filter.return_value.all.return_value = [
             variance_line

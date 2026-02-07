@@ -344,10 +344,8 @@ class TestAddItemPrice:
         self, mock_db, org_id, mock_price_list, item_id
     ):
         """Should raise HTTPException when item not found."""
-        mock_db.get.side_effect = (
-            lambda model, id: mock_price_list
-            if id == mock_price_list.price_list_id
-            else None
+        mock_db.get.side_effect = lambda model, id: (
+            mock_price_list if id == mock_price_list.price_list_id else None
         )
 
         input = PriceListItemInput(

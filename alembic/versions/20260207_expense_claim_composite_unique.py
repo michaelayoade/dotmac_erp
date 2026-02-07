@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "20260207_expense_claim_composite_unique"
-down_revision = "20260207_add_customer_vat_category"
+down_revision = "20260207_add_customer_default_tax_code_id"
 branch_labels = None
 depends_on = None
 
@@ -23,9 +23,7 @@ def upgrade() -> None:
         return
 
     # Check existing constraints
-    uq_constraints = inspector.get_unique_constraints(
-        "expense_claim", schema="expense"
-    )
+    uq_constraints = inspector.get_unique_constraints("expense_claim", schema="expense")
     uq_names = {c["name"] for c in uq_constraints}
 
     # Drop old single-column unique constraint on claim_number
@@ -54,9 +52,7 @@ def downgrade() -> None:
     if not inspector.has_table("expense_claim", schema="expense"):
         return
 
-    uq_constraints = inspector.get_unique_constraints(
-        "expense_claim", schema="expense"
-    )
+    uq_constraints = inspector.get_unique_constraints("expense_claim", schema="expense")
     uq_names = {c["name"] for c in uq_constraints}
 
     if "uq_expense_claim_org_number" in uq_names:

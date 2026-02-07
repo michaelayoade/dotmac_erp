@@ -41,6 +41,8 @@ services:
       OPENBAO_TOKEN: ${OPENBAO_TOKEN:-devtoken}
       OPENBAO_ALLOW_INSECURE: "true"
       GUNICORN_WORKERS: "4"
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONPYCACHEPREFIX: "/tmp/pycache"
     depends_on:
       db:
         condition: service_healthy

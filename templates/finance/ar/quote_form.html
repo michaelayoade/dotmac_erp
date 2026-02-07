@@ -614,6 +614,7 @@ function quoteForm() {
                 { item_code: '', revenue_account_id: '', description: '', quantity: 1, unit_price: 0, discount_amount: 0, tax_code_id: '', tax_amount: 0, line_total: 0 }
             ]
         },
+        defaultTaxCodeId: '',
         taxRates: {
             {% for tax in tax_codes %}
             '{{ tax.tax_code_id }}': {{ tax.rate }},
@@ -671,9 +672,20 @@ function quoteForm() {
             const option = select.options[select.selectedIndex];
             if (option && option.value) {
                 const email = option.dataset.email;
+                this.defaultTaxCodeId = option.dataset.defaultTaxCodeId || '';
                 if (email) {
                     this.form.contact_email = email;
                 }
+                if (this.defaultTaxCodeId) {
+                    this.form.lines.forEach((line, idx) => {
+                        if (!line.tax_code_id) {
+                            line.tax_code_id = this.defaultTaxCodeId;
+                            this.calculateLineAmount(idx);
+                        }
+                    });
+                }
+            } else {
+                this.defaultTaxCodeId = '';
             }
         },
 
@@ -685,7 +697,7 @@ function quoteForm() {
                 quantity: 1,
                 unit_price: 0,
                 discount_amount: 0,
-                tax_code_id: '',
+                tax_code_id: this.defaultTaxCodeId || '',
                 tax_amount: 0,
                 line_total: 0
             });

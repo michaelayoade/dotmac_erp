@@ -326,8 +326,8 @@ class TestAddComponent:
         self, mock_db, org_id, mock_bom, component_item_id
     ):
         """Should raise HTTPException when component item not found."""
-        mock_db.get.side_effect = (
-            lambda model, id: mock_bom if id == mock_bom.bom_id else None
+        mock_db.get.side_effect = lambda model, id: (
+            mock_bom if id == mock_bom.bom_id else None
         )
 
         input = BOMComponentInput(
